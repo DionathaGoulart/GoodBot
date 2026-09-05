@@ -119,9 +119,9 @@ git status --short   # não pode listar .env
 - `typecheck` do web roda `next typegen` antes do `tsc` (tipos globais como
   `LayoutProps` vivem em `.next/types`).
 - Node 22 + pnpm 9 instalados no WSL via nvm/corepack (não havia Node).
-- ⚠️ Docker não está instalado (nem no WSL nem Docker Desktop no Windows): o
-  critério "Postgres saudável" fica pendente até a instalação. O
-  `infra/docker-compose.dev.yml` foi escrito e será validado na Etapa 2.
+- Docker Engine 29 + Compose v2 instalados no WSL (pacotes do Ubuntu 26.04,
+  systemd). Postgres 16.15 do `docker-compose.dev.yml` subiu e respondeu a
+  `select version()` via `postgres` com a `DATABASE_URL` do `.env.example`.
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
