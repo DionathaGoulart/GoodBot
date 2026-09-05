@@ -1,0 +1,51 @@
+import { z } from 'zod';
+
+import { DAY_MS, MAX_PURGE, MAX_SLOWMODE_SECONDS } from '../constants';
+import { DurationMsSchema, moduleConfigBase, SnowflakeListSchema } from './common';
+
+export const UtilitiesConfigSchema = z.object({
+  ...moduleConfigBase,
+  enabled: z.boolean().default(true),
+  purge: z
+    .object({
+      maxPerCommand: z.number().int().min(1).max(MAX_PURGE).default(MAX_PURGE),
+      logToModlog: z.boolean().default(true),
+    })
+    .default({ maxPerCommand: MAX_PURGE, logToModlog: true }),
+  slowmode: z
+    .object({
+      maxSeconds: z.number().int().min(1).max(MAX_SLOWMODE_SECONDS).default(MAX_SLOWMODE_SECONDS),
+    })
+    .default({ maxSeconds: MAX_SLOWMODE_SECONDS }),
+  lock: z
+    .object({
+      /** Cargos além do @everyone que perdem `SendMessages` no lock. */
+      extraRoleIds: SnowflakeListSchema,
+      /** Canais e categorias afetados pelo `/lockdown`. */
+      lockdownChannelIds: SnowflakeListSchema,
+      lockdownCategoryIds: SnowflakeListSchema,
+      /** Avisar no canal quando ele for trancado/destrancado. */
+      announceInChannel: z.boolean().default(true),
+    })
+    .default({
+      extraRoleIds: [],
+      lockdownChannelIds: [],
+      lockdownCategoryIds: [],
+      announceInChannel: true,
+    }),
+  reminders: z
+    .object({
+      maxPerUser: z.number().int().min(1).max(100).default(25),
+      maxDurationMs: DurationMsSchema.max(365 * DAY_MS).default(365 * DAY_MS),
+    })
+    .default({ maxPerUser: 25, maxDurationMs: 365 * DAY_MS }),
+  polls: z
+    .object({
+      maxDurationMs: DurationMsSchema.max(30 * DAY_MS).default(7 * DAY_MS),
+      /** Cargos que podem criar enquetes; vazio = todos. */
+      creatorRoleIds: SnowflakeListSchema,
+    })
+    .default({ maxDurationMs: 7 * DAY_MS, creatorRoleIds: [] }),
+});
+export type UtilitiesConfig = z.infer<typeof UtilitiesConfigSchema>;
+export const DEFAULT_UTILITIES_CONFIG: UtilitiesConfig = UtilitiesConfigSchema.parse({});
