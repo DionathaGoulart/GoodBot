@@ -1,0 +1,28 @@
+# dependências
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+.next/
+out/
+*.tsbuildinfo
+.turbo/
+
+# ambiente — NUNCA commitar segredos
+.env*
+!.env.example
+
+# logs e cobertura
+*.log
+coverage/
+
+# editores / SO
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# next
+next-env.d.ts

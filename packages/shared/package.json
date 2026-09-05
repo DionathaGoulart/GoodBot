@@ -1,0 +1,22 @@
+{
+  "name": "@cobot/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Schemas Zod, tipos e constantes compartilhados entre bot e painel",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}
