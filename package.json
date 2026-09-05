@@ -1,0 +1,36 @@
+{
+  "name": "cobot",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Bot de moderação para Discord + painel web (monorepo pnpm)",
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=22 <23",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "concurrently -n bot,web -c cyan,magenta \"pnpm --filter @cobot/bot dev\" \"pnpm --filter @cobot/web dev\"",
+    "build": "pnpm -r build",
+    "lint": "eslint . && pnpm --filter @cobot/web lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "db:generate": "pnpm --filter @cobot/db db:generate",
+    "db:migrate": "pnpm --filter @cobot/db db:migrate"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.20.1",
+    "concurrently": "^10.0.5",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^4.1.11"
+  }
+}
