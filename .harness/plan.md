@@ -16,7 +16,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | #   | Etapa                                                                      | Status       |
 | --- | -------------------------------------------------------------------------- | ------------ |
 | 1   | Setup do monorepo e tooling                                                | concluída · 2026-09-05 |
-| 2   | `packages/shared` e `packages/db` (schema base + migrations)               | pendente     |
+| 2   | `packages/shared` e `packages/db` (schema base + migrations)               | concluída · 2026-09-05 |
 | 3   | Esqueleto do bot (login, handlers, registro de comandos, config com cache) | pendente     |
 | 4   | Moderação e casos                                                          | pendente     |
 | 5   | Mod-log e logs de eventos                                                  | pendente     |
@@ -141,33 +141,33 @@ aplicada e um client exportado.
 
 **Tarefas — shared:**
 
-- [ ] `src/constants.ts`: `MODULES` (lista), `CASE_TYPES`, `CASE_SOURCES`,
+- [x] `src/constants.ts`: `MODULES` (lista), `CASE_TYPES`, `CASE_SOURCES`,
       `AUTOMOD_RULE_TYPES`, `AUTOMOD_ACTIONS`, `LOG_KINDS`, `STAT_KINDS`,
       `PERMISSION_LEVELS`, limites (`MAX_TIMEOUT_MS = 28d`, `MAX_PURGE = 500`).
-- [ ] `src/duration.ts`: `parseDuration('1h30m') → ms | null` e
+- [x] `src/duration.ts`: `parseDuration('1h30m') → ms | null` e
       `formatDuration(ms)`; testes.
-- [ ] `src/snowflake.ts`: `isSnowflake`, `snowflakeToDate`; testes.
-- [ ] `src/config/<module>.ts` para cada módulo (`general`, `moderation`,
+- [x] `src/snowflake.ts`: `isSnowflake`, `snowflakeToDate`; testes.
+- [x] `src/config/<module>.ts` para cada módulo (`general`, `moderation`,
       `automod`, `logs`, `welcome`, `autorole`, `reactionRoles`, `tickets`,
       `tags`, `utilities`, `stats`): schema Zod com `.default()` em tudo,
       `DEFAULT_<MODULE>_CONFIG`, tipo inferido, `version: z.literal(1)`.
       `src/config/index.ts` exporta `MODULE_SCHEMAS` (mapa módulo → schema).
-- [ ] `src/config/automod-rule.ts`: schema discriminado por `type` com o
+- [x] `src/config/automod-rule.ts`: schema discriminado por `type` com o
       `config` específico de cada regra e `actions[]` (PRD §5.2).
-- [ ] `src/templates.ts`: `renderTemplate(str, vars)` para
+- [x] `src/templates.ts`: `renderTemplate(str, vars)` para
       `{user}`/`{server}`/… e schema `MessageTemplate` (`content?`,
       `embed?`); testes.
-- [ ] `src/api/*.ts`: schemas dos payloads da API interna (PRD §5.7) —
+- [x] `src/api/*.ts`: schemas dos payloads da API interna (PRD §5.7) —
       `ModerationActionInput`, `InvalidateInput`, `MemberSearchQuery`, etc.
-- [ ] `src/errors.ts`: `UserFacingError`.
-- [ ] Testes: todo schema de config aceita `{}` e produz o default; regras
+- [x] `src/errors.ts`: `UserFacingError`.
+- [x] Testes: todo schema de config aceita `{}` e produz o default; regras
       de automod inválidas são rejeitadas.
 
 **Tarefas — db:**
 
-- [ ] `drizzle.config.ts` (dialect postgresql, `schema: ./src/schema`,
+- [x] `drizzle.config.ts` (dialect postgresql, `schema: ./src/schema`,
       `out: ./drizzle`, `DATABASE_URL`).
-- [ ] `src/schema/` um arquivo por grupo: `guilds.ts`, `configs.ts`
+- [x] `src/schema/` um arquivo por grupo: `guilds.ts`, `configs.ts`
       (`guild_settings`, `module_configs`, `log_configs`), `cases.ts`
       (`cases`, `scheduled_actions`), `automod.ts`, `messages.ts`
       (`message_cache`), `community.ts` (welcome, autorole, reaction roles,
@@ -175,18 +175,18 @@ aplicada e um client exportado.
       `audit.ts`. Enums pg para `case_type`, `case_source`, etc. importando
       as listas de `@cobot/shared`. Índices do PRD §8. `src/schema/index.ts`
       reexporta tudo + `relations`.
-- [ ] `src/client.ts`: `createDb(url)` com `postgres` (`max: 5`) e
+- [x] `src/client.ts`: `createDb(url)` com `postgres` (`max: 5`) e
       `drizzle(...)`; `src/index.ts` exporta client, schema e tipos
       (`InferSelectModel`).
-- [ ] Scripts: `db:generate`, `db:migrate` (script `src/migrate.ts` com
+- [x] Scripts: `db:generate`, `db:migrate` (script `src/migrate.ts` com
       `drizzle-orm/postgres-js/migrator`), `db:studio`.
-- [ ] Gerar migration `0000_init` e aplicar no Postgres de dev.
-- [ ] `src/repositories/` mínimos usados por todos: `configs.ts`
+- [x] Gerar migration `0000_init` e aplicar no Postgres de dev.
+- [x] `src/repositories/` mínimos usados por todos: `configs.ts`
       (`getModuleConfig(guildId, module)` que valida com o Zod do shared e
       aplica default; `setModuleConfig`), `cases.ts` (`nextCaseNumber` via
       `INSERT … RETURNING` com subquery `max+1` em transação),
       `audit.ts` (`appendAudit`).
-- [ ] Teste de integração (Vitest, pula se `DATABASE_URL` ausente):
+- [x] Teste de integração (Vitest, pula se `DATABASE_URL` ausente):
       `setModuleConfig` → `getModuleConfig` roundtrip; `nextCaseNumber`
       sequencial.
 
