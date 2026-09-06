@@ -60,9 +60,7 @@ describe('caseFooter', () => {
   });
 
   it('marca a origem quando o caso não veio de um comando', () => {
-    expect(caseFooter(makeCase({ source: 'automod' }))).toBe(
-      'CASO #12 · MOD: moderador · AUTOMOD',
-    );
+    expect(caseFooter(makeCase({ source: 'automod' }))).toBe('CASO #12 · MOD: moderador · AUTOMOD');
   });
 });
 

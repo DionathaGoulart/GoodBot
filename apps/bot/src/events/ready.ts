@@ -35,6 +35,10 @@ export default defineEvent(
     // Aquece o cache de config antes de aceitar interações.
     await ctx.config.warm(guild.id);
 
+    // O LRU de mensagens dimensiona-se pela config da guild (single-server).
+    const logsConfig = await ctx.config.get(guild.id, 'logs');
+    ctx.messageCache.setPerChannel(logsConfig.messageCache.perChannel);
+
     await syncCommands({
       db: ctx.db,
       token: env.DISCORD_TOKEN,

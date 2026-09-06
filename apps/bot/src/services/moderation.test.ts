@@ -118,6 +118,7 @@ function setup(
   const modlog: ModlogService = {
     postCase: vi.fn().mockResolvedValue(undefined),
     updateCase: vi.fn().mockResolvedValue(undefined),
+    postAction: vi.fn().mockResolvedValue(undefined),
   };
 
   const client = { user: { id: BOT_ID, tag: 'CoBot#0001' } } as unknown as Client;
@@ -359,11 +360,14 @@ describe('unban', () => {
     await h.service.unban({ guild: h.guild, target: h.target, actor: h.actor, reason: 'perdão' });
 
     expect(h.bans.remove).toHaveBeenCalledOnce();
-    expect(cancelScheduledActions).toHaveBeenCalledWith({}, {
-      guildId: GUILD_ID,
-      kind: 'unban',
-      targetId: h.target.id,
-    });
+    expect(cancelScheduledActions).toHaveBeenCalledWith(
+      {},
+      {
+        guildId: GUILD_ID,
+        kind: 'unban',
+        targetId: h.target.id,
+      },
+    );
     expect(h.target.send).not.toHaveBeenCalled();
   });
 });
