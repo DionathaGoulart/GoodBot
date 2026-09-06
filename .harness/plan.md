@@ -29,7 +29,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 4   | Moderação e casos                                                          | concluída · 2026-09-06 |
 | 5   | Mod-log e logs de eventos                                                  | concluída · 2026-09-06 |
 | 6   | Automod                                                                    | concluída · 2026-09-06 |
-| 7   | Utilidades                                                                 | pendente     |
+| 7   | Utilidades                                                                 | concluída · 2026-09-06 |
 | 8   | Comunidade I: boas-vindas, autorole, tags                                  | pendente     |
 | 9   | Comunidade II: reaction roles, tickets                                     | pendente     |
 | 10  | Coleta de estatísticas                                                     | pendente     |
@@ -617,22 +617,22 @@ polls persistidos e agendados pelo scheduler existente.
 
 **Tarefas:**
 
-- [ ] `/purge` com todos os filtros; `bulkDelete` em lotes de 100 para ≤14
+- [x] `/purge` com todos os filtros; `bulkDelete` em lotes de 100 para ≤14
       dias; resto individual com delay 1s e progresso na resposta efêmera;
       log no mod-log com contagem e filtros.
-- [ ] `/slowmode`, `/lock`, `/unlock`, `/lockdown` (salva overrides
+- [x] `/slowmode`, `/lock`, `/unlock`, `/lockdown` (salva overrides
       anteriores em `scheduled_actions.payload` ou tabela `channel_locks`
       simples para restaurar exatamente; adicionar migration se necessário).
-- [ ] `/userinfo`, `/serverinfo`, `/avatar`, `/roleinfo` (embeds
+- [x] `/userinfo`, `/serverinfo`, `/avatar`, `/roleinfo` (embeds
       styleguide §9; `userinfo` inclui contagem de casos por tipo).
-- [ ] `/remind set|list|cancel` usando `reminders` + `scheduler` (novo
+- [x] `/remind set|list|cancel` usando `reminders` + `scheduler` (novo
       `kind: reminder`).
-- [ ] `/poll create` (botões, 2–10 opções, múltipla escolha, duração),
+- [x] `/poll create` (botões, 2–10 opções, múltipla escolha, duração),
       handler de botão que grava voto em `polls.votes`, `poll_close` no
       scheduler que edita a mensagem com resultado em barras de texto
       (`████░░ 67%`).
-- [ ] Comando `/help` atualizado automaticamente (já lista por módulo).
-- [ ] Testes: parser de filtros do purge, cálculo de resultado do poll,
+- [x] Comando `/help` atualizado automaticamente (já lista por módulo).
+- [x] Testes: parser de filtros do purge, cálculo de resultado do poll,
       formatação de barras.
 
 **Arquivos criados/alterados:** `apps/bot/src/commands/utilities/*.ts`,
@@ -653,6 +653,22 @@ possível migration `0001_channel_locks`.
 pnpm --filter @cobot/bot dev
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
+
+**Notas de execução (2026-09-06):**
+
+- Overrides do lock ficaram na tabela `channel_locks` (migration
+  `0001_channel_locks`), com `role_ids` além do snapshot: sem a lista de ids
+  afetados o `/unlock` não sabe quais overwrites o próprio lock criou (e que
+  precisam ser apagados, não restaurados).
+- `/lock` e `/lockdown on` aceitam `duracao`, agendando o kind `unlock` que já
+  existia em `SCHEDULED_ACTION_KINDS`.
+- `reminders` e `polls` guardam o conteúdo; a execução continua vindo de
+  `scheduled_actions` (kinds `reminder` e `poll_close`), então um restart do
+  bot não perde nada.
+- Botões de enquete entram pelo `interactionCreate` já existente
+  (`lib/interaction.ts` → `interactions/poll-buttons.ts`); o voto é gravado em
+  transação com `for update` para dois cliques simultâneos não se perderem.
+- `/ping` já era do módulo `utilities` desde a Etapa 3 e ficou onde estava.
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
