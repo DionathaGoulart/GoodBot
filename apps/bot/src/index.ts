@@ -8,6 +8,9 @@ import { events } from './events/index';
 import { loadCommands, loadEvents } from './lib/loader';
 import { logger } from './logger';
 import { ConfigService } from './services/config';
+import { ModerationService } from './services/moderation';
+import { createModlogService } from './services/modlog';
+import { Scheduler } from './services/scheduler';
 
 import type { BotContext } from './lib/command';
 
@@ -20,16 +23,22 @@ async function main(): Promise<void> {
   const { db, sql } = createDb(env.DATABASE_URL);
   const client = createClient();
   const config = new ConfigService(db);
+  const modlog = createModlogService();
+  const moderation = new ModerationService({ db, client, config, modlog });
+  const scheduler = new Scheduler({ db, client, modlog });
 
   const ctx: BotContext = {
     client,
     db,
     config,
+    moderation,
     logger,
     commands: loadCommands(commandList),
   };
 
   loadEvents(client, events, ctx);
+  // Só começa a desfazer punições depois do gateway abrir.
+  client.once('clientReady', () => scheduler.start());
 
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
@@ -44,6 +53,7 @@ async function main(): Promise<void> {
     timer.unref();
 
     try {
+      scheduler.stop();
       await client.destroy();
       await sql.end({ timeout: 5 });
       logger.info('encerrado');

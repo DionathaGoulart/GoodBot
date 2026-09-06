@@ -1,7 +1,6 @@
 import { VERSION } from '@cobot/shared';
 import { EmbedBuilder, type APIEmbedField } from 'discord.js';
 
-
 /** Cores de status do styleguide §2.1/§9 (hex cheios). */
 export const STATUS_COLORS = {
   danger: 0xdc2626,
