@@ -1,9 +1,13 @@
 # CoBot — instruções para o Claude Code
 
 Bot de moderação para Discord (discord.js v14) + painel web (Next.js) num
-monorepo pnpm, hospedado numa instância ARM (Oracle Cloud Free Tier) com
-Docker Compose. Tudo em TypeScript. Idioma do projeto: **pt-BR** (docs,
+monorepo pnpm. Tudo em TypeScript. Idioma do projeto: **pt-BR** (docs,
 commits, UI, mensagens do bot); nomes de código em inglês.
+
+**Hospedagem (PRD v1.1):** dividida em três — o **bot** roda numa VM
+`VM.Standard.E2.1.Micro` da Oracle (x86_64, 1 OCPU / 1 GB, Always Free) via
+Docker Compose com Caddy na frente; o **painel** roda na Vercel; o
+**Postgres** é gerenciado no Supabase. Imagens Docker são `linux/amd64`.
 
 ## Antes de agir (obrigatório em toda sessão)
 
@@ -71,6 +75,13 @@ infra/            docker-compose.yml, Caddyfile, Dockerfiles, scripts de deploy
   `globals.css`. Componentes shadcn são editados em `apps/web/components/ui`.
 - **Discord:** IDs sempre `string`; nunca `Number(snowflake)`. Comandos
   registrados como guild commands. Respeitar rate limits (PRD §7.4).
+- **API do bot:** desde a v1.1 ela é exposta na internet (`bot.<dominio>`),
+  porque o painel roda fora da VM. Todo endpoint novo exige Bearer,
+  validação Zod e conta no rate limit; nunca adicione rota sem auth além do
+  `/health` (PRD §5.7, §7.3). O container do bot não publica porta no host.
+- **Três provedores, três cofres de segredo:** VM (`.env`), GitHub Secrets
+  (CI) e variáveis do projeto na Vercel. `INTERNAL_API_TOKEN` vive nos três
+  e é rotacionado nos três juntos.
 - **Single-server hoje, multi amanhã:** todo query filtra por `guildId`;
   nunca assumir uma única guild fora de `env.GUILD_ID`.
 
@@ -83,6 +94,9 @@ pnpm install
 pnpm --filter @cobot/db db:migrate
 pnpm dev                        # bot + web em paralelo (turbo/concurrently)
 ```
+
+Em dev tudo é local: Postgres no Docker, bot em `:3001`, painel em `:3000`.
+Os serviços gerenciados (Supabase, Vercel) só entram em produção.
 
 Validação padrão de uma etapa (rodar tudo antes de marcar como concluída):
 
