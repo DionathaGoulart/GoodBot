@@ -27,7 +27,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 2   | `packages/shared` e `packages/db` (schema base + migrations)               | concluída · 2026-09-05 |
 | 3   | Esqueleto do bot (login, handlers, registro de comandos, config com cache) | concluída · 2026-09-06 |
 | 4   | Moderação e casos                                                          | concluída · 2026-09-06 |
-| 5   | Mod-log e logs de eventos                                                  | pendente     |
+| 5   | Mod-log e logs de eventos                                                  | concluída · 2026-09-06 |
 | 6   | Automod                                                                    | pendente     |
 | 7   | Utilidades                                                                 | pendente     |
 | 8   | Comunidade I: boas-vindas, autorole, tags                                  | pendente     |
@@ -461,27 +461,27 @@ voice com canais e ignorados configuráveis, mais `message_cache`.
 
 **Tarefas:**
 
-- [ ] `src/services/log-queue.ts`: fila por canal, junta até 10 embeds por
+- [x] `src/services/log-queue.ts`: fila por canal, junta até 10 embeds por
       mensagem, flush a cada 2s ou quando cheia, backoff em 429, descarta
       com log de warn se o canal não existe/sem permissão.
-- [ ] `src/services/modlog.ts`: `postCase` (envia, salva
+- [x] `src/services/modlog.ts`: `postCase` (envia, salva
       `modlog_message_id`), `updateCase` (edita a mensagem quando o motivo
       muda), `postAction` (lock/purge/raid).
-- [ ] `src/services/logs.ts`: `LogService.emit(guildId, kind, embed)` que
+- [x] `src/services/logs.ts`: `LogService.emit(guildId, kind, embed)` que
       resolve canal por `log_configs` (com fallback ao canal geral) e
       ignorados; helpers de formato (diff de antes/depois com truncamento em
       1024 chars).
-- [ ] `src/services/message-cache.ts`: grava em `message_cache` em lote
+- [x] `src/services/message-cache.ts`: grava em `message_cache` em lote
       (buffer de 100 ou 5s) quando o módulo de logs está ativo; job de
       limpeza (7 dias) a cada hora.
-- [ ] Eventos: `messageUpdate`, `messageDelete`, `messageDeleteBulk` (anexa
+- [x] Eventos: `messageUpdate`, `messageDelete`, `messageDeleteBulk` (anexa
       `.txt`), `guildMemberAdd`, `guildMemberRemove`, `guildMemberUpdate`
       (nick, cargos — com `fetchAuditLogs` para descobrir o autor, timeout de
       2s), `guildBanAdd/Remove` (só quando não veio do bot — evitar
       duplicar caso), `channelCreate/Update/Delete`, `roleCreate/Update/
     Delete`, `emojiCreate/Delete`, `guildUpdate`, `voiceStateUpdate`.
-- [ ] Comando `/logs status` (mod): mostra a grade tipo → canal → ativo.
-- [ ] Testes: coalescing da fila (10 embeds → 1 envio), resolução de canal
+- [x] Comando `/logs status` (mod): mostra a grade tipo → canal → ativo.
+- [x] Testes: coalescing da fila (10 embeds → 1 envio), resolução de canal
       com fallback e ignorados, formatação de diff.
 
 **Arquivos criados/alterados:** `apps/bot/src/services/{log-queue,modlog,logs,
@@ -503,6 +503,22 @@ message-cache}.ts`, `apps/bot/src/events/logs/*.ts`,
 pnpm --filter @cobot/bot dev
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
+
+**Notas de execução (2026-09-06):**
+
+- Sem migration nova: `log_configs` e `message_cache` já vieram da Etapa 2.
+  Entraram só as repositories `packages/db/src/repositories/{logs,message-
+  cache}.ts`.
+- O mod-log usa `LogQueue.send` (envio imediato) em vez de `push`: o
+  coalescing não devolve o id da mensagem, e sem ele `/case edit` não teria
+  o que editar. Os demais logs passam pelo coalescing normal.
+- Arquivos de apoio não previstos no plano: `src/lib/log-embeds.ts` (embed
+  padrão de log, cores por natureza do evento) e `src/lib/audit-log.ts`
+  (`findAuditEntry` com o timeout de 2 s).
+- `BotContext` ganhou `logs`, `modlog` e `messageCache`; o LRU de mensagens
+  é dimensionado no `ready` a partir de `logs.messageCache.perChannel`.
+- `/logs` ficou em `commands/index.ts` direto (e não em `moderationCommands`)
+  porque o módulo dele é `logs`, não `moderation`.
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
