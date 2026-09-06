@@ -1,6 +1,6 @@
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
-import { defineCommand } from '../lib/command';
+import { defineCommand, isUserContextCommand } from '../lib/command';
 import { botFooter, code, infoEmbed } from '../lib/embeds';
 import { groupByModule } from '../lib/loader';
 import { levelAtLeast } from '../services/permissions';
@@ -41,7 +41,11 @@ export default defineCommand({
         .map((command) => {
           const json = command.data.toJSON();
           const description = command.help ?? ('description' in json ? json.description : '');
-          return `${code(`/${command.data.name}`)} — ${description}`;
+          // Menu de contexto não é digitado: aparece sem a barra.
+          const label = isUserContextCommand(command)
+            ? `${command.data.name} (menu de contexto)`
+            : `/${command.data.name}`;
+          return `${code(label)} — ${description}`;
         })
         .join('\n'),
       inline: false,

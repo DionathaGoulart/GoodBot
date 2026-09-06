@@ -5,7 +5,7 @@ import { REST, Routes } from 'discord.js';
 
 import { childLogger } from '../logger';
 
-import type { Command } from './command';
+import type { AnyCommand } from './command';
 import type { Db } from '@cobot/db';
 import type { RESTPostAPIApplicationCommandsJSONBody } from 'discord.js';
 
@@ -17,7 +17,7 @@ export type CommandManifest = RESTPostAPIApplicationCommandsJSONBody[];
  * Manifesto JSON dos comandos, ordenado por nome para o hash não depender da
  * ordem em que os arquivos foram carregados.
  */
-export function buildManifest(commands: Iterable<Command>): CommandManifest {
+export function buildManifest(commands: Iterable<AnyCommand>): CommandManifest {
   return [...commands]
     .map((command) => command.data.toJSON() as RESTPostAPIApplicationCommandsJSONBody)
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -45,7 +45,7 @@ export interface SyncOptions {
   token: string;
   clientId: string;
   guildId: string;
-  commands: Iterable<Command>;
+  commands: Iterable<AnyCommand>;
   /** Registra mesmo que o hash não tenha mudado (`--force`). */
   force?: boolean;
 }
