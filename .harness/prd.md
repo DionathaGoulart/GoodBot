@@ -1,7 +1,15 @@
 # CoBot — PRD (Product Requirements Document)
 
-Versão 1.0 · 2026-09-05 · Documento de referência para todas as sessões.
+Versão 1.1 · 2026-09-06 · Documento de referência para todas as sessões.
 Leia junto com `.harness/styleguide.md` (UI) e `.harness/plan.md` (execução).
+
+> **v1.1 — mudança de hospedagem.** A v1.0 assumia tudo numa VM ARM
+> (Ampere A1) com um único Docker Compose. A capacidade A1 do free tier é
+> intermitente e impediu a criação da instância, então a hospedagem passou a
+> ser dividida: **bot** na Oracle E2.1.Micro (x86, Always Free), **painel**
+> na Vercel e **Postgres** no Supabase. O que mudou: §5.7, §7.2, §7.3, §7.5,
+> §11 e §12. O que **não** mudou: requisitos funcionais, modelo de dados,
+> permissões, styleguide e o monorepo.
 
 ---
 
@@ -172,11 +180,14 @@ Eventos agregados em memória e persistidos a cada 60s (flush) na tabela
 Retenção: buckets horários por 90 dias, depois agregados a diários; job
 noturno no bot. Nenhum conteúdo de mensagem é armazenado nas stats.
 
-### 5.7 API interna (Hono no bot)
+### 5.7 API do bot (Hono)
 
-Servidor HTTP no processo do bot (`:3001`, só na rede do Compose), auth por
-header `Authorization: Bearer <INTERNAL_API_TOKEN>` com comparação em tempo
-constante. Endpoints (todos validados com Zod de `packages/shared`):
+Servidor HTTP no processo do bot (`:3001`). Desde a v1.1 o painel roda fora
+da VM (Vercel), então esta API é **exposta na internet** pelo Caddy em
+`https://bot.<dominio>` — o container continua sem publicar porta no host, só
+o Caddy o alcança. Auth por header `Authorization: Bearer
+<INTERNAL_API_TOKEN>` com comparação em tempo constante, mais rate limit e
+body cap (§7.3). Endpoints (todos validados com Zod de `packages/shared`):
 
 - `GET /health` — status gateway, ping, uptime, guild cache.
 - `GET /guilds/:id/channels|roles|members?q=&limit=` — dados ao vivo do cache
@@ -190,6 +201,9 @@ actorId}` → executa a ação e cria caso (mesmo caminho que o slash command).
   reaction-role panel, ticket panel.
 - `POST /guilds/:id/reaction-roles/:id/publish`, `POST /tickets/panel/publish`.
 - `GET /guilds/:id/audit-log?type=&limit=` — proxy para audit log do Discord.
+
+`/health` é o único endpoint sem auth, e responde apenas `{ok: true}` sem
+token (o corpo detalhado exige o Bearer), para servir de healthcheck.
 
 Ponto de extensão: `invalidate` é hoje HTTP; a interface `ConfigBus`
 (`publish(module)` / `subscribe`) permite trocar por Postgres `LISTEN/NOTIFY`
@@ -286,18 +300,25 @@ ator, ação, período, e diff antes/depois em JSON. Imutável (sem delete).
 - Slash commands registrados como **guild commands** (instantâneos) na guild
   configurada; flag para registro global.
 
-### 7.2 Performance na ARM free tier
+### 7.2 Performance no free tier
 
-- Ampere A1: até 4 OCPU / 24 GB no free tier, mas assumir orçamento
-  conservador: bot ≤ 300 MB RSS, web ≤ 500 MB, Postgres ≤ 512 MB
-  (`shared_buffers=128MB`), caddy ≤ 50 MB. Limites no Compose
-  (`mem_limit`).
-- Imagens `linux/arm64` construídas por buildx (QEMU no GitHub Actions ou
-  runner ARM); base `node:22-alpine`; Next.js `output: 'standalone'`.
+- **VM (Oracle E2.1.Micro, 1 OCPU / 1 GB, x86_64)**: roda só `bot` e
+  `caddy`. Orçamento: bot ≤ 300 MB RSS (`mem_limit: 384m`), caddy ≤ 50 MB,
+  sobrando ~500 MB para o sistema. Swap de 2 GB configurado no host, porque
+  1 GB não perdoa pico.
+- **Painel (Vercel)**: `output` padrão (não `standalone`); server components
+  com `fetch` paralelo; nada de trabalho pesado por request. Cold start
+  importa: manter dependências do server enxutas.
+- **Postgres (Supabase free)**: 500 MB de armazenamento — as retenções do §8
+  já cabem nisso com folga; `shared_buffers` é do provedor, não nosso.
+  Painel conecta pelo **pooler** (pgBouncer) porque funções serverless abrem
+  muitas conexões curtas; o bot conecta direto, com pool de no máximo 5.
+- Imagem `linux/amd64` para o bot; base `node:22-alpine`.
 - Stats agregadas em memória e flush em lote (§5.6); nunca 1 INSERT por
   mensagem.
 - Cache de config no bot com TTL de segurança (5 min) além da invalidação
-  explícita.
+  explícita — agora ainda mais importante, já que cada leitura do painel
+  cruza a internet.
 - Consultas do painel paginadas server-side; gráficos lêem de `stat_buckets`
   (nunca de tabelas de eventos brutos).
 - Logs pino em JSON, nível `info` em prod, rotação pelo Docker
@@ -309,28 +330,38 @@ ator, ação, período, e diff antes/depois em JSON. Imutável (sem delete).
 guilds.members.read`; `AUTH_SECRET` ≥ 32 bytes; cookies `Secure`,
   `HttpOnly`, `SameSite=Lax`; callback URL fixa por ambiente; sem refresh
   token armazenado além do necessário (não guardar access token do usuário
-  depois da verificação inicial; re-verificar via API interna do bot, que
-  tem cache de membros).
+  depois da verificação inicial; re-verificar via API do bot, que tem cache
+  de membros).
 - **Autorização**: checagem de permissão em **todo** server action / route
   handler, não só no layout; helper `requireGuildAccess(session, guildId,
 level)`.
-- **API interna**: token longo aleatório (`openssl rand -hex 32`), comparação
-  timing-safe, só escuta na rede do Compose (sem porta publicada), rate limit
-  simples por rota (memória), body ≤ 256 KB, Zod em toda entrada.
-- **Segredos**: só via `.env` (nunca commitado; `.env.example` sim) e GitHub
-  Secrets; Compose lê `env_file`.
+- **API do bot (exposta)**: desde a v1.1 o painel roda fora da VM, então a
+  API do bot é publicada pelo Caddy num subdomínio dedicado
+  (`bot.<dominio>`), **só** com TLS. Defesas obrigatórias, porque o token
+  passa a ser a única barreira: token longo aleatório (`openssl rand -hex
+32`), comparação timing-safe, rate limit 60 req/min por IP **e** 100/min por
+  rota (memória), body ≤ 256 KB, Zod em toda entrada, sem CORS (nenhum
+  `Access-Control-Allow-Origin`), sem listagem de rotas, respostas de erro
+  sem stack. O container do bot não publica porta no host: só o Caddy
+  alcança `bot:3001` pela rede do Compose.
+- **Segredos**: só via `.env` na VM (nunca commitado; `.env.example` sim),
+  GitHub Secrets para a CI e variáveis de ambiente do projeto na Vercel. O
+  `INTERNAL_API_TOKEN` existe nos três lugares e é rotacionado junto.
 - **Web**: CSP restritiva (self + fonts locais), sem `unsafe-inline` exceto
   o script de tema com nonce; CSRF coberto por server actions (origin check)
-  e cookie `SameSite`; headers de segurança no Caddy.
+  e cookie `SameSite`; headers de segurança configurados no `next.config.ts`
+  (não mais no Caddy, que só atende a API do bot).
 - **Discord**: bot com o mínimo de permissões (ver §10); intents privilegiadas
   `GuildMembers` e `MessageContent` (necessárias para automod/logs);
   `GuildPresences` **não**.
-- **Postgres**: sem porta publicada; usuário próprio; backups diários por
-  `pg_dump` em volume + opcionalmente Object Storage da Oracle (etapa de
-  hardening).
+- **Postgres gerenciado**: conexão só por TLS (`sslmode=require`); usuário da
+  aplicação sem privilégio de superusuário; senha só em segredo; painel usa a
+  string do **pooler** (pgBouncer, porta 6543) e o bot usa a conexão direta
+  (5432), que suporta pool longo; backups do provedor + `pg_dump` próprio
+  (§7.5 e etapa de hardening).
 - **Entrada do usuário**: regex de filtro de palavras compilada com limite de
-  tamanho e testada com timeout (safe-regex ou `re2` se disponível em ARM;
-  fallback: rejeitar regex com grupos aninhados quantificados).
+  tamanho e testada com timeout (safe-regex ou `re2`; fallback: rejeitar
+  regex com grupos aninhados quantificados).
 
 ### 7.4 Rate limits do Discord
 
@@ -350,10 +381,14 @@ level)`.
 ### 7.5 Confiabilidade e operação
 
 - Reconexão automática do gateway (discord.js); `unhandledRejection` logado,
-  nunca derruba o processo; `healthcheck` no Compose para os 3 serviços;
+  nunca derruba o processo; `healthcheck` no Compose para `bot` e `caddy`;
   `restart: unless-stopped`.
-- Migrations executadas por um serviço one-shot `migrate` antes de `bot` e
-  `web` (`depends_on: condition: service_completed_successfully`).
+- Migrations executadas pela CI contra o Postgres gerenciado, em um job que
+  roda **antes** do deploy do bot e do painel; nunca pelo processo do bot no
+  boot. Deploy manual usa `pnpm --filter @cobot/db db:migrate` com a
+  `DATABASE_URL` de produção.
+- O painel na Vercel é stateless: qualquer instância pode atender qualquer
+  request; nada de estado em memória entre requests.
 - Graceful shutdown: flush de stats, fechar HTTP, destruir client, 10s de
   timeout.
 
@@ -454,15 +489,18 @@ DirectMessages, GuildEmojisAndStickers`.
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Intents privilegiadas exigem verificação acima de 100 servidores  | irrelevante em single-server; documentar                                                                                                   |
 | Free tier da Oracle reclama instâncias ociosas                    | bot mantém CPU > 0; monitorar; não é "idle" com gateway aberto                                                                             |
-| Build arm64 lento no GitHub Actions (QEMU)                        | cache de camadas (`gha`); considerar runner ARM hospedado (`ubuntu-24.04-arm`)                                                             |
+| **Capacidade Ampere A1 indisponível**                             | resolvido: v1.1 usa E2.1.Micro (x86), que não sofre com capacidade                                                                         |
+| **API do bot exposta na internet**                                | subdomínio próprio, Bearer de 32 bytes com comparação timing-safe, rate limit 60/min por IP, body ≤ 256 KB, sem CORS, fail2ban no Caddy (§7.3) |
+| **Latência web → bot / web → banco**                              | Vercel e Supabase na mesma região (`sa-east-1` / GRU quando possível); painel usa cache do bot; server components paralelizam fetches       |
+| **Limites do free tier da Vercel/Supabase**                       | painel de um servidor está muito abaixo dos limites; alerta de uso; migração para VM continua possível (o Compose antigo fica documentado)  |
+| **Supabase pausa projeto por inatividade (7 dias)**               | o bot mantém conexão e escrita constante; alerta se `pg_dump` diário falhar                                                                |
 | Regex do usuário (ReDoS)                                          | limite + timeout + validação no painel                                                                                                     |
 | Perda de mensagens de log por rate limit                          | fila com coalescing (§7.4)                                                                                                                 |
-| Token da API interna vazar em log                                 | nunca logar headers; pino `redact`                                                                                                         |
+| Token da API do bot vazar em log                                  | nunca logar headers; pino `redact`; rotação documentada no runbook                                                                         |
 | Auth.js + Discord: `guilds.members.read` exige o usuário na guild | tratar 403 como "acesso negado"                                                                                                            |
 | Drift entre schema Zod de config e jsonb salvo                    | campo `version` + migração de config na leitura                                                                                            |
-| Disco cheio (logs, backups, message_cache)                        | retenções (§8), rotação Docker, alerta em hardening                                                                                        |
+| Disco cheio (logs, message_cache)                                 | retenções (§8), rotação Docker; o disco do banco agora é do Supabase (alerta de cota)                                                       |
 | OneDrive sincronizando `node_modules` no Windows do dev           | `.gitignore` + trabalhar via WSL (path `/mnt/c/...` já é o caso); pnpm com `node-linker=hoisted` não é necessário; documentar no CLAUDE.md |
-
 ## 12. Decisões arquiteturais (com justificativa)
 
 | Decisão                             | Por quê                                                                                                                                |
@@ -471,16 +509,22 @@ DirectMessages, GuildEmojisAndStickers`.
 | TypeScript em tudo                  | tipos do discord.js e do Drizzle são o principal valor; Zod fecha o ciclo em runtime                                                   |
 | discord.js v14 + slash commands     | lib madura, tipagem forte, suporte completo a interações (modais, botões, select, context menus)                                       |
 | Handler próprio de comandos/eventos | evita framework opinativo (sapphire) numa base pequena; total controle sobre permissões e carga de config                              |
-| Hono para a API interna             | minúsculo, rápido, tipado, roda em Node sem adaptação; suficiente para uma API privada                                                 |
-| pino                                | JSON estruturado, barato em CPU (importa na ARM), `redact` nativo                                                                      |
+| Hono para a API do bot              | minúsculo, rápido, tipado, roda em Node sem adaptação; suficiente para uma API de superfície pequena                                   |
+| pino                                | JSON estruturado, barato em CPU, `redact` nativo                                                                                       |
 | PostgreSQL                          | relacional cabe no domínio (casos, configs, stats agregadas); jsonb dá flexibilidade para config por módulo; um único serviço de dados |
-| Drizzle ORM                         | schema em TS, migrations SQL versionadas e legíveis, sem runtime pesado, queries tipadas; funciona bem em arm64 (sem binário nativo)   |
-| Next.js App Router                  | server components e server actions eliminam uma API pública separada; standalone output cabe em container pequeno                      |
+| Drizzle ORM                         | schema em TS, migrations SQL versionadas e legíveis, sem runtime pesado, queries tipadas; sem binário nativo                           |
+| Next.js App Router                  | server components e server actions eliminam uma API pública separada; roda nativamente na Vercel                                       |
 | Tailwind + shadcn/ui                | componentes copiados para o repo, totalmente tematizáveis com o styleguide neobrutal (radius 0, borda 2px)                             |
 | Auth.js com Discord OAuth2          | provider pronto, JWT stateless, sem tabela de sessão                                                                                   |
-| Zod em `packages/shared`            | um schema por config e por payload da API interna, importado por bot e web: validação idêntica dos dois lados                          |
+| Zod em `packages/shared`            | um schema por config e por payload da API do bot, importado por bot e web: validação idêntica dos dois lados                           |
 | Sem Redis                           | um processo de bot + config no Postgres com cache em memória cobre single-server; `ConfigBus` abstrai o pub/sub para depois            |
-| Docker Compose + Caddy              | um arquivo descreve tudo; Caddy faz HTTPS automático (Let's Encrypt) e headers; sem nginx + certbot                                    |
-| GitHub Actions → SSH deploy         | build arm64 na CI (imagens no GHCR), servidor só faz `docker compose pull && up -d`; sem build na instância free tier                  |
+| **Hospedagem dividida** (v1.1)      | a capacidade Ampere A1 do free tier é intermitente e bloqueou a criação da VM; o bot sozinho cabe na E2.1.Micro (1 GB), que sempre tem capacidade. Painel e banco saem para serviços gerenciados |
+| **Bot na Oracle E2.1.Micro (x86)**  | Always Free e sempre disponível; o bot é ≤ 300 MB RSS e precisa de processo longo com gateway aberto — exatamente o que serverless não faz |
+| **Imagens `linux/amd64`**           | consequência do E2.1.Micro; some o build QEMU/ARM na CI, que era o passo mais lento do deploy                                          |
+| **Painel na Vercel**                | Next.js roda nativamente, deploy por git, previews por PR, HTTPS e CDN sem configurar nada; plano Hobby é gratuito para uso não-comercial |
+| **Postgres no Supabase**            | free tier sempre ligado (Neon suspende por inatividade e o pool do bot brigaria com isso); backups gerenciados; pooler pgBouncer necessário para as funções serverless da Vercel |
+| **API do bot exposta com TLS**      | com o painel fora da Oracle, `bot ↔ web` deixa de ser rede privada; Caddy publica só essa API num subdomínio, protegida por Bearer token, rate limit e body cap (§7.3) |
+| Docker Compose + Caddy              | um arquivo descreve o que roda na VM (bot + caddy); Caddy faz HTTPS automático (Let's Encrypt) e headers; sem nginx + certbot         |
+| GitHub Actions → SSH deploy         | build amd64 na CI (imagem no GHCR), servidor só faz `docker compose pull && up -d`; sem build na instância free tier                   |
 | Config no banco, não em arquivo     | painel precisa alterar em tempo real sem redeploy                                                                                      |
 | Stats em buckets agregados          | free tier: nunca guardar evento bruto por mensagem; consultas do painel ficam baratas                                                  |
