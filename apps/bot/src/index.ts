@@ -6,6 +6,7 @@ import { createClient } from './client';
 import { commands as commandList } from './commands/index';
 import { env } from './env';
 import { events } from './events/index';
+import { StatsRollupJob } from './jobs/stats-rollup';
 import { loadCommands, loadEvents } from './lib/loader';
 import { logger } from './logger';
 import { AutoroleService } from './services/autorole';
@@ -19,6 +20,7 @@ import { createModlogService } from './services/modlog';
 import { PollService } from './services/polls';
 import { ReactionRoleService } from './services/reaction-roles';
 import { Scheduler } from './services/scheduler';
+import { StatsService } from './services/stats';
 import { TicketService } from './services/tickets';
 import { WelcomeService } from './services/welcome';
 
@@ -37,15 +39,34 @@ async function main(): Promise<void> {
   const logs = new LogService({ db, config, queue });
   const messageCache = new MessageCacheService({ db });
   const modlog = createModlogService({ db, client, logs, queue });
-  const moderation = new ModerationService({ db, client, config, modlog });
-  const automod = new AutomodService({ db, config, moderation, modlog });
+  const stats = new StatsService({ db, client, config });
+  const moderation = new ModerationService({
+    db,
+    client,
+    config,
+    modlog,
+    onCase: (kase) => void stats.recordCase(kase.guildId, kase.type),
+  });
+  const automod = new AutomodService({
+    db,
+    config,
+    moderation,
+    modlog,
+    onHit: (hit) => void stats.recordAutomodHit(hit.guildId, hit.ruleId),
+  });
   const locks = new LockService(db);
   const polls = new PollService({ db, client });
   const welcome = new WelcomeService({ config });
   const autorole = new AutoroleService({ db, config });
   const reactionRoles = new ReactionRoleService({ db, client, config });
-  const tickets = new TicketService({ db, config });
+  const tickets = new TicketService({
+    db,
+    config,
+    onOpen: (ticket) => void stats.recordTicketOpen(ticket.guildId),
+    onClose: (ticket) => void stats.recordTicketClose(ticket.guildId),
+  });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
+  const statsRollup = new StatsRollupJob({ db, client, config });
 
   const ctx: BotContext = {
     client,
@@ -62,6 +83,7 @@ async function main(): Promise<void> {
     reactionRoles,
     tickets,
     messageCache,
+    stats,
     logger,
     commands: loadCommands(commandList),
   };
@@ -73,6 +95,8 @@ async function main(): Promise<void> {
     queue.start();
     messageCache.start();
     automod.start();
+    stats.start();
+    statsRollup.start();
   });
 
   let shuttingDown = false;
@@ -92,9 +116,11 @@ async function main(): Promise<void> {
       queue.stop();
       messageCache.stop();
       automod.stop();
+      stats.stop();
+      statsRollup.stop();
       autorole.stop();
       // O que estava em buffer precisa chegar ao canal e ao banco antes do fim.
-      await Promise.all([queue.flushAll(), messageCache.flush()]);
+      await Promise.all([queue.flushAll(), messageCache.flush(), stats.flush()]);
       await client.destroy();
       await sql.end({ timeout: 5 });
       logger.info('encerrado');

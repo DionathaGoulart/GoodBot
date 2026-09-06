@@ -39,6 +39,9 @@ export default defineEvent(
     const logsConfig = await ctx.config.get(guild.id, 'logs');
     ctx.messageCache.setPerChannel(logsConfig.messageCache.perChannel);
 
+    const statsConfig = await ctx.config.get(guild.id, 'stats');
+    ctx.stats.setFlushInterval(statsConfig.flushIntervalSeconds);
+
     await syncCommands({
       db: ctx.db,
       token: env.DISCORD_TOKEN,

@@ -30,6 +30,8 @@ export interface ModerationDeps {
   client: Client;
   config: ConfigService;
   modlog: ModlogService;
+  /** Hook de estatísticas por tipo de caso (§5.6). */
+  onCase?: (kase: Case) => void;
 }
 
 /**
@@ -80,6 +82,7 @@ interface ExecuteInput extends TimedRequest {
  * variando só o `source`.
  */
 export class ModerationService {
+  private readonly deps: ModerationDeps;
   private readonly db: Db;
   private readonly client: Client;
   private readonly config: ConfigService;
@@ -87,6 +90,7 @@ export class ModerationService {
   readonly modlog: ModlogService;
 
   constructor(deps: ModerationDeps) {
+    this.deps = deps;
     this.db = deps.db;
     this.client = deps.client;
     this.config = deps.config;
@@ -361,6 +365,7 @@ export class ModerationService {
     }
 
     await this.modlog.postCase(kase);
+    this.deps.onCase?.(kase);
 
     log.info(
       { guildId: guild.id, type, caseNumber: kase.caseNumber, targetId: target.id, actorId },
