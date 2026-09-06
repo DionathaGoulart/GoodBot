@@ -90,6 +90,8 @@ export const SCHEDULED_ACTION_KINDS = [
   'unlock',
   'reminder',
   'poll_close',
+  /** Autorole com atraso longo: `setTimeout` não sobrevive a um restart. */
+  'autorole',
 ] as const;
 export type ScheduledActionKind = (typeof SCHEDULED_ACTION_KINDS)[number];
 

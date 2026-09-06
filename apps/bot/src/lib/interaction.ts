@@ -6,7 +6,7 @@ import { childLogger } from '../logger';
 import { isUserContextCommand } from './command';
 import { CooldownStore } from './cooldown';
 import { botFooter, errorEmbed } from './embeds';
-import { handlePollButton } from '../interactions/poll-buttons';
+import { handleComponent } from '../interactions/index';
 import { levelAtLeast, resolveLevel, toMemberLike } from '../services/permissions';
 
 import type { AnyCommand, AutocompleteContext, BotContext, CommandContext } from './command';
@@ -83,11 +83,16 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
       return;
     }
 
-    if (interaction.isButton()) {
+    if (interaction.isMessageComponent()) {
       try {
-        await handlePollButton(ctx, interaction);
+        const handled = await handleComponent(ctx, interaction);
+        // Componente de uma mensagem antiga: o usuário não pode ficar com
+        // "falha na interação" na tela.
+        if (!handled) {
+          await replyError(interaction, 'Este botão não vale mais. Peça uma mensagem nova.');
+        }
       } catch (error) {
-        log.error({ err: error, customId: interaction.customId }, 'erro no botão');
+        log.error({ err: error, customId: interaction.customId }, 'erro no componente');
         await replyError(interaction, 'Não consegui registrar essa ação. Tente de novo.');
       }
       return;

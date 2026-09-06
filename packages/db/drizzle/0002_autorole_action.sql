@@ -1,0 +1,1 @@
+ALTER TYPE "public"."scheduled_action_kind" ADD VALUE 'autorole';

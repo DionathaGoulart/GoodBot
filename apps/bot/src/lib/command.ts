@@ -1,6 +1,7 @@
 import { ContextMenuCommandBuilder } from 'discord.js';
 
 import type { AutomodService } from '../automod/engine';
+import type { AutoroleService } from '../services/autorole';
 import type { ConfigService, ResolvedSettings } from '../services/config';
 import type { LockService } from '../services/locks';
 import type { LogService } from '../services/logs';
@@ -8,6 +9,7 @@ import type { MessageCacheService } from '../services/message-cache';
 import type { ModerationService } from '../services/moderation';
 import type { ModlogService } from '../services/modlog';
 import type { PollService } from '../services/polls';
+import type { WelcomeService } from '../services/welcome';
 import type { Db } from '@cobot/db';
 import type { Module, PermissionLevel } from '@cobot/shared';
 import type {
@@ -41,6 +43,10 @@ export interface BotContext {
   locks: LockService;
   /** Encerramento e resultado de enquetes (§5.3). */
   polls: PollService;
+  /** Mensagens de entrada/saída (§5.5). */
+  welcome: WelcomeService;
+  /** Cargos automáticos e cargo de verificação (§5.5). */
+  autorole: AutoroleService;
   messageCache: MessageCacheService;
   logger: Logger;
   /** Coleção viva de comandos (usada pelo `/help` e pelo registro). */

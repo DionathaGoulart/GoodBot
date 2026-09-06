@@ -7,6 +7,7 @@ import { childLogger } from '../logger';
 import { announceLock, isLockable } from './locks';
 import { fetchMember } from './moderation';
 
+import type { AutoroleService } from './autorole';
 import type { ConfigService } from './config';
 import type { LockService } from './locks';
 import type { ModlogService } from './modlog';
@@ -20,7 +21,14 @@ const log = childLogger('scheduler');
 /** Poll a cada 30 s na tabela, sem cron externo (PRD §5.1). */
 export const SCHEDULER_INTERVAL_MS = 30 * SECOND_MS;
 
-const HANDLED_KINDS = ['unban', 'untimeout', 'unlock', 'reminder', 'poll_close'] as const;
+const HANDLED_KINDS = [
+  'unban',
+  'untimeout',
+  'unlock',
+  'reminder',
+  'poll_close',
+  'autorole',
+] as const;
 type HandledKind = (typeof HANDLED_KINDS)[number];
 
 /** Kinds que desfazem uma punição e por isso viram caso. */
@@ -57,6 +65,7 @@ export interface SchedulerDeps {
   modlog: ModlogService;
   locks: LockService;
   polls: PollService;
+  autorole: AutoroleService;
   /** Sobrescreve o intervalo (testes e dev). */
   intervalMs?: number;
   /** Quantas ações uma passada processa. */
@@ -65,9 +74,10 @@ export interface SchedulerDeps {
 
 /**
  * Executa o que foi agendado: desfazer punições temporárias, destrancar
- * canais, entregar lembretes e encerrar enquetes. As ações são tomadas em lote
- * com `for update skip locked` e já marcadas como feitas; falha de execução
- * vira log e não retentativa infinita (ver `claimDueActions`).
+ * canais, entregar lembretes, encerrar enquetes e aplicar o autorole atrasado.
+ * As ações são tomadas em lote com `for update skip locked` e já marcadas
+ * como feitas; falha de execução vira log e não retentativa infinita (ver
+ * `claimDueActions`).
  */
 export class Scheduler {
   private readonly deps: SchedulerDeps;
@@ -132,6 +142,9 @@ export class Scheduler {
           break;
         case 'poll_close':
           await this.closePoll(action, payload);
+          break;
+        case 'autorole':
+          await this.applyAutorole(action, payload);
           break;
       }
     } catch (error) {
@@ -279,6 +292,17 @@ export class Scheduler {
 
     await completeReminder(this.deps.db, pending.id);
     log.info({ actionId: action.id, reminderId: pending.id }, 'lembrete entregue');
+  }
+
+  /** Autorole com atraso maior que um `setTimeout` aguenta atravessar. */
+  private async applyAutorole(action: ScheduledAction, payload: ActionPayload): Promise<void> {
+    const targetId = payload.targetId;
+    if (!targetId) {
+      log.warn({ actionId: action.id }, 'autorole agendado sem targetId');
+      return;
+    }
+    const guild = await this.deps.client.guilds.fetch(action.guildId);
+    await this.deps.autorole.applyFor(guild, targetId);
   }
 
   private async closePoll(action: ScheduledAction, payload: ActionPayload): Promise<void> {
