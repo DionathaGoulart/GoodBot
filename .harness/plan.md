@@ -35,7 +35,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 10  | Coleta de estatísticas                                                     | concluída · 2026-09-06 |
 | 11  | API interna do bot (Hono)                                                  | concluída · 2026-09-06 |
 | 12  | Esqueleto do painel (Next.js, Auth.js, layout, 2 temas)                    | concluída · 2026-09-06 |
-| 13  | Dashboard de estatísticas                                                  | pendente     |
+| 13  | Dashboard de estatísticas                                                  | concluída · 2026-09-06 |
 | 14  | Configuração I: geral, moderação, logs, boas-vindas, autorole, tags        | pendente     |
 | 15  | Configuração II: automod, reaction roles, tickets, comandos                | pendente     |
 | 16  | Gestão do servidor: membros, cargos, canais                                | pendente     |
@@ -1137,25 +1137,25 @@ erro.
 
 **Tarefas:**
 
-- [ ] `pnpm dlx shadcn@latest add chart` (Recharts) e tematizar conforme
+- [x] `pnpm dlx shadcn@latest add chart` (Recharts) e tematizar conforme
       styleguide §6.7 (`type="linear"`, grid horizontal, sem animação, cores
       `--chart-1..5`, tooltip com moldura).
-- [ ] `lib/stats.ts`: funções server-side que chamam o repositório com
+- [x] `lib/stats.ts`: funções server-side que chamam o repositório com
       `guildId` + período parseado de `searchParams` (`?range=7d|30d|90d|
     from,to`), `unstable_cache` de 60s por chave.
-- [ ] `components/charts/`: `MessagesPerDay` (linha atual vs anterior),
+- [x] `components/charts/`: `MessagesPerDay` (linha atual vs anterior),
       `MembersGrowth` (área), `ActivityHeatmap` (grid CSS, 5 degraus),
       `TopChannels` (barras horizontais), `CasesByType` (barras empilhadas),
       `AutomodByRule` (barras), `Sparkline`.
-- [ ] `components/period-picker.tsx` (tags 7D/30D/90D + popover com
+- [x] `components/period-picker.tsx` (tags 7D/30D/90D + popover com
       `calendar` para custom; atualiza `searchParams`).
-- [ ] Página: 6 stat tiles com delta e sparkline, grade de gráficos,
+- [x] Página: 6 stat tiles com delta e sparkline, grade de gráficos,
       listas "últimos casos" e "última auditoria" (links para as páginas
       das Etapas 17), tudo em `Suspense` com `PageSkeleton` por bloco e
       `error.tsx` com `ErrorState`.
-- [ ] Tratamento de vazio (servidor novo): `EmptyState` `> AINDA SEM DADOS`
+- [x] Tratamento de vazio (servidor novo): `EmptyState` `> AINDA SEM DADOS`
       por gráfico.
-- [ ] Testes: parser de `range`, transformação de buckets → séries
+- [x] Testes: parser de `range`, transformação de buckets → séries
       (preenche dias sem dado com 0), cálculo de delta.
 
 **Arquivos criados/alterados:** `apps/web/app/g/[guildId]/page.tsx`,
@@ -1177,6 +1177,29 @@ erro.
 pnpm dev                    # bot + web
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
+
+**Notas de execução (2026-09-06):**
+
+- `pnpm dlx shadcn add chart` trouxe `recharts` 3.8; o `chart.tsx` foi
+  retematizado (tooltip com moldura 2px + sombra dura, sem raio) e o seletor
+  do tema escuro virou `[data-theme='rose']`.
+- O `calendar` do shadcn queria sobrescrever o `button.tsx` já vestido, então
+  `components/ui/calendar.tsx` foi escrito à mão sobre `react-day-picker` v10,
+  sem importar o `style.css` do pacote (traz raio e cores próprias).
+- Funções novas em `packages/db` (mínimo para o dashboard, cobertas pelos
+  testes de integração): `dailySeries`, `seriesByDayAndKey`, `listRecentCases`,
+  `listRecentAudit`, `getGuildSettings`, `countTicketsByStatus`.
+- Os helpers puros ficaram em `lib/stats-period.ts` (o `lib/stats.ts` é
+  `server-only` e não roda no Vitest). Cache: `unstable_cache` de 60s, porque
+  `use cache` exigiria ligar `cacheComponents` — assunto da Etapa 20.
+- `BotStatus` ganhou `uptimeMs` para o tile do bot do PRD §6.1.
+- **Vitest:** o `require('jsdom')` leva ~90s neste repo (OneDrive + WSL) e
+  estourava o timeout de start de 60s do worker, que não é configurável. O
+  ambiente padrão do `@cobot/web` virou `node` e o teste de componente usa
+  `@vitest-environment happy-dom` (~30s). `jsdom` foi removido do pacote.
+- Falta validar visualmente com dados reais e rodar o Lighthouse: exige login
+  no Discord no navegador. `pnpm dev` sobe, a rota compila e redireciona para
+  `/login` sem sessão; o resto dos critérios foi verificado.
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
