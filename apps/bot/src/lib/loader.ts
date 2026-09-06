@@ -2,7 +2,7 @@ import { Collection } from 'discord.js';
 
 import { childLogger } from '../logger';
 
-import type { BotContext, Command, CommandCollection } from './command';
+import type { AnyCommand, BotContext, CommandCollection } from './command';
 import type { EventHandler } from './event';
 import type { Client } from 'discord.js';
 
@@ -14,7 +14,7 @@ const log = childLogger('loader');
  * A lista é explícita (e não um glob em runtime) porque o build do bot é um
  * bundle único via tsup: não existe `src/commands/*.js` em `dist/` para varrer.
  */
-export function loadCommands(commands: readonly Command[]): CommandCollection {
+export function loadCommands(commands: readonly AnyCommand[]): CommandCollection {
   const collection: CommandCollection = new Collection();
   for (const command of commands) {
     const name = command.data.name;
@@ -28,8 +28,8 @@ export function loadCommands(commands: readonly Command[]): CommandCollection {
 }
 
 /** Agrupa comandos por módulo, preservando a ordem de declaração (`/help`). */
-export function groupByModule(commands: CommandCollection): Map<string, Command[]> {
-  const groups = new Map<string, Command[]>();
+export function groupByModule(commands: CommandCollection): Map<string, AnyCommand[]> {
+  const groups = new Map<string, AnyCommand[]>();
   for (const command of commands.values()) {
     const list = groups.get(command.module);
     if (list) list.push(command);

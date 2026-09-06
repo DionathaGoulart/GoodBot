@@ -1,27 +1,31 @@
+import { ContextMenuCommandBuilder } from 'discord.js';
+
 import type { ConfigService, ResolvedSettings } from '../services/config';
+import type { ModerationService } from '../services/moderation';
 import type { Db } from '@cobot/db';
 import type { Module, PermissionLevel } from '@cobot/shared';
-import type { Collection ,
+import type {
+  Collection,
   AutocompleteInteraction,
   ChatInputCommandInteraction,
   Client,
-  ContextMenuCommandBuilder,
-  ContextMenuCommandInteraction,
   GuildMember,
   SlashCommandBuilder,
   SlashCommandOptionsOnlyBuilder,
   SlashCommandSubcommandsOnlyBuilder,
+  UserContextMenuCommandInteraction,
 } from 'discord.js';
 import type { Logger } from 'pino';
 
 /** Comandos indexados pelo nome registrado no Discord. */
-export type CommandCollection = Collection<string, Command>;
+export type CommandCollection = Collection<string, AnyCommand>;
 
 /** Serviços compartilhados por comandos e eventos. */
 export interface BotContext {
   client: Client;
   db: Db;
   config: ConfigService;
+  moderation: ModerationService;
   logger: Logger;
   /** Coleção viva de comandos (usada pelo `/help` e pelo registro). */
   commands: CommandCollection;
@@ -29,7 +33,7 @@ export interface BotContext {
 
 /** Contexto de uma execução de comando, já com permissões resolvidas. */
 export interface CommandContext<
-  I extends ChatInputCommandInteraction | ContextMenuCommandInteraction =
+  I extends ChatInputCommandInteraction | UserContextMenuCommandInteraction =
     ChatInputCommandInteraction,
 > extends BotContext {
   interaction: I;
@@ -49,13 +53,10 @@ export interface AutocompleteContext extends BotContext {
 
 /** Builders aceitos por um slash command (com ou sem options/subcommands). */
 export type CommandData =
-  | SlashCommandBuilder
-  | SlashCommandOptionsOnlyBuilder
-  | SlashCommandSubcommandsOnlyBuilder
-  | ContextMenuCommandBuilder;
+  SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder;
 
-export interface Command {
-  data: CommandData;
+/** Campos que slash commands e menus de contexto têm em comum. */
+export interface CommandMeta {
   /** Módulo dono do comando: agrupa o `/help` e liga/desliga junto do módulo. */
   module: Module;
   /** Nível mínimo exigido (PRD §9.1). O handler re-verifica sempre. */
@@ -68,16 +69,43 @@ export interface Command {
   ephemeral?: boolean;
   /** Descrição curta para o `/help` (default: a do builder). */
   help?: string;
+}
+
+export interface Command extends CommandMeta {
+  data: CommandData;
   execute(ctx: CommandContext): Promise<void> | void;
   autocomplete?(ctx: AutocompleteContext): Promise<void> | void;
 }
+
+export type UserContextCommandContext = CommandContext<UserContextMenuCommandInteraction>;
+
+/** Menu de contexto de usuário ("Punir…"): sem options, sem autocomplete. */
+export interface UserContextCommand extends CommandMeta {
+  data: ContextMenuCommandBuilder;
+  execute(ctx: UserContextCommandContext): Promise<void> | void;
+}
+
+/** O que a `CommandCollection` guarda: os dois tipos convivem no registro. */
+export type AnyCommand = Command | UserContextCommand;
 
 /** Só dá nome ao objeto — existe para o tipo ser checado no arquivo do comando. */
 export function defineCommand(command: Command): Command {
   return command;
 }
 
+export function defineUserContextCommand(command: UserContextCommand): UserContextCommand {
+  return command;
+}
+
+/**
+ * Discriminador dos dois tipos. A checagem é pela classe do builder porque é
+ * a única marca que sobrevive ao `toJSON()` e ao bundle.
+ */
+export function isUserContextCommand(command: AnyCommand): command is UserContextCommand {
+  return command.data instanceof ContextMenuCommandBuilder;
+}
+
 /** Nome do comando como aparece no Discord (`data.name`). */
-export function commandName(command: Command): string {
+export function commandName(command: AnyCommand): string {
   return command.data.name;
 }

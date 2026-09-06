@@ -5,7 +5,6 @@ import { upsertGuild } from './guilds';
 import { defineEvent } from '../lib/event';
 import { syncCommands } from '../lib/registry';
 
-
 /** `--force` no argv força o re-registro mesmo com o hash igual. */
 const FORCE_REGISTER = process.argv.includes('--force');
 

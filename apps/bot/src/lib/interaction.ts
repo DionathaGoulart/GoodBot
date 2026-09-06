@@ -3,17 +3,19 @@ import { MessageFlags } from 'discord.js';
 
 import { env } from '../env';
 import { childLogger } from '../logger';
+import { isUserContextCommand } from './command';
 import { CooldownStore } from './cooldown';
 import { botFooter, errorEmbed } from './embeds';
 import { levelAtLeast, resolveLevel, toMemberLike } from '../services/permissions';
 
-import type { AutocompleteContext, BotContext, Command, CommandContext } from './command';
+import type { AnyCommand, AutocompleteContext, BotContext, CommandContext } from './command';
 import type { PermissionLevel } from '@cobot/shared';
 import type {
   ChatInputCommandInteraction,
   GuildMember,
   Interaction,
   RepliableInteraction,
+  UserContextMenuCommandInteraction,
 } from 'discord.js';
 
 export { CooldownStore };
@@ -63,7 +65,8 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
 
     if (interaction.isAutocomplete()) {
       const command = ctx.commands.get(interaction.commandName);
-      if (!command?.autocomplete) return;
+      // Menu de contexto não tem options, logo nunca gera autocomplete.
+      if (!command || isUserContextCommand(command) || !command.autocomplete) return;
       try {
         const settings = await ctx.config.getSettings(interaction.guildId);
         const autocompleteCtx: AutocompleteContext = {
@@ -79,7 +82,7 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
       return;
     }
 
-    if (!interaction.isChatInputCommand()) return;
+    if (!interaction.isChatInputCommand() && !interaction.isUserContextMenuCommand()) return;
 
     const command = ctx.commands.get(interaction.commandName);
     if (!command) {
@@ -112,8 +115,8 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
 
 async function runCommand(
   ctx: BotContext,
-  interaction: ChatInputCommandInteraction,
-  command: Command,
+  interaction: ChatInputCommandInteraction | UserContextMenuCommandInteraction,
+  command: AnyCommand,
   cooldowns: CooldownStore,
 ): Promise<void> {
   const guildId = interaction.guildId as string;
@@ -137,27 +140,35 @@ async function runCommand(
 
   const remaining = cooldowns.hit(interaction.user.id, command.data.name, command.cooldown ?? 0);
   if (remaining > 0) {
-    throw new UserFacingError(
-      `Aguarde ${remaining}s antes de usar /${command.data.name} de novo.`,
-      {
-        code: 'COOLDOWN',
-      },
-    );
+    throw new UserFacingError(`Aguarde ${remaining}s antes de usar ${command.data.name} de novo.`, {
+      code: 'COOLDOWN',
+    });
   }
 
+  // Um menu de contexto que abre modal não pode ser adiado antes (o `showModal`
+  // exige a interação intacta), então `defer` é decisão do próprio comando.
   if (command.defer) {
     await interaction.deferReply(command.ephemeral ? { flags: MessageFlags.Ephemeral } : {});
   }
 
-  const commandCtx: CommandContext = {
-    ...ctx,
-    interaction,
-    guildId,
-    member,
-    level,
-    settings,
-  };
-  await command.execute(commandCtx);
+  const base = { ...ctx, guildId, member, level, settings };
+
+  if (isUserContextCommand(command)) {
+    if (!interaction.isUserContextMenuCommand()) {
+      throw new UserFacingError('Este comando só funciona pelo menu de contexto.', {
+        code: 'WRONG_INTERACTION',
+      });
+    }
+    await command.execute({ ...base, interaction });
+  } else {
+    if (!interaction.isChatInputCommand()) {
+      throw new UserFacingError('Este comando só funciona como slash command.', {
+        code: 'WRONG_INTERACTION',
+      });
+    }
+    const commandCtx: CommandContext = { ...base, interaction };
+    await command.execute(commandCtx);
+  }
 
   // Um comando que não responde deixa o usuário com "falha na interação".
   if (!interaction.replied && !interaction.deferred) {
