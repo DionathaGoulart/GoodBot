@@ -1,6 +1,7 @@
 import { createDb } from '@cobot/db';
 import { VERSION } from '@cobot/shared';
 
+import { createApiServer } from './api/server';
 import { AutomodService } from './automod/engine';
 import { createClient } from './client';
 import { commands as commandList } from './commands/index';
@@ -67,6 +68,11 @@ async function main(): Promise<void> {
   });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const statsRollup = new StatsRollupJob({ db, client, config });
+  const api = createApiServer({
+    deps: { client, db, config, moderation, reactionRoles, tickets },
+    token: env.INTERNAL_API_TOKEN,
+    port: env.INTERNAL_API_PORT,
+  });
 
   const ctx: BotContext = {
     client,
@@ -89,6 +95,9 @@ async function main(): Promise<void> {
   };
 
   loadEvents(client, events, ctx);
+  // A API sobe antes do login: o healthcheck do container precisa responder
+  // mesmo enquanto o gateway ainda está conectando (PRD §5.7).
+  api.start();
   // Só começa a desfazer punições e a publicar logs depois do gateway abrir.
   client.once('clientReady', () => {
     scheduler.start();
@@ -119,6 +128,7 @@ async function main(): Promise<void> {
       stats.stop();
       statsRollup.stop();
       autorole.stop();
+      await api.stop();
       // O que estava em buffer precisa chegar ao canal e ao banco antes do fim.
       await Promise.all([queue.flushAll(), messageCache.flush(), stats.flush()]);
       await client.destroy();
