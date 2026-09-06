@@ -11,13 +11,21 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 && pnpm build`, mais o que a etapa listar) e a linha final obrigatória.
 - Nomes dos pacotes: `@cobot/bot`, `@cobot/web`, `@cobot/db`, `@cobot/shared`.
 
+> **Revisão de 2026-09-06 (PRD v1.1) — hospedagem dividida.** A capacidade
+> Ampere A1 do free tier da Oracle é intermitente e impediu criar a VM ARM.
+> A hospedagem passou a ser: **bot** na Oracle E2.1.Micro (x86, 1 GB, sempre
+> disponível), **painel** na Vercel, **Postgres** no Supabase. As Etapas 18,
+> 19 e 20 foram reescritas; as Etapas 11 e 12 ganharam ajustes pontuais. As
+> Etapas 1–17 de produto **não mudaram** — o código do bot e do painel é o
+> mesmo.
+
 ## Estado
 
 | #   | Etapa                                                                      | Status       |
 | --- | -------------------------------------------------------------------------- | ------------ |
 | 1   | Setup do monorepo e tooling                                                | concluída · 2026-09-05 |
 | 2   | `packages/shared` e `packages/db` (schema base + migrations)               | concluída · 2026-09-05 |
-| 3   | Esqueleto do bot (login, handlers, registro de comandos, config com cache) | pendente     |
+| 3   | Esqueleto do bot (login, handlers, registro de comandos, config com cache) | concluída · 2026-09-06 |
 | 4   | Moderação e casos                                                          | pendente     |
 | 5   | Mod-log e logs de eventos                                                  | pendente     |
 | 6   | Automod                                                                    | pendente     |
@@ -32,8 +40,8 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 15  | Configuração II: automod, reaction roles, tickets, comandos                | pendente     |
 | 16  | Gestão do servidor: membros, cargos, canais                                | pendente     |
 | 17  | Casos e auditoria do painel                                                | pendente     |
-| 18  | Docker Compose + Caddy (linux/arm64)                                       | pendente     |
-| 19  | CI/CD (GitHub Actions) e deploy na Oracle                                  | pendente     |
+| 18  | Docker Compose (bot + Caddy) e build do painel                             | pendente     |
+| 19  | CI/CD: bot na Oracle, painel na Vercel                                     | pendente     |
 | 20  | Hardening e observabilidade                                                | pendente     |
 
 ---
@@ -244,45 +252,45 @@ sistema de permissões (admin/mod/member), respostas de erro padronizadas e
 
 **Tarefas:**
 
-- [ ] `src/env.ts`: Zod parse de `process.env` (falha rápido com mensagem).
-- [ ] `src/logger.ts`: pino com `redact: ['token', '*.authorization']`,
+- [x] `src/env.ts`: Zod parse de `process.env` (falha rápido com mensagem).
+- [x] `src/logger.ts`: pino com `redact: ['token', '*.authorization']`,
       `pino-pretty` só em dev.
-- [ ] `src/client.ts`: `Client` com intents do PRD §10, `partials` (Message,
+- [x] `src/client.ts`: `Client` com intents do PRD §10, `partials` (Message,
       Channel, Reaction, GuildMember), `makeCache` com limites (mensagens
       200/canal).
-- [ ] `src/lib/command.ts`: tipo `Command { data: SlashCommandBuilder |
+- [x] `src/lib/command.ts`: tipo `Command { data: SlashCommandBuilder |
     ContextMenuCommandBuilder, module, level: 'admin'|'mod'|'member',
     cooldown?, execute(ctx), autocomplete?(ctx) }` + `defineCommand()`.
       `src/lib/event.ts`: `defineEvent(name, once?, execute)`.
-- [ ] `src/lib/loader.ts`: importa `src/commands/**/*.ts` e
+- [x] `src/lib/loader.ts`: importa `src/commands/**/*.ts` e
       `src/events/**/*.ts` via `import.meta.glob`-equivalente (lista
       explícita gerada ou `fast-glob` + dynamic import).
-- [ ] `src/lib/registry.ts`: monta o manifesto JSON dos comandos, calcula
+- [x] `src/lib/registry.ts`: monta o manifesto JSON dos comandos, calcula
       hash SHA-256, compara com `meta.commands_hash` no DB e só faz
       `rest.put(Routes.applicationGuildCommands)` se mudou (ou `--force`).
-- [ ] `src/services/config.ts`: `ConfigService` com `get(guildId, module)`
+- [x] `src/services/config.ts`: `ConfigService` com `get(guildId, module)`
       (cache `Map`, TTL 5 min), `invalidate(guildId, module?)`,
       `ConfigBus` interface (`publish`, `subscribe`) com impl. em memória.
-- [ ] `src/services/permissions.ts`: `resolveLevel(member, settings)` →
+- [x] `src/services/permissions.ts`: `resolveLevel(member, settings)` →
       `admin|mod|member`; `canActOn(actor, target)` (hierarquia de cargos,
       owner, bot).
-- [ ] `src/lib/interaction.ts`: wrapper do handler de `interactionCreate`:
+- [x] `src/lib/interaction.ts`: wrapper do handler de `interactionCreate`:
       filtro `guildId === env.GUILD_ID`, checagem de nível, cooldown,
       `try/catch` que responde efêmero com `UserFacingError` ou embed de
       erro genérico + log; `deferReply` automático se o comando declarar
       `defer: true`.
-- [ ] `src/lib/embeds.ts`: `successEmbed`, `errorEmbed`, `infoEmbed` com a
+- [x] `src/lib/embeds.ts`: `successEmbed`, `errorEmbed`, `infoEmbed` com a
       cor de `general.embedColor` e o prefixo `>` (styleguide §9).
-- [ ] Eventos: `ready` (loga, registra comandos), `interactionCreate`,
+- [x] Eventos: `ready` (loga, registra comandos), `interactionCreate`,
       `guildCreate`/`guildDelete` (upsert em `guilds`), `error`,
       `shardDisconnect`.
-- [ ] Comandos: `/ping` (gateway, REST, DB), `/help` (lista por módulo,
+- [x] Comandos: `/ping` (gateway, REST, DB), `/help` (lista por módulo,
       respeitando nível), `/config reload` (admin: invalida cache).
-- [ ] `src/index.ts`: boot → env → db → client → loader → login; graceful
+- [x] `src/index.ts`: boot → env → db → client → loader → login; graceful
       shutdown (SIGINT/SIGTERM).
-- [ ] `tsup.config.ts` (`format: esm`, `target: node22`, `noExternal:
+- [x] `tsup.config.ts` (`format: esm`, `target: node22`, `noExternal:
     [/^@cobot\//]`).
-- [ ] Testes unitários: `resolveLevel`, `canActOn` (mocks simples de
+- [x] Testes unitários: `resolveLevel`, `canActOn` (mocks simples de
       `GuildMember`), hash do registry estável.
 
 **Arquivos criados/alterados:** `apps/bot/src/**`, `apps/bot/tsup.config.ts`,
@@ -303,6 +311,26 @@ pnpm --filter @cobot/bot dev      # testar /ping, /help, /config reload no Disco
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 node apps/bot/dist/index.js       # build roda igual ao dev
 ```
+
+**Notas de execução (2026-09-06):**
+
+- **Loader sem glob:** o build é um bundle único (tsup), então não existe
+  `dist/commands/*.js` para varrer em runtime. Comandos e eventos são listados
+  explicitamente em `src/commands/index.ts` e `src/events/index.ts`; `loader.ts`
+  monta a `Collection` e detecta nome duplicado.
+- **`logger.ts` lê `process.env` direto**, não `./env`: `env.ts` valida e falha
+  rápido no boot, mas se o logger dependesse dele qualquer teste unitário que
+  importasse um módulo com log quebraria por falta de `DISCORD_TOKEN`.
+- **`CooldownStore` vive em `lib/cooldown.ts`** (fora de `interaction.ts`, que
+  importa `env`) pelo mesmo motivo — o teste dele não precisa de ambiente.
+- **Hash do registry** usa `stableStringify` (chaves ordenadas em qualquer
+  profundidade) sobre o manifesto já ordenado por nome, gravado em `meta` na
+  chave `commands_hash:<guildId>`. `--force` no argv re-registra.
+- `guild_settings` é lido pelo próprio `ConfigService` (`getSettings`, mesmo
+  cache/TTL), sem repository nova em `@cobot/db`.
+- Deps adicionadas ao bot: `zod`, `drizzle-orm` (query de `guild_settings`) e
+  `dotenv` (dev, carrega o `.env` da raiz sob `tsx`).
+- `apps/bot/vitest.config.ts` criado (o projeto já estava listado na raiz).
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
@@ -756,6 +784,11 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 do PRD §5.7, autenticação por token, validação Zod, rate limit e um client
 tipado em `packages/shared` para o painel consumir.
 
+> **Mudou na v1.1:** essa API deixa de ser só de rede privada — o painel roda
+> na Vercel e a alcança pela internet, atrás do Caddy. O token passa a ser a
+> única barreira, então o rate limit por IP e o `/health` sem segredo abaixo
+> não são opcionais (PRD §7.3).
+
 **Pré-requisitos:** Etapas 1–10.
 
 **Tarefas:**
@@ -764,9 +797,13 @@ tipado em `packages/shared` para o painel consumir.
       `INTERNAL_API_PORT` (3001), bind `0.0.0.0` (a rede do Compose isola),
       middlewares: `requestId`, logger pino, auth Bearer com
       `crypto.timingSafeEqual`, body limit 256 KB, rate limit em memória
-      (100 req/min por rota), handler de erro que mapeia
+      (100 req/min por rota **e** 60 req/min por IP), sem CORS, handler de
+      erro que mapeia
       `UserFacingError` → 400, `DiscordAPIError` 429 → 503 + `retryAfter`,
       resto → 500 sem vazar stack.
+- [ ] `health` responde `{ok: true}` **sem** token (healthcheck do Docker e
+      do Caddy); o corpo detalhado (gateway, ping, uptime, cache) só com o
+      Bearer.
 - [ ] `src/api/routes/*.ts`: `health`, `guild` (channels/roles/members/
       member/audit-log), `moderation` (POST → `ModerationService` com
       `source: 'dashboard'` e `actorId` validado como membro com nível ≥
@@ -793,6 +830,8 @@ localhost:3001/health` retorna JSON com `gateway: ready`.
 - `POST /guilds/:id/config/invalidate` faz o bot recarregar config (visível
   no log).
 - Token não aparece em nenhum log.
+- `GET /health` sem token responde `{"ok":true}` e nada além disso.
+- 61 requests em um minuto do mesmo IP → a última recebe 429.
 
 **Comandos de validação:**
 
@@ -830,6 +869,8 @@ autorização e helper de auditoria prontos para as próximas etapas.
    `DISCORD_CLIENT_SECRET`.
 2. Gerar `AUTH_SECRET` com `openssl rand -base64 32`; `AUTH_URL=
 http://localhost:3000`.
+3. Em dev, `INTERNAL_API_URL=http://localhost:3001` (o bot rodando local);
+   em produção será `https://bot.seudominio.com` (Etapa 19).
 
 **Tarefas:**
 
@@ -861,7 +902,9 @@ http://localhost:3000`.
       min; `redirect('/denied')` ou `throw`.
 - [ ] `lib/internal-api.ts`: instancia o client de `@cobot/shared` com
       `INTERNAL_API_URL` + token (server-only).
-- [ ] `lib/db.ts`: client Drizzle (server-only, singleton).
+- [ ] `lib/db.ts`: client Drizzle (server-only, singleton) com pool pequeno
+      (`max: 1`) — em produção o painel roda serverless na Vercel e conecta
+      pelo pooler pgBouncer do Supabase (PRD §7.2).
 - [ ] `lib/audit.ts`: `withAudit(action, target, before, after)` usando
       `appendAudit` + IP/UA de `headers()`.
 - [ ] Rotas: `/login` (screen-title, botão `ENTRAR COM DISCORD`),
@@ -876,8 +919,9 @@ http://localhost:3000`.
       `EmptyState`, `ErrorState`, `PageSkeleton`, `Tag`, `AvatarSq`,
       `PresenceDot`, `BotStatusBanner` (usa `/health` com `revalidate: 30`).
 - [ ] CSP em `next.config.ts` headers (self, nonce no script de tema).
-- [ ] `next.config.ts`: `output: 'standalone'`, `transpilePackages:
-    ['@cobot/shared', '@cobot/db']`.
+- [ ] `next.config.ts`: `transpilePackages: ['@cobot/shared', '@cobot/db']`
+      e os headers de segurança (o painel vai para a Vercel na Etapa 19, sem
+      Caddy na frente; **não** usar `output: 'standalone'`).
 - [ ] Testes: `requireGuildAccess` (níveis), `renderização do Panel/StatTile`
       (Vitest + Testing Library, `jsdom`).
 
@@ -1218,65 +1262,74 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 
 ---
 
-## Etapa 18 — Docker Compose + Caddy (linux/arm64)
+## Etapa 18 — Docker Compose (bot + Caddy) e build do painel
 
 **Contexto mínimo para esta etapa:** `CLAUDE.md`, `.harness/prd.md` §7.2,
-§7.3, §7.5, esta etapa, `package.json` (raiz), `pnpm-workspace.yaml`,
+§7.3, §7.5, §12, esta etapa, `package.json` (raiz), `pnpm-workspace.yaml`,
 `apps/bot/package.json`, `apps/bot/tsup.config.ts`, `apps/web/package.json`,
-`apps/web/next.config.ts`, `packages/db/package.json`, `packages/db/src/
-migrate.ts`, `.env.example`, `infra/docker-compose.dev.yml`.
+`apps/web/next.config.ts`, `packages/db/package.json`,
+`packages/db/src/migrate.ts`, `.env.example`,
+`infra/docker-compose.dev.yml`.
 
-**Objetivo:** Dockerfiles multi-stage arm64 para bot, web e migrate; Compose
-de produção com Postgres, bot, web, Caddy (HTTPS automático), healthchecks,
-limites de memória, logs rotacionados; tudo testado localmente (build arm64
-via buildx/QEMU no WSL).
+**Objetivo:** Dockerfile multi-stage amd64 do bot; Compose de produção com
+`bot` + `caddy` (HTTPS automático para a API do bot), healthchecks, limites
+de memória e logs rotacionados; painel preparado para a Vercel; tudo testado
+localmente.
 
 **Pré-requisitos:** Etapas 1–17.
+
+> **Mudou na v1.1:** o Compose de produção não tem mais `web`, `postgres` nem
+> `migrate` — o painel vai para a Vercel, o banco para o Supabase e as
+> migrations rodam na CI (PRD §7.5). O Postgres local continua no
+> `docker-compose.dev.yml` para desenvolvimento e testes.
 
 **Tarefas:**
 
 - [ ] `infra/docker/bot.Dockerfile`: `node:22-alpine` multi-stage
       (`pnpm fetch` com lockfile → build tsup → runtime só com `dist` +
       deps de produção do bot via `pnpm deploy --prod`); usuário não-root;
-      `HEALTHCHECK` batendo em `localhost:3001/health` com o token via env.
-- [ ] `infra/docker/web.Dockerfile`: multi-stage com `output: standalone`,
-      copia `.next/standalone` + `static` + `public`; `HEALTHCHECK` em
-      `/api/health` (criar route handler simples).
-- [ ] `infra/docker/migrate.Dockerfile` (ou target no bot): roda
-      `packages/db` `db:migrate` e sai.
-- [ ] `infra/docker-compose.yml` (prod): serviços `postgres` (16-alpine,
-      volume, `shared_buffers=128MB`, healthcheck, sem porta publicada),
-      `migrate` (depende de postgres healthy), `bot` (depende de migrate
-      completed; `mem_limit: 384m`), `web` (idem; `mem_limit: 512m`),
-      `caddy` (`caddy:2-alpine`, portas 80/443, volumes `caddy_data`/
-      `caddy_config`). Rede interna única; `restart: unless-stopped`;
+      `HEALTHCHECK` batendo em `localhost:3001/health`.
+- [ ] `infra/docker-compose.yml` (prod): serviços `bot` (`mem_limit: 384m`,
+      **sem porta publicada** — só o Caddy o alcança) e `caddy`
+      (`caddy:2-alpine`, portas 80/443, volumes `caddy_data`/`caddy_config`,
+      `mem_limit: 64m`). Rede interna única; `restart: unless-stopped`;
       `logging: json-file max-size 10m max-file 5`; `env_file: .env`.
-- [ ] `infra/Caddyfile`: `{$DOMAIN}` → `reverse_proxy web:3000`, headers de
-      segurança (HSTS, X-Content-Type-Options, Referrer-Policy,
-      Permissions-Policy), `encode gzip zstd`, log em JSON.
+- [ ] `infra/Caddyfile`: `{$BOT_DOMAIN}` → `reverse_proxy bot:3001`, headers
+      de segurança, `encode gzip zstd`, log em JSON, `header -Server`. Só
+      esse host; qualquer outro `Host` responde 404.
+- [ ] `apps/web`: **remover** `output: 'standalone'` do `next.config.ts` (a
+      Vercel não usa) e mover para lá os headers de segurança que antes eram
+      do Caddy (HSTS, X-Content-Type-Options, Referrer-Policy,
+      Permissions-Policy); route handler `/api/health`.
+- [ ] `packages/db`: garantir que `db:migrate` funciona contra um Postgres
+      remoto com `sslmode=require` (é assim que a CI vai rodar).
 - [ ] `.dockerignore`.
 - [ ] `infra/docker-compose.dev.yml` mantido só com Postgres.
-- [ ] Scripts raiz: `docker:build` (`docker buildx build --platform
-    linux/arm64` das 3 imagens com tags locais), `docker:up`/`docker:down`.
-- [ ] Teste local: `docker buildx create --use` (QEMU já vem no Docker
-      Desktop) → build das 3 imagens arm64 → `docker compose -f
-    infra/docker-compose.yml up` com `DOMAIN=localhost` (Caddy usa
-      certificado interno) → login no painel em `https://localhost`.
-- [ ] Documentar no README a seção "Rodar em produção localmente".
+- [ ] Scripts raiz: `docker:build` (`docker build --platform linux/amd64` da
+      imagem do bot), `docker:up`/`docker:down`.
+- [ ] Teste local: build da imagem → `docker compose -f
+    infra/docker-compose.yml up` com `BOT_DOMAIN=localhost` (Caddy usa
+      certificado interno) → `curl -k https://localhost/health`; e
+      `pnpm --filter @cobot/web build && pnpm --filter @cobot/web start`
+      apontando `INTERNAL_API_URL` para esse Caddy.
+- [ ] Documentar no README a seção "Rodar em produção localmente" com o
+      desenho dos três provedores.
 
-**Arquivos criados/alterados:** `infra/docker/*.Dockerfile`,
+**Arquivos criados/alterados:** `infra/docker/bot.Dockerfile`,
 `infra/docker-compose.yml`, `infra/Caddyfile`, `.dockerignore`,
-`apps/web/app/api/health/route.ts`, `package.json` (scripts), `README.md`.
+`apps/web/next.config.ts`, `apps/web/app/api/health/route.ts`,
+`package.json` (scripts), `README.md`.
 
 **Critérios de aceite:**
 
-- `docker image inspect cobot-bot --format '{{.Architecture}}'` = `arm64`.
-- Imagens: bot ≤ 200 MB, web ≤ 250 MB.
-- `docker compose -f infra/docker-compose.yml up -d` sobe os 5 serviços
-  saudáveis (`docker compose ps` todos `healthy`/`exited (0)` para migrate);
-  bot online no Discord; painel acessível via Caddy; `docker stats` dentro
-  dos limites.
-- Reiniciar o host (`docker compose down && up`) preserva dados.
+- `docker image inspect cobot-bot --format '{{.Architecture}}'` = `amd64`.
+- Imagem do bot ≤ 200 MB.
+- `docker compose -f infra/docker-compose.yml up -d` sobe os 2 serviços
+  saudáveis; bot online no Discord; `curl -k https://localhost/health` OK.
+- O painel buildado local, apontando para esse Caddy, lista canais e cargos.
+- `docker stats` com bot + caddy somando < 450 MB (cabe em 1 GB com folga).
+- Reiniciar (`docker compose down && up`) não perde nada — o estado está no
+  Postgres gerenciado.
 
 **Comandos de validação:**
 
@@ -1284,7 +1337,7 @@ via buildx/QEMU no WSL).
 pnpm docker:build
 docker compose -f infra/docker-compose.yml --env-file .env up -d
 docker compose -f infra/docker-compose.yml ps
-docker compose -f infra/docker-compose.yml logs -f bot --tail 50
+curl -k https://localhost/health
 docker stats --no-stream
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
@@ -1292,43 +1345,59 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
 ---
-
-## Etapa 19 — CI/CD (GitHub Actions) e deploy na Oracle
+## Etapa 19 — CI/CD: bot na Oracle, painel na Vercel
 
 **Contexto mínimo para esta etapa:** `CLAUDE.md`, `.harness/prd.md` §7.2,
-§7.3, §11 (build arm64), esta etapa, `infra/docker-compose.yml`,
-`infra/docker/*.Dockerfile`, `infra/Caddyfile`, `.env.example`,
-`package.json` (raiz).
+§7.3, §7.5, §12, esta etapa, `infra/docker-compose.yml`,
+`infra/docker/bot.Dockerfile`, `infra/Caddyfile`, `.env.example`,
+`package.json` (raiz), `apps/web/next.config.ts`.
 
-**Objetivo:** pipeline que roda lint/typecheck/test em PR, e em push na
-`main` constrói as imagens arm64, publica no GHCR e faz deploy via SSH na
-instância Oracle com `docker compose pull && up -d`.
+**Objetivo:** pipeline que roda lint/typecheck/test em PR; em push na `main`,
+aplica migrations no Postgres gerenciado, constrói a imagem amd64 do bot,
+publica no GHCR e faz deploy via SSH na E2.1.Micro. O painel é publicado pela
+integração git da Vercel (não pela Action).
 
 **Pré-requisitos:** Etapas 1–18. Repositório no GitHub.
 
 **⚠️ AÇÃO MANUAL (o Claude escreve os arquivos; você executa fora):**
 
-1. **Oracle Cloud**: criar instância _VM.Standard.A1.Flex_ (Ubuntu 24.04
-   arm64, ex.: 2 OCPU / 12 GB), com chave SSH. Anotar IP público.
-2. **Rede Oracle**: na VCN → Security List da subnet → adicionar _Ingress
-   Rules_ TCP 80 e 443 de `0.0.0.0/0` (22 já existe). Na instância, o
-   Ubuntu da Oracle tem iptables restritivo: rodar
+1. **Oracle Cloud**: criar instância _VM.Standard.E2.1.Micro_ (Ubuntu 24.04,
+   x86_64, 1 OCPU / 1 GB, Always Free), com a chave SSH pública. Anotar IP
+   público. Diferente da A1, essa forma praticamente sempre tem capacidade.
+2. **Rede Oracle**: na VCN → Security List da subnet → _Ingress Rules_ TCP 80
+   e 443 de `0.0.0.0/0` (22 já existe). Na instância, o Ubuntu da Oracle tem
+   iptables restritivo: rodar
    `sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j
 ACCEPT && sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443
 -j ACCEPT && sudo netfilter-persistent save`.
-3. **DNS**: registro `A` do domínio (ex.: `cobot.seudominio.com`) → IP
-   público. Aguardar propagação.
-4. **Na instância**: instalar Docker (`curl -fsSL https://get.docker.com |
+3. **Swap**: 1 GB de RAM não perdoa pico —
+   `sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap
+/swapfile && sudo swapon /swapfile` e a linha correspondente no `/etc/fstab`.
+4. **DNS**: registro `A` de `bot.seudominio.com` → IP público da VM. O
+   domínio do painel (`cobot.seudominio.com`) aponta para a Vercel conforme
+   as instruções dela (`CNAME`). Aguardar propagação.
+5. **Na instância**: instalar Docker (`curl -fsSL https://get.docker.com |
 sh`, `sudo usermod -aG docker ubuntu`), criar `/opt/cobot`, copiar
    `infra/docker-compose.yml`, `infra/Caddyfile` e um `.env` de produção
-   (com `DOMAIN`, `AUTH_URL=https://cobot.seudominio.com`, token novo da API
-   interna, `AUTH_SECRET` novo, `DATABASE_URL` apontando para `postgres`).
-5. **Discord Developer Portal**: adicionar redirect
+   (`BOT_DOMAIN=bot.seudominio.com`, `DISCORD_TOKEN`, `GUILD_ID`,
+   `INTERNAL_API_TOKEN` novo, `DATABASE_URL` do Supabase **conexão direta**
+   com `sslmode=require`).
+6. **Supabase**: criar projeto na região mais próxima (São Paulo se
+   disponível), guardar as duas strings de conexão — direta (5432, para o
+   bot) e pooler/pgBouncer (6543, para a Vercel). Nunca commitar.
+7. **Vercel**: importar o repo, _Root Directory_ `apps/web`, build command
+   `pnpm --filter @cobot/web build` (com `pnpm install` na raiz do monorepo),
+   domínio `cobot.seudominio.com`, e as variáveis: `DATABASE_URL` (pooler),
+   `AUTH_SECRET`, `AUTH_DISCORD_ID`, `AUTH_DISCORD_SECRET`,
+   `AUTH_URL=https://cobot.seudominio.com`,
+   `INTERNAL_API_URL=https://bot.seudominio.com`, `INTERNAL_API_TOKEN` (o
+   mesmo da VM), `GUILD_ID`.
+8. **Discord Developer Portal**: adicionar redirect
    `https://cobot.seudominio.com/api/auth/callback/discord`.
-6. **GitHub → Settings → Secrets**: `SSH_HOST`, `SSH_USER` (`ubuntu`),
-   `SSH_KEY` (privada, só para deploy), `GHCR` usa `GITHUB_TOKEN`. Se o
-   pacote GHCR for privado, criar PAT `read:packages` e fazer `docker login
-ghcr.io` uma vez na instância.
+9. **GitHub → Settings → Secrets**: `SSH_HOST`, `SSH_USER` (`ubuntu`),
+   `SSH_KEY` (privada de deploy), `DATABASE_URL` (direta, para o job de
+   migrations). GHCR usa o `GITHUB_TOKEN`; se o pacote for privado, criar PAT
+   `read:packages` e fazer `docker login ghcr.io` uma vez na instância.
 
 **Tarefas:**
 
@@ -1336,47 +1405,58 @@ ghcr.io` uma vez na instância.
       branch): checkout, pnpm (cache), `pnpm install --frozen-lockfile`,
       `lint`, `typecheck`, `test` (com service container Postgres 16 para
       os testes de integração), `build`.
-- [ ] `.github/workflows/deploy.yml`: em `push` na `main` (após CI, via
-      `workflow_run` ou jobs encadeados): `docker/setup-qemu-action` +
-      `setup-buildx-action` (ou runner `ubuntu-24.04-arm` se disponível,
-      sem QEMU), login GHCR, `build-push-action` para as 3 imagens com
-      `platforms: linux/arm64`, tags `latest` + `sha`, cache `type=gha`;
-      job `deploy` com `appleboy/ssh-action`: `cd /opt/cobot && docker
-    compose pull && docker compose up -d --remove-orphans && docker image
-    prune -f`.
-- [ ] `infra/docker-compose.yml`: imagens apontando para
-      `ghcr.io/<owner>/cobot-{bot,web,migrate}:${TAG:-latest}`.
+- [ ] `.github/workflows/deploy.yml`: em `push` na `main`, jobs encadeados:
+      1. `migrate` — `pnpm --filter @cobot/db db:migrate` com
+         `DATABASE_URL` do secret (roda antes de tudo; falhou, para tudo).
+      2. `build` — login GHCR, `build-push-action` da imagem do bot,
+         `platforms: linux/amd64` (sem QEMU, o runner já é x86), tags
+         `latest` + `sha`, cache `type=gha`.
+      3. `deploy` — `appleboy/ssh-action`: `cd /opt/cobot && docker compose
+    pull && docker compose up -d --remove-orphans && docker image prune -f`.
+      O painel **não** aparece aqui: a Vercel publica sozinha no push.
+- [ ] `infra/docker-compose.yml`: imagem do bot apontando para
+      `ghcr.io/<owner>/cobot-bot:${TAG:-latest}`.
 - [ ] `infra/scripts/deploy.sh` (o mesmo que a Action roda, para deploy
-      manual) e `infra/scripts/bootstrap-server.sh` (passos 4 acima,
+      manual) e `infra/scripts/bootstrap-server.sh` (passos 3 e 5 acima,
       idempotente).
-- [ ] Badge de CI e seção "Deploy" no README.
+- [ ] `apps/web/vercel.json` se necessário (região `gru1` para ficar perto do
+      Supabase e do bot).
+- [ ] Badge de CI e seção "Deploy" no README, com o desenho dos três
+      provedores e onde fica cada segredo.
 - [ ] Concurrency no workflow de deploy (`cancel-in-progress: false`,
       grupo `deploy`).
 
 **Arquivos criados/alterados:** `.github/workflows/{ci,deploy}.yml`,
-`infra/docker-compose.yml`, `infra/scripts/*.sh`, `README.md`.
+`infra/docker-compose.yml`, `infra/scripts/*.sh`, `apps/web/vercel.json`,
+`README.md`.
 
 **Critérios de aceite:**
 
 - PR com erro de tipo falha no CI.
-- Push na `main` publica as 3 imagens arm64 no GHCR e a instância atualiza
-  sozinha (`docker compose ps` mostra novo `sha`).
-- `https://cobot.seudominio.com` abre com certificado válido; login
-  Discord funciona; bot online.
-- Deploy total (CI + build + deploy) ≤ 15 min.
+- Push na `main` aplica migrations, publica a imagem amd64 no GHCR e a
+  instância atualiza sozinha (`docker compose ps` mostra o novo `sha`);
+  a Vercel publica o painel em paralelo.
+- `https://cobot.seudominio.com` abre com certificado válido; login Discord
+  funciona; o painel lista canais e cargos (ou seja, alcançou
+  `https://bot.seudominio.com`); bot online.
+- `https://bot.seudominio.com/health` sem token responde `{"ok":true}`; com
+  token errado, 401.
+- Deploy total (CI + migrate + build + deploy) ≤ 10 min (sem QEMU ficou mais
+  rápido que a v1.0).
 
 **Comandos de validação:**
 
 ```bash
-git push origin main            # acompanhar em Actions
-ssh ubuntu@$SSH_HOST 'cd /opt/cobot && docker compose ps && docker compose logs --tail 20 bot'
+git push origin main            # acompanhar em Actions e no dashboard da Vercel
+ssh cobot 'cd /opt/cobot && docker compose ps && docker compose logs --tail 20 bot'
 curl -sI https://cobot.seudominio.com | head -5
+curl -s https://bot.seudominio.com/health
+curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer errado" https://bot.seudominio.com/guilds/$GUILD_ID/roles
 ```
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
 ---
-
 ## Etapa 20 — Hardening e observabilidade
 
 **Contexto mínimo para esta etapa:** `CLAUDE.md`, `.harness/prd.md` §7.3,
@@ -1386,70 +1466,85 @@ curl -sI https://cobot.seudominio.com | head -5
 `.github/workflows/deploy.yml`.
 
 **Objetivo:** fechar os riscos do PRD §11: backups, alertas, métricas
-básicas, rate limiting no painel, revisão de segurança, retenções, runbook.
+básicas, rate limiting, revisão de segurança, retenções, runbook. Atenção
+especial aos riscos novos da v1.1 (API exposta, três provedores).
 
 **Pré-requisitos:** Etapas 1–19, produção no ar.
 
 **Tarefas:**
 
-- [ ] **Backups**: serviço `backup` no Compose (`postgres:16-alpine` com
-      cron interno ou `prodrigestivill/postgres-backup-local` arm64) fazendo
-      `pg_dump` diário, retenção 7 diários + 4 semanais, no volume
-      `backups`; script `infra/scripts/restore.sh`; testar restore num
-      banco temporário. ⚠️ AÇÃO MANUAL opcional: bucket no Oracle Object
-      Storage + `rclone` para cópia externa (documentar, não obrigar).
+- [ ] **Backups**: o Supabase já faz backup diário gerenciado, mas ele não é
+      exportável no free tier — então um job `backup` no Compose da VM
+      (`postgres:16-alpine` + cron) roda `pg_dump` diário contra a
+      `DATABASE_URL` de produção, retenção 7 diários + 4 semanais, no volume
+      `backups`; script `infra/scripts/restore.sh`; testar restore num banco
+      local. ⚠️ AÇÃO MANUAL opcional: bucket no Oracle Object Storage +
+      `rclone` para cópia externa (documentar, não obrigar).
 - [ ] **Alertas**: webhook de Discord (`ALERT_WEBHOOK_URL`) usado pelo bot
       para: boot, shutdown, desconexão do gateway > 60s, erro não tratado
-      (com dedupe de 5 min), falha de flush de stats, backup falhou.
-- [ ] **Métricas**: `GET /metrics` na API interna (formato Prometheus, sem
-      lib pesada: contadores de eventos, comandos, erros, latência p50/p95
-      da API, tamanho das filas) — sem Prometheus rodando por enquanto; o
-      painel mostra um card "Saúde" em `/g/[guildId]/system` (uptime, memória
-      RSS dos processos, ping, filas, último backup, versão/sha).
+      (com dedupe de 5 min), falha de flush de stats, backup falhou, **falha
+      de conexão com o Postgres gerenciado** (rede agora é um ponto de falha
+      real).
+- [ ] **Métricas**: `GET /metrics` na API do bot (formato Prometheus, sem lib
+      pesada: contadores de eventos, comandos, erros, latência p50/p95 da
+      API, tamanho das filas, **latência do Postgres**) — sem Prometheus
+      rodando por enquanto; o painel mostra um card "Saúde" em
+      `/g/[guildId]/system` (uptime, memória RSS do bot, ping, filas, último
+      backup, versão/sha, latência web→bot).
+- [ ] **API exposta** (novo na v1.1): rate limit por IP (60/min) além do por
+      rota; `fail2ban` no host banindo IP com 20 respostas 401 em 5 min
+      (jail lendo o log de acesso do Caddy); Caddy sem `Server` header e sem
+      listagem; alerta no webhook a cada 50 respostas 401 numa hora
+      (alguém está sondando o token).
 - [ ] **Painel**: rate limit por IP nas rotas de auth e nas server actions de
-      escrita (memória, 60/min), `Auth.js` com `trustHost` correto e cookie
+      escrita (60/min), `Auth.js` com `trustHost` correto e cookie
       `__Secure-`; revisar CSP no build de produção (sem `unsafe-eval`);
-      página `/system` só `owner`.
-- [ ] **Bot**: `pino.redact` revisado; body limit e timeouts na API interna;
+      página `/system` só `owner`; headers de segurança no `next.config.ts`.
+- [ ] **Bot**: `pino.redact` revisado; body limit e timeouts na API;
       `AbortSignal.timeout` em todos os `fetch` do Discord; guard de tamanho
       de regex; verificação de que nenhum handler deixa interação sem
       resposta (timeout de 2.5s → `deferReply` automático).
-- [ ] **Retenções** rodando como jobs (message_cache 7d, automod_hits 30d,
-      stats rollup 90d) com log de quantidade removida e alerta se falhar.
+- [ ] **Retenções** rodando como jobs no bot (message_cache 7d, automod_hits
+      30d, stats rollup 90d) com log de quantidade removida e alerta se
+      falhar — importa mais agora, porque o free tier do Supabase são 500 MB.
 - [ ] **Docker**: `read_only: true` + `tmpfs` onde possível, `cap_drop:
-    ALL`, `no-new-privileges`, healthcheck do Postgres, `docker system
-    prune` semanal via cron do host (documentado no bootstrap).
+    ALL`, `no-new-privileges`, `docker system prune` semanal via cron do host
+      (documentado no bootstrap).
 - [ ] **Dependências**: `pnpm audit` no CI (falha em `high`), Dependabot
       semanal para npm e GitHub Actions.
-- [ ] **Runbook** `docs/runbook.md`: como ver logs, reiniciar, restaurar
-      backup, rotacionar token da API interna e do bot, adicionar um
-      moderador ao painel, o que fazer se o gateway cair, checklist mensal
-      (espaço em disco, backups, `docker stats`).
+- [ ] **Runbook** `docs/runbook.md`: como ver logs (VM e Vercel), reiniciar,
+      restaurar backup, **rotacionar o `INTERNAL_API_TOKEN` nos três lugares
+      (VM, GitHub Secrets, Vercel) sem downtime**, rotacionar token do bot,
+      adicionar um moderador ao painel, o que fazer se o gateway cair, o que
+      fazer se o Supabase pausar o projeto, checklist mensal (espaço em
+      disco, backups, cota do Supabase, uso da Vercel, `docker stats`).
 - [ ] **Revisão final**: rodar `/security-review` do Claude Code sobre o repo
       e corrigir o que for `high`.
 - [ ] Atualizar `.harness/prd.md` §11 com o status de cada mitigação.
 
 **Arquivos criados/alterados:** `infra/docker-compose.yml`, `infra/scripts/
-{restore,backup}.sh`, `apps/bot/src/services/alerts.ts`, `apps/bot/src/api/
-routes/metrics.ts`, `apps/bot/src/jobs/*.ts`, `apps/web/app/g/[guildId]/
-system/page.tsx`, `apps/web/lib/rate-limit.ts`, `.github/dependabot.yml`,
-`docs/runbook.md`.
+{restore,backup}.sh`, `infra/fail2ban/`, `apps/bot/src/services/alerts.ts`,
+`apps/bot/src/api/routes/metrics.ts`, `apps/bot/src/jobs/*.ts`,
+`apps/web/app/g/[guildId]/system/page.tsx`, `apps/web/lib/rate-limit.ts`,
+`apps/web/next.config.ts`, `.github/dependabot.yml`, `docs/runbook.md`.
 
 **Critérios de aceite:**
 
 - `docker compose exec backup ls /backups` lista um dump de hoje; restore
-  em banco temporário funciona.
+  em banco local funciona.
 - Derrubar a rede do bot por 90s → alerta no webhook; voltar → alerta de
   reconexão.
+- 25 requests com token errado seguidas → IP banido pelo fail2ban.
 - `/g/[guildId]/system` mostra uptime, memória, filas e último backup.
 - `pnpm audit --audit-level high` limpo; CI verde; `/security-review` sem
   `high`.
-- `docker stats` em produção: bot < 300 MB, web < 500 MB, total < 1.5 GB.
+- `docker stats` na VM: bot < 300 MB, total < 500 MB (a máquina tem 1 GB).
 
 **Comandos de validação:**
 
 ```bash
-ssh ubuntu@$SSH_HOST 'cd /opt/cobot && docker compose ps && docker compose exec backup ls -la /backups && docker stats --no-stream'
+ssh cobot 'cd /opt/cobot && docker compose ps && docker compose exec backup ls -la /backups && docker stats --no-stream'
+ssh cobot 'sudo fail2ban-client status cobot-api'
 pnpm audit --audit-level high
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
@@ -1457,10 +1552,3 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
 ---
-
-## Depois da Etapa 20 (backlog, fora do plano)
-
-Multi-servidor real (seletor de guild no painel, registro global de comandos,
-onboarding), Postgres `LISTEN/NOTIFY` no `ConfigBus`, i18n, anti-emoji/
-anti-attachment, leveling, integração com Object Storage para transcripts,
-dashboard público de stats.
