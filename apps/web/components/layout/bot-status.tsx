@@ -4,6 +4,8 @@ import { cachedInternalApi } from '@/lib/internal-api';
 export interface BotStatus {
   presence: Presence;
   pingMs: number | null;
+  /** Tempo de vida do processo do bot; `null` quando ele não respondeu. */
+  uptimeMs: number | null;
 }
 
 /**
@@ -19,9 +21,9 @@ export async function readBotStatus(): Promise<BotStatus> {
         : health.gateway.status === 'disconnected'
           ? 'offline'
           : 'reconnecting';
-    return { presence, pingMs: health.gateway.pingMs };
+    return { presence, pingMs: health.gateway.pingMs, uptimeMs: health.uptimeMs };
   } catch {
-    return { presence: 'offline', pingMs: null };
+    return { presence: 'offline', pingMs: null, uptimeMs: null };
   }
 }
 

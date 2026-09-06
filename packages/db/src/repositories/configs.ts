@@ -8,10 +8,11 @@ import {
 } from '@cobot/shared';
 import { and, eq, sql } from 'drizzle-orm';
 
-import { moduleConfigs } from '../schema/configs';
+import { guildSettings, moduleConfigs } from '../schema/configs';
 import { guilds } from '../schema/guilds';
 
 import type { DbExecutor } from '../client';
+import type { GuildSettings } from '../types';
 
 export interface ModuleConfigResult<M extends Module> {
   module: M;
@@ -147,4 +148,20 @@ export async function setModuleEnabled(
     { ...current.config, enabled } as ModuleConfigInput<typeof module>,
     updatedBy,
   );
+}
+
+/**
+ * Preferências gerais da guild (PRD §8). O painel precisa do `timezone` para
+ * saber onde o dia começa nos gráficos; `null` = guild sem linha ainda.
+ */
+export async function getGuildSettings(
+  db: DbExecutor,
+  guildId: string,
+): Promise<GuildSettings | null> {
+  const [row] = await db
+    .select()
+    .from(guildSettings)
+    .where(eq(guildSettings.guildId, guildId))
+    .limit(1);
+  return row ?? null;
 }

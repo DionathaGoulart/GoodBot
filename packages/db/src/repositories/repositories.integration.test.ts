@@ -3,12 +3,26 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDb, type Db } from '../client';
 import { loadRootEnv } from '../env';
-import { appendAudit } from './audit';
-import { createCase, getCaseByNumber, listCasesForTarget, nextCaseNumber } from './cases';
-import { getAllModuleConfigs, getModuleConfig, setModuleConfig, setModuleEnabled } from './configs';
+import { appendAudit, listRecentAudit } from './audit';
+import {
+  createCase,
+  getCaseByNumber,
+  listCasesForTarget,
+  listRecentCases,
+  nextCaseNumber,
+} from './cases';
+import {
+  getAllModuleConfigs,
+  getGuildSettings,
+  getModuleConfig,
+  setModuleConfig,
+  setModuleEnabled,
+} from './configs';
 import {
   automodByRule,
   commandsUsage,
+  dailySeries,
+  seriesByDayAndKey,
   heatmapHourWeekday,
   incrementStatBuckets,
   membersGrowth,
@@ -22,6 +36,7 @@ import {
   type StatIncrement,
   type StatsPeriod,
 } from './stats';
+import { guildSettings } from '../schema/configs';
 import { guilds } from '../schema/guilds';
 
 loadRootEnv();
@@ -136,6 +151,12 @@ describe.skipIf(!url)('repositories (integração com Postgres)', () => {
       expect(history).toHaveLength(3);
       expect(history.every((c) => c.type === 'note')).toBe(true);
     });
+
+    it('listRecentCases traz os últimos casos da guild', async () => {
+      const recent = await listRecentCases(db, GUILD_ID, 5);
+      expect(recent).toHaveLength(5);
+      expect(recent.every((c) => c.guildId === GUILD_ID && c.deletedAt === null)).toBe(true);
+    });
   });
 
   describe('audit', () => {
@@ -153,6 +174,19 @@ describe.skipIf(!url)('repositories (integração com Postgres)', () => {
       expect(row.id).toBeGreaterThan(0);
       expect(row.createdAt).toBeInstanceOf(Date);
       expect(row.after).toEqual({ maxTags: 50 });
+    });
+
+    it('listRecentAudit devolve a linha recém-gravada', async () => {
+      const recent = await listRecentAudit(db, GUILD_ID, 10);
+      expect(recent[0]?.action).toBe('config.update');
+    });
+  });
+
+  describe('guild settings', () => {
+    it('sem linha devolve null; com linha devolve o fuso', async () => {
+      expect(await getGuildSettings(db, GUILD_ID)).toBeNull();
+      await db.insert(guildSettings).values({ guildId: GUILD_ID, timezone: 'UTC' });
+      expect((await getGuildSettings(db, GUILD_ID))?.timezone).toBe('UTC');
     });
   });
 
@@ -250,6 +284,19 @@ describe.skipIf(!url)('repositories (integração com Postgres)', () => {
       expect(await topUsers(db, period, 1)).toEqual([{ id: USER_A, count: 18 }]);
       expect(await automodByRule(db, period)).toEqual([{ id: 'regra-1', count: 6 }]);
       expect(await commandsUsage(db, period)).toEqual([{ id: 'ban', count: 3 }]);
+    });
+
+    it('dailySeries soma o kind inteiro por dia', async () => {
+      expect(await dailySeries(db, period, 'cases_type')).toEqual([
+        { date: '2026-03-10', count: 2 },
+      ]);
+    });
+
+    it('seriesByDayAndKey quebra o dia por chave', async () => {
+      const rows = await seriesByDayAndKey(db, period, 'messages_channel');
+      expect(rows).toContainEqual({ date: '2026-03-10', key: CHANNEL_A, count: 27 });
+      expect(rows).toContainEqual({ date: '2026-03-10', key: CHANNEL_B, count: 10 });
+      expect(rows).toContainEqual({ date: '2026-03-11', key: CHANNEL_A, count: 3 });
     });
 
     it('ticketsPerDay separa abertos de fechados', async () => {

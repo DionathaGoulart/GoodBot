@@ -9,7 +9,15 @@ export default defineConfig({
   },
   test: {
     name: 'web',
-    environment: 'jsdom',
+    // `threads` sobe muito mais rápido que `forks` neste repo (OneDrive +
+    // WSL): com `forks` o worker do jsdom estoura o timeout de start de 60s.
+    pool: 'threads',
+    // `node` por padrão: carregar um DOM custa dezenas de segundos neste repo
+    // (OneDrive + WSL) e só os testes de componente precisam dele — esses
+    // pedem `@vitest-environment happy-dom` no docblock. O jsdom não serve
+    // aqui: só o `require` dele leva ~90s e estoura o timeout de start de 60s
+    // do worker do Vitest, que não é configurável.
+    environment: 'node',
     // Necessário para o cleanup automático do Testing Library entre os testes.
     globals: true,
     setupFiles: ['./vitest.setup.ts'],

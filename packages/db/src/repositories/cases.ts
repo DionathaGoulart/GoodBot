@@ -131,9 +131,7 @@ export async function countCasesByType(
   const rows = await db
     .select({ type: cases.type, total: sql<number>`count(*)` })
     .from(cases)
-    .where(
-      and(eq(cases.guildId, guildId), eq(cases.targetId, targetId), isNull(cases.deletedAt)),
-    )
+    .where(and(eq(cases.guildId, guildId), eq(cases.targetId, targetId), isNull(cases.deletedAt)))
     .groupBy(cases.type);
   return Object.fromEntries(rows.map((row) => [row.type, Number(row.total)]));
 }
@@ -280,4 +278,21 @@ export async function cancelScheduledActions(
     )
     .returning({ id: scheduledActions.id });
   return rows.length;
+}
+
+/**
+ * Últimos casos da guild — o bloco "atividade recente" do dashboard
+ * (PRD §6.1). Casos apagados (soft delete) não entram.
+ */
+export async function listRecentCases(
+  db: DbExecutor,
+  guildId: string,
+  limit = 10,
+): Promise<Case[]> {
+  return db
+    .select()
+    .from(cases)
+    .where(and(eq(cases.guildId, guildId), isNull(cases.deletedAt)))
+    .orderBy(desc(cases.createdAt))
+    .limit(limit);
 }

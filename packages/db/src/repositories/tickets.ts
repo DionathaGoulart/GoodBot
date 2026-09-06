@@ -157,11 +157,7 @@ export async function countOpenTickets(
     .select({ count: sql<number>`count(*)::int` })
     .from(tickets)
     .where(
-      and(
-        eq(tickets.guildId, guildId),
-        eq(tickets.userId, userId),
-        eq(tickets.status, 'open'),
-      ),
+      and(eq(tickets.guildId, guildId), eq(tickets.userId, userId), eq(tickets.status, 'open')),
     );
   return row?.count ?? 0;
 }
@@ -193,6 +189,19 @@ export async function getTicketByChannel(
 ): Promise<Ticket | null> {
   const [row] = await db.select().from(tickets).where(eq(tickets.channelId, channelId)).limit(1);
   return row ?? null;
+}
+
+/** Quantos tickets a guild tem em cada estado — o stat tile do dashboard. */
+export async function countTicketsByStatus(
+  db: DbExecutor,
+  guildId: string,
+  status: 'open' | 'closed',
+): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(tickets)
+    .where(and(eq(tickets.guildId, guildId), eq(tickets.status, status)));
+  return row?.count ?? 0;
 }
 
 export async function listTickets(

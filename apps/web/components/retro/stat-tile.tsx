@@ -6,6 +6,7 @@ export function StatTile({
   value,
   delta,
   hint,
+  chart,
   className,
 }: {
   label: string;
@@ -13,6 +14,8 @@ export function StatTile({
   /** Variação percentual do período; positivo sobe, negativo desce. */
   delta?: number | null;
   hint?: string;
+  /** Sparkline opcional (§6.7), renderizada abaixo do valor. */
+  chart?: React.ReactNode;
   className?: string;
 }) {
   return (
@@ -30,6 +33,7 @@ export function StatTile({
         </p>
       ) : null}
       {hint ? <p className="screen-meta">{hint}</p> : null}
+      {chart ? <div className="mt-auto h-10">{chart}</div> : null}
     </article>
   );
 }
