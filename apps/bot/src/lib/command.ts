@@ -1,5 +1,6 @@
 import { ContextMenuCommandBuilder } from 'discord.js';
 
+import type { AutomodService } from '../automod/engine';
 import type { ConfigService, ResolvedSettings } from '../services/config';
 import type { LogService } from '../services/logs';
 import type { MessageCacheService } from '../services/message-cache';
@@ -29,6 +30,8 @@ export interface BotContext {
   db: Db;
   config: ConfigService;
   moderation: ModerationService;
+  /** Motor de automod (§5.2); nunca lança. */
+  automod: AutomodService;
   /** Publicação de logs de evento (§5.4); nunca lança. */
   logs: LogService;
   modlog: ModlogService;
