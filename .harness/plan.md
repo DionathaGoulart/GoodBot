@@ -32,7 +32,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 7   | Utilidades                                                                 | concluída · 2026-09-06 |
 | 8   | Comunidade I: boas-vindas, autorole, tags                                  | concluída · 2026-09-06 |
 | 9   | Comunidade II: reaction roles, tickets                                     | concluída · 2026-09-06 |
-| 10  | Coleta de estatísticas                                                     | pendente     |
+| 10  | Coleta de estatísticas                                                     | concluída · 2026-09-06 |
 | 11  | API interna do bot (Hono)                                                  | pendente     |
 | 12  | Esqueleto do painel (Next.js, Auth.js, layout, 2 temas)                    | pendente     |
 | 13  | Dashboard de estatísticas                                                  | pendente     |
@@ -837,25 +837,25 @@ de leitura que o painel vai usar.
 
 **Tarefas:**
 
-- [ ] `src/services/stats.ts`: `increment(guildId, kind, key, amount = 1)`
+- [x] `src/services/stats.ts`: `increment(guildId, kind, key, amount = 1)`
       agrega em `Map<bucketKey, count>` por hora; `flush()` a cada 60s com
       `INSERT … ON CONFLICT DO UPDATE SET count = count + excluded.count`;
       flush no shutdown.
-- [ ] Hooks: `messageCreate` (canal, usuário/dia), `guildMemberAdd/Remove`,
+- [x] Hooks: `messageCreate` (canal, usuário/dia), `guildMemberAdd/Remove`,
       `voiceStateUpdate` (minutos por canal — calcular por sessão em
       memória), criação de caso (por tipo), automod hit (por regra),
       comando executado (por nome), ticket open/close.
-- [ ] Snapshot diário `members_total` (à meia-noite no TZ da guild + no
+- [x] Snapshot diário `members_total` (à meia-noite no TZ da guild + no
       boot se o dia ainda não tem).
-- [ ] Job noturno: rollup hora → dia para buckets > 90 dias, delete dos
+- [x] Job noturno: rollup hora → dia para buckets > 90 dias, delete dos
       horários agregados.
-- [ ] `packages/db/src/repositories/stats.ts` (queries de leitura, todas
+- [x] `packages/db/src/repositories/stats.ts` (queries de leitura, todas
       parametrizadas por `guildId` e período): `messagesPerDay`,
       `membersGrowth`, `heatmapHourWeekday`, `topChannels`, `topUsers`,
       `casesByType`, `automodByRule`, `commandsUsage`, `ticketsPerDay`,
       `summary` (números dos stat tiles com delta).
-- [ ] `/stats` (mod): embed resumo de 7 dias.
-- [ ] Testes: agregação em memória (mesma hora soma, hora diferente separa),
+- [x] `/stats` (mod): embed resumo de 7 dias.
+- [x] Testes: agregação em memória (mesma hora soma, hora diferente separa),
       rollup (soma correta), queries com dados fixture no Postgres de dev.
 
 **Arquivos criados/alterados:** `apps/bot/src/services/stats.ts`,
@@ -877,6 +877,24 @@ pnpm --filter @cobot/bot dev
 docker compose -f infra/docker-compose.dev.yml exec postgres psql -U cobot -d cobot -c "select kind,key,bucket_start,count from stat_buckets order by bucket_start desc limit 20"
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
+
+**Notas de execução (2026-09-06):**
+
+- Tudo nasce em bucket **horário**; o dia é decidido na leitura
+  (`date_trunc … at time zone`), o que deixa as séries "por dia" corretas no
+  fuso da guild sem duplicar bucket. A exceção é `members_total`, que é
+  snapshot diário e usa `setStatBucket` (substitui, não soma).
+- `group by 1` nas queries de série: o Drizzle renderiza a mesma expressão
+  qualificada no `group by` e sem qualificação no `select`, e o Postgres não
+  as reconhece como iguais.
+- Minutos em voz entram no fechamento da sessão (saída/troca de canal);
+  sessão aberta durante um restart é perdida por desenho.
+- Hooks entraram como callbacks opcionais nas deps dos serviços
+  (`ModerationDeps.onCase`, `TicketsDeps.onOpen/onClose`, o `AutomodDeps.onHit`
+  que já existia), ligados em `apps/bot/src/index.ts`. `messageCreate`,
+  `guildMemberAdd/Remove` e `voiceStateUpdate` ganharam listeners próprios em
+  `events/stats/`.
+- `/stats` faz `flush()` antes de ler, senão o último minuto não apareceria.
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
