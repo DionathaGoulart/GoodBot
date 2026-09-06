@@ -8,6 +8,9 @@ import { events } from './events/index';
 import { loadCommands, loadEvents } from './lib/loader';
 import { logger } from './logger';
 import { ConfigService } from './services/config';
+import { LogQueue } from './services/log-queue';
+import { LogService } from './services/logs';
+import { MessageCacheService } from './services/message-cache';
 import { ModerationService } from './services/moderation';
 import { createModlogService } from './services/modlog';
 import { Scheduler } from './services/scheduler';
@@ -23,7 +26,10 @@ async function main(): Promise<void> {
   const { db, sql } = createDb(env.DATABASE_URL);
   const client = createClient();
   const config = new ConfigService(db);
-  const modlog = createModlogService();
+  const queue = new LogQueue({ client });
+  const logs = new LogService({ db, config, queue });
+  const messageCache = new MessageCacheService({ db });
+  const modlog = createModlogService({ db, client, logs, queue });
   const moderation = new ModerationService({ db, client, config, modlog });
   const scheduler = new Scheduler({ db, client, modlog });
 
@@ -32,13 +38,20 @@ async function main(): Promise<void> {
     db,
     config,
     moderation,
+    logs,
+    modlog,
+    messageCache,
     logger,
     commands: loadCommands(commandList),
   };
 
   loadEvents(client, events, ctx);
-  // Só começa a desfazer punições depois do gateway abrir.
-  client.once('clientReady', () => scheduler.start());
+  // Só começa a desfazer punições e a publicar logs depois do gateway abrir.
+  client.once('clientReady', () => {
+    scheduler.start();
+    queue.start();
+    messageCache.start();
+  });
 
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
@@ -54,6 +67,10 @@ async function main(): Promise<void> {
 
     try {
       scheduler.stop();
+      queue.stop();
+      messageCache.stop();
+      // O que estava em buffer precisa chegar ao canal e ao banco antes do fim.
+      await Promise.all([queue.flushAll(), messageCache.flush()]);
       await client.destroy();
       await sql.end({ timeout: 5 });
       logger.info('encerrado');

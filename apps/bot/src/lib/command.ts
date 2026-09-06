@@ -1,7 +1,10 @@
 import { ContextMenuCommandBuilder } from 'discord.js';
 
 import type { ConfigService, ResolvedSettings } from '../services/config';
+import type { LogService } from '../services/logs';
+import type { MessageCacheService } from '../services/message-cache';
 import type { ModerationService } from '../services/moderation';
+import type { ModlogService } from '../services/modlog';
 import type { Db } from '@cobot/db';
 import type { Module, PermissionLevel } from '@cobot/shared';
 import type {
@@ -26,6 +29,10 @@ export interface BotContext {
   db: Db;
   config: ConfigService;
   moderation: ModerationService;
+  /** Publicação de logs de evento (§5.4); nunca lança. */
+  logs: LogService;
+  modlog: ModlogService;
+  messageCache: MessageCacheService;
   logger: Logger;
   /** Coleção viva de comandos (usada pelo `/help` e pelo registro). */
   commands: CommandCollection;

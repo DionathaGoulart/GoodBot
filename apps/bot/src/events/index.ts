@@ -1,6 +1,7 @@
 import { clientError, clientWarn, shardDisconnect, shardReconnecting, shardResume } from './errors';
 import { guildCreate, guildDelete } from './guilds';
 import interactionCreate from './interactionCreate';
+import { logEvents } from './logs/index';
 import ready from './ready';
 
 import type { EventHandler } from '../lib/event';
@@ -11,6 +12,7 @@ export const events: readonly EventHandler[] = [
   interactionCreate,
   guildCreate,
   guildDelete,
+  ...logEvents,
   clientError,
   clientWarn,
   shardDisconnect,
