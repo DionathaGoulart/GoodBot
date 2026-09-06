@@ -10,6 +10,7 @@ import type { ModerationService } from '../services/moderation';
 import type { ModlogService } from '../services/modlog';
 import type { PollService } from '../services/polls';
 import type { ReactionRoleService } from '../services/reaction-roles';
+import type { StatsService } from '../services/stats';
 import type { TicketService } from '../services/tickets';
 import type { WelcomeService } from '../services/welcome';
 import type { Db } from '@cobot/db';
@@ -54,6 +55,8 @@ export interface BotContext {
   /** Abertura, gestão e fechamento de tickets (§5.5). */
   tickets: TicketService;
   messageCache: MessageCacheService;
+  /** Agregador de estatísticas (§5.6); nunca lança. */
+  stats: StatsService;
   logger: Logger;
   /** Coleção viva de comandos (usada pelo `/help` e pelo registro). */
   commands: CommandCollection;

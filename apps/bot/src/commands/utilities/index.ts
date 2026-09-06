@@ -4,6 +4,7 @@ import poll from './poll';
 import purge from './purge';
 import remind from './remind';
 import slowmode from './slowmode';
+import stats from './stats';
 
 import type { AnyCommand } from '../../lib/command';
 
@@ -20,4 +21,5 @@ export const utilitiesCommands: readonly AnyCommand[] = [
   roleinfo,
   remind,
   poll,
+  stats,
 ];

@@ -143,6 +143,9 @@ export function ticketOverwrites(
 export interface TicketsDeps {
   db: Db;
   config: ConfigService;
+  /** Hooks de estatísticas (§5.6). */
+  onOpen?: (ticket: Ticket) => void;
+  onClose?: (ticket: Ticket) => void;
 }
 
 export interface OpenResult {
@@ -287,6 +290,7 @@ export class TicketService {
       ],
     });
 
+    this.deps.onOpen?.(ticket);
     return { ticket, channel };
   }
 
@@ -483,6 +487,7 @@ export class TicketService {
     }, TICKET_DELETE_DELAY_MS);
     timer.unref();
 
+    this.deps.onClose?.(closed);
     return { ...closed, transcriptUrl: logged };
   }
 

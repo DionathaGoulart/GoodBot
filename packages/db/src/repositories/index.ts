@@ -11,3 +11,4 @@ export * from './locks';
 export * from './tags';
 export * from './reaction-roles';
 export * from './tickets';
+export * from './stats';

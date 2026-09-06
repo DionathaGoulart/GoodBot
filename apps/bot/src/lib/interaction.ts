@@ -207,6 +207,9 @@ async function runCommand(
     await command.execute(commandCtx);
   }
 
+  // Só comandos que chegaram ao fim contam: erro e cooldown não são uso.
+  void ctx.stats.recordCommand(guildId, command.data.name);
+
   // Um comando que não responde deixa o usuário com "falha na interação".
   if (!interaction.replied && !interaction.deferred) {
     log.warn({ command: command.data.name }, 'comando terminou sem responder à interação');
