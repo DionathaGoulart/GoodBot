@@ -5,9 +5,9 @@
   "description": "Bot de moderação para Discord (discord.js v14)",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "build": "tsup",
-    "start": "node dist/index.js",
+    "start": "node --env-file-if-exists=../../.env dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -15,7 +15,9 @@
     "@cobot/db": "workspace:*",
     "@cobot/shared": "workspace:*",
     "discord.js": "^14.27.0",
-    "pino": "^10.3.1"
+    "drizzle-orm": "^0.45.2",
+    "pino": "^10.3.1",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",

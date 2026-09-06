@@ -1,11 +1,77 @@
+import { createDb } from '@cobot/db';
 import { VERSION } from '@cobot/shared';
-import pino from 'pino';
 
-const isProduction = process.env.NODE_ENV === 'production';
+import { createClient } from './client';
+import { commands as commandList } from './commands/index';
+import { env } from './env';
+import { events } from './events/index';
+import { loadCommands, loadEvents } from './lib/loader';
+import { logger } from './logger';
+import { ConfigService } from './services/config';
 
-const logger = pino({
-  level: process.env.LOG_LEVEL ?? 'info',
-  ...(isProduction ? {} : { transport: { target: 'pino-pretty' } }),
+import type { BotContext } from './lib/command';
+
+/** Segundos para o shutdown terminar antes de matar o processo (PRD §7.5). */
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+
+async function main(): Promise<void> {
+  logger.info({ version: VERSION, env: env.NODE_ENV, tz: env.TZ }, 'boot');
+
+  const { db, sql } = createDb(env.DATABASE_URL);
+  const client = createClient();
+  const config = new ConfigService(db);
+
+  const ctx: BotContext = {
+    client,
+    db,
+    config,
+    logger,
+    commands: loadCommands(commandList),
+  };
+
+  loadEvents(client, events, ctx);
+
+  let shuttingDown = false;
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info({ signal }, 'encerrando');
+
+    const timer = setTimeout(() => {
+      logger.error('shutdown excedeu o tempo limite; saindo à força');
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+    timer.unref();
+
+    try {
+      await client.destroy();
+      await sql.end({ timeout: 5 });
+      logger.info('encerrado');
+      logger.flush();
+      process.exit(0);
+    } catch (error) {
+      logger.error({ err: error }, 'erro ao encerrar');
+      logger.flush();
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+
+  // Uma promise rejeitada solta nunca derruba o bot (PRD §7.5).
+  process.on('unhandledRejection', (reason) => {
+    logger.error({ err: reason }, 'unhandledRejection');
+  });
+  process.on('uncaughtException', (error) => {
+    logger.fatal({ err: error }, 'uncaughtException');
+  });
+
+  await client.login(env.DISCORD_TOKEN);
+}
+
+main().catch((error: unknown) => {
+  logger.fatal({ err: error }, 'falha no boot');
+  logger.flush();
+  process.exit(1);
 });
-
-logger.info({ version: VERSION }, 'boot');
