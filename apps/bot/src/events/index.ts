@@ -1,3 +1,4 @@
+import { automodEvents } from './automod/index';
 import { clientError, clientWarn, shardDisconnect, shardReconnecting, shardResume } from './errors';
 import { guildCreate, guildDelete } from './guilds';
 import interactionCreate from './interactionCreate';
@@ -13,6 +14,7 @@ export const events: readonly EventHandler[] = [
   guildCreate,
   guildDelete,
   ...logEvents,
+  ...automodEvents,
   clientError,
   clientWarn,
   shardDisconnect,

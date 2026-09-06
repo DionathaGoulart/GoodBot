@@ -28,7 +28,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 3   | Esqueleto do bot (login, handlers, registro de comandos, config com cache) | concluída · 2026-09-06 |
 | 4   | Moderação e casos                                                          | concluída · 2026-09-06 |
 | 5   | Mod-log e logs de eventos                                                  | concluída · 2026-09-06 |
-| 6   | Automod                                                                    | pendente     |
+| 6   | Automod                                                                    | concluída · 2026-09-06 |
 | 7   | Utilidades                                                                 | pendente     |
 | 8   | Comunidade I: boas-vindas, autorole, tags                                  | pendente     |
 | 9   | Comunidade II: reaction roles, tickets                                     | pendente     |
@@ -539,12 +539,12 @@ configuráveis, anti-raid com modo manual, registro de hits.
 
 **Tarefas:**
 
-- [ ] `src/automod/engine.ts`: carrega regras da guild (cache invalidável
+- [x] `src/automod/engine.ts`: carrega regras da guild (cache invalidável
       por `ConfigBus` no módulo `automod`), ordena por prioridade, avalia
       allowlists, roda `rule.check(ctx)` → `Violation | null`, executa
       `actions` em ordem (`delete` primeiro), grava `automod_hits`,
       incrementa stats (hook vazio até a Etapa 10).
-- [ ] `src/automod/rules/*.ts`, uma por tipo, implementando a interface
+- [x] `src/automod/rules/*.ts`, uma por tipo, implementando a interface
       `Rule { type, check(ctx, config) }`:
       `spam` (janela deslizante por usuário/canal em memória + duplicatas),
       `links` (extração de URLs, allowlist de domínios, detecção de convite
@@ -553,17 +553,17 @@ configuráveis, anti-raid com modo manual, registro de hits.
       limite de tamanho da mensagem), `mentions` (usuários + cargos +
       everyone), `raid` (contador de joins em janela; entra em modo raid;
       ação em `guildMemberAdd`).
-- [ ] `src/automod/actions.ts`: mapeia `AutomodAction` → chamada de
+- [x] `src/automod/actions.ts`: mapeia `AutomodAction` → chamada de
       `ModerationService` com `source: 'automod'`, `dm_user`,
       `notify_modlog`.
-- [ ] `src/automod/raid.ts`: estado do modo raid por guild (`until`,
+- [x] `src/automod/raid.ts`: estado do modo raid por guild (`until`,
       `mode`), `/raid on [minutos]|off|status` (admin), alerta no mod-log.
-- [ ] Eventos: `messageCreate`, `messageUpdate` (re-avalia), `guildMemberAdd`
+- [x] Eventos: `messageCreate`, `messageUpdate` (re-avalia), `guildMemberAdd`
       (raid + idade da conta).
-- [ ] Comandos: `/automod list`, `/automod toggle <regra>`, `/automod test
+- [x] Comandos: `/automod list`, `/automod toggle <regra>`, `/automod test
     <regra> <texto>` (retorna se dispararia) — admin.
-- [ ] Job: limpeza de `automod_hits` > 30 dias.
-- [ ] Testes: cada regra com casos positivos/negativos; regex perigosa
+- [x] Job: limpeza de `automod_hits` > 30 dias.
+- [x] Testes: cada regra com casos positivos/negativos; regex perigosa
       rejeitada; spam em janela; raid entra e sai do modo.
 
 **Arquivos criados/alterados:** `apps/bot/src/automod/**`,
@@ -585,6 +585,18 @@ configuráveis, anti-raid com modo manual, registro de hits.
 pnpm --filter @cobot/bot dev
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
+
+**Notas de execução (2026-09-06):**
+
+- `safe-regex2` entrou como dependência do bot (PRD §7.3). Além dele, o modo
+  `regex` só roda contra os primeiros 2.000 caracteres da mensagem — é o
+  "timeout" possível sem worker.
+- A primeira regra que dispara encerra a avaliação da mensagem: punir duas
+  vezes o mesmo texto seria pior do que deixar a segunda regra passar.
+- Em regra `raid`, `config.action` é a punição padrão quando `actions` não tem
+  nenhuma; `require_account_age` filtra quem é punido, não é punição.
+- Extração de links ignora `arquivo.png` e afins (lista de extensões) para
+  falar de arquivo no chat não virar hit de anti-links.
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 

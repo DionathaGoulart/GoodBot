@@ -1,6 +1,7 @@
 import { createDb } from '@cobot/db';
 import { VERSION } from '@cobot/shared';
 
+import { AutomodService } from './automod/engine';
 import { createClient } from './client';
 import { commands as commandList } from './commands/index';
 import { env } from './env';
@@ -31,6 +32,7 @@ async function main(): Promise<void> {
   const messageCache = new MessageCacheService({ db });
   const modlog = createModlogService({ db, client, logs, queue });
   const moderation = new ModerationService({ db, client, config, modlog });
+  const automod = new AutomodService({ db, config, moderation, modlog });
   const scheduler = new Scheduler({ db, client, modlog });
 
   const ctx: BotContext = {
@@ -38,6 +40,7 @@ async function main(): Promise<void> {
     db,
     config,
     moderation,
+    automod,
     logs,
     modlog,
     messageCache,
@@ -51,6 +54,7 @@ async function main(): Promise<void> {
     scheduler.start();
     queue.start();
     messageCache.start();
+    automod.start();
   });
 
   let shuttingDown = false;
@@ -69,6 +73,7 @@ async function main(): Promise<void> {
       scheduler.stop();
       queue.stop();
       messageCache.stop();
+      automod.stop();
       // O que estava em buffer precisa chegar ao canal e ao banco antes do fim.
       await Promise.all([queue.flushAll(), messageCache.flush()]);
       await client.destroy();
