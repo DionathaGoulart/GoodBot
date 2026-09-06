@@ -1,4 +1,5 @@
 import { automodCommands } from './automod/index';
+import { communityCommands } from './community/index';
 import config from './config';
 import help from './help';
 import { moderationCommands } from './moderation/index';
@@ -20,4 +21,5 @@ export const commands: readonly AnyCommand[] = [
   logs,
   ...automodCommands,
   ...utilitiesCommands,
+  ...communityCommands,
 ];

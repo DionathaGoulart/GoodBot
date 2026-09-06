@@ -23,6 +23,7 @@ export type TicketType = InferSelectModel<typeof s.ticketTypes>;
 export type TicketPanel = InferSelectModel<typeof s.ticketPanels>;
 export type Ticket = InferSelectModel<typeof s.tickets>;
 export type Tag = InferSelectModel<typeof s.tags>;
+export type NewTag = InferInsertModel<typeof s.tags>;
 export type Reminder = InferSelectModel<typeof s.reminders>;
 export type NewReminder = InferInsertModel<typeof s.reminders>;
 export type Poll = InferSelectModel<typeof s.polls>;

@@ -8,6 +8,7 @@ import { env } from './env';
 import { events } from './events/index';
 import { loadCommands, loadEvents } from './lib/loader';
 import { logger } from './logger';
+import { AutoroleService } from './services/autorole';
 import { ConfigService } from './services/config';
 import { LockService } from './services/locks';
 import { LogQueue } from './services/log-queue';
@@ -17,6 +18,7 @@ import { ModerationService } from './services/moderation';
 import { createModlogService } from './services/modlog';
 import { PollService } from './services/polls';
 import { Scheduler } from './services/scheduler';
+import { WelcomeService } from './services/welcome';
 
 import type { BotContext } from './lib/command';
 
@@ -37,7 +39,9 @@ async function main(): Promise<void> {
   const automod = new AutomodService({ db, config, moderation, modlog });
   const locks = new LockService(db);
   const polls = new PollService({ db, client });
-  const scheduler = new Scheduler({ db, client, config, modlog, locks, polls });
+  const welcome = new WelcomeService({ config });
+  const autorole = new AutoroleService({ db, config });
+  const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
 
   const ctx: BotContext = {
     client,
@@ -49,6 +53,8 @@ async function main(): Promise<void> {
     modlog,
     locks,
     polls,
+    welcome,
+    autorole,
     messageCache,
     logger,
     commands: loadCommands(commandList),
@@ -80,6 +86,7 @@ async function main(): Promise<void> {
       queue.stop();
       messageCache.stop();
       automod.stop();
+      autorole.stop();
       // O que estava em buffer precisa chegar ao canal e ao banco antes do fim.
       await Promise.all([queue.flushAll(), messageCache.flush()]);
       await client.destroy();

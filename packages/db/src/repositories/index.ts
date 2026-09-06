@@ -8,3 +8,4 @@ export * from './meta';
 export * from './reminders';
 export * from './polls';
 export * from './locks';
+export * from './tags';
