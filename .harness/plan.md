@@ -33,7 +33,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 8   | Comunidade I: boas-vindas, autorole, tags                                  | concluída · 2026-09-06 |
 | 9   | Comunidade II: reaction roles, tickets                                     | concluída · 2026-09-06 |
 | 10  | Coleta de estatísticas                                                     | concluída · 2026-09-06 |
-| 11  | API interna do bot (Hono)                                                  | pendente     |
+| 11  | API interna do bot (Hono)                                                  | concluída · 2026-09-06 |
 | 12  | Esqueleto do painel (Next.js, Auth.js, layout, 2 temas)                    | pendente     |
 | 13  | Dashboard de estatísticas                                                  | pendente     |
 | 14  | Configuração I: geral, moderação, logs, boas-vindas, autorole, tags        | pendente     |
@@ -920,7 +920,7 @@ tipado em `packages/shared` para o painel consumir.
 
 **Tarefas:**
 
-- [ ] `src/api/server.ts`: Hono + `@hono/node-server` em
+- [x] `src/api/server.ts`: Hono + `@hono/node-server` em
       `INTERNAL_API_PORT` (3001), bind `0.0.0.0` (a rede do Compose isola),
       middlewares: `requestId`, logger pino, auth Bearer com
       `crypto.timingSafeEqual`, body limit 256 KB, rate limit em memória
@@ -928,25 +928,41 @@ tipado em `packages/shared` para o painel consumir.
       erro que mapeia
       `UserFacingError` → 400, `DiscordAPIError` 429 → 503 + `retryAfter`,
       resto → 500 sem vazar stack.
-- [ ] `health` responde `{ok: true}` **sem** token (healthcheck do Docker e
+- [x] `health` responde `{ok: true}` **sem** token (healthcheck do Docker e
       do Caddy); o corpo detalhado (gateway, ping, uptime, cache) só com o
       Bearer.
-- [ ] `src/api/routes/*.ts`: `health`, `guild` (channels/roles/members/
+- [x] `src/api/routes/*.ts`: `health`, `guild` (channels/roles/members/
       member/audit-log), `moderation` (POST → `ModerationService` com
       `source: 'dashboard'` e `actorId` validado como membro com nível ≥
       mod), `config` (invalidate → `ConfigBus.publish`), `messages`
       (welcome test, publish de painéis).
-- [ ] `zValidator` do Hono com os schemas de `@cobot/shared/api`.
-- [ ] `packages/shared/src/api/client.ts`: `createInternalClient({ baseUrl,
+- [x] `zValidator` do Hono com os schemas de `@cobot/shared/api`.
+- [x] `packages/shared/src/api/client.ts`: `createInternalClient({ baseUrl,
     token })` com uma função por endpoint, tipada pelos mesmos schemas,
       `fetch` nativo, timeout 10s, erro tipado `InternalApiError`.
-- [ ] Boot/shutdown do servidor em `src/index.ts`.
-- [ ] Testes: auth (sem token 401, token errado 401, certo 200), validação
+- [x] Boot/shutdown do servidor em `src/index.ts`.
+- [x] Testes: auth (sem token 401, token errado 401, certo 200), validação
       (body inválido 400), `moderation` chama o serviço com `source:
     dashboard` (serviço mockado), 429 → 503.
 
 **Arquivos criados/alterados:** `apps/bot/src/api/**`,
-`packages/shared/src/api/client.ts`, `apps/bot/src/index.ts`.
+`packages/shared/src/api/client.ts`, `packages/shared/src/api/members.ts`
+(`AuditLogEntrySummarySchema`), `apps/bot/src/index.ts`, `apps/bot/src/env.ts`
+(`INTERNAL_API_TOKEN`, `INTERNAL_API_PORT`), `.env.example`.
+
+**Notas de implementação:**
+
+- O comando de validação antigo (`/health` sem token → 401) era da v1.0. Na
+  v1.1 `/health` é público e responde `{"ok":true}`; quem devolve 401 sem token
+  é qualquer rota sob `/guilds`. Corrigido abaixo.
+- `POST /tickets/panel/publish` do PRD virou
+  `POST /guilds/:guildId/tickets/panels/:panelId/publish`, simétrico ao de
+  reaction roles — `TicketService.publishPanel` exige o `panelId`.
+- `POST /guilds/:id/messages` renderiza o `template` que vem no corpo (e não a
+  config salva): é o que o botão "testar" do painel precisa antes de salvar. As
+  variáveis são resolvidas com o próprio bot como membro de exemplo.
+- O rate limit por rota usa o caminho com snowflakes/UUIDs normalizados para
+  `:id`; o `routePath` do Hono não existe num middleware global.
 
 **Critérios de aceite:**
 
@@ -965,7 +981,8 @@ localhost:3001/health` retorna JSON com `gateway: ready`.
 ```bash
 pnpm --filter @cobot/bot dev
 curl -s -H "Authorization: Bearer $INTERNAL_API_TOKEN" localhost:3001/health | jq
-curl -s -o /dev/null -w "%{http_code}\n" localhost:3001/health   # 401
+curl -s localhost:3001/health                                    # {"ok":true}
+curl -s -o /dev/null -w "%{http_code}\n" localhost:3001/guilds/$GUILD_ID/roles  # 401
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 

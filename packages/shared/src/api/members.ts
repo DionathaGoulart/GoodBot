@@ -60,3 +60,19 @@ export const AuditLogQuerySchema = z.object({
   before: SnowflakeSchema.optional(),
 });
 export type AuditLogQuery = z.infer<typeof AuditLogQuerySchema>;
+
+export const AuditLogEntrySummarySchema = z.object({
+  id: SnowflakeSchema,
+  /** `AuditLogEvent` numérico do Discord. */
+  actionType: z.number().int(),
+  targetId: SnowflakeSchema.nullable(),
+  executor: z
+    .object({ id: SnowflakeSchema, username: z.string(), avatarUrl: z.url().nullable() })
+    .nullable(),
+  reason: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+  changes: z.array(
+    z.object({ key: z.string(), old: z.string().nullable(), new: z.string().nullable() }),
+  ),
+});
+export type AuditLogEntrySummary = z.infer<typeof AuditLogEntrySummarySchema>;

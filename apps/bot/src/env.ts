@@ -12,6 +12,9 @@ const EnvSchema = z.object({
   DISCORD_CLIENT_ID: snowflake,
   GUILD_ID: snowflake,
   DATABASE_URL: z.string().min(1),
+  /** Única barreira da API do bot na internet (PRD §7.3): openssl rand -hex 32. */
+  INTERNAL_API_TOKEN: z.string().min(32, 'gere com: openssl rand -hex 32 (≥ 32 caracteres)'),
+  INTERNAL_API_PORT: z.coerce.number().int().min(1).max(65_535).default(3001),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   TZ: z.string().default('America/Sao_Paulo'),
