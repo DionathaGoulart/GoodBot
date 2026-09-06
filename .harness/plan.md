@@ -34,7 +34,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 9   | Comunidade II: reaction roles, tickets                                     | concluída · 2026-09-06 |
 | 10  | Coleta de estatísticas                                                     | concluída · 2026-09-06 |
 | 11  | API interna do bot (Hono)                                                  | concluída · 2026-09-06 |
-| 12  | Esqueleto do painel (Next.js, Auth.js, layout, 2 temas)                    | pendente     |
+| 12  | Esqueleto do painel (Next.js, Auth.js, layout, 2 temas)                    | concluída · 2026-09-06 |
 | 13  | Dashboard de estatísticas                                                  | pendente     |
 | 14  | Configuração I: geral, moderação, logs, boas-vindas, autorole, tags        | pendente     |
 | 15  | Configuração II: automod, reaction roles, tickets, comandos                | pendente     |
@@ -1018,55 +1018,55 @@ http://localhost:3000`.
 
 **Tarefas:**
 
-- [ ] `app/globals.css` conforme styleguide §7: `--palette-*`, blocos
+- [x] `app/globals.css` conforme styleguide §7: `--palette-*`, blocos
       `[data-theme='crimson']`/`[data-theme='rose']`, aliases shadcn,
       `@theme inline` com JetBrains Mono (`@fontsource-variable` ou
       `@fontsource/jetbrains-mono` pesos 400/500/700/800 + itálicos),
       utilities `retro-border`, `retro-shadow(-sm)`, `terminal-cursor`,
       `terminal-scanline`, `animate-enter`, `btn-goodchat*`, `screen-pad`,
       foco, `::selection`, `prefers-reduced-motion`.
-- [ ] `pnpm dlx shadcn@latest init` + `add` de: button, input, textarea,
+- [x] `pnpm dlx shadcn@latest init` + `add` de: button, input, textarea,
       select, switch, checkbox, radio-group, label, form, table, card,
       dialog, alert-dialog, sheet, dropdown-menu, command, popover, tooltip,
       tabs, badge, separator, skeleton, sonner, pagination, breadcrumb,
       sidebar, scroll-area. Editar cada um em `components/ui/*` para
       radius 0, borda 2px, sombra dura, tipografia do styleguide §6.
-- [ ] `components/theme/{theme-script,theme-provider,theme-toggle}.tsx`:
+- [x] `components/theme/{theme-script,theme-provider,theme-toggle}.tsx`:
       script inline no `<head>` (nonce) que lê `localStorage.cobot-theme`
       ou `prefers-color-scheme` e seta `data-theme`; toggle na topbar;
       atalho `Shift+T`.
-- [ ] Auth.js v5: `auth.ts` (provider Discord, scopes `identify guilds
+- [x] Auth.js v5: `auth.ts` (provider Discord, scopes `identify guilds
     guilds.members.read`, JWT), `app/api/auth/[...nextauth]/route.ts`,
       callback `jwt` que na primeira vez chama a API interna
       (`GET /guilds/:id/members/:userId`) para resolver `level`
       (`owner|admin|mod|none`) e guarda no token com `checkedAt`;
       `session` expõe `user.id`, `level`, `guildId`.
-- [ ] `lib/auth/require.ts`: `requireGuildAccess(level)` para server
+- [x] `lib/auth/require.ts`: `requireGuildAccess(level)` para server
       components/actions/route handlers; re-verifica se `checkedAt` > 15
       min; `redirect('/denied')` ou `throw`.
-- [ ] `lib/internal-api.ts`: instancia o client de `@cobot/shared` com
+- [x] `lib/internal-api.ts`: instancia o client de `@cobot/shared` com
       `INTERNAL_API_URL` + token (server-only).
-- [ ] `lib/db.ts`: client Drizzle (server-only, singleton) com pool pequeno
+- [x] `lib/db.ts`: client Drizzle (server-only, singleton) com pool pequeno
       (`max: 1`) — em produção o painel roda serverless na Vercel e conecta
       pelo pooler pgBouncer do Supabase (PRD §7.2).
-- [ ] `lib/audit.ts`: `withAudit(action, target, before, after)` usando
+- [x] `lib/audit.ts`: `withAudit(action, target, before, after)` usando
       `appendAudit` + IP/UA de `headers()`.
-- [ ] Rotas: `/login` (screen-title, botão `ENTRAR COM DISCORD`),
+- [x] Rotas: `/login` (screen-title, botão `ENTRAR COM DISCORD`),
       `/denied`, `/g/[guildId]/layout.tsx` (sidebar §6.9 com grupos e itens
       de todas as páginas futuras, topbar com breadcrumb/status do bot/
       toggle/avatar+sair), `/g/[guildId]/page.tsx` placeholder "Dashboard"
       com 4 `stat-tile` de exemplo, `/` redireciona para
       `/g/${GUILD_ID}`.
-- [ ] `middleware.ts`: protege `/g/*`.
-- [ ] Componentes base do styleguide: `Panel` (com `window-bar` +
+- [x] `middleware.ts`: protege `/g/*`.
+- [x] Componentes base do styleguide: `Panel` (com `window-bar` +
       `WindowDots`), `ScreenHeader` (kicker/title/meta), `StatTile`,
       `EmptyState`, `ErrorState`, `PageSkeleton`, `Tag`, `AvatarSq`,
       `PresenceDot`, `BotStatusBanner` (usa `/health` com `revalidate: 30`).
-- [ ] CSP em `next.config.ts` headers (self, nonce no script de tema).
-- [ ] `next.config.ts`: `transpilePackages: ['@cobot/shared', '@cobot/db']`
+- [x] CSP em `next.config.ts` headers (self, nonce no script de tema).
+- [x] `next.config.ts`: `transpilePackages: ['@cobot/shared', '@cobot/db']`
       e os headers de segurança (o painel vai para a Vercel na Etapa 19, sem
       Caddy na frente; **não** usar `output: 'standalone'`).
-- [ ] Testes: `requireGuildAccess` (níveis), `renderização do Panel/StatTile`
+- [x] Testes: `requireGuildAccess` (níveis), `renderização do Panel/StatTile`
       (Vitest + Testing Library, `jsdom`).
 
 **Arquivos criados/alterados:** `apps/web/app/**`, `apps/web/components/**`,
@@ -1091,6 +1091,31 @@ pnpm --filter @cobot/bot dev &    # a API interna precisa estar de pé
 pnpm --filter @cobot/web dev      # abrir http://localhost:3000
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
+
+**Notas de execução (2026-09-06):**
+
+- A CLI do shadcn agora usa presets; o painel foi inicializado com
+  `--base radix --preset nova`, que traz `radix-ui` (pacote único), `cn` e um
+  `@import "shadcn/tailwind.css"` (custom variants `data-open`/`data-checked`
+  que os componentes usam). Por isso `shadcn` ficou em `devDependencies`.
+- `form` não existe no registry `radix-nova`; `components/ui/form.tsx` foi
+  escrito à mão sobre react-hook-form, com a mesma API do shadcn clássico.
+- `next-themes` (arrastado pelo `sonner`) foi removido: o `ThemeProvider`
+  próprio resolve, como manda o styleguide §0.3.
+- A CSP mora no `proxy.ts`, não no `next.config.ts`: o nonce muda a cada
+  resposta e `headers()` do config só emite valor estático. Os demais headers
+  de segurança ficaram no `next.config.ts`. O arquivo se chama `proxy.ts`
+  porque o Next 16 aposentou a convenção `middleware.ts` (a API é a mesma).
+- O `.env` da raiz é carregado por um leitor próprio no `next.config.ts` (o
+  Next só enxerga `.env` dentro de `apps/web`). `--env-file-if-exists` no
+  script **não** serve: o Next repassa a flag em `NODE_OPTIONS` para os
+  workers de build e o Node recusa. `lib/env.ts` valida na primeira leitura
+  (preguiçoso) para não travar o build.
+- `useIsMobile` e o `ThemeProvider` usam `useSyncExternalStore`: a regra
+  `react-hooks/set-state-in-effect` do eslint-config-next proíbe `setState`
+  dentro de efeito. O corte da sidebar virou `lg` (styleguide §6.9).
+- O nome do servidor na sidebar/breadcrumb é um placeholder até a Etapa 16
+  trazer os dados ao vivo da guild.
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
