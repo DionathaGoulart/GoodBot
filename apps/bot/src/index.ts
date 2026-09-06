@@ -9,11 +9,13 @@ import { events } from './events/index';
 import { loadCommands, loadEvents } from './lib/loader';
 import { logger } from './logger';
 import { ConfigService } from './services/config';
+import { LockService } from './services/locks';
 import { LogQueue } from './services/log-queue';
 import { LogService } from './services/logs';
 import { MessageCacheService } from './services/message-cache';
 import { ModerationService } from './services/moderation';
 import { createModlogService } from './services/modlog';
+import { PollService } from './services/polls';
 import { Scheduler } from './services/scheduler';
 
 import type { BotContext } from './lib/command';
@@ -33,7 +35,9 @@ async function main(): Promise<void> {
   const modlog = createModlogService({ db, client, logs, queue });
   const moderation = new ModerationService({ db, client, config, modlog });
   const automod = new AutomodService({ db, config, moderation, modlog });
-  const scheduler = new Scheduler({ db, client, modlog });
+  const locks = new LockService(db);
+  const polls = new PollService({ db, client });
+  const scheduler = new Scheduler({ db, client, config, modlog, locks, polls });
 
   const ctx: BotContext = {
     client,
@@ -43,6 +47,8 @@ async function main(): Promise<void> {
     automod,
     logs,
     modlog,
+    locks,
+    polls,
     messageCache,
     logger,
     commands: loadCommands(commandList),

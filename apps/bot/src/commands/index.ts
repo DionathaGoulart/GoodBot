@@ -4,6 +4,7 @@ import help from './help';
 import { moderationCommands } from './moderation/index';
 import logs from './moderation/logs';
 import ping from './ping';
+import { utilitiesCommands } from './utilities/index';
 
 import type { AnyCommand } from '../lib/command';
 
@@ -18,4 +19,5 @@ export const commands: readonly AnyCommand[] = [
   ...moderationCommands,
   logs,
   ...automodCommands,
+  ...utilitiesCommands,
 ];

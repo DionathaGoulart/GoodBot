@@ -6,6 +6,7 @@ import { childLogger } from '../logger';
 import { isUserContextCommand } from './command';
 import { CooldownStore } from './cooldown';
 import { botFooter, errorEmbed } from './embeds';
+import { handlePollButton } from '../interactions/poll-buttons';
 import { levelAtLeast, resolveLevel, toMemberLike } from '../services/permissions';
 
 import type { AnyCommand, AutocompleteContext, BotContext, CommandContext } from './command';
@@ -78,6 +79,16 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
         await command.autocomplete(autocompleteCtx);
       } catch (error) {
         log.error({ err: error, command: interaction.commandName }, 'erro no autocomplete');
+      }
+      return;
+    }
+
+    if (interaction.isButton()) {
+      try {
+        await handlePollButton(ctx, interaction);
+      } catch (error) {
+        log.error({ err: error, customId: interaction.customId }, 'erro no botão');
+        await replyError(interaction, 'Não consegui registrar essa ação. Tente de novo.');
       }
       return;
     }

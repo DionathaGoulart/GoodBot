@@ -122,6 +122,22 @@ export async function countCasesForTarget(
   return Number(row?.total ?? 0);
 }
 
+/** Contagem por tipo de caso de um alvo — o resumo do `/userinfo`. */
+export async function countCasesByType(
+  db: DbExecutor,
+  guildId: string,
+  targetId: string,
+): Promise<Partial<Record<Case['type'], number>>> {
+  const rows = await db
+    .select({ type: cases.type, total: sql<number>`count(*)` })
+    .from(cases)
+    .where(
+      and(eq(cases.guildId, guildId), eq(cases.targetId, targetId), isNull(cases.deletedAt)),
+    )
+    .groupBy(cases.type);
+  return Object.fromEntries(rows.map((row) => [row.type, Number(row.total)]));
+}
+
 /** Warns de um usuário desde um instante — base da escalada (PRD §5.1). */
 export async function countWarnsSince(
   db: DbExecutor,

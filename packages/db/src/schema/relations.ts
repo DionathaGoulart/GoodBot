@@ -16,7 +16,7 @@ import {
 import { guildSettings, logConfigs, moduleConfigs } from './configs';
 import { guilds } from './guilds';
 import { messageCache } from './messages';
-import { polls, reminders } from './misc';
+import { channelLocks, polls, reminders } from './misc';
 import { statBuckets } from './stats';
 
 export const guildsRelations = relations(guilds, ({ one, many }) => ({
@@ -44,6 +44,7 @@ export const guildsRelations = relations(guilds, ({ one, many }) => ({
   reminders: many(reminders),
   polls: many(polls),
   statBuckets: many(statBuckets),
+  channelLocks: many(channelLocks),
   auditLogs: many(auditLogs),
 }));
 
@@ -104,4 +105,16 @@ export const ticketTypesRelations = relations(ticketTypes, ({ one, many }) => ({
 export const ticketsRelations = relations(tickets, ({ one }) => ({
   guild: one(guilds, { fields: [tickets.guildId], references: [guilds.id] }),
   type: one(ticketTypes, { fields: [tickets.typeId], references: [ticketTypes.id] }),
+}));
+
+export const remindersRelations = relations(reminders, ({ one }) => ({
+  guild: one(guilds, { fields: [reminders.guildId], references: [guilds.id] }),
+}));
+
+export const pollsRelations = relations(polls, ({ one }) => ({
+  guild: one(guilds, { fields: [polls.guildId], references: [guilds.id] }),
+}));
+
+export const channelLocksRelations = relations(channelLocks, ({ one }) => ({
+  guild: one(guilds, { fields: [channelLocks.guildId], references: [guilds.id] }),
 }));
