@@ -5,12 +5,7 @@ import { createDb, type Db } from '../client';
 import { loadRootEnv } from '../env';
 import { appendAudit } from './audit';
 import { createCase, getCaseByNumber, listCasesForTarget, nextCaseNumber } from './cases';
-import {
-  getAllModuleConfigs,
-  getModuleConfig,
-  setModuleConfig,
-  setModuleEnabled,
-} from './configs';
+import { getAllModuleConfigs, getModuleConfig, setModuleConfig, setModuleEnabled } from './configs';
 import { guilds } from '../schema/guilds';
 
 loadRootEnv();
