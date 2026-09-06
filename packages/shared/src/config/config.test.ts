@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import { MAX_TIMEOUT_MS, MODULES } from '../constants';
 import { AutomodRuleSchema } from './automod-rule';
+import { GuildSettingsSchema, isValidTimezone } from './guild-settings';
 import {
   DEFAULT_MODULE_CONFIGS,
   MODULE_SCHEMAS,
   parseModuleConfig,
   parseModuleConfigOrDefault,
 } from './index';
+import { LogsPageSchema } from './logs';
 import { ModerationConfigSchema } from './moderation';
+import { TagInputSchema } from './tags';
 
 describe('MODULE_SCHEMAS', () => {
   it('cobre exatamente os módulos de MODULES', () => {
@@ -198,5 +201,78 @@ describe('AutomodRuleSchema', () => {
       config: { allowedDomains: ['GitHub.com'] },
     });
     expect(rule.type === 'links' && rule.config.allowedDomains).toEqual(['github.com']);
+  });
+});
+
+describe('GuildSettingsSchema', () => {
+  it('aplica os defaults do PRD §8 quando a guild ainda não tem linha', () => {
+    expect(GuildSettingsSchema.parse({})).toEqual({
+      timezone: 'America/Sao_Paulo',
+      embedColor: 0xdc143c,
+      modRoleIds: [],
+      adminRoleIds: [],
+      dashboardAccessRoleIds: [],
+      logChannelId: null,
+      dmOnPunish: null,
+    });
+  });
+
+  it('recusa fuso que o Intl não conhece', () => {
+    expect(isValidTimezone('America/Sao_Paulo')).toBe(true);
+    expect(isValidTimezone('Marte/Olympus')).toBe(false);
+    expect(GuildSettingsSchema.safeParse({ timezone: 'Marte/Olympus' }).success).toBe(false);
+  });
+
+  it('recusa cor fora de 24 bits e ID que não é snowflake', () => {
+    expect(GuildSettingsSchema.safeParse({ embedColor: 0x1000000 }).success).toBe(false);
+    expect(GuildSettingsSchema.safeParse({ logChannelId: '12' }).success).toBe(false);
+  });
+
+  it('`dmOnPunish` só existe como override completo', () => {
+    const parsed = GuildSettingsSchema.parse({ dmOnPunish: {} });
+    expect(parsed.dmOnPunish).toEqual({
+      ban: true,
+      softban: true,
+      kick: true,
+      timeout: true,
+      warn: true,
+    });
+  });
+});
+
+describe('LogsPageSchema', () => {
+  const kind = { enabled: false, channelId: null, ignoredChannelIds: [], ignoredRoleIds: [] };
+  const kinds = { modlog: kind, messages: kind, members: kind, server: kind, voice: kind };
+
+  it('exige um item para cada tipo de log', () => {
+    expect(LogsPageSchema.safeParse({ module: {}, kinds: { modlog: kind } }).success).toBe(false);
+    expect(LogsPageSchema.parse({ module: {}, kinds }).kinds.voice).toEqual(kind);
+  });
+
+  it('canal inválido em um tipo derruba a página inteira', () => {
+    const result = LogsPageSchema.safeParse({
+      module: {},
+      kinds: { ...kinds, modlog: { ...kind, channelId: 'nope' } },
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path.join('.')).toBe('kinds.modlog.channelId');
+  });
+});
+
+describe('TagInputSchema', () => {
+  it('aceita letras com acento, número, `_` e `-`', () => {
+    expect(TagInputSchema.parse({ name: 'regras-2', content: { content: 'oi' } }).name).toBe(
+      'regras-2',
+    );
+    expect(TagInputSchema.safeParse({ name: 'reg ras', content: { content: 'oi' } }).success).toBe(
+      false,
+    );
+  });
+
+  it('exige conteúdo: nem texto nem embed não é tag', () => {
+    expect(TagInputSchema.safeParse({ name: 'vazia', content: {} }).success).toBe(false);
+    expect(TagInputSchema.safeParse({ name: 'vazia', content: { content: '  ' } }).success).toBe(
+      false,
+    );
   });
 });

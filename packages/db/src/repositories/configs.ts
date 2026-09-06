@@ -165,3 +165,37 @@ export async function getGuildSettings(
     .limit(1);
   return row ?? null;
 }
+
+export type GuildSettingsInput = Pick<
+  GuildSettings,
+  | 'timezone'
+  | 'embedColor'
+  | 'modRoleIds'
+  | 'adminRoleIds'
+  | 'dashboardAccessRoleIds'
+  | 'logChannelId'
+  | 'dmOnPunish'
+>;
+
+/**
+ * Upsert das preferências gerais. Como em `setModuleConfig`, garante a linha
+ * em `guilds` (FK) sem sobrescrever nome/owner que o bot já tenha gravado.
+ */
+export async function setGuildSettings(
+  db: DbExecutor,
+  guildId: string,
+  input: GuildSettingsInput,
+): Promise<void> {
+  await db
+    .insert(guilds)
+    .values({ id: guildId, name: '', ownerId: '' })
+    .onConflictDoNothing({ target: guilds.id });
+
+  await db
+    .insert(guildSettings)
+    .values({ guildId, ...input })
+    .onConflictDoUpdate({
+      target: guildSettings.guildId,
+      set: { ...input, updatedAt: sql`now()` },
+    });
+}
