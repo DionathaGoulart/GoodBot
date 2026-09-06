@@ -30,7 +30,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 5   | Mod-log e logs de eventos                                                  | concluída · 2026-09-06 |
 | 6   | Automod                                                                    | concluída · 2026-09-06 |
 | 7   | Utilidades                                                                 | concluída · 2026-09-06 |
-| 8   | Comunidade I: boas-vindas, autorole, tags                                  | pendente     |
+| 8   | Comunidade I: boas-vindas, autorole, tags                                  | concluída · 2026-09-06 |
 | 9   | Comunidade II: reaction roles, tickets                                     | pendente     |
 | 10  | Coleta de estatísticas                                                     | pendente     |
 | 11  | API interna do bot (Hono)                                                  | pendente     |
@@ -690,20 +690,20 @@ templates.ts`, `packages/shared/src/config/{welcome,autorole,tags}.ts`,
 
 **Tarefas:**
 
-- [ ] `src/services/welcome.ts`: `guildMemberAdd`/`Remove` → renderiza
+- [x] `src/services/welcome.ts`: `guildMemberAdd`/`Remove` → renderiza
       `MessageTemplate` (texto ou embed) com variáveis, envia no canal e DM
       opcional; `/welcome test` (admin) envia para o próprio autor.
-- [ ] `src/services/autorole.ts`: aplica cargos ao entrar (separando bots),
+- [x] `src/services/autorole.ts`: aplica cargos ao entrar (separando bots),
       atraso via `setTimeout` (≤10 min) ou `scheduled_actions` (>10 min);
       verificação: `/verify setup` publica mensagem com botão persistente
       (`customId: verify`), handler aplica o cargo.
-- [ ] `src/commands/community/tag.ts`: `/tag <nome>` com autocomplete,
+- [x] `src/commands/community/tag.ts`: `/tag <nome>` com autocomplete,
       `/tag create|edit|delete|list|info`; permissão de criação por config
       (`tags.createRoleIds`); contador `uses`.
-- [ ] `src/interactions/` registrador de handlers de botão/select/modal por
+- [x] `src/interactions/` registrador de handlers de botão/select/modal por
       prefixo de `customId` (usado aqui por `verify` e reaproveitado na
       Etapa 9) — se ainda não existir da Etapa 7, criar agora.
-- [ ] Testes: renderização de template (todas as variáveis, escaping de
+- [x] Testes: renderização de template (todas as variáveis, escaping de
       menções indevidas), seleção humano/bot no autorole, autocomplete de
       tags (prefixo, limite 25).
 
@@ -726,6 +726,32 @@ templates.ts`, `packages/shared/src/config/{welcome,autorole,tags}.ts`,
 pnpm --filter @cobot/bot dev
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
+
+**Notas de execução (2026-09-06):**
+
+- A config de `welcome`/`autorole` é lida do `module_configs` pelo
+  `ConfigService`, como todos os outros módulos. As tabelas `welcome_configs`
+  e `autorole_configs` do PRD §8 ficaram vazias: duas fontes de verdade para
+  o mesmo dado seria pior que uma tabela sem uso. Decidir na Etapa 14 se elas
+  caem numa migration.
+- `/tag <nome>` ficou como comando próprio e a gestão foi para
+  `/tags create|edit|delete|list|info`: o Discord não deixa o mesmo comando ter
+  option e subcommand ao mesmo tempo, e `/tag <nome>` é o que o PRD §5.5 pede.
+  O cooldown de `/tag` vem de `tags.cooldownSeconds` (a config manda, não o
+  `CommandMeta`, que é estático).
+- Atraso do autorole: até 10 min num `setTimeout`; acima disso no novo kind
+  `autorole` de `scheduled_actions` (migration `0002_autorole_action`), porque
+  um timer não sobrevive a um restart.
+- `interactions/index.ts` roteia componentes pelo prefixo do `custom_id`. Os
+  botões de enquete passaram a entrar por lá, e a Etapa 9 (reaction roles,
+  tickets) só precisa registrar novos prefixos. `custom_id` desconhecido vira
+  resposta efêmera, não "falha na interação".
+- `templateToMessage` envia `allowedMentions: { parse: ['users'] }` e as
+  variáveis passam por `sanitizeVar`: só `{mention}` pinga, e um apelido
+  `@everyone` não vira ping do servidor.
+- `/verify setup` grava canal, mensagem e cargo na config (e liga o módulo):
+  o botão é persistente, então o handler não pode depender de memória. O
+  comando recusa cargo `managed` ou acima do bot antes de publicar.
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
