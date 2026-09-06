@@ -2,10 +2,12 @@ import { ContextMenuCommandBuilder } from 'discord.js';
 
 import type { AutomodService } from '../automod/engine';
 import type { ConfigService, ResolvedSettings } from '../services/config';
+import type { LockService } from '../services/locks';
 import type { LogService } from '../services/logs';
 import type { MessageCacheService } from '../services/message-cache';
 import type { ModerationService } from '../services/moderation';
 import type { ModlogService } from '../services/modlog';
+import type { PollService } from '../services/polls';
 import type { Db } from '@cobot/db';
 import type { Module, PermissionLevel } from '@cobot/shared';
 import type {
@@ -35,6 +37,10 @@ export interface BotContext {
   /** Publicação de logs de evento (§5.4); nunca lança. */
   logs: LogService;
   modlog: ModlogService;
+  /** Lock/unlock de canais com restauração exata dos overwrites (§5.3). */
+  locks: LockService;
+  /** Encerramento e resultado de enquetes (§5.3). */
+  polls: PollService;
   messageCache: MessageCacheService;
   logger: Logger;
   /** Coleção viva de comandos (usada pelo `/help` e pelo registro). */

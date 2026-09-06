@@ -5,3 +5,6 @@ export * from './automod';
 export * from './message-cache';
 export * from './audit';
 export * from './meta';
+export * from './reminders';
+export * from './polls';
+export * from './locks';
