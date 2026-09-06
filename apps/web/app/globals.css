@@ -1,17 +1,608 @@
 @import 'tailwindcss';
+@import 'shadcn/tailwind.css';
+@import '@fontsource-variable/jetbrains-mono';
+@import '@fontsource-variable/jetbrains-mono/wght-italic.css';
 
-/* Tema e tokens definitivos entram na etapa do painel (.harness/styleguide.md). */
+/*
+ * Tokens do painel — `.harness/styleguide.md`.
+ * Ordem obrigatória (§7): paleta bruta → tema claro → tema escuro →
+ * `@theme inline` (aliases shadcn + fontes) → utilities → base.
+ * Hex existe UMA vez, aqui em `--palette-*`. Nenhum componente hardcoda cor,
+ * radius, espessura ou sombra.
+ */
+
+/* Os componentes shadcn usam a variante `dark:`; no CoBot ela é o tema rose. */
+@custom-variant dark (&:is([data-theme='rose'] *));
+
+/* ── §2.1 Paleta bruta ───────────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --palette-cream: #f2efe7;
+  --palette-white: #ffffff;
+  --palette-ink: #1a0a0a;
+  --palette-noir: #121212;
+  --palette-noir-raised: #1a1a1a;
+  --palette-near-black: #0d0d0d;
+  --palette-crimson: #dc143c;
+  --palette-rose: #e8729a;
+  --palette-info: #2563eb;
+  --palette-success: #16a34a;
+  --palette-warning: #d97706;
+  --palette-error: #dc2626;
+  --palette-info-soft: #60a5fa;
+  --palette-success-soft: #4ade80;
+  --palette-warning-soft: #fbbf24;
+  --palette-error-soft: #f87171;
+  --palette-scanline-light: rgba(0, 0, 0, 0.05);
+  --palette-scanline-dark: rgba(0, 0, 0, 0.2);
+
+  /* §5 — geometria, igual nos dois temas. */
+  --radius: 0rem;
+  --frame-border: 2px;
+  --frame-shadow: 6px 6px 0 0 var(--shadow);
+  --frame-shadow-sm: 3px 3px 0 0 var(--shadow);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+}
+
+/* ── §2.2 Tema claro `crimson` (também o fallback de `:root`) ────────────── */
+:root,
+[data-theme='crimson'] {
+  color-scheme: light;
+
+  --base-100: var(--palette-cream);
+  --base-200: var(--palette-white);
+  --base-300: var(--palette-ink);
+  --base-content: var(--palette-ink);
+  --accent: var(--palette-crimson);
+  --accent-content: var(--palette-white);
+  --secondary: var(--palette-ink);
+  --secondary-content: var(--palette-white);
+  --neutral: var(--palette-ink);
+  --neutral-content: var(--palette-white);
+  --info: var(--palette-info);
+  --info-content: var(--palette-white);
+  --success: var(--palette-success);
+  --success-content: var(--palette-white);
+  --warning: var(--palette-warning);
+  --warning-content: var(--palette-white);
+  --error: var(--palette-error);
+  --error-content: var(--palette-white);
+  --shadow: var(--palette-ink);
+  --scanline-color: var(--palette-scanline-light);
+}
+
+/* ── §2.2 Tema escuro `rose` (padrão do painel) ─────────────────────────── */
+[data-theme='rose'] {
+  color-scheme: dark;
+
+  --base-100: var(--palette-noir);
+  --base-200: var(--palette-noir-raised);
+  --base-300: var(--palette-cream);
+  --base-content: var(--palette-cream);
+  --accent: var(--palette-rose);
+  --accent-content: var(--palette-white);
+  --secondary: var(--palette-cream);
+  --secondary-content: var(--palette-noir);
+  --neutral: var(--palette-cream);
+  --neutral-content: var(--palette-noir);
+  --info: var(--palette-info-soft);
+  --info-content: var(--palette-near-black);
+  --success: var(--palette-success-soft);
+  --success-content: var(--palette-near-black);
+  --warning: var(--palette-warning-soft);
+  --warning-content: var(--palette-near-black);
+  --error: var(--palette-error-soft);
+  --error-content: var(--palette-near-black);
+  /* No escuro a sombra dura é accent — é a assinatura do tema. */
+  --shadow: var(--palette-rose);
+  --scanline-color: var(--palette-scanline-dark);
+}
+
+/* ── §7 Aliases shadcn: nomes deles, cores nossas. Nunca cor nova. ──────── */
+:root,
+[data-theme='crimson'],
+[data-theme='rose'] {
+  --background: var(--base-100);
+  --foreground: var(--base-content);
+  --card: var(--base-200);
+  --card-foreground: var(--base-content);
+  --popover: var(--base-200);
+  --popover-foreground: var(--base-content);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-content);
+  --secondary-foreground: var(--secondary-content);
+  --muted: var(--base-200);
+  --muted-foreground: color-mix(in oklab, var(--base-content) 60%, transparent);
+  --accent-foreground: var(--accent-content);
+  --destructive: var(--error);
+  --destructive-foreground: var(--error-content);
+  --border: var(--base-300);
+  --input: var(--base-300);
+  --ring: var(--accent);
+  --chart-1: var(--accent);
+  --chart-2: var(--info);
+  --chart-3: var(--success);
+  --chart-4: var(--warning);
+  --chart-5: var(--error);
+  --sidebar: var(--base-100);
+  --sidebar-foreground: var(--base-content);
+  --sidebar-primary: var(--accent);
+  --sidebar-primary-foreground: var(--accent-content);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-content);
+  --sidebar-border: var(--base-300);
+  --sidebar-ring: var(--accent);
 }
 
 @theme inline {
+  /* §3 — uma família para tudo. */
+  --font-sans: 'JetBrains Mono Variable', ui-monospace, 'Courier New', monospace;
+  --font-mono: var(--font-sans);
+  --font-heading: var(--font-sans);
+
+  /* Tokens semânticos (§2.2) como utilities: `bg-base-200`, `text-error`… */
+  --color-base-100: var(--base-100);
+  --color-base-200: var(--base-200);
+  --color-base-300: var(--base-300);
+  --color-base-content: var(--base-content);
+  --color-accent: var(--accent);
+  --color-accent-content: var(--accent-content);
+  --color-secondary: var(--secondary);
+  --color-secondary-content: var(--secondary-content);
+  --color-neutral: var(--neutral);
+  --color-neutral-content: var(--neutral-content);
+  --color-info: var(--info);
+  --color-info-content: var(--info-content);
+  --color-success: var(--success);
+  --color-success-content: var(--success-content);
+  --color-warning: var(--warning);
+  --color-warning-content: var(--warning-content);
+  --color-error: var(--error);
+  --color-error-content: var(--error-content);
+
+  /* Aliases shadcn (§7). */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* §4.3 — zero radius em tudo, sem exceção. */
+  --radius-sm: 0rem;
+  --radius-md: 0rem;
+  --radius-lg: 0rem;
+  --radius-xl: 0rem;
+  --radius-2xl: 0rem;
+  --radius-3xl: 0rem;
+  --radius-4xl: 0rem;
+
+  /* §4 Motion — entrada sem overshoot, caret piscando. */
+  --animate-enter: enter 200ms cubic-bezier(0.33, 1, 0.68, 1) both;
+  --animate-blink: blink 1s step-end infinite;
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+  }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
+/* ── Utilities (§4) ──────────────────────────────────────────────────────── */
+
+/** §4.2 — moldura grossa reta, sempre `base-300`. */
+@utility retro-border {
+  border: var(--frame-border) solid var(--color-base-300);
+}
+
+/** §4.1 — sombra dura deslocada, sem blur. É a assinatura da skin. */
+@utility retro-shadow {
+  box-shadow: var(--frame-shadow);
+}
+
+@utility retro-shadow-sm {
+  box-shadow: var(--frame-shadow-sm);
+}
+
+/** §5 — respiro padrão de página, respeitando o notch. */
+@utility screen-pad {
+  padding-inline: max(1rem, env(safe-area-inset-left));
+  padding-block: 1rem;
+
+  @media (width >= 40rem) {
+    padding-inline: max(2rem, env(safe-area-inset-left));
+    padding-block: 2rem;
+  }
+}
+
+/** §4.5 — caret `_` no lugar de spinner. */
+@utility terminal-cursor {
+  &::after {
+    content: '_';
+    animation: var(--animate-blink);
+  }
+}
+
+/** §4.4 — textura de 1px a cada 4px; é fundo, não tela. */
+@utility terminal-scanline {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  opacity: 0.3;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 3px,
+    var(--scanline-color) 3px,
+    var(--scanline-color) 4px
+  );
+}
+
+/* ── Componentes (§6). Hook classes: nenhum ramifica por tema. ──────────── */
+
+/** §6.1 — CTA grande, o botão da identidade. */
+.btn-goodchat,
+.btn-goodchat-outline,
+.btn-goodchat-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 3.25rem;
+  padding-inline: 1rem;
+  border: var(--frame-border) solid var(--color-base-300);
+  border-radius: 0;
+  font-size: 0.875rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: var(--frame-shadow-sm);
+  transition: all 0.3s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+@media (width >= 48rem) {
+  .btn-goodchat,
+  .btn-goodchat-outline,
+  .btn-goodchat-danger {
+    height: 3.75rem;
+    padding-inline: 2rem;
+    font-size: 1rem;
+  }
+}
+
+.btn-goodchat:hover:not(:disabled),
+.btn-goodchat-outline:hover:not(:disabled),
+.btn-goodchat-danger:hover:not(:disabled) {
+  /* §4.9 — levantar como um cartão sendo pego. */
+  transform: translateY(-0.25rem);
+  box-shadow: var(--frame-shadow);
+}
+
+.btn-goodchat:active:not(:disabled),
+.btn-goodchat-outline:active:not(:disabled),
+.btn-goodchat-danger:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--frame-shadow-sm);
+}
+
+.btn-goodchat:disabled,
+.btn-goodchat-outline:disabled,
+.btn-goodchat-danger:disabled {
+  opacity: 0.4;
+  box-shadow: var(--frame-shadow-sm);
+}
+
+.btn-goodchat {
+  background-color: var(--color-accent);
+  color: var(--color-accent-content);
+}
+
+.btn-goodchat-outline {
+  background-color: transparent;
+  color: var(--color-base-content);
+}
+
+.btn-goodchat-danger {
+  background-color: var(--color-error);
+  color: var(--color-error-content);
+}
+
+/** §6.1 — variante compacta para barras e tabelas. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  border: var(--frame-border) solid var(--color-base-300);
+  border-radius: 0;
+  background-color: var(--color-base-200);
+  color: var(--color-base-content);
+  font-size: 0.625rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  transition: all 0.3s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.icon-btn:hover:not(:disabled) {
+  transform: translateY(-0.25rem);
+  background-color: var(--color-accent);
+  color: var(--color-accent-content);
+  box-shadow: var(--frame-shadow-sm);
+}
+
+.icon-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+}
+
+/** §6.2 — painel/card. */
+.panel {
+  border: var(--frame-border) solid var(--color-base-300);
+  background-color: var(--color-base-200);
+  box-shadow: var(--frame-shadow);
+}
+
+/** §4.8 — barra de título de painel. */
+.window-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: var(--frame-border) solid var(--color-base-300);
+  background-color: var(--color-base-100);
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  opacity: 0.4;
+}
+
+/** §6.5 — moldura de dialog/sheet/alert-dialog. */
+.dialog-box {
+  border: var(--frame-border) solid var(--color-base-300);
+  background-color: var(--color-base-200);
+  box-shadow: var(--frame-shadow);
+}
+
+/* §3 — tipografia de tela. */
+.screen-title {
+  font-size: 1.875rem;
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: -0.05em;
+  line-height: 1.1;
+}
+
+@media (width >= 48rem) {
+  .screen-title {
+    font-size: 2.25rem;
+  }
+}
+
+.screen-kicker,
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-accent);
+}
+
+.section-label {
+  font-size: 0.625rem;
+  letter-spacing: 0.2em;
+}
+
+.screen-meta,
+.micro {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  opacity: 0.6;
+}
+
+/** §4.6 — o `>` que abre kickers e labels. */
+.sigil::before {
+  content: '> ';
+}
+
+/* §6.7 — stats. */
+.stat-value {
+  font-size: 1.875rem;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+@media (width >= 48rem) {
+  .stat-value {
+    font-size: 2.25rem;
+  }
+}
+
+/** §6.6 — badge preenchido, sempre caixa alta. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border: var(--frame-border) solid var(--color-base-300);
+  border-radius: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  white-space: nowrap;
+}
+
+.tag-accent {
+  background-color: var(--color-accent);
+  color: var(--color-accent-content);
+}
+.tag-error {
+  background-color: var(--color-error);
+  color: var(--color-error-content);
+}
+.tag-warning {
+  background-color: var(--color-warning);
+  color: var(--color-warning-content);
+}
+.tag-info {
+  background-color: var(--color-info);
+  color: var(--color-info-content);
+}
+.tag-success {
+  background-color: var(--color-success);
+  color: var(--color-success-content);
+}
+.tag-muted {
+  background-color: var(--color-base-200);
+  color: var(--color-base-content);
+  opacity: 0.7;
+}
+
+/** §6.9 — avatar quadrado; sem foto vira fill accent com a inicial. */
+.avatar-sq {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: var(--frame-border) solid var(--color-base-300);
+  border-radius: 0;
+  background-color: var(--color-accent);
+  color: var(--color-accent-content);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+/** §6.9 — presença como quadrado com anel. */
+.presence-dot {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  flex: none;
+  border: var(--frame-border) solid var(--color-base-200);
+  border-radius: 0;
+}
+
+/** §8 — skeleton com listras estáticas; shimmer é proibido. */
+.skeleton-retro {
+  border: var(--frame-border) solid var(--color-base-300);
+  background-color: var(--color-base-200);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0,
+    transparent 6px,
+    color-mix(in oklab, var(--color-base-300) 10%, transparent) 6px,
+    color-mix(in oklab, var(--color-base-300) 10%, transparent) 12px
+  );
+}
+
+/** §6.7 — trilho de cota. */
+.usage-track {
+  height: 0.75rem;
+  border: var(--frame-border) solid var(--color-base-300);
+  background-color: var(--color-base-100);
+}
+
+.usage-fill {
+  height: 100%;
+  background-color: var(--color-accent);
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    font-family: var(--font-sans);
+  }
+
+  body {
+    background-color: var(--color-base-100);
+    color: var(--color-base-content);
+    /* §4 Motion — a troca de tema é a única transição de cor global. */
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  /* §4.12 — foco sólido, nunca sutil. */
+  :focus-visible {
+    outline: var(--focus-ring-width) solid var(--color-accent);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  /* §4.10 */
+  ::selection {
+    background-color: var(--color-accent);
+    color: var(--color-accent-content);
+  }
+}
+
+/* §4.13 — nada se mexe; a scanline some. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .terminal-scanline {
+    display: none;
+  }
 }
