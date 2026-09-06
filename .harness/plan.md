@@ -31,7 +31,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 6   | Automod                                                                    | concluída · 2026-09-06 |
 | 7   | Utilidades                                                                 | concluída · 2026-09-06 |
 | 8   | Comunidade I: boas-vindas, autorole, tags                                  | concluída · 2026-09-06 |
-| 9   | Comunidade II: reaction roles, tickets                                     | pendente     |
+| 9   | Comunidade II: reaction roles, tickets                                     | concluída · 2026-09-06 |
 | 10  | Coleta de estatísticas                                                     | pendente     |
 | 11  | API interna do bot (Hono)                                                  | pendente     |
 | 12  | Esqueleto do painel (Next.js, Auth.js, layout, 2 temas)                    | pendente     |
@@ -773,33 +773,33 @@ sistema de tickets completo com transcript.
 
 **Tarefas:**
 
-- [ ] `src/services/reaction-roles.ts`: `publishPanel(panelId)` monta a
+- [x] `src/services/reaction-roles.ts`: `publishPanel(panelId)` monta a
       mensagem (embed + componentes conforme `style`), envia ou edita,
       salva `message_id`; handlers `rr:<panelId>:<itemId>` (botão) e
       `rr:<panelId>` (select) aplicando `mode` (single remove os outros do
       painel; toggle; multiple); `messageReactionAdd/Remove` para `style:
     reactions` (partials).
-- [ ] `/reactionrole create|add|remove|publish|list` (admin) — versão
+- [x] `/reactionrole create|add|remove|publish|list` (admin) — versão
       mínima por comando; o editor completo é o painel (Etapa 15).
-- [ ] `src/services/tickets.ts`: `publishPanel`, `open(typeId, user)`
+- [x] `src/services/tickets.ts`: `publishPanel`, `open(typeId, user)`
       (limite por usuário, cria canal na categoria com overrides: usuário +
       cargos de suporte; nome pelo `naming_pattern`; mensagem de abertura com
       botões `Fechar`/`Assumir`), `claim`, `add/remove user`, `rename`,
       `close(reason)` (gera transcript, envia ao canal de log e DM, apaga
       canal após 10s).
-- [ ] `src/services/transcript.ts`: HTML simples e autocontido (estilo
+- [x] `src/services/transcript.ts`: HTML simples e autocontido (estilo
       styleguide §9 em CSS inline, sem assets externos) + `.txt`; salvo como
       anexo no canal de log (a URL do anexo vira `transcript_url`).
-- [ ] `/ticket close|add|remove|claim|rename` e `/ticket panel publish`.
-- [ ] Handlers de botão `ticket:open:<typeId>`, `ticket:close`,
+- [x] `/ticket close|add|remove|claim|rename` e `/ticket panel publish`.
+- [x] Handlers de botão `ticket:open:<typeId>`, `ticket:close`,
       `ticket:claim`, modal de motivo ao fechar.
-- [ ] Testes: lógica de `mode` do reaction role (single/multiple/toggle),
+- [x] Testes: lógica de `mode` do reaction role (single/multiple/toggle),
       `naming_pattern`, geração de transcript (escapa HTML).
 
 **Arquivos criados/alterados:** `apps/bot/src/services/{reaction-roles,tickets,
 transcript}.ts`, `apps/bot/src/commands/community/{reactionrole,ticket}.ts`,
 `apps/bot/src/interactions/{reaction-roles,tickets}.ts`,
-`packages/db/src/repositories/{reactionRoles,tickets}.ts`.
+`packages/db/src/repositories/{reaction-roles,tickets}.ts`.
 
 **Critérios de aceite:**
 
