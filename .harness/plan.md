@@ -36,7 +36,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 11  | API interna do bot (Hono)                                                  | concluída · 2026-09-06 |
 | 12  | Esqueleto do painel (Next.js, Auth.js, layout, 2 temas)                    | concluída · 2026-09-06 |
 | 13  | Dashboard de estatísticas                                                  | concluída · 2026-09-06 |
-| 14  | Configuração I: geral, moderação, logs, boas-vindas, autorole, tags        | pendente     |
+| 14  | Configuração I: geral, moderação, logs, boas-vindas, autorole, tags        | concluída · 2026-09-06 |
 | 15  | Configuração II: automod, reaction roles, tickets, comandos                | pendente     |
 | 16  | Gestão do servidor: membros, cargos, canais                                | pendente     |
 | 17  | Casos e auditoria do painel                                                | pendente     |
@@ -1223,25 +1223,25 @@ primeiras páginas.
 
 **Tarefas:**
 
-- [ ] `lib/module-config.ts`: `loadModuleConfig(guildId, module)` e server
+- [x] `lib/module-config.ts`: `loadModuleConfig(guildId, module)` e server
       action genérica `saveModuleConfig(module, formData)` → valida com
       `MODULE_SCHEMAS[module]`, `requireGuildAccess('admin')`, grava,
       `withAudit`, `internalApi.invalidate(module)`, `revalidatePath`.
-- [ ] `components/config/`: `ModuleToggle` (header com switch
+- [x] `components/config/`: `ModuleToggle` (header com switch
       "módulo ativo"), `ConfigForm` (react-hook-form + zodResolver, rodapé
       sticky `SALVAR`/`DESCARTAR` só quando dirty, toast), `DiscordPicker`
       (canal/cargo/membro, single/multi, dados via route handler
       `/api/discord/{channels,roles}` que chama a API interna, cache 60s),
       `DurationInput`, `TemplateEditor` (textarea + variáveis + preview de
       embed renderizado em CSS), `EmbedPreview`.
-- [ ] Páginas em `app/g/[guildId]/config/<module>/page.tsx`:
+- [x] Páginas em `app/g/[guildId]/config/<module>/page.tsx`:
       `general`, `moderation` (escalada de warns como lista editável),
       `logs` (grade tipo × ativo × canal + ignorados), `welcome` (join/
       leave/DM com `TemplateEditor` e botão `ENVIAR TESTE` → API interna),
       `autorole`, `tags` (tabela CRUD com `sheet` de edição — usa
       repositório `tags`, não `module_configs`).
-- [ ] Itens da sidebar apontando para as páginas.
-- [ ] Testes: `saveModuleConfig` rejeita payload inválido e não grava; grava
+- [x] Itens da sidebar apontando para as páginas.
+- [x] Testes: `saveModuleConfig` rejeita payload inválido e não grava; grava
       auditoria com before/after; `DiscordPicker` filtra por texto.
 
 **Arquivos criados/alterados:** `apps/web/lib/module-config.ts`,
