@@ -197,6 +197,41 @@ async function rankByKey(
     .limit(limit);
 }
 
+/** Série diária de qualquer `kind` — as sparklines dos stat tiles. */
+export async function dailySeries(
+  db: DbExecutor,
+  period: StatsPeriod,
+  kind: StatKind,
+): Promise<DayPoint[]> {
+  return seriesByDay(db, period, kind);
+}
+
+export interface DayKeyPoint {
+  date: string;
+  key: string;
+  count: number;
+}
+
+/**
+ * Série diária quebrada por `key` — a matéria-prima das barras empilhadas do
+ * painel ("casos por tipo por dia"). Devolve só os dias/chaves com dado; quem
+ * desenha preenche os buracos com zero.
+ */
+export async function seriesByDayAndKey(
+  db: DbExecutor,
+  period: StatsPeriod,
+  kind: StatKind,
+): Promise<DayKeyPoint[]> {
+  const day = dayExpr(period);
+  const rows = await db
+    .select({ date: day, key: statBuckets.key, count: total })
+    .from(statBuckets)
+    .where(inPeriod(period, [kind]))
+    .groupBy(GROUP_BY_FIRST, statBuckets.key)
+    .orderBy(GROUP_BY_FIRST);
+  return rows.map((row) => ({ date: row.date, key: row.key, count: row.count }));
+}
+
 export async function messagesPerDay(db: DbExecutor, period: StatsPeriod): Promise<DayPoint[]> {
   return seriesByDay(db, period, 'messages_channel');
 }
@@ -314,10 +349,7 @@ export interface TicketsPoint {
   closed: number;
 }
 
-export async function ticketsPerDay(
-  db: DbExecutor,
-  period: StatsPeriod,
-): Promise<TicketsPoint[]> {
+export async function ticketsPerDay(db: DbExecutor, period: StatsPeriod): Promise<TicketsPoint[]> {
   const day = dayExpr(period);
   return db
     .select({

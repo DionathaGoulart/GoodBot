@@ -1,0 +1,96 @@
+import Link from 'next/link';
+
+import { Panel } from '@/components/retro/panel';
+import { EmptyState } from '@/components/retro/states';
+import { Tag, type TagTone } from '@/components/retro/tag';
+import type { RecentAudit, RecentCase } from '@/lib/stats';
+
+/** §2.3 — a cor de cada ação de moderação é fixa nos dois temas. */
+const CASE_TONES: Record<string, TagTone> = {
+  ban: 'error',
+  softban: 'error',
+  kick: 'warning',
+  timeout: 'warning',
+  warn: 'info',
+  unban: 'success',
+  untimeout: 'success',
+  note: 'muted',
+};
+
+function when(iso: string): string {
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function MoreLink({ href }: { href: string }) {
+  return (
+    <Link href={href} className="icon-btn">
+      VER TUDO
+    </Link>
+  );
+}
+
+/** Últimos 10 casos (PRD §6.1); a listagem completa é a página de casos. */
+export function RecentCases({ guildId, cases }: { guildId: string; cases: RecentCase[] }) {
+  return (
+    <Panel title="CASOS.LOG" actions={<MoreLink href={`/g/${guildId}/casos`} />}>
+      {cases.length === 0 ? (
+        <EmptyState
+          title="NENHUM CASO"
+          description="Nenhuma ação de moderação foi registrada ainda neste servidor."
+        />
+      ) : (
+        <ul className="flex flex-col divide-y-2 divide-base-300">
+          {cases.map((item) => (
+            <li key={item.caseNumber} className="flex flex-wrap items-center gap-3 py-2 first:pt-0">
+              <span className="screen-meta w-14 shrink-0">#{item.caseNumber}</span>
+              <Tag tone={CASE_TONES[item.type] ?? 'muted'}>{item.type}</Tag>
+              <span className="min-w-0 flex-1 truncate text-sm">
+                {item.targetTag}
+                <span className="opacity-60"> — {item.reason}</span>
+              </span>
+              <span className="screen-meta shrink-0">{when(item.createdAt)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+/** Últimos 10 eventos de auditoria do painel (PRD §6.5). */
+export function RecentAuditLog({ guildId, entries }: { guildId: string; entries: RecentAudit[] }) {
+  return (
+    <Panel title="AUDITORIA.LOG" actions={<MoreLink href={`/g/${guildId}/auditoria`} />}>
+      {entries.length === 0 ? (
+        <EmptyState
+          title="NADA AQUI"
+          description="Ninguém mexeu no painel ainda. Toda alteração feita por aqui vira uma linha nesta lista."
+        />
+      ) : (
+        <ul className="flex flex-col divide-y-2 divide-base-300">
+          {entries.map((entry) => (
+            <li key={entry.id} className="flex flex-wrap items-center gap-3 py-2 first:pt-0">
+              <Tag tone="muted">{entry.action}</Tag>
+              <span className="min-w-0 flex-1 truncate text-sm">
+                {entry.actorTag}
+                {entry.targetType ? (
+                  <span className="opacity-60">
+                    {' '}
+                    — {entry.targetType}
+                    {entry.targetId ? ` ${entry.targetId}` : ''}
+                  </span>
+                ) : null}
+              </span>
+              <span className="screen-meta shrink-0">{when(entry.createdAt)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
