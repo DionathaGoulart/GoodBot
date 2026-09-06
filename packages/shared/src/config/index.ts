@@ -15,6 +15,7 @@ import type { z } from 'zod';
 
 export * from './common';
 export * from './general';
+export * from './guild-settings';
 export * from './moderation';
 export * from './automod';
 export * from './automod-rule';
