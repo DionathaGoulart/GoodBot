@@ -6,7 +6,7 @@ import { childLogger } from '../logger';
 import { isUserContextCommand } from './command';
 import { CooldownStore } from './cooldown';
 import { botFooter, errorEmbed } from './embeds';
-import { handleComponent } from '../interactions/index';
+import { handleComponent, handleModal } from '../interactions/index';
 import { levelAtLeast, resolveLevel, toMemberLike } from '../services/permissions';
 
 import type { AnyCommand, AutocompleteContext, BotContext, CommandContext } from './command';
@@ -42,6 +42,32 @@ async function replyError(interaction: RepliableInteraction, message: string): P
     }
   } catch (error) {
     log.warn({ err: error }, 'não foi possível responder o erro ao usuário');
+  }
+}
+
+/**
+ * Botões, selects e modais compartilham o mesmo contrato: `false` = ninguém
+ * reconheceu o `custom_id`, e toda falha vira resposta efêmera — a interação
+ * nunca pode ficar sem resposta.
+ */
+async function runComponent(
+  interaction: RepliableInteraction & { customId: string },
+  run: () => Promise<boolean>,
+): Promise<void> {
+  try {
+    const handled = await run();
+    // Componente de uma mensagem antiga: o usuário não pode ficar com
+    // "falha na interação" na tela.
+    if (!handled) {
+      await replyError(interaction, 'Este botão não vale mais. Peça uma mensagem nova.');
+    }
+  } catch (error) {
+    if (isUserFacingError(error)) {
+      await replyError(interaction, error.message);
+      return;
+    }
+    log.error({ err: error, customId: interaction.customId }, 'erro no componente');
+    await replyError(interaction, 'Não consegui registrar essa ação. Tente de novo.');
   }
 }
 
@@ -84,17 +110,12 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
     }
 
     if (interaction.isMessageComponent()) {
-      try {
-        const handled = await handleComponent(ctx, interaction);
-        // Componente de uma mensagem antiga: o usuário não pode ficar com
-        // "falha na interação" na tela.
-        if (!handled) {
-          await replyError(interaction, 'Este botão não vale mais. Peça uma mensagem nova.');
-        }
-      } catch (error) {
-        log.error({ err: error, customId: interaction.customId }, 'erro no componente');
-        await replyError(interaction, 'Não consegui registrar essa ação. Tente de novo.');
-      }
+      await runComponent(interaction, () => handleComponent(ctx, interaction));
+      return;
+    }
+
+    if (interaction.isModalSubmit()) {
+      await runComponent(interaction, () => handleModal(ctx, interaction));
       return;
     }
 

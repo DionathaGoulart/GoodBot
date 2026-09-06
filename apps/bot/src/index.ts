@@ -17,7 +17,9 @@ import { MessageCacheService } from './services/message-cache';
 import { ModerationService } from './services/moderation';
 import { createModlogService } from './services/modlog';
 import { PollService } from './services/polls';
+import { ReactionRoleService } from './services/reaction-roles';
 import { Scheduler } from './services/scheduler';
+import { TicketService } from './services/tickets';
 import { WelcomeService } from './services/welcome';
 
 import type { BotContext } from './lib/command';
@@ -41,6 +43,8 @@ async function main(): Promise<void> {
   const polls = new PollService({ db, client });
   const welcome = new WelcomeService({ config });
   const autorole = new AutoroleService({ db, config });
+  const reactionRoles = new ReactionRoleService({ db, client, config });
+  const tickets = new TicketService({ db, config });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
 
   const ctx: BotContext = {
@@ -55,6 +59,8 @@ async function main(): Promise<void> {
     polls,
     welcome,
     autorole,
+    reactionRoles,
+    tickets,
     messageCache,
     logger,
     commands: loadCommands(commandList),

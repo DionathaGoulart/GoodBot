@@ -9,6 +9,8 @@ import type { MessageCacheService } from '../services/message-cache';
 import type { ModerationService } from '../services/moderation';
 import type { ModlogService } from '../services/modlog';
 import type { PollService } from '../services/polls';
+import type { ReactionRoleService } from '../services/reaction-roles';
+import type { TicketService } from '../services/tickets';
 import type { WelcomeService } from '../services/welcome';
 import type { Db } from '@cobot/db';
 import type { Module, PermissionLevel } from '@cobot/shared';
@@ -47,6 +49,10 @@ export interface BotContext {
   welcome: WelcomeService;
   /** Cargos automáticos e cargo de verificação (§5.5). */
   autorole: AutoroleService;
+  /** Painéis de cargo por botão/select/reação (§5.5). */
+  reactionRoles: ReactionRoleService;
+  /** Abertura, gestão e fechamento de tickets (§5.5). */
+  tickets: TicketService;
   messageCache: MessageCacheService;
   logger: Logger;
   /** Coleção viva de comandos (usada pelo `/help` e pelo registro). */
