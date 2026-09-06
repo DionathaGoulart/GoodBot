@@ -26,7 +26,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 1   | Setup do monorepo e tooling                                                | concluída · 2026-09-05 |
 | 2   | `packages/shared` e `packages/db` (schema base + migrations)               | concluída · 2026-09-05 |
 | 3   | Esqueleto do bot (login, handlers, registro de comandos, config com cache) | concluída · 2026-09-06 |
-| 4   | Moderação e casos                                                          | pendente     |
+| 4   | Moderação e casos                                                          | concluída · 2026-09-06 |
 | 5   | Mod-log e logs de eventos                                                  | pendente     |
 | 6   | Automod                                                                    | pendente     |
 | 7   | Utilidades                                                                 | pendente     |
@@ -354,29 +354,29 @@ stub com `postCase(case)` vazio).
 
 **Tarefas:**
 
-- [ ] `src/services/moderation.ts`: `ModerationService` com um método por
+- [x] `src/services/moderation.ts`: `ModerationService` com um método por
       ação (`ban`, `tempban`, `unban`, `softban`, `kick`, `timeout`,
       `untimeout`, `warn`, `note`) — cada um: valida hierarquia
       (`canActOn`), executa no Discord, cria caso (`cases` repo), agenda
       `scheduled_actions` se houver duração, envia DM (se config), chama
       `modlog.postCase`. Recebe `{ guild, actor, target, reason, duration,
     source }` para ser reutilizado pela API interna e pelo automod.
-- [ ] `src/services/dm.ts`: `sendPunishmentDm(user, case, template)`
+- [x] `src/services/dm.ts`: `sendPunishmentDm(user, case, template)`
       tolerante a DM fechada.
-- [ ] `src/services/scheduler.ts`: loop de 30s em `scheduled_actions` com
+- [x] `src/services/scheduler.ts`: loop de 30s em `scheduled_actions` com
       `run_at <= now() and done_at is null` (`FOR UPDATE SKIP LOCKED`),
       executa `unban`/`untimeout` com `actor = bot`, marca `done_at`.
-- [ ] `src/services/escalation.ts`: após `warn`, conta warns na janela da
+- [x] `src/services/escalation.ts`: após `warn`, conta warns na janela da
       config e aplica a ação configurada (cria caso `source: escalation`).
-- [ ] Comandos: `/ban`, `/unban`, `/softban`, `/kick`, `/timeout`,
+- [x] Comandos: `/ban`, `/unban`, `/softban`, `/kick`, `/timeout`,
       `/untimeout`, `/warn`, `/note`, `/reason`, `/case view|edit|delete`,
       `/history` (paginação com botões `◀ ▶`, expira em 2 min), user
       context menu `Punir…` (modal: tipo select + motivo + duração).
-- [ ] `src/lib/case-embed.ts`: embed de caso (styleguide §9: cor por tipo,
+- [x] `src/lib/case-embed.ts`: embed de caso (styleguide §9: cor por tipo,
       rodapé `CASO #n · MOD: x`).
-- [ ] Repositório `cases.ts`: `create`, `getByNumber`, `listByTarget`
+- [x] Repositório `cases.ts`: `create`, `getByNumber`, `listByTarget`
       (paginado), `update`, `softDelete`, `countWarnsSince`.
-- [ ] Testes: `escalation` (janelas), `case-embed` (cores por tipo),
+- [x] Testes: `escalation` (janelas), `case-embed` (cores por tipo),
       `ModerationService` com Discord mockado (hierarquia recusada, caso
       criado com `expires_at` correto).
 
@@ -400,6 +400,45 @@ stub com `postCase(case)` vazio).
 pnpm --filter @cobot/bot dev   # testar os comandos num servidor de teste com uma conta alt
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
+
+**Notas de execução (2026-09-06):**
+
+- **Ordem de uma punição:** hierarquia → caso → DM → ação no Discord →
+  agendamento → mod-log. O caso nasce **antes** da ação porque a DM precisa do
+  número do caso e porque depois de um ban/kick não há mais servidor em comum
+  para mandar DM. Se a ação no Discord falhar, o caso é soft-deleted e o erro
+  sobe — fica um buraco na numeração, preferível a um caso que não aconteceu.
+- **`scheduled_actions` são tomadas com `for update skip locked` e já marcadas
+  como feitas na tomada** (`claimDueActions`), não depois de falar com o
+  Discord: uma ação que falha vira log, e não uma retentativa a cada 30 s para
+  sempre. As queries dessa tabela ficam em `repositories/cases.ts`, junto do
+  schema que as define.
+- **`unban`/`untimeout` manuais cancelam o agendamento** do tempban/timeout
+  correspondente (`cancelScheduledActions`, casando por `payload->>'targetId'`).
+- **Escalada dispara por igualdade** (`count === step.warns`), não por `>=`:
+  com degraus em 3 e 5, o quarto warn não pode reaplicar a ação do terceiro. A
+  decisão (`matchEscalationStep`) é pura e mora em `escalation.ts`; quem aplica
+  é o `ModerationService`, o que evita um ciclo entre os dois módulos. Uma
+  escalada que falha não invalida o warn.
+- **`lib/command.ts` ganhou `UserContextCommand`** e o união `AnyCommand`: o
+  menu de contexto não tem options nem autocomplete, e o discriminador é
+  `data instanceof ContextMenuCommandBuilder` — a única marca que sobrevive ao
+  `toJSON()` e ao bundle. `BotContext` ganhou `moderation`.
+- **O modal do "Punir…" usa `LabelBuilder` + `StringSelectMenuBuilder`**
+  (componentes de modal do discord.js 14.22+), então o tipo é um select de
+  verdade. O comando não usa `defer` (o `showModal` exige a interação intacta)
+  e trata os próprios erros: a interação do modal é outra, o handler genérico
+  de `interactionCreate` não alcança ela.
+- **`/history` pagina com um coletor local de 2 min** na própria mensagem
+  efêmera; ao expirar, os botões somem. Sem roteador global de componentes.
+- `guild_settings.dm_on_punish` sobrescreve o `dmOnPunish` do módulo quando
+  existe; o módulo é o default.
+- `ModlogService` é stub nesta etapa (só log de debug) — a fila por canal e a
+  edição da mensagem são a Etapa 5, mas `ModerationService` e `/case edit` já
+  chamam o contrato certo.
+- Validação ao vivo: bot conecta, registra **15 comandos** na guild e o
+  scheduler sobe; a segunda execução responde "comandos inalterados". O teste
+  interativo dos comandos com uma conta alt continua a cargo do usuário.
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
