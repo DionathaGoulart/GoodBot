@@ -43,7 +43,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 18  | Docker Compose (bot + Caddy) e build do painel                             | concluída · 2026-09-06 |
 | 19  | CI/CD: bot na Oracle, painel na Vercel                                     | concluída · 2026-09-07 |
 | 20  | Hardening e observabilidade                                                | concluída · 2026-09-07 |
-| 21  | Notificações de redes sociais                                              | pendente     |
+| 21  | Notificações de redes sociais                                              | concluída · 2026-09-07 |
 
 ---
 
@@ -1859,12 +1859,12 @@ pré-requisitos da Meta; TikTok como melhor esforço declarado.
 
 **Tarefas:**
 
-- [ ] `packages/db`: schema `social_accounts` e `social_posts` (§8), com a
+- [x] `packages/db`: schema `social_accounts` e `social_posts` (§8), com a
       unique `(account_id, external_id)` que é a trava contra anúncio
       duplicado; `db:generate`, revisar o SQL, `db:migrate`.
-- [ ] `packages/shared`: `SocialConfigSchema` (Zod) por plataforma, enum de
+- [x] `packages/shared`: `SocialConfigSchema` (Zod) por plataforma, enum de
       `platform` e de `kind`, payloads da API interna e schema do template.
-- [ ] `apps/bot/src/services/social/`: um provider por plataforma com a mesma
+- [x] `apps/bot/src/services/social/`: um provider por plataforma com a mesma
       interface (`fetchLatest(account): Promise<SocialItem[]>`), para que o job
       não conheça as diferenças de cada API:
       - `youtube.ts` — RSS de uploads; `HEAD` em `/shorts/<id>` para separar
@@ -1875,27 +1875,27 @@ pré-requisitos da Meta; TikTok como melhor esforço declarado.
       - `instagram.ts` — Graph API `/media`, desabilitado com motivo claro se
         faltar credencial;
       - `tiktok.ts` — melhor esforço, isolado e desligado por padrão.
-- [ ] `apps/bot`: job no scheduler existente (nada de cron novo), com
+- [x] `apps/bot`: job no scheduler existente (nada de cron novo), com
       intervalo por conta, jitter para não bater todas as contas juntas,
       backoff exponencial em erro e desativação após 10 falhas seguidas —
       com alerta pelo webhook da Etapa 20.
-- [ ] Anúncio: renderiza o template (mesmo motor de `welcome`), respeita
+- [x] Anúncio: renderiza o template (mesmo motor de `welcome`), respeita
       `allowedMentions` restrito ao cargo configurado, grava `social_posts`
       **antes** de enviar e guarda o `message_id` depois.
-- [ ] `apps/bot/src/api/routes/social.ts`: CRUD das contas para o painel
+- [x] `apps/bot/src/api/routes/social.ts`: CRUD das contas para o painel
       (Bearer + Zod + rate limit, como toda rota; PRD §5.7) e um
       `POST /social/:id/test` que dispara um anúncio de teste.
-- [ ] `apps/web`: página `/g/[guildId]/config/social` — lista de contas,
+- [x] `apps/web`: página `/g/[guildId]/config/social` — lista de contas,
       formulário por plataforma, seletor de canal e de cargo, editor de
       template com preview, botão "testar", e aviso explícito de
       pré-requisito no Instagram e de instabilidade no TikTok.
-- [ ] Comando `/social list|add|remove|test` no bot, permissão de admin.
-- [ ] Retenção: `social_posts` por 90 dias, junto dos outros jobs de retenção.
-- [ ] Testes (Vitest): parser do RSS do YouTube com fixture real, dedupe por
+- [x] Comando `/social list|add|remove|test` no bot, permissão de admin.
+- [x] Retenção: `social_posts` por 90 dias, junto dos outros jobs de retenção.
+- [x] Testes (Vitest): parser do RSS do YouTube com fixture real, dedupe por
       `external_id`, classificação short/vídeo, backoff, e o schema Zod de
       cada plataforma.
-- [ ] `.env.example` com as novas variáveis comentadas.
-- [ ] Atualizar o README (módulos) e o PRD §5.8 se algo mudar na prática.
+- [x] `.env.example` com as novas variáveis comentadas.
+- [x] Atualizar o README (módulos) e o PRD §5.8 se algo mudar na prática.
 
 **Arquivos criados/alterados:** `packages/db/src/schema/social.ts`,
 `packages/shared/src/config/social.ts`, `apps/bot/src/services/social/*.ts`,
@@ -1920,6 +1920,36 @@ pré-requisitos da Meta; TikTok como melhor esforço declarado.
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ssh cobot 'cd /opt/cobot && docker compose logs bot --tail 50 | grep social'
 ```
+
+**Notas de execução (2026-09-07):**
+
+- **`ALTER TYPE module ADD VALUE 'social'`** entrou na mesma migration
+  (`0003_social.sql`) que cria as tabelas. Passa numa transação porque nada
+  ali *usa* o valor novo — o Postgres só proíbe usar um valor de enum na
+  transação que o adicionou.
+- **Sem dependência de XML.** O feed do YouTube é lido por
+  `parseYouTubeFeed`, um parser por regex com fixture real no teste. O formato
+  é fixo e vem sempre do mesmo servidor; uma lib de XML custaria memória na VM
+  de 1 GB por nada. Se o YouTube mudar o feed, é o teste que avisa.
+- **O job é um intervalo próprio, não uma linha em `scheduled_actions`.** O
+  `Scheduler` existe para ações *pontuais* agendadas (desbanir, destrancar);
+  polling recorrente é o padrão do `RetentionJob`/`StatsRollupJob`, e é esse
+  que o `SocialJob` segue. Nenhum cron novo, como pedia a etapa.
+- **`IG_USER_ID` não virou variável de ambiente.** Ele identifica *cada conta*
+  e por isso mora no painel, junto do canal e do template; da Meta vem só o
+  `META_ACCESS_TOKEN`, que é do app. A ação manual continua a mesma, o valor é
+  que muda de lugar. Anotado no PRD §5.8.
+- **Toda escrita do painel passa pela API do bot**, e não pelo banco direto
+  como em reaction roles: é o processo do bot que sabe se a plataforma tem
+  credencial e se ele enxerga o canal. Uma conta que nunca anunciaria é
+  recusada na hora, com o motivo.
+- A **primeira passada de uma conta nova não anuncia**: grava o que já existia
+  em `social_posts` e passa a avisar do próximo post. `announceBacklog`
+  inverte isso e nasce desligado.
+- **Não validado em produção ainda:** os critérios de aceite que dependem de
+  publicar um vídeo de verdade, de credenciais da Twitch/Meta e do
+  `docker stats` na VM. O que dá para provar fora dela está coberto por
+  testes (dedupe, backoff, short vs. vídeo, desativação no décimo erro).
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
