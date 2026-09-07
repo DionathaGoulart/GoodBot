@@ -40,7 +40,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 15  | Configuração II: automod, reaction roles, tickets, comandos                | concluída · 2026-09-06 |
 | 16  | Gestão do servidor: membros, cargos, canais                                | concluída · 2026-09-06 |
 | 17  | Casos e auditoria do painel                                                | concluída · 2026-09-06 |
-| 18  | Docker Compose (bot + Caddy) e build do painel                             | pendente     |
+| 18  | Docker Compose (bot + Caddy) e build do painel                             | concluída · 2026-09-06 |
 | 19  | CI/CD: bot na Oracle, painel na Vercel                                     | pendente     |
 | 20  | Hardening e observabilidade                                                | pendente     |
 
@@ -1503,34 +1503,34 @@ localmente.
 
 **Tarefas:**
 
-- [ ] `infra/docker/bot.Dockerfile`: `node:22-alpine` multi-stage
+- [x] `infra/docker/bot.Dockerfile`: `node:22-alpine` multi-stage
       (`pnpm fetch` com lockfile → build tsup → runtime só com `dist` +
       deps de produção do bot via `pnpm deploy --prod`); usuário não-root;
       `HEALTHCHECK` batendo em `localhost:3001/health`.
-- [ ] `infra/docker-compose.yml` (prod): serviços `bot` (`mem_limit: 384m`,
+- [x] `infra/docker-compose.yml` (prod): serviços `bot` (`mem_limit: 384m`,
       **sem porta publicada** — só o Caddy o alcança) e `caddy`
       (`caddy:2-alpine`, portas 80/443, volumes `caddy_data`/`caddy_config`,
       `mem_limit: 64m`). Rede interna única; `restart: unless-stopped`;
       `logging: json-file max-size 10m max-file 5`; `env_file: .env`.
-- [ ] `infra/Caddyfile`: `{$BOT_DOMAIN}` → `reverse_proxy bot:3001`, headers
+- [x] `infra/Caddyfile`: `{$BOT_DOMAIN}` → `reverse_proxy bot:3001`, headers
       de segurança, `encode gzip zstd`, log em JSON, `header -Server`. Só
       esse host; qualquer outro `Host` responde 404.
-- [ ] `apps/web`: **remover** `output: 'standalone'` do `next.config.ts` (a
+- [x] `apps/web`: **remover** `output: 'standalone'` do `next.config.ts` (a
       Vercel não usa) e mover para lá os headers de segurança que antes eram
       do Caddy (HSTS, X-Content-Type-Options, Referrer-Policy,
       Permissions-Policy); route handler `/api/health`.
-- [ ] `packages/db`: garantir que `db:migrate` funciona contra um Postgres
+- [x] `packages/db`: garantir que `db:migrate` funciona contra um Postgres
       remoto com `sslmode=require` (é assim que a CI vai rodar).
-- [ ] `.dockerignore`.
-- [ ] `infra/docker-compose.dev.yml` mantido só com Postgres.
-- [ ] Scripts raiz: `docker:build` (`docker build --platform linux/amd64` da
+- [x] `.dockerignore`.
+- [x] `infra/docker-compose.dev.yml` mantido só com Postgres.
+- [x] Scripts raiz: `docker:build` (`docker build --platform linux/amd64` da
       imagem do bot), `docker:up`/`docker:down`.
-- [ ] Teste local: build da imagem → `docker compose -f
+- [x] Teste local: build da imagem → `docker compose -f
     infra/docker-compose.yml up` com `BOT_DOMAIN=localhost` (Caddy usa
       certificado interno) → `curl -k https://localhost/health`; e
       `pnpm --filter @cobot/web build && pnpm --filter @cobot/web start`
       apontando `INTERNAL_API_URL` para esse Caddy.
-- [ ] Documentar no README a seção "Rodar em produção localmente" com o
+- [x] Documentar no README a seção "Rodar em produção localmente" com o
       desenho dos três provedores.
 
 **Arquivos criados/alterados:** `infra/docker/bot.Dockerfile`,
