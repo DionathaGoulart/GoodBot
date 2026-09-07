@@ -44,7 +44,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 19  | CI/CD: bot na Oracle, painel na Vercel                                     | concluída · 2026-09-07 |
 | 20  | Hardening e observabilidade                                                | concluída · 2026-09-07 |
 | 21  | Notificações de redes sociais                                              | concluída · 2026-09-07 |
-| 22  | Painel vivo e histórico de ações                                           | pendente     |
+| 22  | Painel vivo e histórico de ações                                           | concluída · 2026-09-07 |
 | 23  | Configurações do servidor e banidos                                        | pendente     |
 | 24  | Mensagens pelo painel                                                      | pendente     |
 | 25  | Convites, eventos e emojis                                                 | pendente     |
@@ -1981,36 +1981,60 @@ N segundos usa o mesmo caminho de dados que já existe.
 
 **Tarefas:**
 
-- [ ] `apps/web/components/layout/auto-refresh.tsx`: client component que chama
+- [x] `apps/web/components/layout/auto-refresh.tsx`: client component que chama
       `router.refresh()` num intervalo, **pausa com a aba escondida**
       (`document.visibilityState`) e volta a rodar no `focus` — sem isto uma aba
       esquecida bate na API do bot a noite inteira (PRD §7.4).
-- [ ] Intervalo por tela, não global: 10 s no dashboard e em membros/canais/
+- [x] Intervalo por tela, não global: 10 s no dashboard e em membros/canais/
       cargos, 30 s nas telas de config (que quase não mudam sozinhas), nunca
       enquanto um formulário está sujo (`isDirty`) — atualizar por baixo de
       alguém digitando é pior do que ficar velho.
-- [ ] Indicador na topbar: `ATUALIZADO HÁ 00:07` em micro-texto (§3) + botão
+- [x] Indicador na topbar: `ATUALIZADO HÁ 00:07` em micro-texto (§3) + botão
       de refresh manual (`icon-btn`) que força a revalidação na hora.
-- [ ] Preferência do usuário: alternar auto-refresh liga/desliga, persistida em
+- [x] Preferência do usuário: alternar auto-refresh liga/desliga, persistida em
       `localStorage`; desligado, sobra o botão manual.
-- [ ] `packages/db`: acrescentar `source` (`dashboard` | `command` | `automod` |
+- [x] `packages/db`: acrescentar `source` (`dashboard` | `command` | `automod` |
       `event` | `job`) e `reason` a `audit_logs`, com índice por `(guild_id,
       source, created_at desc)`; `db:generate`, revisar o SQL, `db:migrate`.
-- [ ] `apps/bot`: passar a gravar em `audit_logs` também o que **o bot** faz
+- [x] `apps/bot`: passar a gravar em `audit_logs` também o que **o bot** faz
       sozinho — automod aplicado, autorole dado, ticket aberto/fechado, cargo de
       reaction role, anúncio de rede social —, sempre com quem disparou
       (`actorId` do membro, ou o próprio bot quando a origem é uma regra).
-- [ ] Página `/auditoria`: filtros por origem, por ator e por período; coluna de
+- [x] Página `/auditoria`: filtros por origem, por ator e por período; coluna de
       origem como `Tag` (§6.6); diff `before`/`after` já existente mantido.
-- [ ] Dashboard: card "Últimas ações" com as 10 mais recentes de qualquer
+- [x] Dashboard: card "Últimas ações" com as 10 mais recentes de qualquer
       origem, cada uma linkando para o alvo (membro, caso, canal).
-- [ ] Testes (Vitest): o hook de auto-refresh não dispara com a aba escondida
+- [x] Testes (Vitest): o hook de auto-refresh não dispara com a aba escondida
       nem com formulário sujo; o repositório de auditoria filtra por origem.
 
 **Arquivos criados/alterados:** `apps/web/components/layout/auto-refresh.tsx`,
 `apps/web/components/layout/topbar.tsx`, `apps/web/lib/audit.ts`,
 `apps/web/app/g/[guildId]/auditoria/*`, `packages/db/src/schema/audit.ts`,
-`packages/db/drizzle/0004_audit_source.sql`, `apps/bot/src/services/audit.ts`.
+`packages/db/drizzle/0004_audit_source.sql`, `apps/bot/src/services/audit.ts`,
+`packages/shared/src/constants.ts` (`AUDIT_SOURCES`),
+`packages/db/src/repositories/audit.ts` (filtro por origem),
+`apps/web/lib/audit-sources.ts` (rótulo, tom e link do alvo),
+`apps/web/components/multi-select.tsx` (extraído do filtro de casos),
+`apps/web/components/config/config-form.tsx` (pausa com `isDirty`),
+`apps/web/components/dashboard/recent-activity.tsx`, `apps/web/lib/stats.ts`,
+`apps/web/lib/case-filters.ts`, `apps/bot/src/index.ts` e os pontos de gravação
+(`automod/engine.ts`, `services/autorole.ts`, `jobs/social.ts`,
+`events/community/reaction-roles.ts`, `interactions/reaction-roles.ts`).
+
+**Notas de implementação (2026-09-07):**
+
+- `AUDIT_SOURCES` = `dashboard | command | automod | event | job`, com default
+  `dashboard` na coluna: as linhas antigas são exatamente isso.
+- Casos com origem `automod` ou `dashboard` **não** viram uma segunda linha de
+  auditoria — o hit da regra e o `withAudit` do painel já contam a história.
+  O `onCase` do bot registra só `command`, `context` e `escalation`.
+- O intervalo do auto-refresh sai da rota (`refreshIntervalFor`), não de um
+  componente por página: 30 s em `/config/*`, 10 s no resto.
+- `loadRecentAudit` perdeu o `unstable_cache` de 60 s. Era ele que anularia o
+  refresh de 10 s justamente no card que o refresh existe para manter vivo.
+- A preferência e o relógio da topbar usam `useSyncExternalStore`; o carimbo do
+  último refresh vive num `ref`. O lint proíbe `setState` dentro de efeito, e
+  as três coisas são estado externo ao React de qualquer forma.
 
 **Critérios de aceite:**
 
