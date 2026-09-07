@@ -41,7 +41,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 16  | Gestão do servidor: membros, cargos, canais                                | concluída · 2026-09-06 |
 | 17  | Casos e auditoria do painel                                                | concluída · 2026-09-06 |
 | 18  | Docker Compose (bot + Caddy) e build do painel                             | concluída · 2026-09-06 |
-| 19  | CI/CD: bot na Oracle, painel na Vercel                                     | pendente     |
+| 19  | CI/CD: bot na Oracle, painel na Vercel                                     | em andamento |
 | 20  | Hardening e observabilidade                                                | pendente     |
 
 ---
@@ -1619,11 +1619,11 @@ sh`, `sudo usermod -aG docker ubuntu`), criar `/opt/cobot`, copiar
 
 **Tarefas:**
 
-- [ ] `.github/workflows/ci.yml`: em `pull_request` e `push` (qualquer
+- [x] `.github/workflows/ci.yml`: em `pull_request` e `push` (qualquer
       branch): checkout, pnpm (cache), `pnpm install --frozen-lockfile`,
       `lint`, `typecheck`, `test` (com service container Postgres 16 para
       os testes de integração), `build`.
-- [ ] `.github/workflows/deploy.yml`: em `push` na `main`, jobs encadeados:
+- [x] `.github/workflows/deploy.yml`: em `push` na `main`, jobs encadeados:
       1. `migrate` — `pnpm --filter @cobot/db db:migrate` com
          `DATABASE_URL` do secret (roda antes de tudo; falhou, para tudo).
       2. `build` — login GHCR, `build-push-action` da imagem do bot,
@@ -1632,16 +1632,16 @@ sh`, `sudo usermod -aG docker ubuntu`), criar `/opt/cobot`, copiar
       3. `deploy` — `appleboy/ssh-action`: `cd /opt/cobot && docker compose
     pull && docker compose up -d --remove-orphans && docker image prune -f`.
       O painel **não** aparece aqui: a Vercel publica sozinha no push.
-- [ ] `infra/docker-compose.yml`: imagem do bot apontando para
+- [x] `infra/docker-compose.yml`: imagem do bot apontando para
       `ghcr.io/<owner>/cobot-bot:${TAG:-latest}`.
-- [ ] `infra/scripts/deploy.sh` (o mesmo que a Action roda, para deploy
+- [x] `infra/scripts/deploy.sh` (o mesmo que a Action roda, para deploy
       manual) e `infra/scripts/bootstrap-server.sh` (passos 3 e 5 acima,
       idempotente).
-- [ ] `apps/web/vercel.json` se necessário (região `gru1` para ficar perto do
+- [x] `apps/web/vercel.json` se necessário (região `gru1` para ficar perto do
       Supabase e do bot).
-- [ ] Badge de CI e seção "Deploy" no README, com o desenho dos três
+- [x] Badge de CI e seção "Deploy" no README, com o desenho dos três
       provedores e onde fica cada segredo.
-- [ ] Concurrency no workflow de deploy (`cancel-in-progress: false`,
+- [x] Concurrency no workflow de deploy (`cancel-in-progress: false`,
       grupo `deploy`).
 
 **Arquivos criados/alterados:** `.github/workflows/{ci,deploy}.yml`,
