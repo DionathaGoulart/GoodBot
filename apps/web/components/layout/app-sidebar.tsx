@@ -15,12 +15,25 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
 
-import { NAV_GROUPS } from './nav';
+import { navGroupsFor } from './nav';
+
+import type { AccessLevel } from '@/lib/auth/access';
 
 /** §6.9 — sidebar de 16rem; abaixo de `lg` o próprio shadcn a vira `sheet`. */
-export function AppSidebar({ guildId, guildName }: { guildId: string; guildName: string }) {
+export function AppSidebar({
+  guildId,
+  guildName,
+  level,
+}: {
+  guildId: string;
+  guildName: string;
+  level: AccessLevel;
+}) {
   const pathname = usePathname();
   const base = `/g/${guildId}`;
+  // Esconder o item não é a barreira: quem digitar a URL bate no
+  // `requireGuildAccess` da própria página (PRD §7.3).
+  const groups = navGroupsFor(level);
 
   return (
     <Sidebar>
@@ -29,7 +42,7 @@ export function AppSidebar({ guildId, guildName }: { guildId: string; guildName:
         <p className="screen-title text-lg">{guildName}</p>
       </SidebarHeader>
       <SidebarContent>
-        {NAV_GROUPS.map((group) => (
+        {groups.map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel className="sigil">{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>

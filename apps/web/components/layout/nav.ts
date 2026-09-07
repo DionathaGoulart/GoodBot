@@ -1,3 +1,5 @@
+import { hasAccess, type AccessLevel } from '@/lib/auth/access';
+
 /**
  * §6.9 — a navegação inteira do painel. As páginas nascem nas etapas 13–17;
  * os itens já ficam aqui para a sidebar não mudar de forma a cada etapa.
@@ -6,6 +8,16 @@ export interface NavItem {
   label: string;
   /** Caminho relativo a `/g/[guildId]`; `''` é o dashboard. */
   href: string;
+  /** Nível mínimo para o item aparecer. Sem isto, `mod` (PRD §9.2). */
+  minimum?: AccessLevel;
+}
+
+/** Grupos visíveis para um nível — a autorização de verdade é do servidor. */
+export function navGroupsFor(level: AccessLevel): NavGroup[] {
+  return NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => hasAccess(level, item.minimum ?? 'mod')),
+  })).filter((group) => group.items.length > 0);
 }
 
 export interface NavGroup {
@@ -46,6 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Comandos', href: '/config/commands' },
       { label: 'Geral', href: '/config/general' },
       { label: 'Auditoria', href: '/auditoria' },
+      { label: 'Saúde', href: '/system', minimum: 'owner' },
     ],
   },
 ];

@@ -35,7 +35,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
 
   return {
     secret: config.AUTH_SECRET,
+    // Na Vercel o host chega por header e não há proxy nosso na frente; o
+    // `AUTH_URL` é quem fixa a callback (PRD §7.3).
     trustHost: true,
+    // Explícito em vez de inferido: em produção o cookie **tem** que sair com
+    // prefixo `__Secure-` e `Secure`, e a inferência do Auth.js depende de o
+    // host chegar como https até ele.
+    useSecureCookies: config.AUTH_URL.startsWith('https://'),
     session: { strategy: 'jwt', maxAge: 7 * 24 * 60 * 60 },
     pages: { signIn: '/login', error: '/login' },
     providers: [
