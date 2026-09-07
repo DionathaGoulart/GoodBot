@@ -60,7 +60,7 @@ export function SeriesLegend({
             type="button"
             aria-pressed={!off}
             onClick={() => onToggle(item.key)}
-            className={cn('tag tag-muted transition-opacity', off && 'opacity-40')}
+            className={cn('tag tag-muted', off && 'line-through')}
           >
             <span
               aria-hidden

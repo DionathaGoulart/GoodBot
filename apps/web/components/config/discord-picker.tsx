@@ -169,7 +169,7 @@ export function DiscordPicker({
       >
         <span className="flex flex-wrap items-center gap-1.5">
           {empty ? (
-            <span className="opacity-60">
+            <span className="text-muted-text">
               {placeholder ?? (kind === 'channel' ? 'Nenhum canal' : 'Nenhum cargo')}
             </span>
           ) : (
@@ -180,10 +180,16 @@ export function DiscordPicker({
                 {multiple && !disabled ? (
                   <span
                     role="button"
-                    tabIndex={-1}
+                    tabIndex={0}
                     aria-label={`Remover ${label(optionId)}`}
-                    className="opacity-60 hover:opacity-100"
+                    className="text-muted-text transition-colors hover:text-accent-text"
                     onClick={(event) => {
+                      event.stopPropagation();
+                      onChange(value.filter((v) => v !== optionId));
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                      event.preventDefault();
                       event.stopPropagation();
                       onChange(value.filter((v) => v !== optionId));
                     }}
@@ -195,7 +201,7 @@ export function DiscordPicker({
             ))
           )}
         </span>
-        <span aria-hidden className="opacity-60">
+        <span aria-hidden className="text-muted-text">
           ▼
         </span>
       </PopoverTrigger>
@@ -209,7 +215,7 @@ export function DiscordPicker({
           />
           <CommandList>
             {loading ? <p className="screen-meta terminal-cursor p-3">CARREGANDO</p> : null}
-            {error ? <p className="p-3 text-[10px] uppercase tracking-[0.2em] text-error">! {error}</p> : null}
+            {error ? <p className="p-3 text-[10px] uppercase tracking-[0.2em] text-error-text">! {error}</p> : null}
             {!loading && !error && visible.length === 0 ? (
               <CommandEmpty>Nada encontrado.</CommandEmpty>
             ) : null}

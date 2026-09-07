@@ -64,7 +64,7 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
     <th
       data-slot="table-head"
       className={cn(
-        'px-4 py-3 text-left align-middle text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap opacity-60',
+        'px-4 py-3 text-left align-middle text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap text-muted-text',
         '[&:has([role=checkbox])]:pr-0',
         className,
       )}
@@ -87,7 +87,7 @@ function TableCaption({ className, ...props }: React.ComponentProps<'caption'>) 
   return (
     <caption
       data-slot="table-caption"
-      className={cn('mt-4 text-[10px] uppercase tracking-[0.2em] opacity-60', className)}
+      className={cn('mt-4 text-[10px] uppercase tracking-[0.2em] text-muted-text', className)}
       {...props}
     />
   );

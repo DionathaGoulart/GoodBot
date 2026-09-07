@@ -60,7 +60,7 @@ function PopoverTitle({ className, ...props }: React.ComponentProps<'h2'>) {
 }
 
 function PopoverDescription({ className, ...props }: React.ComponentProps<'p'>) {
-  return <p data-slot="popover-description" className={cn('opacity-70', className)} {...props} />;
+  return <p data-slot="popover-description" className={cn('text-muted-text', className)} {...props} />;
 }
 
 export {
