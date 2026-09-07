@@ -46,7 +46,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 21  | Notificações de redes sociais                                              | concluída · 2026-09-07 |
 | 22  | Painel vivo e histórico de ações                                           | concluída · 2026-09-07 |
 | 23  | Configurações do servidor e banidos                                        | concluída · 2026-09-07 |
-| 24  | Mensagens pelo painel                                                      | pendente     |
+| 24  | Mensagens pelo painel                                                      | concluída · 2026-09-07 |
 | 25  | Convites, eventos e emojis                                                 | pendente     |
 | 26  | Organização e legibilidade do painel                                       | pendente     |
 
@@ -2136,23 +2136,23 @@ o mesmo editor de embed que as telas de config já usam.
 
 **Tarefas:**
 
-- [ ] `packages/shared`: estender `SendMessageInputSchema` com edição
+- [x] `packages/shared`: estender `SendMessageInputSchema` com edição
       (`messageId`), resposta a mensagem, e `allowedMentions` **explícito** —
       o padrão continua não mencionar ninguém; mencionar `@everyone` é um campo
       que se marca de propósito e exige `admin`.
-- [ ] `apps/bot/src/api/routes/messages.ts`: `POST /messages` (já existe) ganha
+- [x] `apps/bot/src/api/routes/messages.ts`: `POST /messages` (já existe) ganha
       edição e resposta; `GET /channels/:id/messages` devolve as últimas 50 para
       escolher o que editar; `DELETE /channels/:id/messages/:messageId`.
-- [ ] Rate limit próprio para envio, mais apertado que o das rotas de config
+- [x] Rate limit próprio para envio, mais apertado que o das rotas de config
       (PRD §7.4): o painel não pode virar um caminho para floodar canal.
-- [ ] Toda mensagem enviada, editada ou apagada pelo painel vira `audit_logs`
+- [x] Toda mensagem enviada, editada ou apagada pelo painel vira `audit_logs`
       com o conteúdo — este é o endpoint mais fácil de abusar do painel inteiro.
-- [ ] `apps/web`: página `/g/[guildId]/mensagens` — seletor de canal, editor com
+- [x] `apps/web`: página `/g/[guildId]/mensagens` — seletor de canal, editor com
       abas *texto* / *embed* (reaproveitando `EmbedPreview`), preview ao lado,
       lista das mensagens recentes do bot naquele canal com "editar" e "apagar".
-- [ ] Só `admin` envia; `mod` vê o histórico. Canal que o bot não enxerga sai do
+- [x] Só `admin` envia; `mod` vê o histórico. Canal que o bot não enxerga sai do
       seletor com o motivo.
-- [ ] Testes (Vitest): `allowedMentions` nasce vazio; `@everyone` sem `admin` é
+- [x] Testes (Vitest): `allowedMentions` nasce vazio; `@everyone` sem `admin` é
       recusado; edição de mensagem que não é do bot é recusada.
 
 **Arquivos criados/alterados:** `packages/shared/src/api/messages.ts`,
