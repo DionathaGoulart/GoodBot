@@ -70,6 +70,9 @@ services:
     environment:
       # Em produção: bot.seu-dominio. Local: `localhost` (certificado interno).
       BOT_DOMAIN: ${BOT_DOMAIN:-localhost}
+      # Sem isto o Caddyfile cai no fallback `admin@example.invalid`, e o
+      # Let's Encrypt recusa a conta: "invalid domain ... public suffix".
+      ACME_EMAIL: ${ACME_EMAIL:-}
     ports:
       - '80:80'
       - '443:443'
