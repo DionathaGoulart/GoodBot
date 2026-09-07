@@ -47,13 +47,17 @@ grep -q '^vm.swappiness' /etc/sysctl.conf || echo 'vm.swappiness=10' >>/etc/sysc
 # O Ubuntu da Oracle vem com um iptables restritivo que ignora a Security List:
 # sem estas regras, o Let's Encrypt não valida o domínio.
 log 'Portas 80 e 443 no iptables'
-for port in 80 443; do
-  if iptables -C INPUT -m state --state NEW -p tcp --dport "$port" -j ACCEPT 2>/dev/null; then
-    echo "porta $port já liberada."
-  else
-    iptables -I INPUT 6 -m state --state NEW -p tcp --dport "$port" -j ACCEPT
-    echo "porta $port liberada."
-  fi
+# A regra tem de entrar ANTES do REJECT final da cadeia, senão nunca é
+# alcançada. A posição dele varia entre imagens da Oracle: calcule, não chute.
+reject_line() { iptables -L INPUT --line-numbers -n | awk '/REJECT/ {print $1; exit}'; }
+for port in 443 80; do
+  # Remove regras antigas fora de ordem (ex.: adicionadas com -A) antes de reinserir.
+  while iptables -C INPUT -p tcp -m state --state NEW -m tcp --dport "$port" -j ACCEPT 2>/dev/null; do
+    iptables -D INPUT -p tcp -m state --state NEW -m tcp --dport "$port" -j ACCEPT
+  done
+  pos=$(reject_line)
+  iptables -I INPUT "${pos:-1}" -m state --state NEW -p tcp --dport "$port" -j ACCEPT
+  echo "porta $port liberada (posição ${pos:-1})."
 done
 if command -v netfilter-persistent >/dev/null; then
   netfilter-persistent save
