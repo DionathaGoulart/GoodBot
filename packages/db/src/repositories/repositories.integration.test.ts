@@ -3,13 +3,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createDb, type Db } from '../client';
 import { loadRootEnv } from '../env';
-import { appendAudit, listRecentAudit } from './audit';
+import { appendAudit, listAuditActions, listRecentAudit, searchAudit } from './audit';
 import {
   createCase,
   getCaseByNumber,
   listCasesForTarget,
   listRecentCases,
   nextCaseNumber,
+  searchCases,
+  softDeleteCase,
 } from './cases';
 import {
   getAllModuleConfigs,
@@ -159,6 +161,104 @@ describe.skipIf(!url)('repositories (integração com Postgres)', () => {
     });
   });
 
+  describe('searchCases', () => {
+    // Casos próprios desta suíte: alvo e moderador diferentes dos de cima.
+    const ACTOR = '100000000000000003';
+    const TARGET = '100000000000000004';
+    const base = {
+      guildId: GUILD_ID,
+      targetId: TARGET,
+      targetTag: 'alvo-busca',
+      actorId: ACTOR,
+      actorTag: 'mod-busca',
+    } as const;
+
+    beforeAll(async () => {
+      await createCase(db, { ...base, type: 'ban', reason: 'spam no geral', source: 'dashboard' });
+      await createCase(db, { ...base, type: 'kick', reason: 'flood de imagens' });
+      await createCase(db, { ...base, type: 'warn', reason: 'ofensa à moderação' });
+    });
+
+    it('sem filtro devolve tudo da guild com o total', async () => {
+      const all = await searchCases(db, { guildId: GUILD_ID, pageSize: 100 });
+      expect(all.total).toBe(all.rows.length);
+      expect(all.total).toBeGreaterThanOrEqual(13);
+    });
+
+    it('filtra por tipo e por origem', async () => {
+      const bans = await searchCases(db, { guildId: GUILD_ID, type: ['ban'], targetId: TARGET });
+      expect(bans.total).toBe(1);
+      expect(bans.rows[0]?.reason).toBe('spam no geral');
+
+      const dashboard = await searchCases(db, { guildId: GUILD_ID, source: ['dashboard'] });
+      expect(dashboard.total).toBe(1);
+    });
+
+    it('combina tipo com período', async () => {
+      const future = new Date(Date.now() + 60_000);
+      const inWindow = await searchCases(db, {
+        guildId: GUILD_ID,
+        type: ['kick'],
+        targetId: TARGET,
+        from: new Date(Date.now() - 3_600_000),
+        to: future,
+      });
+      expect(inWindow.total).toBe(1);
+
+      const outOfWindow = await searchCases(db, {
+        guildId: GUILD_ID,
+        type: ['kick'],
+        targetId: TARGET,
+        from: future,
+      });
+      expect(outOfWindow.total).toBe(0);
+      expect(outOfWindow.rows).toEqual([]);
+    });
+
+    it('busca por texto no motivo, na tag e no número do caso', async () => {
+      expect((await searchCases(db, { guildId: GUILD_ID, q: 'flood' })).total).toBe(1);
+      expect((await searchCases(db, { guildId: GUILD_ID, q: 'ALVO-BUSCA' })).total).toBe(3);
+      expect((await searchCases(db, { guildId: GUILD_ID, q: 'ofensa à' })).total).toBe(1);
+
+      const byNumber = await searchCases(db, { guildId: GUILD_ID, q: '#2' });
+      expect(byNumber.rows.some((c) => c.caseNumber === 2)).toBe(true);
+    });
+
+    it('% e _ na busca são texto, não curinga', async () => {
+      expect((await searchCases(db, { guildId: GUILD_ID, q: '%' })).total).toBe(0);
+    });
+
+    it('pagina e ordena', async () => {
+      const first = await searchCases(db, {
+        guildId: GUILD_ID,
+        sort: 'caseNumber',
+        direction: 'asc',
+        page: 1,
+        pageSize: 2,
+      });
+      const second = await searchCases(db, {
+        guildId: GUILD_ID,
+        sort: 'caseNumber',
+        direction: 'asc',
+        page: 2,
+        pageSize: 2,
+      });
+      expect(first.rows.map((c) => c.caseNumber)).toEqual([1, 2]);
+      expect(second.rows.map((c) => c.caseNumber)).toEqual([3, 4]);
+      expect(first.total).toBe(second.total);
+    });
+
+    it('casos apagados só aparecem com includeDeleted', async () => {
+      const created = await createCase(db, { ...base, type: 'note', reason: 'some daqui' });
+      await softDeleteCase(db, GUILD_ID, created.caseNumber);
+
+      expect((await searchCases(db, { guildId: GUILD_ID, q: 'some daqui' })).total).toBe(0);
+      expect(
+        (await searchCases(db, { guildId: GUILD_ID, q: 'some daqui', includeDeleted: true })).total,
+      ).toBe(1);
+    });
+  });
+
   describe('audit', () => {
     it('appendAudit grava e devolve a linha', async () => {
       const row = await appendAudit(db, {
@@ -179,6 +279,36 @@ describe.skipIf(!url)('repositories (integração com Postgres)', () => {
     it('listRecentAudit devolve a linha recém-gravada', async () => {
       const recent = await listRecentAudit(db, GUILD_ID, 10);
       expect(recent[0]?.action).toBe('config.update');
+    });
+
+    it('searchAudit filtra por ator, família de ação e texto', async () => {
+      await appendAudit(db, {
+        guildId: GUILD_ID,
+        actorId: USER_B,
+        actorTag: 'outro-admin',
+        action: 'member.ban',
+        targetType: 'member',
+        targetId: USER_A,
+        before: null,
+        after: { reason: 'spam' },
+      });
+
+      expect((await searchAudit(db, { guildId: GUILD_ID, actorId: USER_B })).total).toBe(1);
+      // `config` casa `config.update`: o filtro é por família de ação.
+      expect((await searchAudit(db, { guildId: GUILD_ID, action: 'config' })).total).toBe(1);
+      expect((await searchAudit(db, { guildId: GUILD_ID, action: 'member.ban' })).total).toBe(1);
+      expect((await searchAudit(db, { guildId: GUILD_ID, q: 'outro-admin' })).total).toBe(1);
+      expect((await searchAudit(db, { guildId: GUILD_ID, q: 'nada disso' })).total).toBe(0);
+    });
+
+    it('searchAudit pagina e o total ignora a página', async () => {
+      const page = await searchAudit(db, { guildId: GUILD_ID, page: 1, pageSize: 1 });
+      expect(page.rows).toHaveLength(1);
+      expect(page.total).toBe(2);
+    });
+
+    it('listAuditActions lista as ações distintas em ordem', async () => {
+      expect(await listAuditActions(db, GUILD_ID)).toEqual(['config.update', 'member.ban']);
     });
   });
 

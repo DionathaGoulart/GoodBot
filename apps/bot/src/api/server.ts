@@ -14,6 +14,7 @@ import {
   rateLimit,
 } from './middleware/rate-limit';
 import { createAutomodRoutes } from './routes/automod';
+import { createCaseRoutes } from './routes/cases';
 import { createChannelRoutes } from './routes/channels';
 import { createCommandRoutes } from './routes/commands';
 import { createConfigRoutes } from './routes/config';
@@ -90,6 +91,7 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
   guilds.use('/:guildId/*', withGuild(deps));
   guilds.route('/:guildId', createGuildRoutes());
   guilds.route('/:guildId/moderation', createModerationRoutes(deps));
+  guilds.route('/:guildId/cases', createCaseRoutes(deps));
   guilds.route('/:guildId/config', createConfigRoutes(deps));
   guilds.route('/:guildId/commands', createCommandRoutes(deps));
   guilds.route('/:guildId/automod', createAutomodRoutes(deps));

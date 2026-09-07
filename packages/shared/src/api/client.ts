@@ -1,4 +1,5 @@
 import { RaidModeInputSchema, RaidModeStateSchema } from './automod';
+import { CaseDeleteInputSchema, CaseEditInputSchema, CaseSummarySchema } from './cases';
 import {
   ChannelCreateInputSchema,
   ChannelOverridesInputSchema,
@@ -34,6 +35,7 @@ import {
 import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
 
 import type { RaidModeInput, RaidModeState } from './automod';
+import type { CaseDeleteInput, CaseEditInput, CaseSummary } from './cases';
 import type {
   ChannelCreateInput,
   ChannelOverridesInput,
@@ -235,10 +237,14 @@ export function createInternalClient(options: InternalClientOptions) {
       channelId: string,
       input: ChannelUpdateInput,
     ): Promise<GuildChannelDetail> =>
-      request(GuildChannelDetailSchema, `${guild(guildId)}/channels/${encodeURIComponent(channelId)}`, {
-        method: 'PATCH',
-        body: ChannelUpdateInputSchema.parse(input),
-      }),
+      request(
+        GuildChannelDetailSchema,
+        `${guild(guildId)}/channels/${encodeURIComponent(channelId)}`,
+        {
+          method: 'PATCH',
+          body: ChannelUpdateInputSchema.parse(input),
+        },
+      ),
 
     deleteChannel: (guildId: string, channelId: string, input: ActorInput): Promise<{ ok: true }> =>
       request(ApiOkSchema, `${guild(guildId)}/channels/${encodeURIComponent(channelId)}`, {
@@ -329,6 +335,36 @@ export function createInternalClient(options: InternalClientOptions) {
         GuildMemberDetailSchema,
         `${guild(guildId)}/members/${encodeURIComponent(userId)}/roles`,
         { method: 'POST', body: MemberRolesInputSchema.parse(input) },
+      ),
+
+    /**
+     * Edita o motivo de um caso. Passa pelo bot (e não por um update direto do
+     * painel) porque a mensagem já publicada no mod-log precisa ser reeditada,
+     * e só o bot fala com o Discord (PRD §6.4).
+     */
+    editCase: (guildId: string, caseNumber: number, input: CaseEditInput): Promise<CaseSummary> =>
+      request(
+        CaseSummarySchema,
+        `${guild(guildId)}/cases/${encodeURIComponent(String(caseNumber))}`,
+        {
+          method: 'PATCH',
+          body: CaseEditInputSchema.parse(input),
+        },
+      ),
+
+    /** Soft delete do caso (só admin); a linha continua no banco. */
+    deleteCase: (
+      guildId: string,
+      caseNumber: number,
+      input: CaseDeleteInput,
+    ): Promise<CaseSummary> =>
+      request(
+        CaseSummarySchema,
+        `${guild(guildId)}/cases/${encodeURIComponent(String(caseNumber))}`,
+        {
+          method: 'DELETE',
+          body: CaseDeleteInputSchema.parse(input),
+        },
       ),
 
     moderate: (guildId: string, input: ModerationActionInput): Promise<ModerationActionResult> =>
