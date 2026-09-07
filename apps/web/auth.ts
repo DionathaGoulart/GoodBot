@@ -11,6 +11,13 @@ interface CobotToken {
   sub?: string;
   name?: string | null;
   picture?: string | null;
+  /**
+   * Snowflake do Discord. Guardado à parte porque o `sub` do Auth.js não é
+   * confiável como identidade: sem adapter ele vem como UUID aleatório, e a
+   * API do bot responde 404 para qualquer coisa que não seja snowflake — o
+   * que o painel lê como "sem permissão".
+   */
+  discordId?: string;
   level?: AccessLevel;
   guildId?: string;
   checkedAt?: number;
@@ -39,19 +46,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
       }),
     ],
     callbacks: {
-      async jwt({ token }) {
+      async jwt({ token, account, profile }) {
         const cobot = token as CobotToken;
-        if (!cobot.sub) return token;
+
+        // Só existem no login; das renovações em diante vale o que ficou aqui.
+        if (account?.providerAccountId) cobot.discordId = account.providerAccountId;
+        else if (typeof profile?.id === 'string') cobot.discordId = profile.id;
+
+        const userId = cobot.discordId;
+        if (!userId) return token;
         if (cobot.guildId === config.GUILD_ID && !isStale(cobot.checkedAt)) return token;
 
-        cobot.level = await resolveGuildLevel(cobot.sub);
+        cobot.level = await resolveGuildLevel(userId);
         cobot.guildId = config.GUILD_ID;
         cobot.checkedAt = Date.now();
         return token;
       },
       session({ session, token }) {
         const cobot = token as CobotToken;
-        session.user.id = cobot.sub ?? '';
+        session.user.id = cobot.discordId ?? '';
         session.user.name = cobot.name ?? 'desconhecido';
         session.user.image = cobot.picture ?? null;
         session.level = cobot.level ?? 'none';
