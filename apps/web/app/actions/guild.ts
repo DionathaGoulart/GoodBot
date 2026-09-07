@@ -8,11 +8,12 @@ import {
   setSlowmode,
   toggleChannelLock,
 } from '@/lib/channels';
+import { loadMoreBans, saveGuildProfile, unbanUser } from '@/lib/guild';
 import { punishMember, setMemberRoles } from '@/lib/members';
 import { moveRole, removeRole, saveRole } from '@/lib/roles';
 
 import type { ActionResult } from '@/lib/module-config';
-import type { GuildChannelDetail } from '@cobot/shared';
+import type { BanListQuery, GuildBanPage, GuildChannelDetail } from '@cobot/shared';
 
 /**
  * As ações da gestão de servidor (Etapa 16). Cascas finas sobre o `lib/`
@@ -70,4 +71,20 @@ export async function toggleChannelLockAction(formData: FormData): Promise<Actio
 
 export async function setChannelOverridesAction(formData: FormData): Promise<ActionResult> {
   return setChannelOverrides(formData);
+}
+
+// ── servidor e banidos ──────────────────────────────────────────────────────
+
+export async function saveGuildProfileAction(formData: FormData): Promise<ActionResult> {
+  return saveGuildProfile(formData);
+}
+
+export async function unbanUserAction(formData: FormData): Promise<ActionResult> {
+  return unbanUser(formData);
+}
+
+export async function loadMoreBansAction(
+  query: Partial<BanListQuery>,
+): Promise<{ ok: true; page: GuildBanPage } | { ok: false; message: string }> {
+  return loadMoreBans(query);
 }

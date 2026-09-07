@@ -10,6 +10,12 @@ import {
 import { CommandSummarySchema } from './commands';
 import { ApiErrorSchema, ApiOkSchema } from './common';
 import { InvalidateInputSchema } from './config';
+import {
+  BanListQuerySchema,
+  GuildBanPageSchema,
+  GuildProfileSchema,
+  GuildSettingsInputSchema,
+} from './guild';
 import { HealthResponseSchema } from './health';
 import {
   AuditLogEntrySummarySchema,
@@ -52,6 +58,7 @@ import type {
 import type { CommandSummary } from './commands';
 import type { ApiError } from './common';
 import type { InvalidateInput } from './config';
+import type { BanListQuery, GuildBanPage, GuildProfile, GuildSettingsInput } from './guild';
 import type { HealthResponse } from './health';
 import type {
   AuditLogEntrySummary,
@@ -202,6 +209,29 @@ export function createInternalClient(options: InternalClientOptions) {
 
   return {
     health: (): Promise<HealthResponse> => request(HealthResponseSchema, '/health'),
+
+    /** Dados do servidor + o que o bot pode editar nele (PRD §6.3). */
+    guildProfile: (guildId: string): Promise<GuildProfile> =>
+      request(GuildProfileSchema, guild(guildId)),
+
+    updateGuildProfile: (guildId: string, input: GuildSettingsInput): Promise<GuildProfile> =>
+      request(GuildProfileSchema, guild(guildId), {
+        method: 'PATCH',
+        body: GuildSettingsInputSchema.parse(input),
+      }),
+
+    bans: (guildId: string, query: Partial<BanListQuery> = {}): Promise<GuildBanPage> =>
+      request(GuildBanPageSchema, `${guild(guildId)}/bans`, {
+        query: BanListQuerySchema.parse(query),
+      }),
+
+    /** Desbanir passa pelo mesmo serviço do `/unban`; só o `source` muda. */
+    unban: (guildId: string, userId: string, input: ActorInput): Promise<ModerationActionResult> =>
+      request(
+        ModerationActionResultSchema,
+        `${guild(guildId)}/bans/${encodeURIComponent(userId)}`,
+        { method: 'DELETE', body: ActorInputSchema.parse(input) },
+      ),
 
     channels: (guildId: string): Promise<GuildChannelSummary[]> =>
       request(GuildChannelSummarySchema.array(), `${guild(guildId)}/channels`),

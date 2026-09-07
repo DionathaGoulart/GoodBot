@@ -5,6 +5,7 @@ export * from './client';
 export * from './commands';
 export * from './common';
 export * from './config';
+export * from './guild';
 export * from './health';
 export * from './members';
 export * from './messages';

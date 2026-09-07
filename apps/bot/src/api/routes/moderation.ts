@@ -65,7 +65,8 @@ function dispatch(
   }
 }
 
-function toResult(result: ActionResult): ModerationActionResult {
+/** Exportado: a rota de desbanimento (`DELETE /bans/:userId`) devolve o mesmo. */
+export function toModerationResult(result: ActionResult): ModerationActionResult {
   return {
     caseId: result.case.id,
     caseNumber: result.case.caseNumber,
@@ -88,6 +89,6 @@ export function createModerationRoutes(deps: ApiDeps): Hono<ApiEnv> {
     await deps.moderation.assertCanAct(guild, actor, target);
 
     const result = await dispatch(deps.moderation, { input, guild, actor, target });
-    return c.json(toResult(result));
+    return c.json(toModerationResult(result));
   });
 }
