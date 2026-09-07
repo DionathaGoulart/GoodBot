@@ -1,4 +1,5 @@
 import reactionrole from './reactionrole';
+import social from './social';
 import { tag, tags } from './tag';
 import ticket from './ticket';
 import verify from './verify';
@@ -11,6 +12,7 @@ export const communityCommands: readonly AnyCommand[] = [
   welcome,
   verify,
   reactionrole,
+  social,
   ticket,
   tag,
   tags,

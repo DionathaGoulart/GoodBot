@@ -10,6 +10,7 @@ import type { ModerationService } from '../services/moderation';
 import type { ModlogService } from '../services/modlog';
 import type { PollService } from '../services/polls';
 import type { ReactionRoleService } from '../services/reaction-roles';
+import type { SocialProviders } from '../services/social/index';
 import type { StatsService } from '../services/stats';
 import type { TicketService } from '../services/tickets';
 import type { WelcomeService } from '../services/welcome';
@@ -54,6 +55,8 @@ export interface BotContext {
   reactionRoles: ReactionRoleService;
   /** Abertura, gestão e fechamento de tickets (§5.5). */
   tickets: TicketService;
+  /** Providers das notificações de rede social (§5.8). */
+  social: SocialProviders;
   messageCache: MessageCacheService;
   /** Agregador de estatísticas (§5.6); nunca lança. */
   stats: StatsService;

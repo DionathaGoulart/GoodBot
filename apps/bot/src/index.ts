@@ -1,5 +1,5 @@
-import { createDb } from '@cobot/db';
-import { VERSION } from '@cobot/shared';
+import { createDb, deleteSocialPostsBefore } from '@cobot/db';
+import { DAY_MS, SOCIAL_POSTS_RETENTION_DAYS, VERSION } from '@cobot/shared';
 import { sql } from 'drizzle-orm';
 
 import { createApiServer } from './api/server';
@@ -9,6 +9,7 @@ import { commands as commandList } from './commands/index';
 import { env } from './env';
 import { events } from './events/index';
 import { RetentionJob } from './jobs/retention';
+import { SocialJob } from './jobs/social';
 import { StatsRollupJob } from './jobs/stats-rollup';
 import { loadCommands, loadEvents } from './lib/loader';
 import { logger } from './logger';
@@ -25,6 +26,7 @@ import { createModlogService } from './services/modlog';
 import { PollService } from './services/polls';
 import { ReactionRoleService } from './services/reaction-roles';
 import { Scheduler } from './services/scheduler';
+import { SocialProviders } from './services/social/index';
 import { StatsService } from './services/stats';
 import { TicketService } from './services/tickets';
 import { WelcomeService } from './services/welcome';
@@ -95,7 +97,15 @@ async function main(): Promise<void> {
     onOpen: (ticket) => void stats.recordTicketOpen(ticket.guildId),
     onClose: (ticket) => void stats.recordTicketClose(ticket.guildId),
   });
+  const social = new SocialProviders({
+    ...(env.YOUTUBE_API_KEY ? { youtubeApiKey: env.YOUTUBE_API_KEY } : {}),
+    ...(env.TWITCH_CLIENT_ID ? { twitchClientId: env.TWITCH_CLIENT_ID } : {}),
+    ...(env.TWITCH_CLIENT_SECRET ? { twitchClientSecret: env.TWITCH_CLIENT_SECRET } : {}),
+    ...(env.META_ACCESS_TOKEN ? { metaAccessToken: env.META_ACCESS_TOKEN } : {}),
+    tiktokEnabled: env.SOCIAL_TIKTOK_ENABLED,
+  });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
+  const socialJob = new SocialJob({ db, client, config, providers: social, alerts });
   const statsRollup = new StatsRollupJob({ db, client, config });
   // As três retenções do PRD §8 num job só, porque é ele que alerta na falha.
   const retention = new RetentionJob({
@@ -104,6 +114,11 @@ async function main(): Promise<void> {
       { name: 'message_cache', run: () => messageCache.cleanup() },
       { name: 'automod_hits', run: () => automod.cleanup() },
       { name: 'stats_rollup', run: () => runStatsRollup(statsRollup, client) },
+      {
+        name: 'social_posts',
+        run: () =>
+          deleteSocialPostsBefore(db, new Date(Date.now() - SOCIAL_POSTS_RETENTION_DAYS * DAY_MS)),
+      },
     ],
   });
   // A coleção nasce antes do `ctx` porque a API também a expõe (`GET /commands`).
@@ -114,7 +129,7 @@ async function main(): Promise<void> {
     stats: stats.pendingSize,
   });
   const api = createApiServer({
-    deps: { client, db, config, moderation, automod, reactionRoles, tickets, commands },
+    deps: { client, db, config, moderation, automod, reactionRoles, tickets, social, commands },
     token: env.INTERNAL_API_TOKEN,
     port: env.INTERNAL_API_PORT,
     queues: readQueues,
@@ -139,6 +154,7 @@ async function main(): Promise<void> {
     autorole,
     reactionRoles,
     tickets,
+    social,
     messageCache,
     stats,
     logger,
@@ -158,6 +174,7 @@ async function main(): Promise<void> {
     automod.start();
     stats.start();
     statsRollup.start();
+    socialJob.start();
     retention.start();
     databaseProbe.start();
     alerts.emit({
@@ -191,6 +208,7 @@ async function main(): Promise<void> {
       automod.stop();
       stats.stop();
       statsRollup.stop();
+      socialJob.stop();
       retention.stop();
       databaseProbe.stop();
       autorole.stop();

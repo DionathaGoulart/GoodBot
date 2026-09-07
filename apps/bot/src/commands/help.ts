@@ -20,6 +20,7 @@ const MODULE_LABELS: Record<Module, string> = {
   tags: 'Tags',
   utilities: 'Utilidades',
   stats: 'Estatísticas',
+  social: 'Redes sociais',
 };
 
 export default defineCommand({

@@ -1,3 +1,4 @@
+import { MODULES } from '@cobot/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -112,7 +113,9 @@ describe.skipIf(!url)('repositories (integração com Postgres)', () => {
       expect(all.tags.stored).toBe(true);
       expect(all.moderation.stored).toBe(false);
       expect(all.moderation.config.defaultReason).toBe('[sem motivo]');
-      expect(Object.keys(all)).toHaveLength(11);
+      // Contra a lista de módulos, não contra um número: um módulo novo não
+      // deve exigir editar este teste.
+      expect(Object.keys(all)).toHaveLength(MODULES.length);
     });
   });
 

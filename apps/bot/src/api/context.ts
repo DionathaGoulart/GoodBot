@@ -11,6 +11,7 @@ export type ApiDeps = Pick<
   | 'automod'
   | 'reactionRoles'
   | 'tickets'
+  | 'social'
   | 'commands'
 >;
 

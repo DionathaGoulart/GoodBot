@@ -32,7 +32,13 @@ import {
   RoleMoveInputSchema,
   RoleWriteInputSchema,
 } from './roles';
+import {
+  SocialAccountSummarySchema,
+  SocialOverviewSchema,
+  SocialTestResultSchema,
+} from './social';
 import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
+import { SocialAccountInputSchema } from '../config/social';
 
 import type { RaidModeInput, RaidModeState } from './automod';
 import type { CaseDeleteInput, CaseEditInput, CaseSummary } from './cases';
@@ -59,7 +65,9 @@ import type {
 import type { PublishPanelInput, SendMessageInput, SendMessageResult } from './messages';
 import type { ModerationActionInput, ModerationActionResult } from './moderation';
 import type { ActorInput, MemberRolesInput, RoleMoveInput, RoleWriteInput } from './roles';
+import type { SocialAccountSummary, SocialOverview, SocialTestResult } from './social';
 import type { CloseTicketInput, CloseTicketResult } from './tickets';
+import type { SocialAccountInput } from '../config/social';
 import type { z } from 'zod';
 
 /** Timeout padrão de uma chamada; a API do bot é local a um datacenter. */
@@ -443,6 +451,42 @@ export function createInternalClient(options: InternalClientOptions) {
       request(
         ApiOkSchema,
         `${guild(guildId)}/tickets/panels/${encodeURIComponent(panelId)}/unpublish`,
+        { method: 'POST' },
+      ),
+
+    /** Contas observadas + o que cada plataforma consegue fazer (PRD §5.8). */
+    social: (guildId: string): Promise<SocialOverview> =>
+      request(SocialOverviewSchema, `${guild(guildId)}/social`),
+
+    createSocialAccount: (
+      guildId: string,
+      input: SocialAccountInput,
+    ): Promise<SocialAccountSummary> =>
+      request(SocialAccountSummarySchema, `${guild(guildId)}/social`, {
+        method: 'POST',
+        body: SocialAccountInputSchema.parse(input),
+      }),
+
+    updateSocialAccount: (
+      guildId: string,
+      accountId: string,
+      input: SocialAccountInput,
+    ): Promise<SocialAccountSummary> =>
+      request(SocialAccountSummarySchema, `${guild(guildId)}/social/${encodeURIComponent(accountId)}`, {
+        method: 'PATCH',
+        body: SocialAccountInputSchema.parse(input),
+      }),
+
+    deleteSocialAccount: (guildId: string, accountId: string): Promise<{ ok: true }> =>
+      request(ApiOkSchema, `${guild(guildId)}/social/${encodeURIComponent(accountId)}`, {
+        method: 'DELETE',
+      }),
+
+    /** Anúncio de exemplo no canal da conta — o botão "testar" do painel. */
+    testSocialAccount: (guildId: string, accountId: string): Promise<SocialTestResult> =>
+      request(
+        SocialTestResultSchema,
+        `${guild(guildId)}/social/${encodeURIComponent(accountId)}/test`,
         { method: 'POST' },
       ),
   };

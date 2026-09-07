@@ -11,4 +11,5 @@ export * from './messages';
 export * from './moderation';
 export * from './permissions';
 export * from './roles';
+export * from './social';
 export * from './tickets';

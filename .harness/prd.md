@@ -252,6 +252,25 @@ Template por conta, com as variáveis `{title}`, `{url}`, `{author}`,
 motor de templates das boas-vindas (§5.5). Menção opcional a um cargo, com
 `allowedMentions` restrito a ele.
 
+**Notas de implementação (Etapa 21).** Três decisões que o desenho acima não
+fixava e que valem para quem for mexer no módulo depois:
+
+- `{thumbnail}` existe como variável de texto, mas a capa da publicação entra
+  mesmo como **imagem do embed**, e só quando o template não define uma imagem
+  própria. Um card com a capa é o que dá ao anúncio a cara que se espera.
+- A **primeira passada de uma conta nova não anuncia nada**: ela grava em
+  `social_posts` o que já existia e passa a avisar do próximo post em diante.
+  Sem isso, adicionar um canal antigo despejaria o feed inteiro no canal.
+  `social.announceBacklog` inverte esse comportamento, e nasce desligado.
+- O **IG User ID não é variável de ambiente**: ele identifica cada conta e
+  entra no painel, junto do canal e do template. Da Meta vem só o
+  `META_ACCESS_TOKEN`, que é do app e vale para todas as contas.
+- A conta guarda `poll_interval_s` próprio, mas a busca de **live no YouTube**
+  respeita os 15 min da cota mesmo que a conta esteja em 1 min.
+- O backoff de uma conta em falha vive **em memória**: um restart tenta de
+  novo na hora (o que se quer depois de um deploy), enquanto o contador de
+  falhas — que é o que desliga a conta no décimo erro — fica no banco.
+
 ## 6. Requisitos funcionais — Painel
 
 Acesso: login com Discord OAuth2 (Auth.js). Após login, o painel verifica se
