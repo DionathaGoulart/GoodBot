@@ -39,7 +39,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 14  | Configuração I: geral, moderação, logs, boas-vindas, autorole, tags        | concluída · 2026-09-06 |
 | 15  | Configuração II: automod, reaction roles, tickets, comandos                | concluída · 2026-09-06 |
 | 16  | Gestão do servidor: membros, cargos, canais                                | concluída · 2026-09-06 |
-| 17  | Casos e auditoria do painel                                                | pendente     |
+| 17  | Casos e auditoria do painel                                                | concluída · 2026-09-06 |
 | 18  | Docker Compose (bot + Caddy) e build do painel                             | pendente     |
 | 19  | CI/CD: bot na Oracle, painel na Vercel                                     | pendente     |
 | 20  | Hardening e observabilidade                                                | pendente     |
@@ -1430,30 +1430,36 @@ desfazer/exportar CSV, e página de auditoria com diff.
 
 **Tarefas:**
 
-- [ ] Repositório `cases.ts`: `search({ guildId, type[], actorId, targetId,
+- [x] Repositório `cases.ts`: `search({ guildId, type[], actorId, targetId,
     from, to, source[], q, page, pageSize, sort })` com `count` total;
       `audit.ts`: `search` equivalente.
-- [ ] `cases`: tabela com filtros na toolbar (tipo multi, moderador/alvo via
-      `DiscordPicker`, período, origem, texto), URL como estado
+- [x] `cases`: tabela com filtros na toolbar (tipo multi, moderador/alvo via
+      `MemberPicker` — o `DiscordPicker` só faz canal/cargo, e a lista de
+      membros não cabe num fetch só), URL como estado
       (`searchParams`), paginação server-side, `Tag` por tipo (styleguide
       §2.3), export CSV (route handler `text/csv` streaming, máx. 10k
       linhas).
-- [ ] `cases/[caseNumber]`: detalhe, editar motivo (`admin`/`mod`), apagar
+- [x] `cases/[caseNumber]`: detalhe, editar motivo (`admin`/`mod`), apagar
       (soft, `admin`, `AlertDialog`), `DESFAZER` (unban/untimeout via API
       interna quando aplicável e ainda ativo), link para mensagem do
       mod-log, link para o membro.
-- [ ] `audit`: tabela (ator, ação, alvo, data) com filtros; linha expande
+- [x] `audit`: tabela (ator, ação, alvo, data) com filtros; linha expande
       mostrando `before`/`after` como diff JSON (componente simples:
       chaves adicionadas/removidas/alteradas com cores `success`/`error`/
       `warning`).
-- [ ] Dashboard: listas "últimos casos"/"última auditoria" agora linkam para
+- [x] Dashboard: listas "últimos casos"/"última auditoria" agora linkam para
       cá.
-- [ ] Testes: `search` com combinações de filtros (fixture no Postgres),
+- [x] Testes: `search` com combinações de filtros (fixture no Postgres),
       geração de CSV (escape), diff JSON.
 
-**Arquivos criados/alterados:** `apps/web/app/g/[guildId]/{cases,audit}/**`,
-`apps/web/app/api/cases/export/route.ts`, `apps/web/components/json-diff.tsx`,
-`packages/db/src/repositories/{cases,audit}.ts`.
+**Arquivos criados/alterados:** `apps/web/app/g/[guildId]/{casos,auditoria}/**`
+(as rotas são pt-BR como o resto do painel), `apps/web/app/api/cases/export/
+route.ts`, `apps/web/app/api/discord/members/route.ts`,
+`apps/web/components/{json-diff.tsx,config/member-picker.tsx,data-table/
+pager.tsx}`, `apps/web/lib/{cases,case-filters,csv,json-diff}.ts`,
+`packages/db/src/repositories/{cases,audit}.ts`,
+`packages/shared/src/api/cases.ts`, `apps/bot/src/api/routes/cases.ts`
+(editar/apagar caso passa pelo bot, que reedita o mod-log).
 
 **Critérios de aceite:**
 

@@ -35,14 +35,19 @@ export function RecentCases({ guildId, cases }: { guildId: string; cases: Recent
       ) : (
         <ul className="flex flex-col divide-y-2 divide-base-300">
           {cases.map((item) => (
-            <li key={item.caseNumber} className="flex flex-wrap items-center gap-3 py-2 first:pt-0">
-              <span className="screen-meta w-14 shrink-0">#{item.caseNumber}</span>
-              <Tag tone={CASE_TONES[item.type] ?? 'muted'}>{item.type}</Tag>
-              <span className="min-w-0 flex-1 truncate text-sm">
-                {item.targetTag}
-                <span className="opacity-60"> — {item.reason}</span>
-              </span>
-              <span className="screen-meta shrink-0">{when(item.createdAt)}</span>
+            <li key={item.caseNumber}>
+              <Link
+                href={`/g/${guildId}/casos/${item.caseNumber}`}
+                className="flex flex-wrap items-center gap-3 py-2 hover:bg-base-300/30"
+              >
+                <span className="screen-meta w-14 shrink-0">#{item.caseNumber}</span>
+                <Tag tone={CASE_TONES[item.type] ?? 'muted'}>{item.type}</Tag>
+                <span className="min-w-0 flex-1 truncate text-sm">
+                  {item.targetTag}
+                  <span className="opacity-60"> — {item.reason}</span>
+                </span>
+                <span className="screen-meta shrink-0">{when(item.createdAt)}</span>
+              </Link>
             </li>
           ))}
         </ul>
@@ -63,19 +68,24 @@ export function RecentAuditLog({ guildId, entries }: { guildId: string; entries:
       ) : (
         <ul className="flex flex-col divide-y-2 divide-base-300">
           {entries.map((entry) => (
-            <li key={entry.id} className="flex flex-wrap items-center gap-3 py-2 first:pt-0">
-              <Tag tone="muted">{entry.action}</Tag>
-              <span className="min-w-0 flex-1 truncate text-sm">
-                {entry.actorTag}
-                {entry.targetType ? (
-                  <span className="opacity-60">
-                    {' '}
-                    — {entry.targetType}
-                    {entry.targetId ? ` ${entry.targetId}` : ''}
-                  </span>
-                ) : null}
-              </span>
-              <span className="screen-meta shrink-0">{when(entry.createdAt)}</span>
+            <li key={entry.id}>
+              <Link
+                href={`/g/${guildId}/auditoria?action=${encodeURIComponent(entry.action)}`}
+                className="flex flex-wrap items-center gap-3 py-2 hover:bg-base-300/30"
+              >
+                <Tag tone="muted">{entry.action}</Tag>
+                <span className="min-w-0 flex-1 truncate text-sm">
+                  {entry.actorTag}
+                  {entry.targetType ? (
+                    <span className="opacity-60">
+                      {' '}
+                      — {entry.targetType}
+                      {entry.targetId ? ` ${entry.targetId}` : ''}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="screen-meta shrink-0">{when(entry.createdAt)}</span>
+              </Link>
             </li>
           ))}
         </ul>

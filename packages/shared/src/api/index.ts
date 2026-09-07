@@ -1,4 +1,5 @@
 export * from './automod';
+export * from './cases';
 export * from './channels';
 export * from './client';
 export * from './commands';

@@ -1,9 +1,10 @@
-import { and, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 
 import { cases, scheduledActions } from '../schema/cases';
 
 import type { Db, DbExecutor } from '../client';
 import type { Case, NewCase, NewScheduledAction, ScheduledAction } from '../types';
+import type { SQL } from 'drizzle-orm';
 
 export type CreateCaseInput = Omit<
   NewCase,
@@ -295,4 +296,100 @@ export async function listRecentCases(
     .where(and(eq(cases.guildId, guildId), isNull(cases.deletedAt)))
     .orderBy(desc(cases.createdAt))
     .limit(limit);
+}
+
+// ── busca do painel ─────────────────────────────────────────────────────────
+
+/** Filtros da página de casos (PRD §6.4). Tudo opcional exceto a guild. */
+export interface CaseSearchFilters {
+  guildId: string;
+  type?: readonly Case['type'][];
+  source?: readonly Case['source'][];
+  actorId?: string;
+  targetId?: string;
+  from?: Date;
+  /** Instante final **exclusivo**. */
+  to?: Date;
+  /** Texto livre: motivo, tag do alvo/moderador ou número do caso. */
+  q?: string;
+  includeDeleted?: boolean;
+}
+
+export interface CaseSearchOptions extends CaseSearchFilters {
+  /** 1-based; a URL da página é 1-based e não vale traduzir duas vezes. */
+  page?: number;
+  pageSize?: number;
+  sort?: 'createdAt' | 'caseNumber';
+  direction?: 'asc' | 'desc';
+}
+
+export interface SearchResult<T> {
+  rows: T[];
+  total: number;
+}
+
+/** Teto de página; o export de CSV pede o máximo de uma vez (PRD §6.4). */
+export const MAX_CASE_PAGE_SIZE = 10_000;
+
+function caseConditions(filters: CaseSearchFilters): SQL[] {
+  const conditions: SQL[] = [eq(cases.guildId, filters.guildId)];
+  if (!filters.includeDeleted) conditions.push(isNull(cases.deletedAt));
+  if (filters.type?.length) conditions.push(inArray(cases.type, [...filters.type]));
+  if (filters.source?.length) conditions.push(inArray(cases.source, [...filters.source]));
+  if (filters.actorId) conditions.push(eq(cases.actorId, filters.actorId));
+  if (filters.targetId) conditions.push(eq(cases.targetId, filters.targetId));
+  if (filters.from) conditions.push(gte(cases.createdAt, filters.from));
+  if (filters.to) conditions.push(lt(cases.createdAt, filters.to));
+
+  const term = filters.q?.trim();
+  if (term) {
+    const like = `%${term.replace(/[%_\\]/g, (char) => `\\${char}`)}%`;
+    const parts: SQL[] = [
+      ilike(cases.reason, like),
+      ilike(cases.targetTag, like),
+      ilike(cases.actorTag, like),
+    ];
+    // "#12" e "12" acham o caso pelo número; digitar isso na busca é reflexo.
+    const asNumber = Number(term.replace(/^#/, ''));
+    if (Number.isInteger(asNumber) && asNumber > 0) {
+      parts.push(eq(cases.caseNumber, asNumber));
+    }
+    const combined = or(...parts);
+    if (combined) conditions.push(combined);
+  }
+  return conditions;
+}
+
+/**
+ * Busca paginada de casos com o total (PRD §6.4). O total vem de uma segunda
+ * query em vez de `count(*) over ()`: com filtro que não casa com nada, a
+ * janela não devolveria linha nenhuma e o total viraria `undefined`.
+ */
+export async function searchCases(
+  db: DbExecutor,
+  options: CaseSearchOptions,
+): Promise<SearchResult<Case>> {
+  const page = Math.max(1, Math.trunc(options.page ?? 1));
+  const pageSize = Math.min(MAX_CASE_PAGE_SIZE, Math.max(1, Math.trunc(options.pageSize ?? 25)));
+  const conditions = caseConditions(options);
+  const where = and(...conditions);
+
+  const column = options.sort === 'caseNumber' ? cases.caseNumber : cases.createdAt;
+  const order = options.direction === 'asc' ? asc(column) : desc(column);
+
+  const [rows, [totalRow]] = await Promise.all([
+    db
+      .select()
+      .from(cases)
+      .where(where)
+      .orderBy(order, desc(cases.id))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize),
+    db
+      .select({ total: sql<number>`count(*)` })
+      .from(cases)
+      .where(where),
+  ]);
+
+  return { rows, total: Number(totalRow?.total ?? 0) };
 }
