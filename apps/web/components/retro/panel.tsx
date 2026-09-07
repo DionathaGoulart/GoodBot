@@ -25,7 +25,7 @@ export function Panel({
     <section className={cn('panel', className)}>
       {title ? (
         <header className="window-bar">
-          <span>{title}</span>
+          <span className="window-bar-title">{title}</span>
           <span className="flex items-center gap-3">
             {actions}
             <WindowDots tone={tone} />

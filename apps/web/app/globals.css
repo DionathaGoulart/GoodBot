@@ -297,6 +297,8 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   box-shadow: var(--frame-shadow-sm);
+  /* O UA dá `cursor: default` a <button>; sem isto nada parece clicável. */
+  cursor: pointer;
   transition: all 0.3s cubic-bezier(0.33, 1, 0.68, 1);
 }
 
@@ -330,6 +332,7 @@
 .btn-goodchat-danger:disabled {
   opacity: 0.4;
   box-shadow: var(--frame-shadow-sm);
+  cursor: not-allowed;
 }
 
 .btn-goodchat {
@@ -362,6 +365,7 @@
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.1em;
+  cursor: pointer;
   transition: all 0.3s cubic-bezier(0.33, 1, 0.68, 1);
 }
 
@@ -379,6 +383,7 @@
 
 .icon-btn:disabled {
   opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /** §6.2 — painel/card. */
@@ -401,6 +406,14 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.2em;
+}
+
+/**
+ * §4.8 — o `opacity-40` é do *título*, não da barra. Na barra ele apagava
+ * junto os botões de ação, que ficavam na mesma opacidade de um `:disabled`
+ * e passavam a impressão de não serem clicáveis.
+ */
+.window-bar-title {
   opacity: 0.4;
 }
 

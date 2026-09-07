@@ -32,6 +32,20 @@ export default defineEvent(
 
     await upsertGuild(ctx, guild);
 
+    // O GUILD_CREATE não garante a lista completa de membros, então o cache
+    // nascia com o bot e quem apareceu num evento — era isso que fazia o
+    // painel listar 2 de 13. Um GUILD_REQUEST_MEMBERS no boot enche o cache;
+    // depois os eventos de entrada/saída o mantêm (PRD §7.4: nada em loop).
+    try {
+      const members = await guild.members.fetch();
+      ctx.logger.info({ cached: members.size, total: guild.memberCount }, 'cache de membros');
+    } catch (error) {
+      ctx.logger.error(
+        { err: error },
+        'não consegui carregar os membros; confira a intent GuildMembers no portal',
+      );
+    }
+
     // Aquece o cache de config antes de aceitar interações.
     await ctx.config.warm(guild.id);
 
