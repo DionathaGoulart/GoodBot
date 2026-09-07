@@ -1,0 +1,29 @@
+# Jail do fail2ban para a API do bot (PRD §11).
+#
+# Instalação na VM (⚠️ AÇÃO MANUAL — ver docs/runbook.md):
+#
+#   sudo apt-get install -y fail2ban
+#   sudo cp infra/fail2ban/cobot-api.conf /etc/fail2ban/filter.d/
+#   sudo cp infra/fail2ban/jail.local     /etc/fail2ban/jail.d/cobot.local
+#   sudo systemctl restart fail2ban
+#   sudo fail2ban-client status cobot-api
+#
+# O log do Caddy vive no journal do Docker; a linha `backend` abaixo lê de lá.
+# Se o `journalmatch` não casar (Docker sem driver journald), troque `backend`
+# por `auto` e aponte `logpath` para o arquivo em
+# /var/lib/docker/containers/<id>/<id>-json.log.
+
+[cobot-api]
+enabled  = true
+filter   = cobot-api
+backend  = systemd
+journalmatch = CONTAINER_NAME=cobot-caddy
+# 20 respostas 401 em 5 minutos = alguém adivinhando o token, não dedo gordo.
+maxretry = 20
+findtime = 5m
+bantime  = 1h
+# Escala: quem reincide fica banido por mais tempo.
+bantime.increment = true
+bantime.factor    = 4
+bantime.maxtime   = 7d
+action   = iptables-allports[name=cobot-api]

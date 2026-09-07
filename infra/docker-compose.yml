@@ -36,14 +36,26 @@ services:
     environment:
       NODE_ENV: production
       INTERNAL_API_PORT: 3001
+      # O bot lê o volume de backups só para reportar o último dump no
+      # `/health` (card "Saúde" do painel).
+      BACKUP_DIR: /backups
     # Sem `ports`: a API só é alcançável pelo Caddy, pela rede interna
     # do Compose (PRD §7.3).
     expose:
       - '3001'
     networks: [cobot]
+    volumes:
+      - backups:/backups:ro
     mem_limit: 384m
     mem_reservation: 256m
     pids_limit: 256
+    # Sistema de arquivos imutável: o bot não escreve em disco (logs vão para
+    # o stdout e os dados para o Postgres). `/tmp` existe porque o Node pode
+    # querer escrever nele.
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
     logging: *logging
@@ -82,6 +94,10 @@ services:
       - caddy_config:/config
     networks: [cobot]
     mem_limit: 64m
+    # O Caddy **não** é read_only: ele grava certificados em /data.
+    # `NET_BIND_SERVICE` é o que sobra do `cap_drop: ALL` para ouvir em 80/443.
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
     security_opt:
       - no-new-privileges:true
     logging: *logging
@@ -91,6 +107,45 @@ services:
       timeout: 5s
       retries: 3
 
+  # `pg_dump` diário contra o Supabase (PRD §11). O backup gerenciado do free
+  # tier não é exportável — este é.
+  backup:
+    image: postgres:16-alpine
+    container_name: cobot-backup
+    restart: unless-stopped
+    # Sem `env_file`: este container não tem por que enxergar o DISCORD_TOKEN
+    # nem o INTERNAL_API_TOKEN. Só o que ele usa, vindo da substituição do
+    # Compose (que lê o `.env` do diretório do arquivo).
+    environment:
+      # Sem valor o `backup.sh` sai com erro explicando; usar `:?` aqui
+      # quebraria até um `docker compose config` rodado da raiz do repo.
+      DATABASE_URL: ${DATABASE_URL:-}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      BACKUP_DIR: /backups
+      # Hora (UTC) do dump: 06:00Z = 03:00 em São Paulo, longe do pico.
+      BACKUP_HOUR: ${BACKUP_HOUR:-6}
+    volumes:
+      - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
+      - backups:/backups
+    # Sem crond na imagem: o laço acorda de hora em hora e roda uma vez por dia.
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        while true; do
+          if [ "$$(date -u +%H)" = "$$(printf '%02d' "$$BACKUP_HOUR")" ] && [ "$$LAST" != "$$(date -u +%F)" ]; then
+            LAST=$$(date -u +%F)
+            sh /usr/local/bin/backup.sh || true
+          fi
+          sleep 900
+        done
+    networks: [cobot]
+    mem_limit: 128m
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+
 networks:
   cobot:
     driver: bridge
@@ -98,3 +153,4 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
+  backups:

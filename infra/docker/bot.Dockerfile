@@ -37,6 +37,10 @@ RUN pnpm --filter @cobot/bot --prod deploy /out \
 
 # ── runtime ──────────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runtime
+# Sha do commit que gerou a imagem. Aparece no `/health`, no card "Saúde" do
+# painel e no alerta de boot — é como se sabe o que está rodando na VM.
+ARG GIT_SHA=
+ENV GIT_SHA=${GIT_SHA}
 ENV NODE_ENV=production
 # 1 GB de RAM na VM: o heap do V8 fica abaixo do `mem_limit` do Compose.
 ENV NODE_OPTIONS=--max-old-space-size=256

@@ -40,6 +40,8 @@
 		max_size 256KB
 	}
 
+	# Log de acesso em JSON no stdout: é daqui que o `fail2ban` lê os 401
+	# (infra/fail2ban/), e é o único lugar que enxerga o IP de verdade.
 	log {
 		output stdout
 		format json
