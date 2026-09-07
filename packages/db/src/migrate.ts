@@ -9,6 +9,9 @@ import { loadRootEnv } from './env';
 
 loadRootEnv();
 
+// A CI roda este script contra o Postgres gerenciado (PRD §7.5): a
+// `DATABASE_URL` de produção traz `?sslmode=require`, que o postgres-js
+// entende sozinho (abre TLS sem exigir CA local). Nada a configurar aqui.
 const url = process.env.DATABASE_URL;
 if (!url) {
   console.error('DATABASE_URL não definida');

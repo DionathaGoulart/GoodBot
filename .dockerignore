@@ -1,0 +1,35 @@
+# Tudo que não entra no contexto de build da imagem do bot.
+# O contexto é a raiz do monorepo (o build precisa do lockfile e dos
+# pacotes de workspace), então a lista é generosa de propósito.
+
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+
+.git
+.github
+.harness
+.vscode
+.idea
+
+# Segredos: só o exemplo pode viajar.
+.env
+.env.*
+!.env.example
+
+# O painel vai para a Vercel; a imagem é só do bot.
+apps/web/app
+apps/web/components
+apps/web/lib
+apps/web/public
+apps/web/hooks
+apps/web/tests
+
+infra
+*.md
+!README.md
+*.log
+Dockerfile*
+.dockerignore

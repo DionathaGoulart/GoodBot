@@ -1,0 +1,47 @@
+# Caddy publica **apenas** a API do bot, com TLS automático (PRD §7.3).
+# O painel está na Vercel e traz os próprios headers de segurança.
+
+{
+	# Sem admin API exposta: nada além de 80/443 sai do container.
+	admin off
+	email {$ACME_EMAIL:admin@example.invalid}
+}
+
+# Qualquer Host que não seja o esperado cai aqui e não vê nada.
+:80, :443 {
+	tls internal
+	respond 404
+}
+
+{$BOT_DOMAIN} {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		X-Frame-Options "DENY"
+		# A API é JSON puro: nada de cache em intermediários.
+		Cache-Control "no-store"
+		-Server
+	}
+
+	# Sem CORS de propósito: só o painel (server-side) fala com esta API.
+	reverse_proxy bot:3001 {
+		header_up X-Forwarded-For {remote_host}
+		# Corpo grande é rejeitado antes de chegar ao bot (PRD §7.3).
+		transport http {
+			read_timeout 30s
+		}
+	}
+
+	request_body {
+		max_size 256KB
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
