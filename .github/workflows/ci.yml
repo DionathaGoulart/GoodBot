@@ -55,6 +55,11 @@ jobs:
       - name: Instalar dependências
         run: pnpm install --frozen-lockfile
 
+      # Antes do resto: uma vulnerabilidade `high` não espera o build acabar.
+      # `low`/`moderate` não reprovam — o Dependabot cuida delas semanalmente.
+      - name: Auditoria de dependências
+        run: pnpm audit --audit-level high
+
       - name: Migrations no Postgres de teste
         run: pnpm db:migrate
 
