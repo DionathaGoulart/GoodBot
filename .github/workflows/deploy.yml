@@ -104,14 +104,22 @@ jobs:
     steps:
       - name: docker compose pull && up -d
         uses: appleboy/ssh-action@v1
+        env:
+          # O pacote no GHCR é privado. O token do job dura só o job: a VM
+          # autentica, puxa e desloga, sem PAT parado no disco de lá.
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
+          envs: GHCR_USER,GHCR_TOKEN
           script_stop: true
           script: |
             cd /opt/cobot
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose pull
             docker compose up -d --remove-orphans
             docker image prune -f
+            docker logout ghcr.io
             docker compose ps

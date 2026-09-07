@@ -21,9 +21,9 @@ services:
     image: ${BOT_IMAGE:-ghcr.io/dionathagoulart/cobot-bot}:${TAG:-latest}
     container_name: cobot-bot
     platform: linux/amd64
-    build:
-      context: ..
-      dockerfile: infra/docker/bot.Dockerfile
+    # Sem `build:` de propósito: se o pull falhar (credencial do GHCR, por
+    # exemplo), o compose cairia em build local e o deploy passaria sem trocar
+    # a imagem. Para construir na mão use `pnpm docker:build`.
     restart: unless-stopped
     # Duas origens possíveis, ambas opcionais: `../.env` é a raiz do monorepo
     # (rodando do repositório) e `./.env` é `/opt/cobot/.env` na VM, onde só o
