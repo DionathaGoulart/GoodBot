@@ -5,7 +5,10 @@ import { signOutAction } from '@/app/actions/auth';
 import { AutoRefreshIndicator } from './auto-refresh';
 import { BotStatusIndicator, type BotStatus } from './bot-status';
 import { Breadcrumbs } from './breadcrumbs';
+import { CommandPalette } from './command-palette';
 import { UserMenu } from './user-menu';
+
+import type { AccessLevel } from '@/lib/auth/access';
 
 /** §6.9 — breadcrumb à esquerda; frescor, tema, status do bot e conta à direita. */
 export function Topbar({
@@ -19,13 +22,14 @@ export function Topbar({
   guildName: string;
   status: BotStatus;
   user: { name: string; image: string | null };
-  level: string;
+  level: AccessLevel;
 }) {
   return (
     <header className="flex items-center gap-3 border-b-2 border-base-300 bg-base-100 px-4 py-3">
       <SidebarTrigger className="icon-btn lg:hidden" />
       <Breadcrumbs guildId={guildId} guildName={guildName} />
       <div className="ml-auto flex items-center gap-3">
+        <CommandPalette guildId={guildId} level={level} />
         <AutoRefreshIndicator />
         <BotStatusIndicator status={status} />
         <ThemeToggle />
