@@ -538,22 +538,31 @@ DirectMessages, GuildEmojisAndStickers`.
 
 ## 11. Riscos
 
-| Risco                                                             | Mitigação                                                                                                                                  |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Intents privilegiadas exigem verificação acima de 100 servidores  | irrelevante em single-server; documentar                                                                                                   |
-| Free tier da Oracle reclama instâncias ociosas                    | bot mantém CPU > 0; monitorar; não é "idle" com gateway aberto                                                                             |
-| **Capacidade Ampere A1 indisponível**                             | resolvido: v1.1 usa E2.1.Micro (x86), que não sofre com capacidade                                                                         |
-| **API do bot exposta na internet**                                | subdomínio próprio, Bearer de 32 bytes com comparação timing-safe, rate limit 60/min por IP, body ≤ 256 KB, sem CORS, fail2ban no Caddy (§7.3) |
-| **Latência web → bot / web → banco**                              | Vercel e Supabase na mesma região (`sa-east-1` / GRU quando possível); painel usa cache do bot; server components paralelizam fetches       |
-| **Limites do free tier da Vercel/Supabase**                       | painel de um servidor está muito abaixo dos limites; alerta de uso; migração para VM continua possível (o Compose antigo fica documentado)  |
-| **Supabase pausa projeto por inatividade (7 dias)**               | o bot mantém conexão e escrita constante; alerta se `pg_dump` diário falhar                                                                |
-| Regex do usuário (ReDoS)                                          | limite + timeout + validação no painel                                                                                                     |
-| Perda de mensagens de log por rate limit                          | fila com coalescing (§7.4)                                                                                                                 |
-| Token da API do bot vazar em log                                  | nunca logar headers; pino `redact`; rotação documentada no runbook                                                                         |
-| Auth.js + Discord: `guilds.members.read` exige o usuário na guild | tratar 403 como "acesso negado"                                                                                                            |
-| Drift entre schema Zod de config e jsonb salvo                    | campo `version` + migração de config na leitura                                                                                            |
-| Disco cheio (logs, message_cache)                                 | retenções (§8), rotação Docker; o disco do banco agora é do Supabase (alerta de cota)                                                       |
-| OneDrive sincronizando `node_modules` no Windows do dev           | `.gitignore` + trabalhar via WSL (path `/mnt/c/...` já é o caso); pnpm com `node-linker=hoisted` não é necessário; documentar no CLAUDE.md |
+Status revisado na Etapa 20 (2026-09-07). **Feito** = mitigação implementada e
+verificável no repositório; **parcial** = implementada com limitação conhecida,
+descrita na linha; **manual** = depende de uma ação do operador na VM ou num
+provedor, documentada em `docs/runbook.md`.
+
+| Risco                                                             | Mitigação                                                                                                                                  | Status |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| Intents privilegiadas exigem verificação acima de 100 servidores  | irrelevante em single-server; documentar                                                                                                   | feito — §10 e §7.3 |
+| Free tier da Oracle reclama instâncias ociosas                    | bot mantém CPU > 0; monitorar; não é "idle" com gateway aberto                                                                             | feito — gateway aberto + `/metrics` |
+| **Capacidade Ampere A1 indisponível**                             | resolvido: v1.1 usa E2.1.Micro (x86), que não sofre com capacidade                                                                         | feito — Etapa 18 |
+| **API do bot exposta na internet**                                | subdomínio próprio, Bearer de 32 bytes com comparação timing-safe, rate limit 60/min por IP, body ≤ 256 KB, sem CORS, fail2ban no Caddy (§7.3) | feito (fail2ban **manual**) — `api/server.ts`, `infra/fail2ban/`; alerta a cada 50 respostas 401 numa hora |
+| **Latência web → bot / web → banco**                              | Vercel e Supabase na mesma região (`sa-east-1` / GRU quando possível); painel usa cache do bot; server components paralelizam fetches       | feito — medida no card **Saúde** (`/g/[guildId]/system`) e no `cobot_api_duration_ms` |
+| **Limites do free tier da Vercel/Supabase**                       | painel de um servidor está muito abaixo dos limites; alerta de uso; migração para VM continua possível (o Compose antigo fica documentado)  | parcial — não existe alerta automático de cota; é item do checklist mensal do runbook (a Vercel e o Supabase não expõem isso no free tier) |
+| **Supabase pausa projeto por inatividade (7 dias)**               | o bot mantém conexão e escrita constante; alerta se `pg_dump` diário falhar                                                                | feito — ping a cada 60s (`watchDatabase`), alerta "Postgres inacessível"; `backup.sh` alerta ao falhar |
+| Regex do usuário (ReDoS)                                          | limite + timeout + validação no painel                                                                                                     | feito — `safe-regex2` no schema Zod (painel recusa ao salvar) **e** na compilação do bot; padrão ≤ 200 chars, entrada ≤ 2 000 chars |
+| Perda de mensagens de log por rate limit                          | fila com coalescing (§7.4)                                                                                                                 | feito — `LogQueue`; tamanho da fila exposto no `/metrics` e no card Saúde |
+| Token da API do bot vazar em log                                  | nunca logar headers; pino `redact`; rotação documentada no runbook                                                                         | feito — `logger.ts` (`redact`), rotação nos três cofres em `docs/runbook.md` |
+| Auth.js + Discord: `guilds.members.read` exige o usuário na guild | tratar 403 como "acesso negado"                                                                                                            | feito — `resolveGuildLevel` → `/denied` |
+| Drift entre schema Zod de config e jsonb salvo                    | campo `version` + migração de config na leitura                                                                                            | feito — `packages/shared/src/config` |
+| Disco cheio (logs, message_cache)                                 | retenções (§8), rotação Docker; o disco do banco agora é do Supabase (alerta de cota)                                                       | feito — `RetentionJob` com alerta na falha; `json-file` com 5×10 MB; `docker system prune` semanal no bootstrap |
+| OneDrive sincronizando `node_modules` no Windows do dev           | `.gitignore` + trabalhar via WSL (path `/mnt/c/...` já é o caso); pnpm com `node-linker=hoisted` não é necessário; documentar no CLAUDE.md | feito — CLAUDE.md |
+| **Backup do Supabase não é exportável no free tier**              | `pg_dump` próprio diário no serviço `backup` do Compose, 7 diários + 4 semanais no volume `backups`; `infra/scripts/restore.sh`             | feito — cópia externa (Object Storage + rclone) segue **opcional e não implementada** |
+| **Perder o rastro do que está rodando na VM**                     | `GIT_SHA` embutido na imagem pela CI, exibido no `/health`, no card Saúde e no alerta de boot                                              | feito — `infra/docker/bot.Dockerfile` |
+| **Rate limit do painel na Vercel**                                | 60/min por IP nas rotas de auth e nas server actions de escrita                                                                             | parcial — contagem **por instância**, porque o painel é stateless e a stack não tem store compartilhado (§12); serve para cortar script, não como cota |
+
 ## 12. Decisões arquiteturais (com justificativa)
 
 | Decisão                             | Por quê                                                                                                                                |
