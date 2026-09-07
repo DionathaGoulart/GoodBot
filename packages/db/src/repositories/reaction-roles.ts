@@ -124,6 +124,60 @@ export async function createPanel(
   return row;
 }
 
+export interface UpdatePanelInput {
+  channelId?: string;
+  mode?: ReactionRoleMode;
+  style?: ReactionRoleStyle;
+  content?: MessageTemplate;
+}
+
+/** Edição do painel pelo dashboard (Etapa 15); não mexe na mensagem publicada. */
+export async function updatePanel(
+  db: DbExecutor,
+  guildId: string,
+  panelId: string,
+  input: UpdatePanelInput,
+): Promise<ReactionRolePanel | null> {
+  const [row] = await db
+    .update(reactionRolePanels)
+    .set({ ...input, updatedAt: sql`now()` })
+    .where(and(eq(reactionRolePanels.guildId, guildId), eq(reactionRolePanels.id, panelId)))
+    .returning();
+  return row ?? null;
+}
+
+/** Esquece a mensagem publicada (o painel volta a ser rascunho). */
+export async function clearPanelMessage(
+  db: DbExecutor,
+  panelId: string,
+): Promise<ReactionRolePanel | null> {
+  const [row] = await db
+    .update(reactionRolePanels)
+    .set({ messageId: null, updatedAt: sql`now()` })
+    .where(eq(reactionRolePanels.id, panelId))
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * Troca a lista de cargos do painel de uma vez. O editor do painel manda a
+ * lista inteira, então apagar e reinserir mantém `position` igual à ordem que
+ * o usuário vê — reconciliar item a item daria o mesmo resultado com mais
+ * chance de divergir.
+ */
+export async function replacePanelItems(
+  db: DbExecutor,
+  panelId: string,
+  items: readonly Omit<AddItemInput, 'panelId'>[],
+): Promise<ReactionRoleItem[]> {
+  await db.delete(reactionRoleItems).where(eq(reactionRoleItems.panelId, panelId));
+  if (items.length === 0) return [];
+  return db
+    .insert(reactionRoleItems)
+    .values(items.map((item, position) => ({ ...item, panelId, position })))
+    .returning();
+}
+
 export async function updatePanelContent(
   db: DbExecutor,
   panelId: string,

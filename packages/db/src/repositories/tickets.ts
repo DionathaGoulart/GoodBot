@@ -61,6 +61,23 @@ export async function createTicketType(
   return row ?? null;
 }
 
+export type UpdateTicketTypeInput = Partial<Omit<CreateTicketTypeInput, 'guildId'>>;
+
+/** `null` quando o tipo sumiu ou o novo nome já existe na guild. */
+export async function updateTicketType(
+  db: DbExecutor,
+  guildId: string,
+  typeId: string,
+  input: UpdateTicketTypeInput,
+): Promise<TicketType | null> {
+  const [row] = await db
+    .update(ticketTypes)
+    .set({ ...input, updatedAt: sql`now()` })
+    .where(and(eq(ticketTypes.guildId, guildId), eq(ticketTypes.id, typeId)))
+    .returning();
+  return row ?? null;
+}
+
 export async function deleteTicketType(
   db: DbExecutor,
   guildId: string,
@@ -111,6 +128,52 @@ export async function createTicketPanel(
   const [row] = await db.insert(ticketPanels).values(input).returning();
   if (!row) throw new Error('INSERT em ticket_panels não retornou linha');
   return row;
+}
+
+export interface UpdateTicketPanelInput {
+  channelId?: string;
+  content?: MessageTemplate;
+  typeIds?: string[];
+}
+
+export async function updateTicketPanel(
+  db: DbExecutor,
+  guildId: string,
+  panelId: string,
+  input: UpdateTicketPanelInput,
+): Promise<TicketPanel | null> {
+  const [row] = await db
+    .update(ticketPanels)
+    .set({ ...input, updatedAt: sql`now()` })
+    .where(and(eq(ticketPanels.guildId, guildId), eq(ticketPanels.id, panelId)))
+    .returning();
+  return row ?? null;
+}
+
+/** Esquece a mensagem publicada (o painel volta a ser rascunho). */
+export async function clearTicketPanelMessage(
+  db: DbExecutor,
+  panelId: string,
+): Promise<TicketPanel | null> {
+  const [row] = await db
+    .update(ticketPanels)
+    .set({ messageId: null, updatedAt: sql`now()` })
+    .where(eq(ticketPanels.id, panelId))
+    .returning();
+  return row ?? null;
+}
+
+export async function getTicket(
+  db: DbExecutor,
+  guildId: string,
+  ticketId: number,
+): Promise<Ticket | null> {
+  const [row] = await db
+    .select()
+    .from(tickets)
+    .where(and(eq(tickets.guildId, guildId), eq(tickets.id, ticketId)))
+    .limit(1);
+  return row ?? null;
 }
 
 export async function setTicketPanelMessage(

@@ -68,8 +68,10 @@ async function main(): Promise<void> {
   });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const statsRollup = new StatsRollupJob({ db, client, config });
+  // A coleção nasce antes do `ctx` porque a API também a expõe (`GET /commands`).
+  const commands = loadCommands(commandList);
   const api = createApiServer({
-    deps: { client, db, config, moderation, reactionRoles, tickets },
+    deps: { client, db, config, moderation, automod, reactionRoles, tickets, commands },
     token: env.INTERNAL_API_TOKEN,
     port: env.INTERNAL_API_PORT,
   });
@@ -91,7 +93,7 @@ async function main(): Promise<void> {
     messageCache,
     stats,
     logger,
-    commands: loadCommands(commandList),
+    commands,
   };
 
   loadEvents(client, events, ctx);

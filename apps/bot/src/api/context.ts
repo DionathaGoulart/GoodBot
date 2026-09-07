@@ -4,7 +4,14 @@ import type { Guild } from 'discord.js';
 /** O que a API precisa do bot: os mesmos serviços que os comandos usam. */
 export type ApiDeps = Pick<
   BotContext,
-  'client' | 'db' | 'config' | 'moderation' | 'reactionRoles' | 'tickets'
+  | 'client'
+  | 'db'
+  | 'config'
+  | 'moderation'
+  | 'automod'
+  | 'reactionRoles'
+  | 'tickets'
+  | 'commands'
 >;
 
 /** Variáveis que os middlewares põem no contexto do Hono. */

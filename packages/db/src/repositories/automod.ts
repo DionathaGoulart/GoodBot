@@ -1,4 +1,4 @@
-import { and, asc, eq, lt } from 'drizzle-orm';
+import { and, asc, count, eq, gte, lt } from 'drizzle-orm';
 
 import { automodHits, automodRules } from '../schema/automod';
 import { guilds } from '../schema/guilds';
@@ -77,6 +77,60 @@ export async function deleteAutomodRule(
     .where(and(eq(automodRules.guildId, guildId), eq(automodRules.id, ruleId)))
     .returning({ id: automodRules.id });
   return rows.length > 0;
+}
+
+export type UpdateAutomodRuleInput = Partial<
+  Pick<
+    NewAutomodRuleRow,
+    'name' | 'type' | 'enabled' | 'priority' | 'config' | 'actions' | 'exemptRoleIds' | 'exemptChannelIds'
+  >
+>;
+
+/** Edição vinda do painel (Etapa 15). `null` quando a regra não é da guild. */
+export async function updateAutomodRule(
+  db: DbExecutor,
+  guildId: string,
+  ruleId: string,
+  input: UpdateAutomodRuleInput,
+): Promise<AutomodRuleRow | null> {
+  const [row] = await db
+    .update(automodRules)
+    .set({ ...input, updatedAt: new Date() })
+    .where(and(eq(automodRules.guildId, guildId), eq(automodRules.id, ruleId)))
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * Reordena as regras da guild: `ruleIds` na ordem desejada vira `priority`
+ * 0, 10, 20… Espaçar de 10 deixa espaço para inserir no meio depois sem
+ * reescrever a lista inteira.
+ */
+export async function reorderAutomodRules(
+  db: DbExecutor,
+  guildId: string,
+  ruleIds: readonly string[],
+): Promise<void> {
+  for (const [index, ruleId] of ruleIds.entries()) {
+    await db
+      .update(automodRules)
+      .set({ priority: index * 10, updatedAt: new Date() })
+      .where(and(eq(automodRules.guildId, guildId), eq(automodRules.id, ruleId)));
+  }
+}
+
+/** Disparos por regra desde `since` — a coluna "hits 24h" da tabela do painel. */
+export async function countAutomodHitsByRule(
+  db: DbExecutor,
+  guildId: string,
+  since: Date,
+): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ ruleId: automodHits.ruleId, hits: count() })
+    .from(automodHits)
+    .where(and(eq(automodHits.guildId, guildId), gte(automodHits.createdAt, since)))
+    .groupBy(automodHits.ruleId);
+  return new Map(rows.map((row) => [row.ruleId, Number(row.hits)]));
 }
 
 export type RecordAutomodHitInput = Omit<AutomodHit, 'id' | 'createdAt'>;

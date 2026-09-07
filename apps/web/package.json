@@ -15,6 +15,7 @@
     "@cobot/shared": "workspace:*",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@hookform/resolvers": "^5.9.1",
+    "@tanstack/react-table": "^9.2.4",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "cn": "^0.2.6",
