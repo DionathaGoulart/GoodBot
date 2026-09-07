@@ -9,6 +9,7 @@ import { deleteChannelMessageAction, sendChannelMessageAction } from '@/app/acti
 import { TemplateEditor } from '@/components/config/template-editor';
 import { AvatarSq } from '@/components/retro/avatar-sq';
 import { Panel } from '@/components/retro/panel';
+import { EmptyState } from '@/components/retro/states';
 import { Tag } from '@/components/retro/tag';
 import {
   AlertDialog,
@@ -276,7 +277,7 @@ export function MessageComposer({
             ))}
           </div>
           {mentions.everyone ? (
-            <p className="border-2 border-warning p-3 text-xs text-warning">
+            <p className="border-2 border-warning p-3 text-xs text-warning-text">
               ! @everyone avisa o servidor inteiro. O bot ainda confere se você tem essa permissão
               no Discord.
             </p>
@@ -318,9 +319,9 @@ export function MessageComposer({
 
       <Panel title="RECENTES.LOG">
         {historyError ? (
-          <p className="border-2 border-error p-3 text-xs text-error">! {historyError}</p>
+          <p className="border-2 border-error p-3 text-xs text-error-text">! {historyError}</p>
         ) : messages.length === 0 ? (
-          <p className="screen-meta">Nenhuma mensagem recente neste canal.</p>
+          <EmptyState description="Nenhuma mensagem recente neste canal. Escreva a primeira no painel acima." />
         ) : (
           <ul className="flex flex-col">
             {messages.map((message) => (
