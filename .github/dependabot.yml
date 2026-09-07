@@ -1,0 +1,35 @@
+# Atualizações semanais de dependência (PRD §11). Só duas ecologias importam
+# aqui: o npm do monorepo e as actions da própria CI.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 5
+    commit-message:
+      # Conventional Commits em pt-BR, como o resto do repositório (CLAUDE.md).
+      prefix: chore
+      prefix-development: chore
+      include: scope
+    groups:
+      # Um PR por grupo em vez de um por pacote: o repositório é pequeno e a
+      # CI roda o monorepo inteiro a cada PR.
+      producao:
+        dependency-type: production
+        update-types: [minor, patch]
+      desenvolvimento:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope
