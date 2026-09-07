@@ -1,4 +1,5 @@
 export * from './automod';
+export * from './channels';
 export * from './client';
 export * from './commands';
 export * from './common';
@@ -7,4 +8,6 @@ export * from './health';
 export * from './members';
 export * from './messages';
 export * from './moderation';
+export * from './permissions';
+export * from './roles';
 export * from './tickets';

@@ -1,11 +1,22 @@
+import { bitsToOverride, isEmptyOverride } from '@cobot/shared';
+import { OverwriteType } from 'discord.js';
+
 import type {
   AuditLogEntrySummary,
+  GuildChannelDetail,
   GuildChannelSummary,
   GuildMemberDetail,
   GuildMemberSummary,
   GuildRoleSummary,
 } from '@cobot/shared';
-import type { GuildBasedChannel, GuildMember, PartialUser, Role, User } from 'discord.js';
+import type {
+  GuildBasedChannel,
+  GuildMember,
+  NonThreadGuildBasedChannel,
+  PartialUser,
+  Role,
+  User,
+} from 'discord.js';
 
 /**
  * Só o que lemos de uma entrada do audit log. Estrutural de propósito: os
@@ -35,6 +46,31 @@ export function toChannelSummary(channel: GuildBasedChannel): GuildChannelSummar
   };
 }
 
+/**
+ * O detalhe de um canal, com os overrides de **cargo** traduzidos para o
+ * vocabulário do painel (ver/falar). Overrides de membro continuam existindo no
+ * Discord; o painel só não os mostra nem os toca (PRD §6.3).
+ */
+export function toChannelDetail(channel: NonThreadGuildBasedChannel): GuildChannelDetail {
+  const overrides = [...channel.permissionOverwrites.cache.values()]
+    .filter((overwrite) => overwrite.type === OverwriteType.Role)
+    .map((overwrite) =>
+      bitsToOverride(overwrite.id, {
+        allow: overwrite.allow.bitfield.toString(),
+        deny: overwrite.deny.bitfield.toString(),
+      }),
+    )
+    .filter((override) => !isEmptyOverride(override));
+
+  return {
+    ...toChannelSummary(channel),
+    topic: 'topic' in channel ? (channel.topic ?? null) : null,
+    nsfw: 'nsfw' in channel ? channel.nsfw : false,
+    slowmodeSeconds: 'rateLimitPerUser' in channel ? (channel.rateLimitPerUser ?? 0) : 0,
+    overrides,
+  };
+}
+
 export function toRoleSummary(role: Role): GuildRoleSummary {
   return {
     id: role.id,
@@ -42,6 +78,8 @@ export function toRoleSummary(role: Role): GuildRoleSummary {
     color: role.color,
     position: role.position,
     managed: role.managed,
+    hoist: role.hoist,
+    mentionable: role.mentionable,
     permissions: role.permissions.bitfield.toString(),
     memberCount: role.members.size,
   };

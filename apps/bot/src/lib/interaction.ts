@@ -3,8 +3,8 @@ import { MessageFlags } from 'discord.js';
 
 import { env } from '../env';
 import { childLogger } from '../logger';
-import { assertCommandAllowed } from './command-overrides';
 import { isUserContextCommand } from './command';
+import { assertCommandAllowed } from './command-overrides';
 import { CooldownStore } from './cooldown';
 import { botFooter, errorEmbed } from './embeds';
 import { handleComponent, handleModal } from '../interactions/index';

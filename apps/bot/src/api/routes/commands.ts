@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 
 import { isUserContextCommand } from '../../lib/command';
 
-import type { ApiDeps, ApiEnv } from '../context';
 import type { AnyCommand } from '../../lib/command';
+import type { ApiDeps, ApiEnv } from '../context';
 import type { CommandSummary } from '@cobot/shared';
 import type { APIApplicationCommandOption } from 'discord.js';
 

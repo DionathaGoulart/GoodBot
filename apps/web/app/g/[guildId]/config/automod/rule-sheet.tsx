@@ -86,17 +86,14 @@ function LinesField({
   // Estado local para o usuário poder digitar linhas em branco sem que elas
   // desapareçam a cada tecla.
   const [text, setText] = React.useState(value.join('\n'));
-
-  React.useEffect(() => {
-    setText((current) =>
-      current.split('\n').map((line) => line.trim()).filter(Boolean).join('\n') ===
-      value.join('\n')
-        ? current
-        : value.join('\n'),
-    );
-    // Só reagimos a uma troca de regra: `value` vem do form, `text` é o rascunho.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name]);
+  // Só ressincronizamos numa troca de regra: `value` vem do form, `text` é o
+  // rascunho. Ajustar em render (e não num efeito) é o caminho recomendado pelo
+  // React para estado derivado de prop.
+  const [syncedName, setSyncedName] = React.useState(name);
+  if (syncedName !== name) {
+    setSyncedName(name);
+    setText(value.join('\n'));
+  }
 
   return (
     <div className="flex flex-col gap-1.5">

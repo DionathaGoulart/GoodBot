@@ -105,3 +105,39 @@ export function canActOn(
 
   return { ok: true };
 }
+
+/** O mínimo que a hierarquia precisa saber sobre um cargo. */
+export interface RoleLike {
+  id: string;
+  position: number;
+  /** Cargo de integração (bot, boost): o Discord não deixa ninguém editar. */
+  managed: boolean;
+  /** `@everyone`, que tem a posição 0 e não pode ser mexido. */
+  isEveryone: boolean;
+}
+
+/**
+ * Hierarquia para mexer num cargo pelo painel (PRD §6.3). Vale para editar,
+ * deletar, mover e para dar/tirar o cargo de um membro. Diferente de
+ * `canActOn`, o owner **não** passa por cima do cargo do bot: quem executa a
+ * chamada na API do Discord é o bot, e o Discord recusa.
+ */
+export function canManageRole(actor: MemberLike, role: RoleLike, bot: MemberLike): CanActResult {
+  if (role.isEveryone) {
+    return DENY('ROLE_EVERYONE', 'O cargo @everyone não pode ser gerenciado por aqui.');
+  }
+  if (role.managed) {
+    return DENY('ROLE_MANAGED', 'Esse cargo é gerenciado por uma integração do Discord.');
+  }
+  if (bot.highestRolePosition <= role.position) {
+    return DENY(
+      'BOT_ROLE_HIERARCHY',
+      'Esse cargo está acima do cargo do bot. Mova o cargo do bot para cima.',
+    );
+  }
+  if (actor.isOwner) return { ok: true };
+  if (actor.highestRolePosition <= role.position) {
+    return DENY('ROLE_HIERARCHY', 'Você não pode mexer num cargo igual ou acima do seu.');
+  }
+  return { ok: true };
+}

@@ -14,12 +14,15 @@ import {
   rateLimit,
 } from './middleware/rate-limit';
 import { createAutomodRoutes } from './routes/automod';
+import { createChannelRoutes } from './routes/channels';
 import { createCommandRoutes } from './routes/commands';
 import { createConfigRoutes } from './routes/config';
 import { createGuildRoutes } from './routes/guild';
 import { createHealthRoutes } from './routes/health';
+import { createMemberRoutes } from './routes/members';
 import { createMessageRoutes } from './routes/messages';
 import { createModerationRoutes } from './routes/moderation';
+import { createRoleRoutes } from './routes/roles';
 
 import type { ApiDeps, ApiEnv } from './context';
 import type { ServerType } from '@hono/node-server';
@@ -90,6 +93,9 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
   guilds.route('/:guildId/config', createConfigRoutes(deps));
   guilds.route('/:guildId/commands', createCommandRoutes(deps));
   guilds.route('/:guildId/automod', createAutomodRoutes(deps));
+  guilds.route('/:guildId/roles', createRoleRoutes(deps));
+  guilds.route('/:guildId/channels', createChannelRoutes(deps));
+  guilds.route('/:guildId/members', createMemberRoutes(deps));
   guilds.route('/:guildId', createMessageRoutes(deps));
   app.route('/guilds', guilds);
 
