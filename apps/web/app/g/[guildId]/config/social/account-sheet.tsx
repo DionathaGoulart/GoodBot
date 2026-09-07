@@ -65,7 +65,7 @@ function KindsField({ platform, status }: { platform: SocialPlatform; status?: S
   return (
     <FormItem>
       <FormLabel>
-        Anunciar<span className="text-accent"> *</span>
+        Anunciar<span className="text-accent-text"> *</span>
       </FormLabel>
       <FormDescription>O que dispara uma mensagem no canal.</FormDescription>
       <div className="flex flex-wrap gap-2">
@@ -76,7 +76,7 @@ function KindsField({ platform, status }: { platform: SocialPlatform; status?: S
               key={kind}
               type="button"
               disabled={formState.disabled || !usable}
-              className={selected.includes(kind) ? 'icon-btn border-accent text-accent' : 'icon-btn'}
+              className={selected.includes(kind) ? 'icon-btn border-accent text-accent-text' : 'icon-btn'}
               onClick={() => toggle(kind)}
               title={usable ? undefined : 'Indisponível neste bot; veja o aviso da plataforma.'}
             >
@@ -176,7 +176,7 @@ export function AccountSheet({
             <fieldset disabled={readOnly} className="flex flex-col gap-4">
               <FormItem>
                 <FormLabel>
-                  Plataforma<span className="text-accent"> *</span>
+                  Plataforma<span className="text-accent-text"> *</span>
                 </FormLabel>
                 <div className="flex flex-wrap gap-2">
                   {SOCIAL_PLATFORMS.map((value) => (
@@ -184,7 +184,7 @@ export function AccountSheet({
                       key={value}
                       type="button"
                       disabled={readOnly || Boolean(editing?.id)}
-                      className={value === platform ? 'icon-btn border-accent text-accent' : 'icon-btn'}
+                      className={value === platform ? 'icon-btn border-accent text-accent-text' : 'icon-btn'}
                       onClick={() => changePlatform(value)}
                     >
                       {PLATFORM_LABEL[value].toUpperCase()}
@@ -199,7 +199,7 @@ export function AccountSheet({
               </FormItem>
 
               {status && !status.available ? (
-                <p className="border-2 border-warning p-3 text-warning">{status.reason}</p>
+                <p className="border-2 border-warning p-3 text-warning-text">{status.reason}</p>
               ) : null}
 
               <TextField

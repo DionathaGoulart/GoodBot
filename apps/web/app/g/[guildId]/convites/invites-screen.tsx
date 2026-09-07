@@ -198,7 +198,7 @@ export function InvitesScreen({
   return (
     <div className="flex flex-col gap-4">
       {list.canManage ? null : (
-        <p className="border-2 border-warning p-3 text-xs text-warning">
+        <p className="border-2 border-warning p-3 text-xs text-warning-text">
           ! O bot não tem a permissão Gerenciar Servidor, então não consegue listar nem revogar
           convites. Reconvide-o com ela.
         </p>

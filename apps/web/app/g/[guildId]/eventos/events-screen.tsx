@@ -299,7 +299,7 @@ export function EventsScreen({
   return (
     <div className="flex flex-col gap-4">
       {list.canManage ? null : (
-        <p className="border-2 border-warning p-3 text-xs text-warning">
+        <p className="border-2 border-warning p-3 text-xs text-warning-text">
           ! O bot não tem a permissão Gerenciar Eventos. A lista continua aparecendo, mas criar e
           editar exige reconvidá-lo com ela.
         </p>
@@ -351,7 +351,7 @@ export function EventsScreen({
                   onChange={(event) => set('location', event.target.value)}
                 />
                 {problemOf('location') ? (
-                  <p className="text-xs text-error">! {problemOf('location')}</p>
+                  <p className="text-xs text-error-text">! {problemOf('location')}</p>
                 ) : null}
               </div>
             ) : (
@@ -366,7 +366,7 @@ export function EventsScreen({
                   disabled={busy}
                 />
                 {problemOf('channelId') ? (
-                  <p className="text-xs text-error">! {problemOf('channelId')}</p>
+                  <p className="text-xs text-error-text">! {problemOf('channelId')}</p>
                 ) : null}
               </div>
             )}
@@ -392,7 +392,7 @@ export function EventsScreen({
                 onChange={(event) => set('scheduledEndAt', event.target.value)}
               />
               {problemOf('scheduledEndAt') ? (
-                <p className="text-xs text-error">! {problemOf('scheduledEndAt')}</p>
+                <p className="text-xs text-error-text">! {problemOf('scheduledEndAt')}</p>
               ) : null}
             </div>
 

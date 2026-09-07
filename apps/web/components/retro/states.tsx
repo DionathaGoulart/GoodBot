@@ -43,7 +43,7 @@ export function ErrorState({
       role="alert"
       className={cn('flex flex-col gap-3 border-2 border-error bg-base-200 p-4', className)}
     >
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-error">! {title}</p>
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-error-text">! {title}</p>
       <p className="text-sm opacity-80">{description}</p>
       {requestId ? <p className="screen-meta select-all">REQUEST {requestId}</p> : null}
       {action}

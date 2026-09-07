@@ -40,7 +40,7 @@ export function ConfirmButton({
     <button
       type="button"
       disabled={busy || disabled}
-      className={armed ? 'icon-btn border-error text-error' : 'icon-btn'}
+      className={armed ? 'icon-btn border-error text-error-text' : 'icon-btn'}
       onClick={async () => {
         if (!armed) {
           setArmed(true);

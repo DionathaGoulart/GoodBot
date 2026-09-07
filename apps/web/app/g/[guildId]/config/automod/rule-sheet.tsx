@@ -99,7 +99,7 @@ function LinesField({
     <div className="flex flex-col gap-1.5">
       <label className="section-label" htmlFor={name}>
         {label}
-        {required ? <span className="text-accent"> *</span> : null}
+        {required ? <span className="text-accent-text"> *</span> : null}
       </label>
       {description ? <p className="text-xs opacity-60">{description}</p> : null}
       <textarea
