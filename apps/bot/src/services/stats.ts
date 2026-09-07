@@ -99,6 +99,12 @@ export interface StatsDeps {
   config: ConfigService;
   /** Sobrescreve o intervalo de flush (testes e dev). */
   flushIntervalMs?: number;
+  /**
+   * Chamado quando um lote não conseguiu ser gravado. O flush continua sem
+   * lançar (contar é menos importante do que ficar de pé), mas alguém precisa
+   * ficar sabendo — o `index.ts` liga isto no webhook de alertas (PRD §11).
+   */
+  onFlushError?: (error: unknown, buckets: number) => void;
   snapshotIntervalMs?: number;
   now?: () => number;
 }
@@ -239,6 +245,7 @@ export class StatsService {
       return rows.length + snaps.length;
     } catch (error) {
       log.error({ err: error, buckets: rows.length }, 'falha ao gravar as stats');
+      this.deps.onFlushError?.(error, rows.length + snaps.length);
       // O lote volta para a memória: o próximo flush tenta de novo.
       for (const row of rows) this.restore(this.pending, row);
       for (const snap of snaps) this.snapshots.set(bucketKey(snap), snap);

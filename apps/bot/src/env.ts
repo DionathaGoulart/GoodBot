@@ -7,6 +7,12 @@ import { z } from 'zod';
 
 const snowflake = z.string().refine(isSnowflake, 'não é um snowflake válido');
 
+/**
+ * O `.env.example` documenta as opcionais com o valor vazio, e o Compose
+ * repassa `FOO=` como string vazia — que não é "ausente" para o Zod.
+ */
+const blankToUndefined = (value: unknown): unknown => (value === '' ? undefined : value);
+
 const EnvSchema = z.object({
   DISCORD_TOKEN: z.string().min(1, 'obrigatório: Developer Portal → Bot → Reset Token'),
   DISCORD_CLIENT_ID: snowflake,
@@ -15,6 +21,12 @@ const EnvSchema = z.object({
   /** Única barreira da API do bot na internet (PRD §7.3): openssl rand -hex 32. */
   INTERNAL_API_TOKEN: z.string().min(32, 'gere com: openssl rand -hex 32 (≥ 32 caracteres)'),
   INTERNAL_API_PORT: z.coerce.number().int().min(1).max(65_535).default(3001),
+  /** Webhook de Discord dos alertas operacionais (PRD §11). Opcional em dev. */
+  ALERT_WEBHOOK_URL: z.preprocess(blankToUndefined, z.url().optional()),
+  /** Volume de backups montado read-only; sem ele o painel não mostra o card. */
+  BACKUP_DIR: z.preprocess(blankToUndefined, z.string().optional()),
+  /** Sha do commit da imagem, injetado pela CI no build (`GIT_SHA`). */
+  GIT_SHA: z.preprocess(blankToUndefined, z.string().optional()),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   TZ: z.string().default('America/Sao_Paulo'),

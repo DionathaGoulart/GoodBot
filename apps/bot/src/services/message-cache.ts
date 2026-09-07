@@ -1,5 +1,5 @@
 import { cacheMessages, deleteCachedMessagesBefore, getCachedMessages } from '@cobot/db';
-import { DAY_MS, HOUR_MS, MESSAGE_CACHE_RETENTION_DAYS, SECOND_MS } from '@cobot/shared';
+import { DAY_MS, MESSAGE_CACHE_RETENTION_DAYS, SECOND_MS } from '@cobot/shared';
 
 import { childLogger } from '../logger';
 
@@ -11,7 +11,6 @@ const log = childLogger('message-cache');
 /** Mensagens acumuladas antes de um `INSERT` (ou 5 s, o que vier primeiro). */
 export const BUFFER_SIZE = 100;
 export const BUFFER_FLUSH_MS = 5 * SECOND_MS;
-export const CLEANUP_INTERVAL_MS = HOUR_MS;
 
 /** O que o log de exclusão precisa saber sobre uma mensagem. */
 export interface CachedContent {
@@ -28,7 +27,6 @@ export interface MessageCacheDeps {
   perChannel?: number;
   bufferSize?: number;
   flushIntervalMs?: number;
-  cleanupIntervalMs?: number;
 }
 
 /**
@@ -47,7 +45,6 @@ export class MessageCacheService {
   private readonly memory = new Map<string, Map<string, CachedContent>>();
   private buffer: CacheMessageInput[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
-  private cleanupTimer: NodeJS.Timeout | null = null;
   private flushing = false;
 
   constructor(deps: MessageCacheDeps) {
@@ -72,20 +69,16 @@ export class MessageCacheService {
       );
       this.flushTimer.unref();
     }
-    if (!this.cleanupTimer) {
-      this.cleanupTimer = setInterval(
-        () => void this.cleanup(),
-        this.deps.cleanupIntervalMs ?? CLEANUP_INTERVAL_MS,
-      );
-      this.cleanupTimer.unref();
-    }
   }
 
   stop(): void {
     if (this.flushTimer) clearInterval(this.flushTimer);
-    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
     this.flushTimer = null;
-    this.cleanupTimer = null;
+  }
+
+  /** Mensagens no buffer esperando o INSERT em lote — gauge do `/metrics`. */
+  get pendingSize(): number {
+    return this.buffer.length;
   }
 
   /** Registra uma mensagem (memória na hora, banco no próximo lote). */
@@ -188,17 +181,10 @@ export class MessageCacheService {
     }
   }
 
-  /** Job de retenção (PRD §8): 7 dias. */
+  /** Job de retenção (PRD §8): 7 dias. Roda pelo `RetentionJob`, que alerta se falhar. */
   async cleanup(): Promise<number> {
-    try {
-      const before = new Date(Date.now() - MESSAGE_CACHE_RETENTION_DAYS * DAY_MS);
-      const removed = await deleteCachedMessagesBefore(this.deps.db, before);
-      if (removed > 0) log.info({ removed }, 'cache de mensagens podado');
-      return removed;
-    } catch (error) {
-      log.error({ err: error }, 'falha na limpeza do cache de mensagens');
-      return 0;
-    }
+    const before = new Date(Date.now() - MESSAGE_CACHE_RETENTION_DAYS * DAY_MS);
+    return deleteCachedMessagesBefore(this.deps.db, before);
   }
 
   /** Esquece um canal inteiro (canal apagado). */

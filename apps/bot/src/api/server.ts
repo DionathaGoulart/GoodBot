@@ -1,9 +1,11 @@
+import { HOUR_MS } from '@cobot/shared';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { requestId } from 'hono/request-id';
 
 import { childLogger } from '../logger';
+import { metrics } from '../metrics';
 import { apiError, mapError } from './errors';
 import { bearerAuth } from './middleware/auth';
 import { withGuild } from './middleware/guild';
@@ -22,10 +24,13 @@ import { createGuildRoutes } from './routes/guild';
 import { createHealthRoutes } from './routes/health';
 import { createMemberRoutes } from './routes/members';
 import { createMessageRoutes } from './routes/messages';
+import { createMetricsRoutes } from './routes/metrics';
 import { createModerationRoutes } from './routes/moderation';
 import { createRoleRoutes } from './routes/roles';
 
 import type { ApiDeps, ApiEnv } from './context';
+import type { AlertService } from '../services/alerts';
+import type { QueueHealth } from '@cobot/shared';
 import type { ServerType } from '@hono/node-server';
 
 const log = childLogger('api');
@@ -33,12 +38,20 @@ const log = childLogger('api');
 /** Teto de corpo aceito (PRD §7.3): nenhum payload legítimo chega perto. */
 export const MAX_BODY_BYTES = 256 * 1024;
 
+/** 401 numa hora que já é sondagem de token e não dedo gordo (PRD §11). */
+export const UNAUTHORIZED_ALERT_THRESHOLD = 50;
+
 export interface ApiServerOptions {
   deps: ApiDeps;
   token: string;
   port: number;
   /** Guilds esperadas no cache — hoje uma (`GUILD_ID`). */
   expectedGuilds?: number;
+  /** Filas do bot, para o `/health` e os gauges do `/metrics`. */
+  queues?: () => QueueHealth;
+  /** Volume de backups montado read-only (`/backups`); ausente em dev. */
+  backupDir?: string;
+  alerts?: Pick<AlertService, 'emit'>;
 }
 
 /**
@@ -65,25 +78,48 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
   );
 
   // Log de acesso: método, rota e status. Nunca headers — é lá que mora o token.
+  // O `fail2ban` da VM lê justamente estas linhas (nível `warn` no 401).
+  const probes = createProbeCounter(options.alerts);
   app.use('*', async (c, next) => {
     const start = performance.now();
     await next();
-    log.debug(
-      {
-        requestId: c.get('requestId'),
-        method: c.req.method,
-        path: new URL(c.req.url).pathname,
-        status: c.res.status,
-        durationMs: Math.round(performance.now() - start),
-      },
-      'requisição',
-    );
+
+    const path = new URL(c.req.url).pathname;
+    const status = c.res.status;
+    const durationMs = Math.round(performance.now() - start);
+    // Rota que não existe vira um label só: senão qualquer caminho inventado
+    // por um estranho abriria uma série nova no `/metrics`.
+    const route = status === 404 ? '(desconhecida)' : routeLabel(path);
+    metrics.apiRequests.inc({ status: String(status) });
+    metrics.apiLatency.observe(durationMs, { route });
+
+    const entry = { requestId: c.get('requestId'), method: c.req.method, path, status, durationMs };
+    if (status === 401) {
+      metrics.apiUnauthorized.inc();
+      probes.record();
+      // `warn` de propósito: é o que o filtro do fail2ban procura no log.
+      log.warn(entry, 'requisição não autorizada');
+      return;
+    }
+    log.debug(entry, 'requisição');
   });
 
   app.route(
     '/health',
-    createHealthRoutes({ deps, token, expectedGuilds: options.expectedGuilds ?? 1 }),
+    createHealthRoutes({
+      deps,
+      token,
+      expectedGuilds: options.expectedGuilds ?? 1,
+      queues: options.queues,
+      backupDir: options.backupDir,
+    }),
   );
+
+  // `/metrics` não é de guild, mas exige o mesmo Bearer (PRD §7.3).
+  const metricsApp = new Hono<ApiEnv>();
+  metricsApp.use('*', bearerAuth(token));
+  metricsApp.route('/', createMetricsRoutes());
+  app.route('/metrics', metricsApp);
 
   // Tudo abaixo de /guilds exige o Bearer e uma guild que o bot conheça.
   const guilds = new Hono<ApiEnv>();
@@ -110,6 +146,44 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
   });
 
   return app;
+}
+
+/**
+ * Conta 401 numa janela de uma hora e avisa uma vez por janela ao cruzar o
+ * limiar. Complementa o fail2ban: ele bane o IP, isto avisa o humano.
+ */
+function createProbeCounter(alerts?: Pick<AlertService, 'emit'>) {
+  let count = 0;
+  let windowStart = Date.now();
+  let alerted = false;
+
+  return {
+    record(): void {
+      const at = Date.now();
+      if (at - windowStart >= HOUR_MS) {
+        count = 0;
+        windowStart = at;
+        alerted = false;
+      }
+      count += 1;
+      if (count < UNAUTHORIZED_ALERT_THRESHOLD || alerted) return;
+      alerted = true;
+      log.warn({ count }, 'sondagem do token da API');
+      alerts?.emit({
+        kind: 'api-probe',
+        title: 'Sondagem do token da API',
+        description:
+          `A API respondeu **${String(count)}** vezes com 401 na última hora. ` +
+          'Confira o `fail2ban` e considere rotacionar o `INTERNAL_API_TOKEN` (runbook).',
+        level: 'danger',
+      });
+    },
+  };
+}
+
+/** Caminho normalizado como label de métrica (cardinalidade baixa). */
+function routeLabel(path: string): string {
+  return path.replace(/\/\d{17,20}(?=\/|$)/g, '/:id');
 }
 
 export interface ApiServer {

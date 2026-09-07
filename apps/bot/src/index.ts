@@ -1,5 +1,6 @@
 import { createDb } from '@cobot/db';
 import { VERSION } from '@cobot/shared';
+import { sql } from 'drizzle-orm';
 
 import { createApiServer } from './api/server';
 import { AutomodService } from './automod/engine';
@@ -7,9 +8,12 @@ import { createClient } from './client';
 import { commands as commandList } from './commands/index';
 import { env } from './env';
 import { events } from './events/index';
+import { RetentionJob } from './jobs/retention';
 import { StatsRollupJob } from './jobs/stats-rollup';
 import { loadCommands, loadEvents } from './lib/loader';
 import { logger } from './logger';
+import { metrics } from './metrics';
+import { AlertService } from './services/alerts';
 import { AutoroleService } from './services/autorole';
 import { ConfigService } from './services/config';
 import { LockService } from './services/locks';
@@ -26,21 +30,46 @@ import { TicketService } from './services/tickets';
 import { WelcomeService } from './services/welcome';
 
 import type { BotContext } from './lib/command';
+import type { Db } from '@cobot/db';
+import type { Client } from 'discord.js';
 
 /** Segundos para o shutdown terminar antes de matar o processo (PRD §7.5). */
 const SHUTDOWN_TIMEOUT_MS = 10_000;
+
+/**
+ * Quanto tempo o gateway pode ficar fora antes de virar alerta (PRD §11). O
+ * discord.js reconecta sozinho em segundos; passou de um minuto, é problema.
+ */
+const GATEWAY_DOWN_ALERT_MS = 60_000;
+
+/** Intervalo do ping no Postgres gerenciado. */
+const DATABASE_PROBE_INTERVAL_MS = 60_000;
 
 async function main(): Promise<void> {
   logger.info({ version: VERSION, env: env.NODE_ENV, tz: env.TZ }, 'boot');
 
   const { db, sql } = createDb(env.DATABASE_URL);
   const client = createClient();
+  const alerts = new AlertService({ webhookUrl: env.ALERT_WEBHOOK_URL });
   const config = new ConfigService(db);
   const queue = new LogQueue({ client });
   const logs = new LogService({ db, config, queue });
   const messageCache = new MessageCacheService({ db });
   const modlog = createModlogService({ db, client, logs, queue });
-  const stats = new StatsService({ db, client, config });
+  const stats = new StatsService({
+    db,
+    client,
+    config,
+    onFlushError: (error, buckets) => {
+      alerts.emit({
+        kind: 'stats-flush',
+        title: 'Falha ao gravar estatísticas',
+        description: describeError(error),
+        level: 'warning',
+        fields: [{ name: 'Buckets represados', value: String(buckets) }],
+      });
+    },
+  });
   const moderation = new ModerationService({
     db,
     client,
@@ -68,13 +97,33 @@ async function main(): Promise<void> {
   });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const statsRollup = new StatsRollupJob({ db, client, config });
+  // As três retenções do PRD §8 num job só, porque é ele que alerta na falha.
+  const retention = new RetentionJob({
+    alerts,
+    tasks: [
+      { name: 'message_cache', run: () => messageCache.cleanup() },
+      { name: 'automod_hits', run: () => automod.cleanup() },
+      { name: 'stats_rollup', run: () => runStatsRollup(statsRollup, client) },
+    ],
+  });
   // A coleção nasce antes do `ctx` porque a API também a expõe (`GET /commands`).
   const commands = loadCommands(commandList);
+  const readQueues = () => ({
+    logQueue: queue.pendingSize,
+    messageCache: messageCache.pendingSize,
+    stats: stats.pendingSize,
+  });
   const api = createApiServer({
     deps: { client, db, config, moderation, automod, reactionRoles, tickets, commands },
     token: env.INTERNAL_API_TOKEN,
     port: env.INTERNAL_API_PORT,
+    queues: readQueues,
+    backupDir: env.BACKUP_DIR,
+    alerts,
   });
+
+  registerGauges({ client, readQueues, startedAt: Date.now() });
+  const databaseProbe = watchDatabase(db, alerts);
 
   const ctx: BotContext = {
     client,
@@ -97,6 +146,7 @@ async function main(): Promise<void> {
   };
 
   loadEvents(client, events, ctx);
+  watchGateway(client, alerts);
   // A API sobe antes do login: o healthcheck do container precisa responder
   // mesmo enquanto o gateway ainda está conectando (PRD §5.7).
   api.start();
@@ -108,6 +158,18 @@ async function main(): Promise<void> {
     automod.start();
     stats.start();
     statsRollup.start();
+    retention.start();
+    databaseProbe.start();
+    alerts.emit({
+      kind: 'boot',
+      title: 'Bot no ar',
+      level: 'success',
+      force: true,
+      fields: [
+        { name: 'Versão', value: `v${VERSION}` },
+        { name: 'Commit', value: env.GIT_SHA ?? 'local' },
+      ],
+    });
   });
 
   let shuttingDown = false;
@@ -129,12 +191,22 @@ async function main(): Promise<void> {
       automod.stop();
       stats.stop();
       statsRollup.stop();
+      retention.stop();
+      databaseProbe.stop();
       autorole.stop();
       await api.stop();
       // O que estava em buffer precisa chegar ao canal e ao banco antes do fim.
       await Promise.all([queue.flushAll(), messageCache.flush(), stats.flush()]);
       await client.destroy();
       await sql.end({ timeout: 5 });
+      // Espera o alerta: depois do `process.exit` não sai mais nada.
+      await alerts.send({
+        kind: 'shutdown',
+        title: 'Bot encerrando',
+        description: `Sinal \`${signal}\`.`,
+        level: 'info',
+        force: true,
+      });
       logger.info('encerrado');
       logger.flush();
       process.exit(0);
@@ -148,15 +220,170 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
-  // Uma promise rejeitada solta nunca derruba o bot (PRD §7.5).
+  // Uma promise rejeitada solta nunca derruba o bot (PRD §7.5). O alerta usa a
+  // janela de dedupe de 5 min: um erro em loop não vira 300 mensagens no canal.
   process.on('unhandledRejection', (reason) => {
+    metrics.errors.inc({ scope: 'unhandledRejection' });
     logger.error({ err: reason }, 'unhandledRejection');
+    alerts.emit({
+      kind: 'unhandledRejection',
+      title: 'Promise rejeitada sem tratamento',
+      description: describeError(reason),
+      level: 'danger',
+    });
   });
   process.on('uncaughtException', (error) => {
+    metrics.errors.inc({ scope: 'uncaughtException' });
     logger.fatal({ err: error }, 'uncaughtException');
+    alerts.emit({
+      kind: 'uncaughtException',
+      title: 'Exceção não capturada',
+      description: describeError(error),
+      level: 'danger',
+    });
   });
 
   await client.login(env.DISCORD_TOKEN);
+}
+
+/**
+ * Gauges lidos no scrape do `/metrics`. Ficam registrados uma vez: os
+ * `Gauge` do registry guardam a função, não o valor.
+ */
+function registerGauges(input: {
+  client: Client;
+  readQueues: () => { logQueue: number; messageCache: number; stats: number };
+  startedAt: number;
+}): void {
+  metrics.queue.register(() => input.readQueues().logQueue, { queue: 'log' });
+  metrics.queue.register(() => input.readQueues().messageCache, { queue: 'message_cache' });
+  metrics.queue.register(() => input.readQueues().stats, { queue: 'stats' });
+  metrics.process.register(() => process.memoryUsage().rss, { kind: 'rss_bytes' });
+  metrics.process.register(() => process.memoryUsage().heapUsed, { kind: 'heap_used_bytes' });
+  metrics.process.register(() => Date.now() - input.startedAt, { kind: 'uptime_ms' });
+  metrics.gateway.register(() => (input.client.isReady() ? 1 : 0), { kind: 'ready' });
+  metrics.gateway.register(() => {
+    const ping = input.client.ws.ping;
+    return Number.isFinite(ping) && ping >= 0 ? Math.round(ping) : -1;
+  }, { kind: 'ping_ms' });
+  metrics.gateway.register(() => input.client.guilds.cache.size, { kind: 'guilds' });
+}
+
+/**
+ * Alerta quando o gateway fica fora por mais de um minuto e quando volta.
+ * A reconexão do discord.js é normal e frequente; o que importa é a queda que
+ * dura (PRD §11).
+ */
+function watchGateway(client: Client, alerts: AlertService): void {
+  let downSince: number | null = null;
+  let timer: NodeJS.Timeout | null = null;
+  let alerted = false;
+
+  const clear = (): void => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+
+  client.on('shardDisconnect', () => {
+    if (downSince !== null) return;
+    downSince = Date.now();
+    clear();
+    timer = setTimeout(() => {
+      alerted = true;
+      alerts.emit({
+        kind: 'gateway-down',
+        title: 'Gateway desconectado',
+        description: 'O bot está fora do Discord há mais de 60s e ainda não reconectou.',
+        level: 'danger',
+        force: true,
+      });
+    }, GATEWAY_DOWN_ALERT_MS);
+    timer.unref();
+  });
+
+  const back = (): void => {
+    const since = downSince;
+    downSince = null;
+    clear();
+    if (!alerted) return;
+    alerted = false;
+    alerts.emit({
+      kind: 'gateway-up',
+      title: 'Gateway reconectado',
+      description:
+        since === null
+          ? 'O bot voltou ao Discord.'
+          : `O bot voltou ao Discord após ${String(Math.round((Date.now() - since) / 1000))}s fora.`,
+      level: 'success',
+      force: true,
+    });
+  };
+
+  client.on('shardResume', back);
+  client.on('shardReady', back);
+}
+
+/**
+ * Ping periódico no Postgres gerenciado. Desde a v1.1 o banco está do outro
+ * lado da rede (Supabase) e a conexão virou um ponto de falha real: uma pausa
+ * do projeto por inatividade ou uma queda de rede precisa gerar alerta, não
+ * só erros espalhados pelos handlers (PRD §11).
+ */
+function watchDatabase(db: Db, alerts: AlertService) {
+  let timer: NodeJS.Timeout | null = null;
+  let down = false;
+
+  const probe = async (): Promise<void> => {
+    const start = performance.now();
+    try {
+      await db.execute(sql`select 1`);
+      metrics.dbLatency.observe(Math.round(performance.now() - start), { probe: 'health' });
+      if (!down) return;
+      down = false;
+      alerts.emit({
+        kind: 'database-up',
+        title: 'Postgres respondendo de novo',
+        level: 'success',
+        force: true,
+      });
+    } catch (error) {
+      logger.error({ err: error }, 'falha ao falar com o Postgres');
+      down = true;
+      alerts.emit({
+        kind: 'database-down',
+        title: 'Postgres inacessível',
+        description: describeError(error),
+        level: 'danger',
+      });
+    }
+  };
+
+  return {
+    start(): void {
+      if (timer) return;
+      timer = setInterval(() => void probe(), DATABASE_PROBE_INTERVAL_MS);
+      timer.unref();
+    },
+    stop(): void {
+      if (timer) clearInterval(timer);
+      timer = null;
+    },
+  };
+}
+
+/** Roda o rollup em todas as guilds do cache e soma o que foi removido. */
+async function runStatsRollup(job: StatsRollupJob, client: Client): Promise<number> {
+  let removed = 0;
+  for (const guild of client.guilds.cache.values()) {
+    removed += await job.runFor(guild.id);
+  }
+  return removed;
+}
+
+/** Mensagem curta de um erro para o embed do alerta — nunca a stack inteira. */
+function describeError(error: unknown): string {
+  const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  return `\`\`\`\n${message.slice(0, 500)}\n\`\`\``;
 }
 
 main().catch((error: unknown) => {
