@@ -42,7 +42,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 17  | Casos e auditoria do painel                                                | concluída · 2026-09-06 |
 | 18  | Docker Compose (bot + Caddy) e build do painel                             | concluída · 2026-09-06 |
 | 19  | CI/CD: bot na Oracle, painel na Vercel                                     | concluída · 2026-09-07 |
-| 20  | Hardening e observabilidade                                                | pendente     |
+| 20  | Hardening e observabilidade                                                | concluída · 2026-09-07 |
 | 21  | Notificações de redes sociais                                              | pendente     |
 
 ---
@@ -1708,54 +1708,54 @@ especial aos riscos novos da v1.1 (API exposta, três provedores).
 
 **Tarefas:**
 
-- [ ] **Backups**: o Supabase já faz backup diário gerenciado, mas ele não é
+- [x] **Backups**: o Supabase já faz backup diário gerenciado, mas ele não é
       exportável no free tier — então um job `backup` no Compose da VM
       (`postgres:16-alpine` + cron) roda `pg_dump` diário contra a
       `DATABASE_URL` de produção, retenção 7 diários + 4 semanais, no volume
       `backups`; script `infra/scripts/restore.sh`; testar restore num banco
       local. ⚠️ AÇÃO MANUAL opcional: bucket no Oracle Object Storage +
       `rclone` para cópia externa (documentar, não obrigar).
-- [ ] **Alertas**: webhook de Discord (`ALERT_WEBHOOK_URL`) usado pelo bot
+- [x] **Alertas**: webhook de Discord (`ALERT_WEBHOOK_URL`) usado pelo bot
       para: boot, shutdown, desconexão do gateway > 60s, erro não tratado
       (com dedupe de 5 min), falha de flush de stats, backup falhou, **falha
       de conexão com o Postgres gerenciado** (rede agora é um ponto de falha
       real).
-- [ ] **Métricas**: `GET /metrics` na API do bot (formato Prometheus, sem lib
+- [x] **Métricas**: `GET /metrics` na API do bot (formato Prometheus, sem lib
       pesada: contadores de eventos, comandos, erros, latência p50/p95 da
       API, tamanho das filas, **latência do Postgres**) — sem Prometheus
       rodando por enquanto; o painel mostra um card "Saúde" em
       `/g/[guildId]/system` (uptime, memória RSS do bot, ping, filas, último
       backup, versão/sha, latência web→bot).
-- [ ] **API exposta** (novo na v1.1): rate limit por IP (60/min) além do por
+- [x] **API exposta** (novo na v1.1): rate limit por IP (60/min) além do por
       rota; `fail2ban` no host banindo IP com 20 respostas 401 em 5 min
       (jail lendo o log de acesso do Caddy); Caddy sem `Server` header e sem
       listagem; alerta no webhook a cada 50 respostas 401 numa hora
       (alguém está sondando o token).
-- [ ] **Painel**: rate limit por IP nas rotas de auth e nas server actions de
+- [x] **Painel**: rate limit por IP nas rotas de auth e nas server actions de
       escrita (60/min), `Auth.js` com `trustHost` correto e cookie
       `__Secure-`; revisar CSP no build de produção (sem `unsafe-eval`);
       página `/system` só `owner`; headers de segurança no `next.config.ts`.
-- [ ] **Bot**: `pino.redact` revisado; body limit e timeouts na API;
+- [x] **Bot**: `pino.redact` revisado; body limit e timeouts na API;
       `AbortSignal.timeout` em todos os `fetch` do Discord; guard de tamanho
       de regex; verificação de que nenhum handler deixa interação sem
       resposta (timeout de 2.5s → `deferReply` automático).
-- [ ] **Retenções** rodando como jobs no bot (message_cache 7d, automod_hits
+- [x] **Retenções** rodando como jobs no bot (message_cache 7d, automod_hits
       30d, stats rollup 90d) com log de quantidade removida e alerta se
       falhar — importa mais agora, porque o free tier do Supabase são 500 MB.
-- [ ] **Docker**: `read_only: true` + `tmpfs` onde possível, `cap_drop:
+- [x] **Docker**: `read_only: true` + `tmpfs` onde possível, `cap_drop:
     ALL`, `no-new-privileges`, `docker system prune` semanal via cron do host
       (documentado no bootstrap).
-- [ ] **Dependências**: `pnpm audit` no CI (falha em `high`), Dependabot
+- [x] **Dependências**: `pnpm audit` no CI (falha em `high`), Dependabot
       semanal para npm e GitHub Actions.
-- [ ] **Runbook** `docs/runbook.md`: como ver logs (VM e Vercel), reiniciar,
+- [x] **Runbook** `docs/runbook.md`: como ver logs (VM e Vercel), reiniciar,
       restaurar backup, **rotacionar o `INTERNAL_API_TOKEN` nos três lugares
       (VM, GitHub Secrets, Vercel) sem downtime**, rotacionar token do bot,
       adicionar um moderador ao painel, o que fazer se o gateway cair, o que
       fazer se o Supabase pausar o projeto, checklist mensal (espaço em
       disco, backups, cota do Supabase, uso da Vercel, `docker stats`).
-- [ ] **Revisão final**: rodar `/security-review` do Claude Code sobre o repo
+- [x] **Revisão final**: rodar `/security-review` do Claude Code sobre o repo
       e corrigir o que for `high`.
-- [ ] Atualizar `.harness/prd.md` §11 com o status de cada mitigação.
+- [x] Atualizar `.harness/prd.md` §11 com o status de cada mitigação.
 
 **Arquivos criados/alterados:** `infra/docker-compose.yml`, `infra/scripts/
 {restore,backup}.sh`, `infra/fail2ban/`, `apps/bot/src/services/alerts.ts`,
@@ -1783,6 +1783,47 @@ ssh cobot 'sudo fail2ban-client status cobot-api'
 pnpm audit --audit-level high
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
+
+**Notas de execução (2026-09-07):**
+
+- **Backups**: o serviço `backup` do Compose é um `postgres:16-alpine` com um
+  laço `sleep 900` em vez de cron — a imagem não tem `crond`. O dump vai para
+  `NOME.part` e só é renomeado no fim, para o `/health` nunca reportar um dump
+  pela metade como se fosse o último bom. O container **não** recebe `env_file`:
+  só `DATABASE_URL` e `ALERT_WEBHOOK_URL`, porque ele não tem o que fazer com o
+  token do bot. A cópia externa (Object Storage + `rclone`) ficou documentada
+  como opcional e **não** foi implementada.
+- **Retenções**: `messageCache.cleanup()` e `automod.cleanup()` deixaram de
+  engolir o erro e perderam o timer próprio; quem agenda as três agora é o
+  `RetentionJob`, porque a tarefa da etapa é justamente *alertar quando uma
+  falha* — e não dá para alertar sobre um erro que o serviço já comeu.
+- **Rate limit do painel**: o gatilho é o header `next-action`, que o Next só
+  manda numa server action. Assim toda escrita passa pelo limitador sem que
+  nenhum call site precise lembrar dele, e navegar não gasta o balde. A
+  contagem é **por instância** (a Vercel é stateless e a stack não tem store
+  compartilhado, §12); está registrado como `parcial` no PRD §11.
+- **Métricas**: registry próprio (`Counter`/`Gauge`/`Summary`) em vez de
+  `prom-client` — 400 KB e um registro global não se pagam numa VM de 1 GB.
+  Teto de 256 séries por métrica e label `(desconhecida)` no 404: sem isso um
+  estranho abriria uma série nova por caminho inventado.
+- **ReDoS**: `safe-regex2` passou a rodar **também** no schema Zod de
+  `packages/shared`, então o painel recusa o padrão ao salvar em vez de o bot
+  descartá-lo em silêncio no `warn`. O teste antigo virou dois, um por camada.
+- **Auto-defer**: `command.ephemeral` passou a valer para o adiamento
+  automático de 2,5 s, e `/config` (que responde efêmero sem `defer`) ganhou a
+  marca — sem ela a rede de segurança abriria a resposta em público. Comandos
+  que abrem modal declaram `opensModal` e ficam de fora.
+- **`/security-review`**: nenhuma vulnerabilidade com confiança ≥ 8. Os dois
+  pontos que ela levantou fora do próprio escopo (cardinalidade de label e o
+  defer efêmero) foram corrigidos e estão descritos acima.
+- **fail2ban**: os arquivos estão em `infra/fail2ban/` e o `bootstrap-server.sh`
+  os instala, mas a jail lê o log do container do Caddy pelo `journald` — se a
+  VM usar outro driver de log, o `jail.local` explica como apontar para o
+  arquivo. Falta validar na VM (⚠️ ação manual, runbook).
+- Os critérios de aceite que exigem a VM no ar (`docker compose exec backup
+  ls`, derrubar a rede por 90s, 25 requisições com token errado, `docker
+  stats`) **não** foram verificados nesta sessão: dependem de acesso ao
+  servidor. Estão no checklist do `docs/runbook.md`.
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
