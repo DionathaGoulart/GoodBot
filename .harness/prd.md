@@ -209,6 +209,49 @@ Ponto de extensão: `invalidate` é hoje HTTP; a interface `ConfigBus`
 (`publish(module)` / `subscribe`) permite trocar por Postgres `LISTEN/NOTIFY`
 ou Redis pub/sub depois sem tocar nos módulos.
 
+### 5.8 Notificações de redes sociais
+
+Avisa num canal do Discord quando a conta configurada publica algo. Uma
+**conta** = plataforma + identificador externo + canal de destino + template.
+Várias contas por servidor, cada uma com seu canal e sua menção opcional.
+
+Tudo por **polling** no scheduler do bot, nunca por webhook de entrada: a API
+do bot está exposta na internet e §7.3 proíbe rota sem autenticação além do
+`/health`. O intervalo é configurável por plataforma (padrão 5 min), com
+backoff ao errar e desativação automática após 10 falhas seguidas (com
+alerta).
+
+Idempotência é o requisito central: cada publicação vista vira uma linha em
+`social_posts` antes do envio. Nada é anunciado duas vezes, mesmo com restart
+do bot no meio do ciclo.
+
+- **YouTube** — feed RSS público do canal
+  (`/feeds/videos.xml?channel_id=UC…`), sem API key e sem cota. Cobre
+  **vídeos** e **shorts**; distinguir os dois exige um `HEAD` em
+  `youtube.com/shorts/<id>` (200 = short, redirect = vídeo comum). **Lives**
+  não aparecem no RSS de forma confiável: exigem a Data API v3
+  (`search?eventType=live`, 100 unidades de cota por chamada, teto diário de
+  10.000) — ou seja, live custa uma API key e um intervalo mais folgado (15
+  min). O usuário escolhe quais tipos quer: vídeo, short, live.
+- **Twitch** — Helix `streams?user_login=…` com App Access Token (client
+  credentials). Avisa quando a live abre; não re-anuncia enquanto continuar a
+  mesma sessão (`stream.id`). Preferido sobre EventSub justamente por não
+  exigir rota pública de callback.
+- **Instagram/Reels** — Graph API da Meta (`/{ig-user-id}/media`). ⚠️ Exige
+  conta **Business ou Creator** vinculada a uma Página do Facebook, um app na
+  Meta e as permissões `instagram_basic` + `pages_show_list` aprovadas. Sem
+  isso o módulo não tem como funcionar, e o painel deve dizer isso na cara do
+  usuário em vez de falhar silenciosamente.
+- **TikTok** — sem API pública que sirva: a Content Posting API é de
+  publicação, e a Display API exige aprovação comercial. Fica como **melhor
+  esforço**, atrás de um aviso explícito no painel de que pode parar de
+  funcionar a qualquer momento e sem promessa de suporte.
+
+Template por conta, com as variáveis `{title}`, `{url}`, `{author}`,
+`{thumbnail}`, `{platform}`, `{kind}`; texto ou embed, seguindo o mesmo
+motor de templates das boas-vindas (§5.5). Menção opcional a um cargo, com
+`allowedMentions` restrito a ele.
+
 ## 6. Requisitos funcionais — Painel
 
 Acesso: login com Discord OAuth2 (Auth.js). Após login, o painel verifica se
@@ -403,7 +446,7 @@ guilds            (id PK text, name, icon, owner_id, joined_at, left_at)
 guild_settings    (guild_id PK/FK, timezone, embed_color, mod_role_ids[], admin_role_ids[],
                    dashboard_access_role_ids[], log_channel_id, dm_on_punish jsonb, updated_at)
 module_configs    (guild_id, module PK(guild_id,module), enabled, config jsonb, version, updated_at, updated_by)
-                   -- módulo ∈ moderation|automod|logs|welcome|autorole|reaction_roles|tickets|tags|utilities|stats
+                   -- módulo ∈ moderation|automod|logs|welcome|autorole|reaction_roles|tickets|tags|utilities|stats|social
 cases             (id bigserial PK, guild_id, case_number (seq por guild), type enum,
                    target_id, target_tag, actor_id, actor_tag, reason, duration_ms, expires_at,
                    source enum(command|dashboard|automod|context|escalation), automod_rule_id FK?,
@@ -418,6 +461,16 @@ log_configs       (guild_id, kind PK(guild_id,kind), enabled, channel_id, ignore
 message_cache     (message_id PK, guild_id, channel_id, author_id, content, attachments jsonb, created_at)
                    -- só se módulo logs ativo; retenção 7 dias; usado para recuperar conteúdo em delete
 welcome_configs   (guild_id PK, join_enabled, join_channel_id, join_template jsonb, leave_*, dm_enabled, dm_template jsonb)
+social_accounts   (id PK, guild_id, platform enum(youtube|twitch|instagram|tiktok),
+                   external_id (channel_id/user_login/ig_user_id), handle, display_name,
+                   discord_channel_id, kinds[] (video|short|live|post), template jsonb,
+                   mention_role_id, enabled, poll_interval_s, last_checked_at,
+                   last_external_id, failure_count, disabled_reason, created_at, updated_at)
+                   unique (guild_id, platform, external_id)
+social_posts      (id PK, guild_id, account_id FK, external_id, kind, url, title,
+                   published_at, announced_at, message_id)
+                   unique (account_id, external_id)  -- a trava contra anúncio duplicado
+                   -- retenção 90 dias
 autorole_configs  (guild_id PK, human_role_ids[], bot_role_ids[], delay_s, verify_enabled, verify_channel_id, verify_message_id, verify_role_id)
 reaction_role_panels (id, guild_id, channel_id, message_id, mode enum(single|multiple|toggle), style enum(buttons|select|reactions), content jsonb)
 reaction_role_items  (id, panel_id FK, role_id, emoji, label, description, position)
