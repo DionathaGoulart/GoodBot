@@ -1,3 +1,4 @@
+import safeRegex from 'safe-regex2';
 import { z } from 'zod';
 
 import {
@@ -6,6 +7,7 @@ import {
   MAX_MESSAGE_CONTENT_LENGTH,
   MAX_NAME_LENGTH,
   MAX_REASON_LENGTH,
+  MAX_REGEX_PATTERN_LENGTH,
   MAX_TIMEOUT_MS,
 } from '../constants';
 import { DurationMsSchema, SnowflakeListSchema } from './common';
@@ -78,7 +80,7 @@ export const WORD_MATCH_MODES = ['exact', 'wildcard', 'regex'] as const;
 export const WordsRuleConfigSchema = z
   .object({
     mode: z.enum(WORD_MATCH_MODES).default('exact'),
-    words: z.array(z.string().min(1).max(200)).min(1).max(500),
+    words: z.array(z.string().min(1).max(MAX_REGEX_PATTERN_LENGTH)).min(1).max(500),
     caseSensitive: z.boolean().default(false),
     /** Ignorar acentos/diacríticos na comparação. */
     normalizeDiacritics: z.boolean().default(true),
@@ -90,6 +92,17 @@ export const WordsRuleConfigSchema = z
         new RegExp(pattern, 'u');
       } catch {
         ctx.addIssue({ code: 'custom', message: `Regex inválido: ${pattern}`, path: ['words', i] });
+        return;
+      }
+      // Mesmo teste que o bot aplica antes de compilar (PRD §7.3): o padrão
+      // que passa aqui é exatamente o que vai rodar, então o painel recusa o
+      // ReDoS na hora de salvar em vez de deixá-lo virar log de aviso.
+      if (!safeRegex(pattern)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Regex com backtracking perigoso (ReDoS); simplifique o padrão',
+          path: ['words', i],
+        });
       }
     });
   });

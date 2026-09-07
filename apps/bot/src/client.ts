@@ -39,10 +39,19 @@ export const PARTIALS = [
  * Limites de cache pensados para a ARM free tier (PRD §7.2): guardamos o que
  * os módulos realmente consultam (membros, cargos, canais) e cortamos o resto.
  */
+/**
+ * Teto de uma chamada REST ao Discord. Explícito e não herdado do default do
+ * discord.js: uma requisição pendurada segura o handler que a chamou, e desde
+ * a v1.1 quem espera do outro lado pode ser o painel (PRD §7.5). O `@discordjs/rest`
+ * aplica isto como `AbortSignal` em cada `fetch`, com uma tentativa de repetição.
+ */
+export const REST_TIMEOUT_MS = 15_000;
+
 export const clientOptions: ClientOptions = {
   intents: [...INTENTS],
   partials: [...PARTIALS],
   allowedMentions: { parse: [], repliedUser: false },
+  rest: { timeout: REST_TIMEOUT_MS, retries: 1 },
   makeCache: Options.cacheWithLimits({
     ...Options.DefaultMakeCacheSettings,
     MessageManager: 200,

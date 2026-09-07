@@ -3,6 +3,7 @@ import { MessageFlags } from 'discord.js';
 
 import { env } from '../env';
 import { childLogger } from '../logger';
+import { metrics } from '../metrics';
 import { isUserContextCommand } from './command';
 import { assertCommandAllowed } from './command-overrides';
 import { CooldownStore } from './cooldown';
@@ -16,6 +17,7 @@ import type {
   ChatInputCommandInteraction,
   GuildMember,
   Interaction,
+  InteractionDeferReplyOptions,
   RepliableInteraction,
   UserContextMenuCommandInteraction,
 } from 'discord.js';
@@ -23,6 +25,14 @@ import type {
 export { CooldownStore };
 
 const log = childLogger('interaction');
+
+/**
+ * O Discord invalida o token de uma interação não respondida em 3 s. Comandos
+ * que não declaram `defer` são rápidos por natureza, mas um Postgres lento (o
+ * banco agora é gerenciado e vive do outro lado da rede — PRD §11) transforma
+ * "rápido" em "expirado". A 2,5 s adiamos por conta própria.
+ */
+export const AUTO_DEFER_MS = 2_500;
 
 const LEVEL_LABEL: Record<PermissionLevel, string> = {
   member: 'membro',
@@ -67,6 +77,7 @@ async function runComponent(
       await replyError(interaction, error.message);
       return;
     }
+    metrics.errors.inc({ scope: 'component' });
     log.error({ err: error, customId: interaction.customId }, 'erro no componente');
     await replyError(interaction, 'Não consegui registrar essa ação. Tente de novo.');
   }
@@ -139,6 +150,7 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
         await replyError(interaction, error.message);
         return;
       }
+      metrics.errors.inc({ scope: 'command' });
       log.error(
         { err: error, command: command.data.name, userId: interaction.user.id },
         'erro ao executar comando',
@@ -196,30 +208,56 @@ async function runCommand(
 
   // Um menu de contexto que abre modal não pode ser adiado antes (o `showModal`
   // exige a interação intacta), então `defer` é decisão do próprio comando.
+  const ephemeral: InteractionDeferReplyOptions = command.ephemeral
+    ? { flags: MessageFlags.Ephemeral }
+    : {};
   if (command.defer) {
-    await interaction.deferReply(command.ephemeral ? { flags: MessageFlags.Ephemeral } : {});
+    await interaction.deferReply(ephemeral);
   }
+
+  // Rede de segurança para quem não declarou `defer` e demorou mesmo assim.
+  // `opensModal` marca os comandos em que adiar quebraria o `showModal`.
+  const autoDefer =
+    command.defer || command.opensModal
+      ? null
+      : setTimeout(() => {
+          if (interaction.replied || interaction.deferred) return;
+          void interaction
+            .deferReply(ephemeral)
+            .then(() => {
+              log.warn({ command: command.data.name }, 'interação adiada automaticamente');
+            })
+            .catch(() => {
+              // Interação já expirada ou respondida na corrida: nada a fazer.
+            });
+        }, AUTO_DEFER_MS);
+  autoDefer?.unref();
 
   const base = { ...ctx, guildId, member, level, settings };
 
-  if (isUserContextCommand(command)) {
-    if (!interaction.isUserContextMenuCommand()) {
-      throw new UserFacingError('Este comando só funciona pelo menu de contexto.', {
-        code: 'WRONG_INTERACTION',
-      });
+  try {
+    if (isUserContextCommand(command)) {
+      if (!interaction.isUserContextMenuCommand()) {
+        throw new UserFacingError('Este comando só funciona pelo menu de contexto.', {
+          code: 'WRONG_INTERACTION',
+        });
+      }
+      await command.execute({ ...base, interaction });
+    } else {
+      if (!interaction.isChatInputCommand()) {
+        throw new UserFacingError('Este comando só funciona como slash command.', {
+          code: 'WRONG_INTERACTION',
+        });
+      }
+      const commandCtx: CommandContext = { ...base, interaction };
+      await command.execute(commandCtx);
     }
-    await command.execute({ ...base, interaction });
-  } else {
-    if (!interaction.isChatInputCommand()) {
-      throw new UserFacingError('Este comando só funciona como slash command.', {
-        code: 'WRONG_INTERACTION',
-      });
-    }
-    const commandCtx: CommandContext = { ...base, interaction };
-    await command.execute(commandCtx);
+  } finally {
+    if (autoDefer) clearTimeout(autoDefer);
   }
 
   // Só comandos que chegaram ao fim contam: erro e cooldown não são uso.
+  metrics.commands.inc({ command: command.data.name });
   void ctx.stats.recordCommand(guildId, command.data.name);
 
   // Um comando que não responde deixa o usuário com "falha na interação".
