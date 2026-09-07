@@ -47,6 +47,9 @@ export const GuildRoleSummarySchema = z.object({
   color: z.number().int(),
   position: z.number().int(),
   managed: z.boolean(),
+  /** Mostra o cargo separado na lista de membros. */
+  hoist: z.boolean(),
+  mentionable: z.boolean(),
   /** Bitfield de permissões como string (BigInt serializado). */
   permissions: z.string(),
   memberCount: z.number().int().min(0).optional(),

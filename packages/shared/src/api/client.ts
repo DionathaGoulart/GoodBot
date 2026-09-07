@@ -1,4 +1,11 @@
 import { RaidModeInputSchema, RaidModeStateSchema } from './automod';
+import {
+  ChannelCreateInputSchema,
+  ChannelOverridesInputSchema,
+  ChannelUpdateInputSchema,
+  GuildChannelDetailSchema,
+  SlowmodeInputSchema,
+} from './channels';
 import { CommandSummarySchema } from './commands';
 import { ApiErrorSchema, ApiOkSchema } from './common';
 import { InvalidateInputSchema } from './config';
@@ -18,9 +25,22 @@ import {
   SendMessageResultSchema,
 } from './messages';
 import { ModerationActionInputSchema, ModerationActionResultSchema } from './moderation';
+import {
+  ActorInputSchema,
+  MemberRolesInputSchema,
+  RoleMoveInputSchema,
+  RoleWriteInputSchema,
+} from './roles';
 import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
 
 import type { RaidModeInput, RaidModeState } from './automod';
+import type {
+  ChannelCreateInput,
+  ChannelOverridesInput,
+  ChannelUpdateInput,
+  GuildChannelDetail,
+  SlowmodeInput,
+} from './channels';
 import type { CommandSummary } from './commands';
 import type { ApiError } from './common';
 import type { InvalidateInput } from './config';
@@ -36,6 +56,7 @@ import type {
 } from './members';
 import type { PublishPanelInput, SendMessageInput, SendMessageResult } from './messages';
 import type { ModerationActionInput, ModerationActionResult } from './moderation';
+import type { ActorInput, MemberRolesInput, RoleMoveInput, RoleWriteInput } from './roles';
 import type { CloseTicketInput, CloseTicketResult } from './tickets';
 import type { z } from 'zod';
 
@@ -81,7 +102,7 @@ export class InternalApiError extends Error {
 type Query = Record<string, string | number | undefined>;
 
 interface RequestOptions {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   query?: Query;
   body?: unknown;
 }
@@ -196,6 +217,119 @@ export function createInternalClient(options: InternalClientOptions) {
       request(AuditLogEntrySummarySchema.array(), `${guild(guildId)}/audit-log`, {
         query: AuditLogQuerySchema.parse(query),
       }),
+
+    channel: (guildId: string, channelId: string): Promise<GuildChannelDetail> =>
+      request(
+        GuildChannelDetailSchema,
+        `${guild(guildId)}/channels/${encodeURIComponent(channelId)}`,
+      ),
+
+    createChannel: (guildId: string, input: ChannelCreateInput): Promise<GuildChannelDetail> =>
+      request(GuildChannelDetailSchema, `${guild(guildId)}/channels`, {
+        method: 'POST',
+        body: ChannelCreateInputSchema.parse(input),
+      }),
+
+    updateChannel: (
+      guildId: string,
+      channelId: string,
+      input: ChannelUpdateInput,
+    ): Promise<GuildChannelDetail> =>
+      request(GuildChannelDetailSchema, `${guild(guildId)}/channels/${encodeURIComponent(channelId)}`, {
+        method: 'PATCH',
+        body: ChannelUpdateInputSchema.parse(input),
+      }),
+
+    deleteChannel: (guildId: string, channelId: string, input: ActorInput): Promise<{ ok: true }> =>
+      request(ApiOkSchema, `${guild(guildId)}/channels/${encodeURIComponent(channelId)}`, {
+        method: 'DELETE',
+        body: ActorInputSchema.parse(input),
+      }),
+
+    setSlowmode: (
+      guildId: string,
+      channelId: string,
+      input: SlowmodeInput,
+    ): Promise<GuildChannelDetail> =>
+      request(
+        GuildChannelDetailSchema,
+        `${guild(guildId)}/channels/${encodeURIComponent(channelId)}/slowmode`,
+        { method: 'POST', body: SlowmodeInputSchema.parse(input) },
+      ),
+
+    /** `lock`/`unlock` mexem só no `SendMessages` do `@everyone` — igual ao comando. */
+    lockChannel: (
+      guildId: string,
+      channelId: string,
+      input: ActorInput,
+    ): Promise<GuildChannelDetail> =>
+      request(
+        GuildChannelDetailSchema,
+        `${guild(guildId)}/channels/${encodeURIComponent(channelId)}/lock`,
+        { method: 'POST', body: ActorInputSchema.parse(input) },
+      ),
+
+    unlockChannel: (
+      guildId: string,
+      channelId: string,
+      input: ActorInput,
+    ): Promise<GuildChannelDetail> =>
+      request(
+        GuildChannelDetailSchema,
+        `${guild(guildId)}/channels/${encodeURIComponent(channelId)}/unlock`,
+        { method: 'POST', body: ActorInputSchema.parse(input) },
+      ),
+
+    setChannelOverrides: (
+      guildId: string,
+      channelId: string,
+      input: ChannelOverridesInput,
+    ): Promise<GuildChannelDetail> =>
+      request(
+        GuildChannelDetailSchema,
+        `${guild(guildId)}/channels/${encodeURIComponent(channelId)}/overrides`,
+        { method: 'POST', body: ChannelOverridesInputSchema.parse(input) },
+      ),
+
+    createRole: (guildId: string, input: RoleWriteInput): Promise<GuildRoleSummary> =>
+      request(GuildRoleSummarySchema, `${guild(guildId)}/roles`, {
+        method: 'POST',
+        body: RoleWriteInputSchema.parse(input),
+      }),
+
+    updateRole: (
+      guildId: string,
+      roleId: string,
+      input: RoleWriteInput,
+    ): Promise<GuildRoleSummary> =>
+      request(GuildRoleSummarySchema, `${guild(guildId)}/roles/${encodeURIComponent(roleId)}`, {
+        method: 'PATCH',
+        body: RoleWriteInputSchema.parse(input),
+      }),
+
+    deleteRole: (guildId: string, roleId: string, input: ActorInput): Promise<{ ok: true }> =>
+      request(ApiOkSchema, `${guild(guildId)}/roles/${encodeURIComponent(roleId)}`, {
+        method: 'DELETE',
+        body: ActorInputSchema.parse(input),
+      }),
+
+    moveRole: (guildId: string, roleId: string, input: RoleMoveInput): Promise<GuildRoleSummary> =>
+      request(
+        GuildRoleSummarySchema,
+        `${guild(guildId)}/roles/${encodeURIComponent(roleId)}/position`,
+        { method: 'PATCH', body: RoleMoveInputSchema.parse(input) },
+      ),
+
+    setMemberRoles: (
+      guildId: string,
+      userId: string,
+      input: MemberRolesInput,
+    ): Promise<GuildMemberDetail> =>
+      request(
+        GuildMemberDetailSchema,
+        `${guild(guildId)}/members/${encodeURIComponent(userId)}/roles`,
+        { method: 'POST', body: MemberRolesInputSchema.parse(input) },
+      ),
 
     moderate: (guildId: string, input: ModerationActionInput): Promise<ModerationActionResult> =>
       request(ModerationActionResultSchema, `${guild(guildId)}/moderation`, {

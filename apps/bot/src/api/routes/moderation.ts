@@ -1,9 +1,8 @@
 import { ModerationActionInputSchema } from '@cobot/shared';
 import { Hono } from 'hono';
 
-import { fetchMember } from '../../services/moderation';
-import { levelAtLeast, resolveLevel, toMemberLike } from '../../services/permissions';
-import { forbidden, notFound } from '../errors';
+import { requireActor } from '../actor';
+import { notFound } from '../errors';
 import { validate } from '../validate';
 
 import type { ActionResult } from '../../services/moderation';
@@ -81,16 +80,7 @@ export function createModerationRoutes(deps: ApiDeps): Hono<ApiEnv> {
     const input = c.req.valid('json');
     const guild = c.get('guild');
 
-    // O token da API não diz *quem* pediu: o `actorId` do corpo é que
-    // responde por isso, e ele precisa ser um mod de verdade neste servidor.
-    const actor = await fetchMember(guild, input.actorId);
-    if (!actor) throw forbidden('O autor da ação não está no servidor.', 'ACTOR_NOT_MEMBER');
-
-    const settings = await deps.config.getSettings(guild.id);
-    const level = resolveLevel(toMemberLike(actor), settings);
-    if (!levelAtLeast(level, 'mod')) {
-      throw forbidden('O autor da ação não é moderador.', 'ACTOR_NOT_MOD');
-    }
+    const actor = await requireActor(deps, guild, input.actorId, 'mod');
 
     const target = await deps.client.users.fetch(input.targetId).catch(() => null);
     if (!target) throw notFound('Usuário não encontrado.', 'TARGET_NOT_FOUND');

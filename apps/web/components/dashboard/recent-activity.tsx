@@ -2,20 +2,9 @@ import Link from 'next/link';
 
 import { Panel } from '@/components/retro/panel';
 import { EmptyState } from '@/components/retro/states';
-import { Tag, type TagTone } from '@/components/retro/tag';
+import { Tag } from '@/components/retro/tag';
+import { CASE_TONES } from '@/lib/case-tones';
 import type { RecentAudit, RecentCase } from '@/lib/stats';
-
-/** §2.3 — a cor de cada ação de moderação é fixa nos dois temas. */
-const CASE_TONES: Record<string, TagTone> = {
-  ban: 'error',
-  softban: 'error',
-  kick: 'warning',
-  timeout: 'warning',
-  warn: 'info',
-  unban: 'success',
-  untimeout: 'success',
-  note: 'muted',
-};
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', {

@@ -1,7 +1,7 @@
 import { PermissionFlagsBits } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 
-import { canActOn, levelAtLeast, resolveLevel, type MemberLike } from './permissions';
+import { canActOn, canManageRole, levelAtLeast, resolveLevel, type MemberLike } from './permissions';
 
 function member(overrides: Partial<MemberLike> = {}): MemberLike {
   const permissions = new Set<bigint>(overrides.hasPermission ? [] : []);
@@ -121,5 +121,37 @@ describe('canActOn', () => {
     const actor = member({ id: 'a', highestRolePosition: 40 });
     const target = member({ id: 'b', highestRolePosition: 5 });
     expect(canActOn(actor, target, { bot })).toEqual({ ok: true });
+  });
+});
+
+describe('canManageRole', () => {
+  const bot = member({ id: 'bot', highestRolePosition: 10 });
+
+  it('recusa @everyone e cargo de integração', () => {
+    const actor = member({ id: 'a', highestRolePosition: 9 });
+    expect(
+      canManageRole(actor, { id: 'e', position: 0, managed: false, isEveryone: true }, bot).ok,
+    ).toBe(false);
+    expect(
+      canManageRole(actor, { id: 'm', position: 1, managed: true, isEveryone: false }, bot).ok,
+    ).toBe(false);
+  });
+
+  it('recusa cargo acima do bot, mesmo para o owner', () => {
+    const owner = member({ id: 'o', isOwner: true, highestRolePosition: 99 });
+    const result = canManageRole(
+      owner,
+      { id: 'r', position: 20, managed: false, isEveryone: false },
+      bot,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('BOT_ROLE_HIERARCHY');
+  });
+
+  it('recusa cargo igual ou acima do ator, mas o owner passa', () => {
+    const role = { id: 'r', position: 5, managed: false, isEveryone: false };
+    expect(canManageRole(member({ id: 'a', highestRolePosition: 5 }), role, bot).ok).toBe(false);
+    expect(canManageRole(member({ id: 'a', highestRolePosition: 6 }), role, bot).ok).toBe(true);
+    expect(canManageRole(member({ id: 'o', isOwner: true }), role, bot).ok).toBe(true);
   });
 });

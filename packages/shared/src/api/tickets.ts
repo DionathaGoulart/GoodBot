@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-import { MAX_REASON_LENGTH } from '../constants';
 import { SnowflakeSchema } from '../config/common';
+import { MAX_REASON_LENGTH } from '../constants';
 
 /** `POST /guilds/:id/tickets/:ticketId/close` — o botão `FECHAR` do painel. */
 export const CloseTicketInputSchema = z.object({

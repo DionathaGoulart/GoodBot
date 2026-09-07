@@ -38,7 +38,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 13  | Dashboard de estatísticas                                                  | concluída · 2026-09-06 |
 | 14  | Configuração I: geral, moderação, logs, boas-vindas, autorole, tags        | concluída · 2026-09-06 |
 | 15  | Configuração II: automod, reaction roles, tickets, comandos                | concluída · 2026-09-06 |
-| 16  | Gestão do servidor: membros, cargos, canais                                | pendente     |
+| 16  | Gestão do servidor: membros, cargos, canais                                | concluída · 2026-09-06 |
 | 17  | Casos e auditoria do painel                                                | pendente     |
 | 18  | Docker Compose (bot + Caddy) e build do painel                             | pendente     |
 | 19  | CI/CD: bot na Oracle, painel na Vercel                                     | pendente     |
@@ -1348,27 +1348,27 @@ overrides básicos), todas escrevendo via API interna com auditoria.
 
 **Tarefas:**
 
-- [ ] API interna: adicionar endpoints de escrita que faltam —
+- [x] API interna: adicionar endpoints de escrita que faltam —
       `PATCH/POST/DELETE /guilds/:id/roles[/:roleId]`,
       `/channels[/:channelId]`, `POST /members/:userId/roles`,
       `POST /channels/:id/{slowmode,lock,unlock}` — com schemas em
       `shared/api`, checagem de hierarquia por `actorId`, e client tipado.
-- [ ] `members`: busca por nome/ID (`GET /members?q=`), tabela; página
+- [x] `members`: busca por nome/ID (`GET /members?q=`), tabela; página
       `members/[userId]`: cabeçalho com `AvatarSq`, ids, datas, cargos com
       `DiscordPicker` para adicionar/remover; tabela de casos do membro;
       botões `BAN/KICK/TIMEOUT/WARN/NOTE` abrindo `AlertDialog` com motivo
       (obrigatório) e duração → `internalApi.moderation` → toast; `mod`
       pode punir, só `admin` mexe em cargos.
-- [ ] `roles`: tabela (cor como quadrado, membros, posição, badge
+- [x] `roles`: tabela (cor como quadrado, membros, posição, badge
       `PERIGOSO` se tiver Administrator/ManageGuild/etc.), `sheet` de
       criar/editar (nome, cor, hoist, mentionable, checklist de permissões
       agrupadas), mover posição (▲▼), deletar com `AlertDialog`.
-- [ ] `channels`: árvore por categoria (lista aninhada, sem drag), ações
+- [x] `channels`: árvore por categoria (lista aninhada, sem drag), ações
       por canal: editar (nome, tópico, NSFW, slowmode), lock/unlock,
       deletar; criar canal/categoria; overrides básicos view/send por
       cargo em `sheet`.
-- [ ] Tudo passa por `withAudit`.
-- [ ] Testes: server actions recusam nível insuficiente; mapeamento de
+- [x] Tudo passa por `withAudit`.
+- [x] Testes: server actions recusam nível insuficiente; mapeamento de
       permissões perigosas; construção do payload de overrides.
 
 **Arquivos criados/alterados:** `apps/web/app/g/[guildId]/{members,roles,
@@ -1390,6 +1390,26 @@ channels}/**`, `apps/bot/src/api/routes/{roles,channels,members}.ts`,
 pnpm dev
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
+
+**Notas de execução (2026-09-06):**
+
+- As rotas do painel seguem a navegação em pt-BR já existente
+  (`/membros`, `/cargos`, `/canais`), não os nomes em inglês do texto acima.
+- Os bits de permissão do Discord vivem em `packages/shared/src/api/
+permissions.ts` escritos à mão (o `shared` não pode depender do discord.js,
+  que o painel importa). `apps/bot/src/api/permissions-sync.test.ts` confere
+  cada bit contra o `PermissionFlagsBits`, então um erro de digitação quebra
+  o `pnpm test`.
+- Salvar um cargo faz *merge* do bitfield (`mergePermissions`): permissões
+  que a checklist do painel não mostra não são apagadas.
+- `requireActor` (`apps/bot/src/api/actor.ts`) centraliza "quem é o ator e
+  qual o nível dele"; a rota de moderação passou a usá-lo também.
+- Overrides de canal só cobrem cargos (não membros) e só `ver`/`falar`,
+  como o PRD §6.3 pede; a tradução `{view,send} ↔ {allow,deny}` mora em
+  `shared/api/channels.ts` e é testada dos dois lados.
+- Lint: `eslint --fix` de `import/order` em três arquivos de etapas
+  anteriores e a troca de dois efeitos por estado ajustado em render
+  (`react-hooks/set-state-in-effect`, regra que passou a pegá-los).
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
