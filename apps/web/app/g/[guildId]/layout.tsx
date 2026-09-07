@@ -16,7 +16,7 @@ export default async function GuildLayout({ children, params }: LayoutProps<'/g/
 
   return (
     <SidebarProvider>
-      <AppSidebar guildId={guildId} guildName={guildName} />
+      <AppSidebar guildId={guildId} guildName={guildName} level={session.level} />
       <SidebarInset className="min-w-0">
         <Topbar
           guildId={guildId}

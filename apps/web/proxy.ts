@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { authLimiter, clientIp } from '@/lib/rate-limit';
+
 /**
  * Duas responsabilidades:
  *
@@ -9,11 +11,24 @@ import { NextResponse, type NextRequest } from 'next/server';
  *    mesmo nonce (`.harness/styleguide.md` §0.2, PRD §7.3).
  * 2. **Porta de `/g/*`.** Sem cookie de sessão nem adianta renderizar; a
  *    autorização de verdade é do `requireGuildAccess`, no servidor.
+ * 3. **Rate limit de `/api/auth/*`.** O fluxo de OAuth é o único endpoint que
+ *    responde a quem ainda não tem sessão; as escritas são limitadas mais
+ *    adiante, no `requireGuildAccess` (PRD §7.3).
  *
  * O arquivo se chama `proxy.ts` porque o Next 16 aposentou `middleware.ts`;
  * a API é a mesma.
  */
 export default function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith('/api/auth/')) {
+    const hit = authLimiter.hit(clientIp(request.headers));
+    if (!hit.allowed) {
+      return NextResponse.json(
+        { error: 'Muitas tentativas; espere um minuto.' },
+        { status: 429, headers: { 'retry-after': String(hit.retryAfter) } },
+      );
+    }
+  }
+
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const isDev = process.env.NODE_ENV === 'development';
 

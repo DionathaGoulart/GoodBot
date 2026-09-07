@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 
-import { defaultGuildId, resolveGuildSession } from '@/lib/auth/require';
+import {
+  defaultGuildId,
+  resolveGuildSession,
+  verdictMessage,
+  verdictStatus,
+} from '@/lib/auth/require';
 import { cachedInternalApi } from '@/lib/internal-api';
 
 /**
@@ -17,8 +22,8 @@ export async function GET(): Promise<NextResponse> {
   const access = await resolveGuildSession(guildId);
   if ('verdict' in access) {
     return NextResponse.json(
-      { error: 'Sem acesso a esta guild.' },
-      { status: access.verdict === 'unauthenticated' ? 401 : 403 },
+      { error: verdictMessage(access.verdict) },
+      { status: verdictStatus(access.verdict) },
     );
   }
 

@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 
-import { defaultGuildId, resolveGuildSession } from '@/lib/auth/require';
+import {
+  defaultGuildId,
+  resolveGuildSession,
+  verdictMessage,
+  verdictStatus,
+} from '@/lib/auth/require';
 import { parseCaseFilters } from '@/lib/case-filters';
 import { exportCasesCsv } from '@/lib/cases';
 
@@ -16,8 +21,8 @@ export async function GET(request: Request): Promise<NextResponse> {
   const access = await resolveGuildSession(guildId);
   if ('verdict' in access) {
     return NextResponse.json(
-      { error: 'Sem acesso a esta guild.' },
-      { status: access.verdict === 'unauthenticated' ? 401 : 403 },
+      { error: verdictMessage(access.verdict) },
+      { status: verdictStatus(access.verdict) },
     );
   }
 
