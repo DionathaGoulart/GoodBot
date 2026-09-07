@@ -164,11 +164,11 @@ export function DataTable<T extends Record<string, unknown>>({
                         {header.isPlaceholder ? null : header.column.getCanSort() ? (
                           <button
                             type="button"
-                            className="flex items-center gap-1"
+                            className="flex items-center gap-1 transition-colors hover:text-accent-text"
                             onClick={() => header.column.toggleSorting()}
                           >
                             <table.FlexRender header={header} />
-                            <span aria-hidden className="opacity-60">
+                            <span aria-hidden className="text-muted-text">
                               {direction === 'asc' ? '▲' : direction === 'desc' ? '▼' : ''}
                             </span>
                           </button>
@@ -185,7 +185,7 @@ export function DataTable<T extends Record<string, unknown>>({
             {loading ? (
               <TableSkeleton columns={columnCount} />
             ) : (
-              <TableBody className={refetching ? 'opacity-60' : undefined}>
+              <TableBody aria-busy={refetching || undefined}>
                 {rows.map((row) => (
                   <TableRow
                     key={row.id}

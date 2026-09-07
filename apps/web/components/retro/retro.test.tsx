@@ -16,6 +16,21 @@ describe('Panel', () => {
     expect(screen.getByText('conteúdo')).toBeInTheDocument();
   });
 
+  // Regressão da Etapa 26: o apagado da barra é do *nome do arquivo*. Quando
+  // era `opacity` na barra inteira, os botões de ação caíam junto para a
+  // opacidade de um `:disabled` e pareciam desligados.
+  it('apaga só o título, nunca as ações da barra', () => {
+    const { container } = render(
+      <Panel title="CASOS.LOG" actions={<button type="button">EXPORTAR</button>}>
+        <p>conteúdo</p>
+      </Panel>,
+    );
+    const bar = container.querySelector('.window-bar');
+    expect(bar?.className).not.toMatch(/opacity/);
+    expect(screen.getByText('CASOS.LOG')).toHaveClass('window-bar-title');
+    expect(screen.getByRole('button', { name: 'EXPORTAR' }).closest('.window-bar-title')).toBeNull();
+  });
+
   it('sem título não renderiza barra alguma', () => {
     const { container } = render(
       <Panel>

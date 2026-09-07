@@ -39,7 +39,7 @@ export function PeriodPicker({ value }: { value: string }) {
   const custom = !(RANGE_PRESETS as readonly string[]).includes(value);
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-2', pending && 'opacity-60')}>
+    <div className="flex flex-wrap items-center gap-2" aria-busy={pending || undefined}>
       {RANGE_PRESETS.map((preset: RangePreset) => (
         <button
           key={preset}
@@ -88,6 +88,9 @@ export function PeriodPicker({ value }: { value: string }) {
           </div>
         </PopoverContent>
       </Popover>
+
+      {/* §4.5 — o caret conta o carregamento sem apagar os botões. */}
+      {pending ? <span className="screen-meta terminal-cursor">ATUALIZANDO</span> : null}
     </div>
   );
 }
