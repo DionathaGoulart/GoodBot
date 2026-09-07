@@ -1,12 +1,19 @@
-import { VERSION } from '@cobot/shared';
+import { readdir, stat } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { HOUR_MS, VERSION } from '@cobot/shared';
 import { sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 
+import { metrics } from '../../metrics';
 import { isAuthorized } from '../middleware/auth';
 
 import type { ApiDeps, ApiEnv } from '../context';
-import type { HealthResponse } from '@cobot/shared';
+import type { BackupHealth, HealthResponse, QueueHealth } from '@cobot/shared';
 import type { Client } from 'discord.js';
+
+/** Um dump com mais de 48h significa que o job de backup parou (PRD §11). */
+export const BACKUP_STALE_AFTER_MS = 48 * HOUR_MS;
 
 /** `Status` do discord.js → o enum público do `HealthResponse`. */
 export function gatewayStatus(client: Client): HealthResponse['gateway']['status'] {
@@ -20,9 +27,41 @@ async function databaseHealth(db: ApiDeps['db']): Promise<HealthResponse['databa
   const start = performance.now();
   try {
     await db.execute(sql`select 1`);
-    return { ok: true, latencyMs: Math.round(performance.now() - start) };
+    const latencyMs = Math.round(performance.now() - start);
+    metrics.dbLatency.observe(latencyMs);
+    return { ok: true, latencyMs };
   } catch {
     return { ok: false, latencyMs: null };
+  }
+}
+
+/**
+ * O dump mais recente no volume `backups`, montado read-only no container do
+ * bot. Se o diretório não existe (dev, ou VM sem o serviço `backup`), o painel
+ * simplesmente não mostra o card.
+ */
+export async function readBackupHealth(
+  directory: string,
+  now: () => number = Date.now,
+): Promise<BackupHealth | undefined> {
+  try {
+    const files = (await readdir(directory)).filter((name) => name.endsWith('.sql.gz'));
+    if (files.length === 0) return { at: null, sizeBytes: null, fresh: false };
+
+    let newest: { at: number; size: number } | null = null;
+    for (const name of files) {
+      const info = await stat(join(directory, name));
+      if (!newest || info.mtimeMs > newest.at) newest = { at: info.mtimeMs, size: info.size };
+    }
+    if (!newest) return { at: null, sizeBytes: null, fresh: false };
+
+    return {
+      at: new Date(newest.at).toISOString(),
+      sizeBytes: newest.size,
+      fresh: now() - newest.at < BACKUP_STALE_AFTER_MS,
+    };
+  } catch {
+    return undefined;
   }
 }
 
@@ -32,6 +71,10 @@ export interface HealthRoutesOptions {
   /** Quantas guilds o bot deveria ter no cache (hoje: `GUILD_ID`). */
   expectedGuilds: number;
   startedAt?: number;
+  /** Leitor das filas; sem ele o campo `queues` some da resposta. */
+  queues?: () => QueueHealth;
+  /** Diretório do volume de backups (`/backups` na VM). */
+  backupDir?: string;
 }
 
 /**
@@ -50,6 +93,7 @@ export function createHealthRoutes(options: HealthRoutesOptions): Hono<ApiEnv> {
 
     const database = await databaseHealth(deps.db);
     const status = gatewayStatus(deps.client);
+    const memory = process.memoryUsage();
     const body: HealthResponse = {
       ok: status === 'ready' && database.ok,
       version: VERSION,
@@ -63,6 +107,14 @@ export function createHealthRoutes(options: HealthRoutesOptions): Hono<ApiEnv> {
       },
       database,
       guilds: { cached: deps.client.guilds.cache.size, expected: expectedGuilds },
+      process: {
+        rssBytes: memory.rss,
+        heapUsedBytes: memory.heapUsed,
+        nodeVersion: process.version,
+        commit: process.env.GIT_SHA ?? null,
+      },
+      ...(options.queues ? { queues: options.queues() } : {}),
+      ...(options.backupDir ? { backup: await readBackupHealth(options.backupDir) } : {}),
     };
     return c.json(body);
   });

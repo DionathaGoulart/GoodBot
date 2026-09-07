@@ -208,6 +208,13 @@ export class LogQueue {
   pendingCount(channelId: string): number {
     return this.channels.get(channelId)?.pending.length ?? 0;
   }
+
+  /** Total represado em todos os canais — gauge do `/metrics` (PRD §11). */
+  get pendingSize(): number {
+    let total = 0;
+    for (const state of this.channels.values()) total += state.pending.length;
+    return total;
+  }
 }
 
 /** Junta entradas até o limite de embeds; entrada com anexo vai sozinha. */

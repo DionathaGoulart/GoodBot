@@ -3,7 +3,6 @@ import {
   AUTOMOD_HITS_RETENTION_DAYS,
   AutomodRuleSchema,
   DAY_MS,
-  HOUR_MS,
   MINUTE_MS,
   SECOND_MS,
 } from '@cobot/shared';
@@ -25,8 +24,6 @@ import type { Guild, GuildMember, Message, PartialMessage, User } from 'discord.
 
 const log = childLogger('automod');
 
-/** Poda de `automod_hits` (PRD §8): 30 dias, verificada de hora em hora. */
-export const CLEANUP_INTERVAL_MS = HOUR_MS;
 /** Passada que expira modos raid e limpa janelas de spam em memória. */
 export const SWEEP_INTERVAL_MS = 30 * SECOND_MS;
 /** Duração do `/raid on` quando não há regra anti-raid para copiar. */
@@ -48,7 +45,6 @@ export interface AutomodDeps {
   /** TTL do cache de regras (default 5 min, como o `ConfigService`). */
   ttl?: number;
   now?: () => number;
-  cleanupIntervalMs?: number;
   sweepIntervalMs?: number;
   /** Hook de estatísticas por regra (§5.6). Preenchido na Etapa 10. */
   onHit?: (hit: { guildId: string; ruleId: string; type: AutomodRuleType }) => void;
@@ -72,7 +68,6 @@ export class AutomodService {
   private readonly ttl: number;
   private readonly now: () => number;
   private readonly runtime: AutomodRuntime;
-  private cleanupTimer: NodeJS.Timeout | null = null;
   private sweepTimer: NodeJS.Timeout | null = null;
   /** Público: os comandos `/raid` mexem no mesmo estado. */
   readonly raid: RaidService;
@@ -91,13 +86,6 @@ export class AutomodService {
   }
 
   start(): void {
-    if (!this.cleanupTimer) {
-      this.cleanupTimer = setInterval(
-        () => void this.cleanup(),
-        this.deps.cleanupIntervalMs ?? CLEANUP_INTERVAL_MS,
-      );
-      this.cleanupTimer.unref();
-    }
     if (!this.sweepTimer) {
       this.sweepTimer = setInterval(
         () => void this.sweep(),
@@ -108,9 +96,7 @@ export class AutomodService {
   }
 
   stop(): void {
-    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
     if (this.sweepTimer) clearInterval(this.sweepTimer);
-    this.cleanupTimer = null;
     this.sweepTimer = null;
   }
 
@@ -374,17 +360,13 @@ export class AutomodService {
     await this.deps.modlog.postAction(guild.id, { embeds: [embed] });
   }
 
-  /** Job de retenção de `automod_hits`. Nunca lança. */
+  /**
+   * Job de retenção de `automod_hits` (PRD §8): 30 dias. Lança de propósito —
+   * quem chama é o `RetentionJob`, que alerta quando a poda falha.
+   */
   async cleanup(): Promise<number> {
-    try {
-      const before = new Date(this.now() - AUTOMOD_HITS_RETENTION_DAYS * DAY_MS);
-      const removed = await deleteAutomodHitsBefore(this.deps.db, before);
-      if (removed > 0) log.info({ removed }, 'hits de automod podados');
-      return removed;
-    } catch (error) {
-      log.error({ err: error }, 'falha na limpeza dos hits de automod');
-      return 0;
-    }
+    const before = new Date(this.now() - AUTOMOD_HITS_RETENTION_DAYS * DAY_MS);
+    return deleteAutomodHitsBefore(this.deps.db, before);
   }
 
   /** Expira modos raid e descarta janelas de spam antigas. */
