@@ -52,23 +52,37 @@ function base64Bytes(payload: string): number {
   return Math.floor((payload.length * 3) / 4) - padding;
 }
 
+/** Formatos e teto aceitos por um campo de imagem. */
+export interface ImageDataUrlLimits {
+  mimeTypes: readonly string[];
+  maxBytes: number;
+}
+
 /**
  * Valida uma imagem que chegou como data URL. Roda no painel (antes de subir),
  * na server action e na rota do bot — é a mesma função nos três, então o que o
  * navegador aceita é exatamente o que o Discord vai receber.
+ *
+ * Os limites são parâmetro porque emoji (256 KB) e sticker (512 KB) são bem
+ * mais apertados que o ícone do servidor (Etapa 25); sem argumento, valem os
+ * do servidor.
  */
 export function parseImageDataUrl(
   value: string,
+  limits: ImageDataUrlLimits = {
+    mimeTypes: GUILD_IMAGE_MIME_TYPES,
+    maxBytes: MAX_GUILD_IMAGE_BYTES,
+  },
 ): { ok: true; image: ParsedImageDataUrl } | { ok: false; reason: ImageRejection } {
   const match = DATA_URL.exec(value);
   if (!match?.[1] || !match[2]) return { ok: false, reason: 'format' };
 
   const mime = match[1];
-  if (!GUILD_IMAGE_MIME_TYPES.includes(mime)) return { ok: false, reason: 'mime' };
+  if (!limits.mimeTypes.includes(mime)) return { ok: false, reason: 'mime' };
 
   const bytes = base64Bytes(match[2]);
   if (bytes <= 0) return { ok: false, reason: 'format' };
-  if (bytes > MAX_GUILD_IMAGE_BYTES) return { ok: false, reason: 'size' };
+  if (bytes > limits.maxBytes) return { ok: false, reason: 'size' };
 
   return { ok: true, image: { mime, bytes, animated: mime === 'image/gif' } };
 }

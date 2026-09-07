@@ -11,12 +11,31 @@ import { CommandSummarySchema } from './commands';
 import { ApiErrorSchema, ApiOkSchema } from './common';
 import { InvalidateInputSchema } from './config';
 import {
+  GuildScheduledEventListSchema,
+  GuildScheduledEventSummarySchema,
+  ScheduledEventInputSchema,
+} from './events';
+import {
+  EmojiCreateInputSchema,
+  EmojiUpdateInputSchema,
+  ExpressionOverviewSchema,
+  GuildEmojiSummarySchema,
+  GuildStickerSummarySchema,
+  StickerCreateInputSchema,
+  StickerUpdateInputSchema,
+} from './expressions';
+import {
   BanListQuerySchema,
   GuildBanPageSchema,
   GuildProfileSchema,
   GuildSettingsInputSchema,
 } from './guild';
 import { HealthResponseSchema } from './health';
+import {
+  CreateInviteInputSchema,
+  GuildInviteListSchema,
+  GuildInviteSummarySchema,
+} from './invites';
 import {
   AuditLogEntrySummarySchema,
   AuditLogQuerySchema,
@@ -57,8 +76,19 @@ import type {
 import type { CommandSummary } from './commands';
 import type { ApiError } from './common';
 import type { InvalidateInput } from './config';
+import type { GuildScheduledEventList, GuildScheduledEventSummary, ScheduledEventInput } from './events';
+import type {
+  EmojiCreateInput,
+  EmojiUpdateInput,
+  ExpressionOverview,
+  GuildEmojiSummary,
+  GuildStickerSummary,
+  StickerCreateInput,
+  StickerUpdateInput,
+} from './expressions';
 import type { BanListQuery, GuildBanPage, GuildProfile, GuildSettingsInput } from './guild';
 import type { HealthResponse } from './health';
+import type { CreateInviteInput, GuildInviteList, GuildInviteSummary } from './invites';
 import type {
   AuditLogEntrySummary,
   AuditLogQuery,
@@ -236,6 +266,108 @@ export function createInternalClient(options: InternalClientOptions) {
       request(
         ModerationActionResultSchema,
         `${guild(guildId)}/bans/${encodeURIComponent(userId)}`,
+        { method: 'DELETE', body: ActorInputSchema.parse(input) },
+      ),
+
+    /** Convites do servidor (PRD §6.3); exige `ManageGuild` ao bot. */
+    invites: (guildId: string): Promise<GuildInviteList> =>
+      request(GuildInviteListSchema, `${guild(guildId)}/invites`),
+
+    createInvite: (guildId: string, input: CreateInviteInput): Promise<GuildInviteSummary> =>
+      request(GuildInviteSummarySchema, `${guild(guildId)}/invites`, {
+        method: 'POST',
+        body: CreateInviteInputSchema.parse(input),
+      }),
+
+    deleteInvite: (guildId: string, code: string, input: ActorInput): Promise<{ ok: true }> =>
+      request(ApiOkSchema, `${guild(guildId)}/invites/${encodeURIComponent(code)}`, {
+        method: 'DELETE',
+        body: ActorInputSchema.parse(input),
+      }),
+
+    /** Eventos agendados. Lidos por REST: o cache do manager é 0 (PRD §7.2). */
+    scheduledEvents: (guildId: string): Promise<GuildScheduledEventList> =>
+      request(GuildScheduledEventListSchema, `${guild(guildId)}/events`),
+
+    createScheduledEvent: (
+      guildId: string,
+      input: ScheduledEventInput,
+    ): Promise<GuildScheduledEventSummary> =>
+      request(GuildScheduledEventSummarySchema, `${guild(guildId)}/events`, {
+        method: 'POST',
+        body: ScheduledEventInputSchema.parse(input),
+      }),
+
+    updateScheduledEvent: (
+      guildId: string,
+      eventId: string,
+      input: ScheduledEventInput,
+    ): Promise<GuildScheduledEventSummary> =>
+      request(
+        GuildScheduledEventSummarySchema,
+        `${guild(guildId)}/events/${encodeURIComponent(eventId)}`,
+        { method: 'PATCH', body: ScheduledEventInputSchema.parse(input) },
+      ),
+
+    deleteScheduledEvent: (
+      guildId: string,
+      eventId: string,
+      input: ActorInput,
+    ): Promise<{ ok: true }> =>
+      request(ApiOkSchema, `${guild(guildId)}/events/${encodeURIComponent(eventId)}`, {
+        method: 'DELETE',
+        body: ActorInputSchema.parse(input),
+      }),
+
+    /** Emojis e stickers + os slots que sobram no nível de impulso atual. */
+    expressions: (guildId: string): Promise<ExpressionOverview> =>
+      request(ExpressionOverviewSchema, `${guild(guildId)}/expressions`),
+
+    createEmoji: (guildId: string, input: EmojiCreateInput): Promise<GuildEmojiSummary> =>
+      request(GuildEmojiSummarySchema, `${guild(guildId)}/expressions/emojis`, {
+        method: 'POST',
+        body: EmojiCreateInputSchema.parse(input),
+      }),
+
+    updateEmoji: (
+      guildId: string,
+      emojiId: string,
+      input: EmojiUpdateInput,
+    ): Promise<GuildEmojiSummary> =>
+      request(
+        GuildEmojiSummarySchema,
+        `${guild(guildId)}/expressions/emojis/${encodeURIComponent(emojiId)}`,
+        { method: 'PATCH', body: EmojiUpdateInputSchema.parse(input) },
+      ),
+
+    deleteEmoji: (guildId: string, emojiId: string, input: ActorInput): Promise<{ ok: true }> =>
+      request(
+        ApiOkSchema,
+        `${guild(guildId)}/expressions/emojis/${encodeURIComponent(emojiId)}`,
+        { method: 'DELETE', body: ActorInputSchema.parse(input) },
+      ),
+
+    createSticker: (guildId: string, input: StickerCreateInput): Promise<GuildStickerSummary> =>
+      request(GuildStickerSummarySchema, `${guild(guildId)}/expressions/stickers`, {
+        method: 'POST',
+        body: StickerCreateInputSchema.parse(input),
+      }),
+
+    updateSticker: (
+      guildId: string,
+      stickerId: string,
+      input: StickerUpdateInput,
+    ): Promise<GuildStickerSummary> =>
+      request(
+        GuildStickerSummarySchema,
+        `${guild(guildId)}/expressions/stickers/${encodeURIComponent(stickerId)}`,
+        { method: 'PATCH', body: StickerUpdateInputSchema.parse(input) },
+      ),
+
+    deleteSticker: (guildId: string, stickerId: string, input: ActorInput): Promise<{ ok: true }> =>
+      request(
+        ApiOkSchema,
+        `${guild(guildId)}/expressions/stickers/${encodeURIComponent(stickerId)}`,
         { method: 'DELETE', body: ActorInputSchema.parse(input) },
       ),
 

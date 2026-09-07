@@ -561,11 +561,18 @@ verifica na API interna usando `actorId`).
 `ViewChannel, SendMessages, SendMessagesInThreads, EmbedLinks, AttachFiles,
 ReadMessageHistory, ManageMessages, ManageChannels, ManageRoles, ManageGuild,
 KickMembers, BanMembers, ModerateMembers, ViewAuditLog, ManageThreads,
-AddReactions, UseExternalEmojis, MuteMembers, DeafenMembers, MoveMembers`.
+AddReactions, UseExternalEmojis, MuteMembers, DeafenMembers, MoveMembers,
+CreateInstantInvite, ManageEvents, ManageGuildExpressions`.
 
 `ManageGuild` entrou na Etapa 23 (editar nome, ícone, banner e nível de
 verificação pelo painel). Sem ela o bot continua funcionando: a tela
 `/servidor` fica em leitura e diz o que falta, em vez de falhar no envio.
+
+`CreateInstantInvite`, `ManageEvents` e `ManageGuildExpressions` entraram na
+Etapa 25 (convites, eventos agendados, emojis e stickers pelo painel). Valem a
+mesma regra: sem elas as telas `/convites`, `/eventos` e `/emojis` ficam em
+leitura e explicam qual permissão falta. `ManageGuild` também é o que o Discord
+exige para *listar* convites.
 Sem `Administrator`. Intents: `Guilds, GuildMembers, GuildModeration,
 GuildMessages, MessageContent, GuildMessageReactions, GuildVoiceStates,
 DirectMessages, GuildEmojisAndStickers`.
