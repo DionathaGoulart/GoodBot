@@ -1,0 +1,85 @@
+# Produção — VM Oracle E2.1.Micro (x86_64, 1 OCPU / 1 GB).
+# Só o bot e o Caddy rodam aqui: o painel está na Vercel e o Postgres no
+# Supabase (PRD §7.2, §7.5).
+#
+#   docker compose -f infra/docker-compose.yml --env-file .env up -d
+name: cobot
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
+services:
+  bot:
+    image: ${BOT_IMAGE:-cobot-bot:local}
+    container_name: cobot-bot
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: infra/docker/bot.Dockerfile
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_PORT: 3001
+    # Sem `ports`: a API só é alcançável pelo Caddy, pela rede interna
+    # do Compose (PRD §7.3).
+    expose:
+      - '3001'
+    networks: [cobot]
+    mem_limit: 384m
+    mem_reservation: 256m
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: cobot-caddy
+    restart: unless-stopped
+    depends_on:
+      bot:
+        condition: service_started
+    environment:
+      # Em produção: bot.seu-dominio. Local: `localhost` (certificado interno).
+      BOT_DOMAIN: ${BOT_DOMAIN:-localhost}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [cobot]
+    mem_limit: 64m
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+    healthcheck:
+      test: ['CMD', 'caddy', 'version']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  cobot:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

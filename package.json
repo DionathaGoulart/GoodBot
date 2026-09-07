@@ -18,7 +18,10 @@
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "db:generate": "pnpm --filter @cobot/db db:generate",
-    "db:migrate": "pnpm --filter @cobot/db db:migrate"
+    "db:migrate": "pnpm --filter @cobot/db db:migrate",
+    "docker:build": "docker build --platform linux/amd64 -f infra/docker/bot.Dockerfile -t cobot-bot:local .",
+    "docker:up": "docker compose -f infra/docker-compose.yml --env-file .env up -d",
+    "docker:down": "docker compose -f infra/docker-compose.yml --env-file .env down"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
