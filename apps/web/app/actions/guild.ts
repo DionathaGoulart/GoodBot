@@ -8,7 +8,17 @@ import {
   setSlowmode,
   toggleChannelLock,
 } from '@/lib/channels';
+import { deleteScheduledEvent, saveScheduledEvent } from '@/lib/events';
+import {
+  createEmoji,
+  createSticker,
+  deleteEmoji,
+  deleteSticker,
+  updateEmoji,
+  updateSticker,
+} from '@/lib/expressions';
 import { loadMoreBans, saveGuildProfile, unbanUser } from '@/lib/guild';
+import { createInvite, deleteInvite } from '@/lib/invites';
 import { punishMember, setMemberRoles } from '@/lib/members';
 import { moveRole, removeRole, saveRole } from '@/lib/roles';
 
@@ -87,4 +97,46 @@ export async function loadMoreBansAction(
   query: Partial<BanListQuery>,
 ): Promise<{ ok: true; page: GuildBanPage } | { ok: false; message: string }> {
   return loadMoreBans(query);
+}
+
+// ── convites, eventos e emojis (Etapa 25) ───────────────────────────────────
+
+export async function createInviteAction(formData: FormData): Promise<ActionResult> {
+  return createInvite(formData);
+}
+
+export async function deleteInviteAction(formData: FormData): Promise<ActionResult> {
+  return deleteInvite(formData);
+}
+
+export async function saveScheduledEventAction(formData: FormData): Promise<ActionResult> {
+  return saveScheduledEvent(formData);
+}
+
+export async function deleteScheduledEventAction(formData: FormData): Promise<ActionResult> {
+  return deleteScheduledEvent(formData);
+}
+
+export async function createEmojiAction(formData: FormData): Promise<ActionResult> {
+  return createEmoji(formData);
+}
+
+export async function updateEmojiAction(formData: FormData): Promise<ActionResult> {
+  return updateEmoji(formData);
+}
+
+export async function deleteEmojiAction(formData: FormData): Promise<ActionResult> {
+  return deleteEmoji(formData);
+}
+
+export async function createStickerAction(formData: FormData): Promise<ActionResult> {
+  return createSticker(formData);
+}
+
+export async function updateStickerAction(formData: FormData): Promise<ActionResult> {
+  return updateSticker(formData);
+}
+
+export async function deleteStickerAction(formData: FormData): Promise<ActionResult> {
+  return deleteSticker(formData);
 }

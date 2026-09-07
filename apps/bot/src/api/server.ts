@@ -20,8 +20,11 @@ import { createCaseRoutes } from './routes/cases';
 import { createChannelRoutes } from './routes/channels';
 import { createCommandRoutes } from './routes/commands';
 import { createConfigRoutes } from './routes/config';
+import { createEventRoutes } from './routes/events';
+import { createExpressionRoutes } from './routes/expressions';
 import { createGuildRoutes } from './routes/guild';
 import { createHealthRoutes } from './routes/health';
+import { createInviteRoutes } from './routes/invites';
 import { createMemberRoutes } from './routes/members';
 import { createMessageRoutes } from './routes/messages';
 import { createMetricsRoutes } from './routes/metrics';
@@ -41,17 +44,27 @@ const log = childLogger('api');
 export const MAX_BODY_BYTES = 256 * 1024;
 
 /**
- * Exceção ao teto acima: só o `PATCH` das configurações do servidor carrega
- * imagem, e uma imagem de 8 MB (o limite do Discord) vira ~11 MB em base64.
- * Toda outra rota continua em 256 KB.
+ * Exceção ao teto acima: as rotas que carregam imagem. Uma imagem de 8 MB (o
+ * limite do Discord para ícone, banner e capa de evento) vira ~11 MB em
+ * base64. Toda outra rota continua em 256 KB.
  */
 export const MAX_UPLOAD_BODY_BYTES = 12 * 1024 * 1024;
 
-/** `PATCH /guilds/:id` — a única rota que recebe ícone e banner. */
-const GUILD_SETTINGS_PATH = /^\/guilds\/\d{17,20}\/?$/;
+/**
+ * Quem recebe data URL: as configurações do servidor (ícone e banner), a capa
+ * do evento agendado e o upload de emoji e sticker. Emoji e sticker são bem
+ * menores (256 KB e 512 KB), mas já passam do teto padrão depois da base64.
+ */
+const GUILD = String.raw`/guilds/\d{17,20}`;
+const UPLOAD_ROUTES: { method: string; path: RegExp }[] = [
+  { method: 'PATCH', path: new RegExp(`^${GUILD}/?$`) },
+  { method: 'POST', path: new RegExp(`^${GUILD}/events/?$`) },
+  { method: 'PATCH', path: new RegExp(String.raw`^${GUILD}/events/\d{17,20}/?$`) },
+  { method: 'POST', path: new RegExp(`^${GUILD}/expressions/(emojis|stickers)/?$`) },
+];
 
 export function isImageUploadRoute(method: string, path: string): boolean {
-  return method === 'PATCH' && GUILD_SETTINGS_PATH.test(path);
+  return UPLOAD_ROUTES.some((route) => route.method === method && route.path.test(path));
 }
 
 /** 401 numa hora que já é sondagem de token e não dedo gordo (PRD §11). */
@@ -152,6 +165,9 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
   guilds.route('/:guildId/channels', createChannelRoutes(deps));
   guilds.route('/:guildId/members', createMemberRoutes(deps));
   guilds.route('/:guildId/social', createSocialRoutes(deps));
+  guilds.route('/:guildId/invites', createInviteRoutes(deps));
+  guilds.route('/:guildId/events', createEventRoutes(deps));
+  guilds.route('/:guildId/expressions', createExpressionRoutes(deps));
   guilds.route('/:guildId', createMessageRoutes(deps));
   app.route('/guilds', guilds);
 

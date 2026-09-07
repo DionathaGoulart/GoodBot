@@ -53,6 +53,13 @@ export function auditTargetHref(
       return `/g/${guildId}/cargos`;
     case 'ticket':
       return `/g/${guildId}/config/tickets`;
+    case 'invite':
+      return `/g/${guildId}/convites`;
+    case 'event':
+      return `/g/${guildId}/eventos`;
+    case 'emoji':
+    case 'sticker':
+      return `/g/${guildId}/emojis`;
     default:
       return null;
   }
