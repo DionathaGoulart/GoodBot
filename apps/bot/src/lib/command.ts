@@ -1,6 +1,7 @@
 import { ContextMenuCommandBuilder } from 'discord.js';
 
 import type { AutomodService } from '../automod/engine';
+import type { AuditService } from '../services/audit';
 import type { AutoroleService } from '../services/autorole';
 import type { ConfigService, ResolvedSettings } from '../services/config';
 import type { LockService } from '../services/locks';
@@ -60,6 +61,8 @@ export interface BotContext {
   messageCache: MessageCacheService;
   /** Agregador de estatísticas (§5.6); nunca lança. */
   stats: StatsService;
+  /** Trilha do que o bot fez e por quê (§6.5); nunca lança. */
+  audit: AuditService;
   logger: Logger;
   /** Coleção viva de comandos (usada pelo `/help` e pelo registro). */
   commands: CommandCollection;

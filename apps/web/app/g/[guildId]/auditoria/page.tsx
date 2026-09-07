@@ -30,10 +30,16 @@ export default async function AuditPage({
       <ScreenHeader
         kicker="SERVIDOR"
         title="Auditoria"
-        meta="Quem mexeu no painel, quando e o que mudou. Nada aqui pode ser editado ou apagado."
+        meta="Tudo que aconteceu no servidor — pelo painel, por comando, pelo automod ou sozinho — com quem pediu e por quê. Nada aqui pode ser editado ou apagado."
       />
       <Panel title="AUDITORIA.LOG">
-        <AuditTable basePath={basePath} filters={filters} rows={rows} actions={actions} />
+        <AuditTable
+          guildId={guildId}
+          basePath={basePath}
+          filters={filters}
+          rows={rows}
+          actions={actions}
+        />
         <Pager
           basePath={basePath}
           query={auditFiltersToQuery({ ...filters, page: 1 })}

@@ -304,14 +304,55 @@ describe.skipIf(!url)('repositories (integração com Postgres)', () => {
       expect((await searchAudit(db, { guildId: GUILD_ID, q: 'nada disso' })).total).toBe(0);
     });
 
+    it('searchAudit filtra por origem', async () => {
+      // O que o bot faz sozinho vive na mesma tabela desde a Etapa 22; é o
+      // `source` que separa as duas histórias.
+      await appendAudit(db, {
+        guildId: GUILD_ID,
+        actorId: USER_A,
+        actorTag: 'spammer',
+        action: 'automod.words',
+        source: 'automod',
+        reason: 'palavrão: regra Palavras',
+        targetType: 'member',
+        targetId: USER_A,
+        before: null,
+        after: { actions: ['delete'] },
+      });
+
+      // As duas linhas anteriores nasceram sem `source`: o default é o painel.
+      expect((await searchAudit(db, { guildId: GUILD_ID, source: ['dashboard'] })).total).toBe(2);
+
+      const hits = await searchAudit(db, { guildId: GUILD_ID, source: ['automod'] });
+      expect(hits.total).toBe(1);
+      expect(hits.rows[0]?.action).toBe('automod.words');
+      expect(hits.rows[0]?.reason).toBe('palavrão: regra Palavras');
+
+      expect(
+        (await searchAudit(db, { guildId: GUILD_ID, source: ['automod', 'dashboard'] })).total,
+      ).toBe(3);
+      // Lista vazia é o mesmo que não filtrar — a barra manda `[]` por padrão.
+      expect((await searchAudit(db, { guildId: GUILD_ID, source: [] })).total).toBe(3);
+      expect((await searchAudit(db, { guildId: GUILD_ID, source: ['job'] })).total).toBe(0);
+
+      // A origem combina com os outros filtros, não os substitui.
+      expect(
+        (await searchAudit(db, { guildId: GUILD_ID, source: ['automod'], actorId: USER_B })).total,
+      ).toBe(0);
+    });
+
     it('searchAudit pagina e o total ignora a página', async () => {
       const page = await searchAudit(db, { guildId: GUILD_ID, page: 1, pageSize: 1 });
       expect(page.rows).toHaveLength(1);
-      expect(page.total).toBe(2);
+      expect(page.total).toBe(3);
     });
 
     it('listAuditActions lista as ações distintas em ordem', async () => {
-      expect(await listAuditActions(db, GUILD_ID)).toEqual(['config.update', 'member.ban']);
+      expect(await listAuditActions(db, GUILD_ID)).toEqual([
+        'automod.words',
+        'config.update',
+        'member.ban',
+      ]);
     });
   });
 

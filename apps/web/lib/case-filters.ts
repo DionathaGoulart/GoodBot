@@ -1,4 +1,11 @@
-import { CASE_SOURCES, CASE_TYPES, type CaseSource, type CaseType } from '@cobot/shared';
+import {
+  AUDIT_SOURCES,
+  CASE_SOURCES,
+  CASE_TYPES,
+  type AuditSource,
+  type CaseSource,
+  type CaseType,
+} from '@cobot/shared';
 
 import { addDays, zonedDayStart, DEFAULT_TIMEZONE } from './stats-period';
 
@@ -145,6 +152,8 @@ export function filterRange(
 export interface AuditFilters {
   actorId: string;
   action: string;
+  /** Origens marcadas; vazio = todas (Etapa 22). */
+  source: AuditSource[];
   from: string;
   to: string;
   q: string;
@@ -154,6 +163,7 @@ export interface AuditFilters {
 export const EMPTY_AUDIT_FILTERS: AuditFilters = {
   actorId: '',
   action: '',
+  source: [],
   from: '',
   to: '',
   q: '',
@@ -165,6 +175,7 @@ export function parseAuditFilters(params: RawSearchParams): AuditFilters {
     actorId: snowflake(params.actor),
     // A ação é texto livre porque a lista cresce a cada módulo novo.
     action: first(params.action).slice(0, 64),
+    source: list(params.source, AUDIT_SOURCES),
     from: day(params.from),
     to: day(params.to),
     q: first(params.q).slice(0, 200),
@@ -176,6 +187,7 @@ export function auditFiltersToQuery(filters: AuditFilters): URLSearchParams {
   const query = new URLSearchParams();
   if (filters.actorId) query.set('actor', filters.actorId);
   if (filters.action) query.set('action', filters.action);
+  if (filters.source.length) query.set('source', filters.source.join(','));
   if (filters.from) query.set('from', filters.from);
   if (filters.to) query.set('to', filters.to);
   if (filters.q) query.set('q', filters.q);
@@ -187,6 +199,7 @@ export function activeAuditFilterCount(filters: AuditFilters): number {
   return [
     Boolean(filters.actorId),
     Boolean(filters.action),
+    filters.source.length > 0,
     Boolean(filters.from),
     Boolean(filters.to),
     Boolean(filters.q),

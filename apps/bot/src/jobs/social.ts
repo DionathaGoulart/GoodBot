@@ -10,9 +10,10 @@ import {
 import { MINUTE_MS, SECOND_MS, SOCIAL_MAX_FAILURES } from '@cobot/shared';
 
 import { childLogger } from '../logger';
-import { buildSocialMessage } from '../services/social/announce';
+import { KIND_LABEL, buildSocialMessage } from '../services/social/announce';
 
 import type { AlertService } from '../services/alerts';
+import type { AuditService } from '../services/audit';
 import type { ConfigService } from '../services/config';
 import type { SocialProviders } from '../services/social/index';
 import type { SocialItem } from '../services/social/types';
@@ -55,6 +56,8 @@ export interface SocialJobDeps {
   config: ConfigService;
   providers: SocialProviders;
   alerts?: Pick<AlertService, 'emit'>;
+  /** Trilha de auditoria (§6.5); ausente nos testes. */
+  audit?: Pick<AuditService, 'record'>;
   intervalMs?: number;
   batchSize?: number;
   /** `0` nos testes: ninguém quer esperar o jitter numa suíte. */
@@ -230,6 +233,21 @@ export class SocialJob {
         { accountId: account.id, platform: account.platform, kind: item.kind },
         'publicação anunciada',
       );
+      this.deps.audit?.record({
+        guildId: account.guildId,
+        action: `social.announce.${account.platform}`,
+        source: 'job',
+        target: { type: 'channel', id: account.discordChannelId },
+        reason: `${account.handle} publicou ${KIND_LABEL[item.kind]}`,
+        after: {
+          accountId: account.id,
+          handle: account.handle,
+          kind: item.kind,
+          url: item.url,
+          title: item.title || null,
+          messageId: message.id,
+        },
+      });
     } catch (error) {
       await releaseSocialPost(this.deps.db, post.id);
       throw error;

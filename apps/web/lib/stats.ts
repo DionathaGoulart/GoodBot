@@ -32,10 +32,12 @@ import {
   type Period,
 } from './stats-period';
 
+import type { AuditSource } from '@cobot/shared';
+
 /**
- * Leituras do dashboard (PRD §6.1). Tudo passa por `unstable_cache` de 60s por
- * guild + período: seis blocos batendo no Supabase a cada F5 não valem o
- * frescor de meio minuto. (`use cache` exigiria ligar `cacheComponents`, o que
+ * Leituras do dashboard (PRD §6.1). Quase tudo passa por `unstable_cache` de
+ * 60s por guild + período: seis blocos batendo no Supabase a cada F5 não valem
+ * o frescor de meio minuto. A exceção é `loadRecentAudit` — ver lá por quê. (`use cache` exigiria ligar `cacheComponents`, o que
  * é assunto da Etapa 20.)
  *
  * O que sai daqui é sempre serializável — nada de `Date`, que o cache do Next
@@ -278,6 +280,8 @@ export interface RecentAudit {
   id: number;
   actorTag: string;
   action: string;
+  source: AuditSource;
+  reason: string | null;
   targetType: string | null;
   targetId: string | null;
   createdAt: string;
@@ -301,20 +305,22 @@ export async function loadRecentCases(guildId: string): Promise<RecentCase[]> {
   )();
 }
 
+/**
+ * Últimas dez ações de **qualquer** origem (PRD §6.1, Etapa 22). Único bloco
+ * do dashboard sem `unstable_cache`: é um `LIMIT 10` num índice e é o card que
+ * o auto-refresh de 10 s existe para manter vivo — cachear por 60 s aqui
+ * anularia o refresh sem economizar nada que importe.
+ */
 export async function loadRecentAudit(guildId: string): Promise<RecentAudit[]> {
-  return unstable_cache(
-    async () => {
-      const rows = await listRecentAudit(db(), guildId, 10);
-      return rows.map((row) => ({
-        id: row.id,
-        actorTag: row.actorTag,
-        action: row.action,
-        targetType: row.targetType,
-        targetId: row.targetId,
-        createdAt: row.createdAt.toISOString(),
-      }));
-    },
-    ['stats', 'recent-audit', guildId],
-    { revalidate: TTL_SECONDS, tags: [`stats:${guildId}`] },
-  )();
+  const rows = await listRecentAudit(db(), guildId, 10);
+  return rows.map((row) => ({
+    id: row.id,
+    actorTag: row.actorTag,
+    action: row.action,
+    source: row.source,
+    reason: row.reason,
+    targetType: row.targetType,
+    targetId: row.targetId,
+    createdAt: row.createdAt.toISOString(),
+  }));
 }

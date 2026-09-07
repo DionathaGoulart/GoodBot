@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Panel } from '@/components/retro/panel';
 import { EmptyState } from '@/components/retro/states';
 import { Tag } from '@/components/retro/tag';
+import { AUDIT_SOURCE_LABEL, AUDIT_SOURCE_TONES, auditTargetHref } from '@/lib/audit-sources';
 import { CASE_TONES } from '@/lib/case-tones';
 import type { RecentAudit, RecentCase } from '@/lib/stats';
 
@@ -56,33 +57,38 @@ export function RecentCases({ guildId, cases }: { guildId: string; cases: Recent
   );
 }
 
-/** Últimos 10 eventos de auditoria do painel (PRD §6.5). */
+/**
+ * "Últimas ações" (PRD §6.1, Etapa 22): as 10 mais recentes de **qualquer**
+ * origem — painel, comando, automod, evento ou job. Cada linha aponta para o
+ * alvo quando ele tem página; sem alvo navegável, cai na auditoria filtrada
+ * por aquela ação.
+ */
 export function RecentAuditLog({ guildId, entries }: { guildId: string; entries: RecentAudit[] }) {
   return (
-    <Panel title="AUDITORIA.LOG" actions={<MoreLink href={`/g/${guildId}/auditoria`} />}>
+    <Panel title="ULTIMAS_ACOES.LOG" actions={<MoreLink href={`/g/${guildId}/auditoria`} />}>
       {entries.length === 0 ? (
         <EmptyState
           title="NADA AQUI"
-          description="Ninguém mexeu no painel ainda. Toda alteração feita por aqui vira uma linha nesta lista."
+          description="Nada aconteceu ainda. Toda ação — sua ou do bot — vira uma linha nesta lista."
         />
       ) : (
         <ul className="flex flex-col divide-y-2 divide-base-300">
           {entries.map((entry) => (
             <li key={entry.id}>
               <Link
-                href={`/g/${guildId}/auditoria?action=${encodeURIComponent(entry.action)}`}
+                href={
+                  auditTargetHref(guildId, entry) ??
+                  `/g/${guildId}/auditoria?action=${encodeURIComponent(entry.action)}`
+                }
                 className="flex flex-wrap items-center gap-3 py-2 hover:bg-base-300/30"
               >
-                <Tag tone="muted">{entry.action}</Tag>
+                <Tag tone={AUDIT_SOURCE_TONES[entry.source]}>
+                  {AUDIT_SOURCE_LABEL[entry.source]}
+                </Tag>
+                <span className="screen-meta shrink-0">{entry.action}</span>
                 <span className="min-w-0 flex-1 truncate text-sm">
                   {entry.actorTag}
-                  {entry.targetType ? (
-                    <span className="opacity-60">
-                      {' '}
-                      — {entry.targetType}
-                      {entry.targetId ? ` ${entry.targetId}` : ''}
-                    </span>
-                  ) : null}
+                  {entry.reason ? <span className="opacity-60"> — {entry.reason}</span> : null}
                 </span>
                 <span className="screen-meta shrink-0">{when(entry.createdAt)}</span>
               </Link>

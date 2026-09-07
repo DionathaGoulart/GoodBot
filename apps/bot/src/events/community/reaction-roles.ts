@@ -10,18 +10,15 @@ import {
 } from '../../services/reaction-roles';
 
 import type { BotContext } from '../../lib/command';
-import type {
-  MessageReaction,
-  PartialMessageReaction,
-  PartialUser,
-  User,
-} from 'discord.js';
+import type { MessageReaction, PartialMessageReaction, PartialUser, User } from 'discord.js';
 
 /**
  * Identificador comparável com `reaction_role_items.emoji`: `name:id` para
  * emoji customizado, o próprio caractere para unicode.
  */
-export function reactionIdentifier(reaction: MessageReaction | PartialMessageReaction): string | null {
+export function reactionIdentifier(
+  reaction: MessageReaction | PartialMessageReaction,
+): string | null {
   const { id, name } = reaction.emoji;
   if (id) return name ? `${name}:${id}` : null;
   return name;
@@ -88,18 +85,26 @@ async function handleReaction(
     return;
   }
 
+  ctx.audit.record({
+    guildId,
+    action: added ? 'reaction_role.add' : 'reaction_role.remove',
+    source: 'event',
+    actor: { id: member.id, tag: member.user.tag },
+    target: { type: 'member', id: member.id },
+    reason: `Reagiu com ${identifier} num painel de cargos`,
+    after: { panelId: panel.id, add: change.add, remove: change.remove },
+  });
+
   // Só no `add`: tirar a reação do próprio bot no `remove` não faz sentido.
   if (added && config.removeReactionAfter) {
     await reaction.users.remove(user.id).catch(() => null);
   }
 }
 
-export const reactionRoleAdd = defineEvent(
-  Events.MessageReactionAdd,
-  (ctx, reaction, user) => handleReaction(ctx, reaction, user, true),
+export const reactionRoleAdd = defineEvent(Events.MessageReactionAdd, (ctx, reaction, user) =>
+  handleReaction(ctx, reaction, user, true),
 );
 
-export const reactionRoleRemove = defineEvent(
-  Events.MessageReactionRemove,
-  (ctx, reaction, user) => handleReaction(ctx, reaction, user, false),
+export const reactionRoleRemove = defineEvent(Events.MessageReactionRemove, (ctx, reaction, user) =>
+  handleReaction(ctx, reaction, user, false),
 );

@@ -3,8 +3,11 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 
+import Link from 'next/link';
+
 import { JsonDiff } from '@/components/json-diff';
 import { MemberPicker } from '@/components/config/member-picker';
+import { MultiSelect } from '@/components/multi-select';
 import { Tag } from '@/components/retro/tag';
 import { EmptyState } from '@/components/retro/states';
 import { Input } from '@/components/ui/input';
@@ -16,6 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  AUDIT_SOURCE_LABEL,
+  AUDIT_SOURCE_OPTIONS,
+  AUDIT_SOURCE_TONES,
+  auditTargetHref,
+} from '@/lib/audit-sources';
 import { auditFiltersToQuery, EMPTY_AUDIT_FILTERS, type AuditFilters } from '@/lib/case-filters';
 
 import type { AuditRow } from '@/lib/audit';
@@ -82,6 +91,14 @@ function AuditFiltersBar({
           </SelectContent>
         </Select>
       </Field>
+      <Field label="ORIGEM">
+        <MultiSelect
+          label="Origem"
+          options={AUDIT_SOURCE_OPTIONS}
+          value={draft.source}
+          onChange={(source) => patch({ source: source as AuditFilters['source'] })}
+        />
+      </Field>
       <Field label="DE">
         <Input
           type="date"
@@ -124,17 +141,44 @@ function AuditFiltersBar({
   );
 }
 
+/** O alvo vira link quando existe uma página para ele (Etapa 22). */
+function TargetCell({ guildId, row }: { guildId: string; row: AuditRow }) {
+  if (!row.targetType) return <span className="screen-meta">—</span>;
+
+  const href = auditTargetHref(guildId, row);
+  const body = (
+    <span className="text-sm">
+      {row.targetType}
+      {row.targetId ? <span className="screen-meta block select-all">{row.targetId}</span> : null}
+    </span>
+  );
+
+  return href ? (
+    <Link
+      href={href}
+      className="underline decoration-accent decoration-2 underline-offset-2"
+      onClick={(event) => event.stopPropagation()}
+    >
+      {body}
+    </Link>
+  ) : (
+    body
+  );
+}
+
 /**
  * §6.3/§6.5 — a auditoria não usa a `DataTable`: cada linha abre num diff, e
  * uma `<tr>` que vira duas quando expande é mais simples aqui do que uma
  * coluna extra na tabela genérica.
  */
 export function AuditTable({
+  guildId,
   basePath,
   filters,
   rows,
   actions,
 }: {
+  guildId: string;
   basePath: string;
   filters: AuditFilters;
   rows: AuditRow[];
@@ -152,12 +196,13 @@ export function AuditTable({
       />
 
       {rows.length === 0 ? (
-        <EmptyState description="Nenhuma ação do painel com esses filtros." />
+        <EmptyState description="Nenhuma ação com esses filtros." />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr>
+                <th className="screen-meta p-2 text-left">ORIGEM</th>
                 <th className="screen-meta p-2 text-left">ATOR</th>
                 <th className="screen-meta p-2 text-left">AÇÃO</th>
                 <th className="screen-meta p-2 text-left">ALVO</th>
@@ -173,6 +218,11 @@ export function AuditTable({
                     onClick={() => setOpen(open === row.id ? null : row.id)}
                   >
                     <td className="p-2">
+                      <Tag tone={AUDIT_SOURCE_TONES[row.source]}>
+                        {AUDIT_SOURCE_LABEL[row.source]}
+                      </Tag>
+                    </td>
+                    <td className="p-2">
                       <span className="font-bold">{row.actorTag}</span>
                       <span className="screen-meta block select-all">{row.actorId}</span>
                     </td>
@@ -180,16 +230,7 @@ export function AuditTable({
                       <Tag tone="muted">{row.action}</Tag>
                     </td>
                     <td className="p-2">
-                      {row.targetType ? (
-                        <span className="text-sm">
-                          {row.targetType}
-                          {row.targetId ? (
-                            <span className="screen-meta block select-all">{row.targetId}</span>
-                          ) : null}
-                        </span>
-                      ) : (
-                        <span className="screen-meta">—</span>
-                      )}
+                      <TargetCell guildId={guildId} row={row} />
                     </td>
                     <td className="p-2">
                       <time dateTime={row.createdAt} title={row.createdAt} className="screen-meta">
@@ -204,11 +245,20 @@ export function AuditTable({
                   </tr>
                   {open === row.id ? (
                     <tr className="border-t-2 border-base-300/30">
-                      <td colSpan={5} className="bg-base-100 p-4">
+                      <td colSpan={6} className="bg-base-100 p-4">
+                        {row.reason ? (
+                          <p className="pb-3 text-sm">
+                            <span className="screen-meta pr-2">MOTIVO</span>
+                            {row.reason}
+                          </p>
+                        ) : null}
                         <JsonDiff before={row.before} after={row.after} />
                         <p className="screen-meta pt-3">
-                          {row.ip ? `IP ${row.ip}` : 'IP DESCONHECIDO'}
-                          {row.userAgent ? ` · ${row.userAgent}` : ''}
+                          {row.source === 'dashboard'
+                            ? `${row.ip ? `IP ${row.ip}` : 'IP DESCONHECIDO'}${
+                                row.userAgent ? ` · ${row.userAgent}` : ''
+                              }`
+                            : 'AÇÃO DO PRÓPRIO BOT — SEM REQUISIÇÃO HTTP'}
                         </p>
                       </td>
                     </tr>

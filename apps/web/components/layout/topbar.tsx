@@ -2,11 +2,12 @@ import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { signOutAction } from '@/app/actions/auth';
 
+import { AutoRefreshIndicator } from './auto-refresh';
 import { BotStatusIndicator, type BotStatus } from './bot-status';
 import { Breadcrumbs } from './breadcrumbs';
 import { UserMenu } from './user-menu';
 
-/** §6.9 — breadcrumb à esquerda; tema, status do bot e conta à direita. */
+/** §6.9 — breadcrumb à esquerda; frescor, tema, status do bot e conta à direita. */
 export function Topbar({
   guildId,
   guildName,
@@ -25,6 +26,7 @@ export function Topbar({
       <SidebarTrigger className="icon-btn lg:hidden" />
       <Breadcrumbs guildId={guildId} guildName={guildName} />
       <div className="ml-auto flex items-center gap-3">
+        <AutoRefreshIndicator />
         <BotStatusIndicator status={status} />
         <ThemeToggle />
         <UserMenu name={user.name} image={user.image} level={level} onSignOut={signOutAction} />

@@ -71,6 +71,16 @@ export async function handleReactionRoleComponent(
     return true;
   }
 
+  ctx.audit.record({
+    guildId,
+    action: 'reaction_role.apply',
+    source: 'event',
+    actor: { id: member.id, tag: member.user.tag },
+    target: { type: 'member', id: member.id },
+    reason: 'Usou um painel de cargos',
+    after: { panelId: panel.id, add: change.add, remove: change.remove },
+  });
+
   await interaction.editReply({
     content: config.ephemeralFeedback ? describeChange(change) : 'Pronto.',
   });

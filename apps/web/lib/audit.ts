@@ -8,6 +8,8 @@ import { db } from './db';
 import { env } from './env';
 import { guildTimezone } from './stats';
 
+import type { AuditSource } from '@cobot/shared';
+
 export interface AuditActor {
   id: string;
   tag: string;
@@ -16,6 +18,10 @@ export interface AuditActor {
 /**
  * Registra uma ação do painel (PRD §6.5). A tabela é append-only: nunca
  * editar, nunca apagar. Chame **depois** da escrita dar certo.
+ *
+ * Origem sempre `dashboard`: desde a Etapa 22 a mesma tabela recebe também o
+ * que o bot faz sozinho, e é o `source` que separa as duas histórias. Só o
+ * painel tem request, então IP e user-agent só existem nestas linhas.
  */
 export async function withAudit(
   actor: AuditActor,
@@ -33,6 +39,7 @@ export async function withAudit(
     actorId: actor.id,
     actorTag: actor.tag,
     action,
+    source: 'dashboard',
     targetType: target.type ?? null,
     targetId: target.id ?? null,
     before: before ?? null,
@@ -48,6 +55,8 @@ export interface AuditRow extends Record<string, unknown> {
   actorId: string;
   actorTag: string;
   action: string;
+  source: AuditSource;
+  reason: string | null;
   targetType: string | null;
   targetId: string | null;
   before: unknown;
@@ -73,6 +82,7 @@ export async function loadAuditPage(guildId: string, filters: AuditFilters): Pro
       guildId,
       ...(filters.actorId ? { actorId: filters.actorId } : {}),
       ...(filters.action ? { action: filters.action } : {}),
+      ...(filters.source.length ? { source: filters.source } : {}),
       ...filterRange(filters, timezone),
       ...(filters.q ? { q: filters.q } : {}),
       page: filters.page,
@@ -90,6 +100,8 @@ export async function loadAuditPage(guildId: string, filters: AuditFilters): Pro
       actorId: entry.actorId,
       actorTag: entry.actorTag,
       action: entry.action,
+      source: entry.source,
+      reason: entry.reason,
       targetType: entry.targetType,
       targetId: entry.targetId,
       before: entry.before,
