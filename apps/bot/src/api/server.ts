@@ -33,11 +33,26 @@ import type { ApiDeps, ApiEnv } from './context';
 import type { AlertService } from '../services/alerts';
 import type { QueueHealth } from '@cobot/shared';
 import type { ServerType } from '@hono/node-server';
+import type { Context } from 'hono';
 
 const log = childLogger('api');
 
 /** Teto de corpo aceito (PRD §7.3): nenhum payload legítimo chega perto. */
 export const MAX_BODY_BYTES = 256 * 1024;
+
+/**
+ * Exceção ao teto acima: só o `PATCH` das configurações do servidor carrega
+ * imagem, e uma imagem de 8 MB (o limite do Discord) vira ~11 MB em base64.
+ * Toda outra rota continua em 256 KB.
+ */
+export const MAX_UPLOAD_BODY_BYTES = 12 * 1024 * 1024;
+
+/** `PATCH /guilds/:id` — a única rota que recebe ícone e banner. */
+const GUILD_SETTINGS_PATH = /^\/guilds\/\d{17,20}\/?$/;
+
+export function isImageUploadRoute(method: string, path: string): boolean {
+  return method === 'PATCH' && GUILD_SETTINGS_PATH.test(path);
+}
 
 /** 401 numa hora que já é sondagem de token e não dedo gordo (PRD §11). */
 export const UNAUTHORIZED_ALERT_THRESHOLD = 50;
@@ -70,13 +85,14 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
 
   app.use('*', requestId());
   app.use('*', rateLimit({ ipLimiter, routeLimiter }));
-  app.use(
-    '*',
-    bodyLimit({
-      maxSize: MAX_BODY_BYTES,
-      onError: (c) => c.json(apiError('BODY_TOO_LARGE', 'Corpo da requisição grande demais.'), 413),
-    }),
-  );
+  const tooLarge = (c: Context) =>
+    c.json(apiError('BODY_TOO_LARGE', 'Corpo da requisição grande demais.'), 413);
+  const standardBody = bodyLimit({ maxSize: MAX_BODY_BYTES, onError: tooLarge });
+  const uploadBody = bodyLimit({ maxSize: MAX_UPLOAD_BODY_BYTES, onError: tooLarge });
+  app.use('*', (c, next) => {
+    const path = new URL(c.req.url).pathname;
+    return isImageUploadRoute(c.req.method, path) ? uploadBody(c, next) : standardBody(c, next);
+  });
 
   // Log de acesso: método, rota e status. Nunca headers — é lá que mora o token.
   // O `fail2ban` da VM lê justamente estas linhas (nível `warn` no 401).
@@ -126,7 +142,7 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
   const guilds = new Hono<ApiEnv>();
   guilds.use('*', bearerAuth(token));
   guilds.use('/:guildId/*', withGuild(deps));
-  guilds.route('/:guildId', createGuildRoutes());
+  guilds.route('/:guildId', createGuildRoutes(deps));
   guilds.route('/:guildId/moderation', createModerationRoutes(deps));
   guilds.route('/:guildId/cases', createCaseRoutes(deps));
   guilds.route('/:guildId/config', createConfigRoutes(deps));

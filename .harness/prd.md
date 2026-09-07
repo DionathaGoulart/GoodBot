@@ -405,7 +405,10 @@ level)`.
   rota (memória), body ≤ 256 KB, Zod em toda entrada, sem CORS (nenhum
   `Access-Control-Allow-Origin`), sem listagem de rotas, respostas de erro
   sem stack. O container do bot não publica porta no host: só o Caddy
-  alcança `bot:3001` pela rede do Compose.
+  alcança `bot:3001` pela rede do Compose. **Única exceção ao teto de corpo**
+  (Etapa 23): `PATCH /guilds/:id` aceita 12 MB, porque ícone e banner do
+  servidor viajam como data URL e 8 MB de imagem (o limite do Discord) viram
+  ~11 MB em base64. Toda outra rota continua em 256 KB.
 - **Segredos**: só via `.env` na VM (nunca commitado; `.env.example` sim),
   GitHub Secrets para a CI e variáveis de ambiente do projeto na Vercel. O
   `INTERNAL_API_TOKEN` existe nos três lugares e é rotacionado junto.
@@ -548,9 +551,13 @@ verifica na API interna usando `actorId`).
 ## 10. Permissões do bot no Discord (convite)
 
 `ViewChannel, SendMessages, SendMessagesInThreads, EmbedLinks, AttachFiles,
-ReadMessageHistory, ManageMessages, ManageChannels, ManageRoles,
+ReadMessageHistory, ManageMessages, ManageChannels, ManageRoles, ManageGuild,
 KickMembers, BanMembers, ModerateMembers, ViewAuditLog, ManageThreads,
 AddReactions, UseExternalEmojis, MuteMembers, DeafenMembers, MoveMembers`.
+
+`ManageGuild` entrou na Etapa 23 (editar nome, ícone, banner e nível de
+verificação pelo painel). Sem ela o bot continua funcionando: a tela
+`/servidor` fica em leitura e diz o que falta, em vez de falhar no envio.
 Sem `Administrator`. Intents: `Guilds, GuildMembers, GuildModeration,
 GuildMessages, MessageContent, GuildMessageReactions, GuildVoiceStates,
 DirectMessages, GuildEmojisAndStickers`.

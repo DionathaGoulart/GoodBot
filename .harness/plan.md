@@ -45,7 +45,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 20  | Hardening e observabilidade                                                | concluída · 2026-09-07 |
 | 21  | Notificações de redes sociais                                              | concluída · 2026-09-07 |
 | 22  | Painel vivo e histórico de ações                                           | concluída · 2026-09-07 |
-| 23  | Configurações do servidor e banidos                                        | pendente     |
+| 23  | Configurações do servidor e banidos                                        | concluída · 2026-09-07 |
 | 24  | Mensagens pelo painel                                                      | pendente     |
 | 25  | Convites, eventos e emojis                                                 | pendente     |
 | 26  | Organização e legibilidade do painel                                       | pendente     |
@@ -2072,30 +2072,30 @@ convite (PRD §10); se faltar, a tela mostra o motivo em vez de falhar no envio.
 
 **Tarefas:**
 
-- [ ] `packages/shared`: `GuildSettingsInputSchema` (nome 2–100, descrição ≤ 120,
+- [x] `packages/shared`: `GuildSettingsInputSchema` (nome 2–100, descrição ≤ 120,
       `verificationLevel`, `systemChannelId`, `afkChannelId`, `afkTimeout`) e
       `BanListQuerySchema`. Ícone e banner viajam como **data URL** validada por
       tipo (`png`/`jpeg`/`gif`/`webp`) e tamanho (≤ 8 MB, o teto do Discord).
-- [ ] `apps/bot/src/api/routes/guild.ts`: `GET /guild` (dados atuais + o que o
+- [x] `apps/bot/src/api/routes/guild.ts`: `GET /guild` (dados atuais + o que o
       bot pode editar), `PATCH /guild` (só `admin`), `GET /guild/bans` paginado
       por cursor e `DELETE /guild/bans/:userId`. Bearer + Zod + rate limit, como
       toda rota (PRD §5.7).
-- [ ] Recusar antes de chamar o Discord o que o servidor não suporta: banner
+- [x] Recusar antes de chamar o Discord o que o servidor não suporta: banner
       exige o boost nível 2, `INVITE_SPLASH` o nível 1. A resposta traz a
       feature que falta, e o painel escreve isso em português.
-- [ ] Toda alteração vira uma linha de `audit_logs` com `before`/`after` — trocar
+- [x] Toda alteração vira uma linha de `audit_logs` com `before`/`after` — trocar
       o ícone do servidor sem deixar rastro seria o pior tipo de poder no painel.
-- [ ] `apps/web`: página `/g/[guildId]/servidor` — formulário com upload de ícone
+- [x] `apps/web`: página `/g/[guildId]/servidor` — formulário com upload de ícone
       e banner (preview quadrado 2px, §6.2), campos de texto, seletores de canal,
       e um aviso claro quando a permissão do bot ou o nível de boost impede algo.
-- [ ] `apps/web`: página `/g/[guildId]/banidos` — tabela com avatar, tag, ID,
+- [x] `apps/web`: página `/g/[guildId]/banidos` — tabela com avatar, tag, ID,
       motivo e quem baniu (do audit log do Discord), busca por ID/nome, botão
       "desbanir" com confirmação e campo de motivo.
-- [ ] Desbanir pelo painel usa o **mesmo serviço** dos slash commands, para o
+- [x] Desbanir pelo painel usa o **mesmo serviço** dos slash commands, para o
       caso, o mod-log e a escalada saírem idênticos — só o `source` muda para
       `dashboard`.
-- [ ] Nav: grupo `SERVIDOR` ganha "Servidor" e "Banidos".
-- [ ] Testes (Vitest): schema de upload rejeita tipo e tamanho fora do limite;
+- [x] Nav: grupo `SERVIDOR` ganha "Servidor" e "Banidos".
+- [x] Testes (Vitest): schema de upload rejeita tipo e tamanho fora do limite;
       o gate de boost recusa banner sem a feature.
 
 **Arquivos criados/alterados:** `packages/shared/src/api/guild.ts`,
