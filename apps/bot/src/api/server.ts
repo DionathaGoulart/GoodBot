@@ -13,6 +13,8 @@ import {
   createRateLimiter,
   rateLimit,
 } from './middleware/rate-limit';
+import { createAutomodRoutes } from './routes/automod';
+import { createCommandRoutes } from './routes/commands';
 import { createConfigRoutes } from './routes/config';
 import { createGuildRoutes } from './routes/guild';
 import { createHealthRoutes } from './routes/health';
@@ -86,6 +88,8 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
   guilds.route('/:guildId', createGuildRoutes());
   guilds.route('/:guildId/moderation', createModerationRoutes(deps));
   guilds.route('/:guildId/config', createConfigRoutes(deps));
+  guilds.route('/:guildId/commands', createCommandRoutes(deps));
+  guilds.route('/:guildId/automod', createAutomodRoutes(deps));
   guilds.route('/:guildId', createMessageRoutes(deps));
   app.route('/guilds', guilds);
 

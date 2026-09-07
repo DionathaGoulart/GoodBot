@@ -1,6 +1,14 @@
 import { z } from 'zod';
 
-import { moduleConfigBase, NullableSnowflakeSchema } from './common';
+import { MAX_NAME_LENGTH } from '../constants';
+import { MessageTemplateSchema } from '../templates';
+import {
+  emptyToNull,
+  moduleConfigBase,
+  NullableSnowflakeSchema,
+  SnowflakeListSchema,
+  SnowflakeSchema,
+} from './common';
 
 /** Config global; tipos e painéis ficam em `ticket_types`/`ticket_panels`. */
 export const TicketsConfigSchema = z.object({
@@ -26,3 +34,30 @@ export const TicketsConfigSchema = z.object({
 });
 export type TicketsConfig = z.infer<typeof TicketsConfigSchema>;
 export const DEFAULT_TICKETS_CONFIG: TicketsConfig = TicketsConfigSchema.parse({});
+
+
+/** Um tipo de ticket no editor do painel (linha de `ticket_types`). */
+export const TicketTypeInputSchema = z.object({
+  name: z.string().trim().min(1, 'Informe o nome do tipo').max(MAX_NAME_LENGTH),
+  /** Categoria onde o canal do ticket nasce. */
+  categoryId: SnowflakeSchema,
+  supportRoleIds: SnowflakeListSchema,
+  openingMessage: MessageTemplateSchema.nullable().default(null),
+  /** `null` = herda `maxOpenPerUserDefault` do módulo. */
+  maxOpenPerUser: emptyToNull(z.number().int().min(1).max(20)),
+  /** `null` = herda `namingPattern` do módulo. */
+  namingPattern: emptyToNull(z.string().trim().min(1).max(60)),
+});
+export type TicketTypeInput = z.infer<typeof TicketTypeInputSchema>;
+
+/** O painel de abertura (linha de `ticket_panels`). */
+export const TicketPanelInputSchema = z.object({
+  channelId: SnowflakeSchema,
+  content: MessageTemplateSchema,
+  typeIds: z
+    .array(z.string().uuid())
+    .min(1, 'Escolha pelo menos um tipo')
+    .max(25)
+    .transform((ids) => [...new Set(ids)]),
+});
+export type TicketPanelInput = z.infer<typeof TicketPanelInputSchema>;

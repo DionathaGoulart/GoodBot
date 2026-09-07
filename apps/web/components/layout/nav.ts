@@ -43,6 +43,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Membros', href: '/membros' },
       { label: 'Cargos', href: '/cargos' },
       { label: 'Canais', href: '/canais' },
+      { label: 'Comandos', href: '/config/commands' },
       { label: 'Geral', href: '/config/general' },
       { label: 'Auditoria', href: '/auditoria' },
     ],

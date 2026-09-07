@@ -1,8 +1,9 @@
-import { isUserFacingError, UserFacingError } from '@cobot/shared';
+import { DEFAULT_COMMAND_OVERRIDE, isUserFacingError, UserFacingError } from '@cobot/shared';
 import { MessageFlags } from 'discord.js';
 
 import { env } from '../env';
 import { childLogger } from '../logger';
+import { assertCommandAllowed } from './command-overrides';
 import { isUserContextCommand } from './command';
 import { CooldownStore } from './cooldown';
 import { botFooter, errorEmbed } from './embeds';
@@ -173,6 +174,17 @@ async function runCommand(
     throw new UserFacingError(`Este comando é restrito a ${LEVEL_LABEL[command.level]}.`, {
       code: 'FORBIDDEN',
     });
+  }
+
+  // Só quem já passou no nível chega aqui, então o override nunca alarga o
+  // acesso — no máximo tira quem o comando deixaria entrar.
+  const { commandOverrides } = await ctx.config.get(guildId, 'utilities');
+  const override = commandOverrides[command.data.name];
+  if (override) {
+    assertCommandAllowed(
+      { ...DEFAULT_COMMAND_OVERRIDE, ...override },
+      { channelId: interaction.channelId, roleIds: [...member.roles.cache.keys()] },
+    );
   }
 
   const remaining = cooldowns.hit(interaction.user.id, command.data.name, command.cooldown ?? 0);

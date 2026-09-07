@@ -148,6 +148,8 @@ export const POLL_MIN_OPTIONS = 2;
 export const POLL_MAX_OPTIONS = 10;
 /** Nome de tag/regra/tipo de ticket. */
 export const MAX_NAME_LENGTH = 64;
+/** Nome de slash command / menu de contexto (limite do Discord). */
+export const MAX_COMMAND_NAME_LENGTH = 32;
 /** Retenções (PRD §8 e §5.6). */
 export const MESSAGE_CACHE_RETENTION_DAYS = 7;
 export const AUTOMOD_HITS_RETENTION_DAYS = 30;

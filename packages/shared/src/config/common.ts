@@ -17,6 +17,17 @@ export const SnowflakeListSchema = z
 /** ID opcional (`null` = não configurado). */
 export const NullableSnowflakeSchema = SnowflakeSchema.nullable().default(null);
 
+/**
+ * Campo opcional vindo de um `<input>`: o formulário do painel manda `''`
+ * quando o usuário apaga o valor, e `''` não é `null` para o Zod. Envolve o
+ * schema para que "vazio" e "não configurado" signifiquem a mesma coisa.
+ */
+export const emptyToNull = <T extends z.ZodType>(schema: T) =>
+  z.preprocess(
+    (value) => (value === '' || value === undefined ? null : value),
+    schema.nullable().default(null),
+  );
+
 /** Duração em ms, positiva e inteira. */
 export const DurationMsSchema = z.number().int().positive();
 

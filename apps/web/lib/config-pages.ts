@@ -1,9 +1,13 @@
 import {
+  AutomodConfigSchema,
   AutoroleConfigSchema,
   GeneralPageSchema,
   LogsPageSchema,
   ModerationConfigSchema,
+  ReactionRolesConfigSchema,
   TagsConfigSchema,
+  TicketsConfigSchema,
+  UtilitiesConfigSchema,
   WelcomeConfigSchema,
   type Module,
 } from '@cobot/shared';
@@ -34,6 +38,13 @@ export const CONFIG_PAGES = {
     file: 'MODERACAO.CFG',
     description: 'Padrões das punições, DM ao punido e escalada de warns.',
   },
+  automod: {
+    module: 'automod',
+    schema: AutomodConfigSchema,
+    title: 'AUTOMOD',
+    file: 'AUTOMOD.CFG',
+    description: 'Isenções globais, limites de execução e o modo raid.',
+  },
   logs: {
     module: 'logs',
     schema: LogsPageSchema,
@@ -61,6 +72,32 @@ export const CONFIG_PAGES = {
     title: 'TAGS',
     file: 'TAGS.CFG',
     description: 'Quem cria tags, quem usa e os limites do módulo.',
+  },
+  'reaction-roles': {
+    module: 'reaction_roles',
+    schema: ReactionRolesConfigSchema,
+    title: 'REACTION ROLES',
+    file: 'CARGOS.CFG',
+    description: 'Painéis de cargo por botão, select ou reação.',
+  },
+  tickets: {
+    module: 'tickets',
+    schema: TicketsConfigSchema,
+    title: 'TICKETS',
+    file: 'TICKETS.CFG',
+    description: 'Tipos, painel de abertura, transcript e tickets abertos.',
+  },
+  /**
+   * As permissões de comando moram em `utilities.commandOverrides`, então a
+   * página salva o módulo `utilities` inteiro — o resto do config viaja de
+   * volta sem alteração em vez de ser sobrescrito por um objeto parcial.
+   */
+  commands: {
+    module: 'utilities',
+    schema: UtilitiesConfigSchema,
+    title: 'COMANDOS',
+    file: 'COMANDOS.CFG',
+    description: 'Ligar, desligar e restringir cada comando por cargo e canal.',
   },
 } as const satisfies Record<
   string,

@@ -11,7 +11,10 @@ import {
 } from './index';
 import { LogsPageSchema } from './logs';
 import { ModerationConfigSchema } from './moderation';
+import { ReactionRolePanelInputSchema } from './reaction-roles';
 import { TagInputSchema } from './tags';
+import { TicketTypeInputSchema } from './tickets';
+import { UtilitiesConfigSchema } from './utilities';
 
 describe('MODULE_SCHEMAS', () => {
   it('cobre exatamente os módulos de MODULES', () => {
@@ -274,5 +277,76 @@ describe('TagInputSchema', () => {
     expect(TagInputSchema.safeParse({ name: 'vazia', content: { content: '  ' } }).success).toBe(
       false,
     );
+  });
+});
+
+describe('UtilitiesConfigSchema.commandOverrides', () => {
+  it('nasce vazio: o mapa guarda exceções, não uma cópia dos comandos', () => {
+    expect(UtilitiesConfigSchema.parse({}).commandOverrides).toEqual({});
+  });
+
+  it('completa o override com os defaults', () => {
+    const parsed = UtilitiesConfigSchema.parse({ commandOverrides: { ban: { enabled: false } } });
+    expect(parsed.commandOverrides.ban).toEqual({
+      enabled: false,
+      allowedRoleIds: [],
+      allowedChannelIds: [],
+      deniedChannelIds: [],
+    });
+  });
+
+  it('recusa ID de canal que não é snowflake', () => {
+    const result = UtilitiesConfigSchema.safeParse({
+      commandOverrides: { poll: { allowedChannelIds: ['nope'] } },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('ReactionRolePanelInputSchema', () => {
+  const item = { roleId: '100000000000000000', label: 'Jogos', emoji: '🎮' };
+  const panel = {
+    channelId: '200000000000000000',
+    content: { content: 'Escolha:' },
+    items: [item],
+  };
+
+  it('aceita um painel mínimo e aplica os defaults de modo e estilo', () => {
+    const parsed = ReactionRolePanelInputSchema.parse(panel);
+    expect(parsed.mode).toBe('toggle');
+    expect(parsed.style).toBe('buttons');
+  });
+
+  it('recusa o mesmo cargo duas vezes, apontando o item repetido', () => {
+    const result = ReactionRolePanelInputSchema.safeParse({ ...panel, items: [item, item] });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path.join('.')).toBe('items.1.roleId');
+  });
+
+  it('no estilo por reação todo item precisa de emoji', () => {
+    const result = ReactionRolePanelInputSchema.safeParse({
+      ...panel,
+      style: 'reactions',
+      items: [{ roleId: item.roleId, label: 'Jogos' }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('painel sem cargo nenhum não passa', () => {
+    expect(ReactionRolePanelInputSchema.safeParse({ ...panel, items: [] }).success).toBe(false);
+  });
+});
+
+describe('TicketTypeInputSchema', () => {
+  const type = { name: 'Suporte', categoryId: '300000000000000000' };
+
+  it('trata campo vazio do formulário como "herda do módulo"', () => {
+    const parsed = TicketTypeInputSchema.parse({ ...type, maxOpenPerUser: '', namingPattern: '' });
+    expect(parsed.maxOpenPerUser).toBeNull();
+    expect(parsed.namingPattern).toBeNull();
+  });
+
+  it('exige categoria válida', () => {
+    expect(TicketTypeInputSchema.safeParse({ ...type, categoryId: 'nope' }).success).toBe(false);
   });
 });

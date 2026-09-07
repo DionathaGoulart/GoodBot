@@ -1,3 +1,5 @@
+import { RaidModeInputSchema, RaidModeStateSchema } from './automod';
+import { CommandSummarySchema } from './commands';
 import { ApiErrorSchema, ApiOkSchema } from './common';
 import { InvalidateInputSchema } from './config';
 import { HealthResponseSchema } from './health';
@@ -16,7 +18,10 @@ import {
   SendMessageResultSchema,
 } from './messages';
 import { ModerationActionInputSchema, ModerationActionResultSchema } from './moderation';
+import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
 
+import type { RaidModeInput, RaidModeState } from './automod';
+import type { CommandSummary } from './commands';
 import type { ApiError } from './common';
 import type { InvalidateInput } from './config';
 import type { HealthResponse } from './health';
@@ -31,6 +36,7 @@ import type {
 } from './members';
 import type { PublishPanelInput, SendMessageInput, SendMessageResult } from './messages';
 import type { ModerationActionInput, ModerationActionResult } from './moderation';
+import type { CloseTicketInput, CloseTicketResult } from './tickets';
 import type { z } from 'zod';
 
 /** Timeout padrão de uma chamada; a API do bot é local a um datacenter. */
@@ -197,6 +203,30 @@ export function createInternalClient(options: InternalClientOptions) {
         body: ModerationActionInputSchema.parse(input),
       }),
 
+    /** Manifesto vivo dos comandos carregados pelo bot. */
+    commands: (guildId: string): Promise<CommandSummary[]> =>
+      request(CommandSummarySchema.array(), `${guild(guildId)}/commands`),
+
+    raidMode: (guildId: string): Promise<RaidModeState> =>
+      request(RaidModeStateSchema, `${guild(guildId)}/automod/raid`),
+
+    setRaidMode: (guildId: string, input: RaidModeInput): Promise<RaidModeState> =>
+      request(RaidModeStateSchema, `${guild(guildId)}/automod/raid`, {
+        method: 'POST',
+        body: RaidModeInputSchema.parse(input),
+      }),
+
+    closeTicket: (
+      guildId: string,
+      ticketId: number,
+      input: CloseTicketInput,
+    ): Promise<CloseTicketResult> =>
+      request(
+        CloseTicketResultSchema,
+        `${guild(guildId)}/tickets/${encodeURIComponent(String(ticketId))}/close`,
+        { method: 'POST', body: CloseTicketInputSchema.parse(input) },
+      ),
+
     invalidateConfig: (guildId: string, input: InvalidateInput = {}): Promise<{ ok: true }> =>
       request(ApiOkSchema, `${guild(guildId)}/config/invalidate`, {
         method: 'POST',
@@ -220,6 +250,14 @@ export function createInternalClient(options: InternalClientOptions) {
         { method: 'POST', body: PublishPanelInputSchema.parse(input) },
       ),
 
+    /** Apaga a mensagem publicada do painel; a linha continua no banco. */
+    unpublishReactionRolePanel: (guildId: string, panelId: string): Promise<{ ok: true }> =>
+      request(
+        ApiOkSchema,
+        `${guild(guildId)}/reaction-roles/${encodeURIComponent(panelId)}/unpublish`,
+        { method: 'POST' },
+      ),
+
     publishTicketPanel: (
       guildId: string,
       panelId: string,
@@ -229,6 +267,13 @@ export function createInternalClient(options: InternalClientOptions) {
         SendMessageResultSchema,
         `${guild(guildId)}/tickets/panels/${encodeURIComponent(panelId)}/publish`,
         { method: 'POST', body: PublishPanelInputSchema.parse(input) },
+      ),
+
+    unpublishTicketPanel: (guildId: string, panelId: string): Promise<{ ok: true }> =>
+      request(
+        ApiOkSchema,
+        `${guild(guildId)}/tickets/panels/${encodeURIComponent(panelId)}/unpublish`,
+        { method: 'POST' },
       ),
   };
 }
