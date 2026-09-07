@@ -74,17 +74,20 @@ Somente as famílias usadas pelos dois temas + status + overlay. Copiadas do
 | Token                      | Hex                | Papel                                              |
 | -------------------------- | ------------------ | -------------------------------------------------- |
 | `--palette-cream`          | `#f2efe7`          | fundo de página (claro) / texto e borda (escuro)   |
-| `--palette-white`          | `#ffffff`          | superfície elevada (claro) / conteúdo sobre accent |
+| `--palette-white`          | `#ffffff`          | superfície elevada (claro) / conteúdo sobre accent (só no `crimson`) |
 | `--palette-ink`            | `#1a0a0a`          | texto e borda (claro)                              |
 | `--palette-noir`           | `#121212`          | fundo de página (escuro)                           |
 | `--palette-noir-raised`    | `#1a1a1a`          | superfície elevada (escuro)                        |
 | `--palette-near-black`     | `#0d0d0d`          | texto sobre status suavizado (escuro)              |
-| `--palette-crimson`        | `#dc143c`          | accent — tema claro                                |
+| `--palette-crimson`        | `#dc143c`          | accent — tema claro (só como **fill**)             |
+| `--palette-crimson-deep`   | `#c8102e`          | accent como **texto** — tema claro (§2.4)          |
 | `--palette-rose`           | `#e8729a`          | accent — tema escuro                               |
 | `--palette-info`           | `#2563eb`          | status cheio (claro)                               |
 | `--palette-success`        | `#16a34a`          | status cheio (claro)                               |
 | `--palette-warning`        | `#d97706`          | status cheio (claro)                               |
 | `--palette-error`          | `#dc2626`          | status cheio (claro)                               |
+| `--palette-success-deep`   | `#15803d`          | success como **texto** — tema claro (§2.4)         |
+| `--palette-warning-deep`   | `#b45309`          | warning como **texto** — tema claro (§2.4)         |
 | `--palette-info-soft`      | `#60a5fa`          | status suavizado (escuro)                          |
 | `--palette-success-soft`   | `#4ade80`          | status suavizado (escuro)                          |
 | `--palette-warning-soft`   | `#fbbf24`          | status suavizado (escuro)                          |
@@ -105,13 +108,13 @@ para shadcn está em §7.
 | `base-300` (toda moldura)            | ink                                      | cream                                  |
 | `base-content` (texto)               | ink                                      | cream                                  |
 | `primary` / `accent`                 | crimson                                  | rose                                   |
-| `primary-content` / `accent-content` | white                                    | white                                  |
+| `primary-content` / `accent-content` | white                                    | **near-black** (§2.4)                  |
 | `secondary`                          | ink                                      | cream                                  |
 | `secondary-content`                  | white                                    | noir                                   |
 | `neutral` / `neutral-content`        | ink / white                              | cream / noir                           |
 | `info` / `-content`                  | info / white                             | info-soft / near-black                 |
-| `success` / `-content`               | success / white                          | success-soft / near-black              |
-| `warning` / `-content`               | warning / white                          | warning-soft / near-black              |
+| `success` / `-content`               | success / **ink** (§2.4)                 | success-soft / near-black              |
+| `warning` / `-content`               | warning / **ink** (§2.4)                 | warning-soft / near-black              |
 | `error` / `-content`                 | error / white                            | error-soft / near-black                |
 | `--shadow` (cor da sombra dura)      | ink                                      | **rose** (a sombra é accent no escuro) |
 | `--scanline-color`                   | scanline-light                           | scanline-dark                          |
@@ -129,11 +132,51 @@ Geometria igual nos dois: `--radius-*: 0rem`, `--border: 2px`, `--depth: 0`,
 | Sombra dura                                                                          | `--shadow` (declarado por tema)                 |
 | Ênfase / estado ativo / item de nav selecionado / avatar / badge primário            | `accent` + `accent-content`                     |
 | Status (badge de caso, toast, banner)                                                | `info`/`success`/`warning`/`error` + `-content` |
-| Micro-texto decorativo                                                               | `base-content` com `opacity-40`–`70`            |
+| Micro-texto decorativo                                                               | `muted-text` (§2.4) — nunca `opacity`           |
 
 Semântica de moderação (fixa, os dois temas): ban/softban → `error`,
 kick → `warning`, timeout → `warning`, warn → `info`, unban/unlock →
 `success`, automod → `accent`, nota interna → `neutral`.
+
+### 2.4 Contraste (WCAG AA) — conferido na Etapa 26
+
+Alvo: **4.5:1** para texto e **3:1** para elemento de interface (moldura,
+trilho, ícone que carrega significado). O micro-texto do §3 é 10px: entra na
+régua de 4.5:1, não na de texto grande.
+
+**Uma cor de fill não serve como cor de texto.** Daí os tokens `-text`, que
+existem só para quando a cor é a do glifo:
+
+| Token         | `crimson`                | `rose`               | Por quê                                                                    |
+| ------------- | ------------------------ | -------------------- | -------------------------------------------------------------------------- |
+| `accent-text` | crimson-deep `#c8102e`   | rose                 | crimson sobre cream dá 4.34:1; crimson-deep dá 5.12:1                      |
+| `success-text`| success-deep `#15803d`   | success-soft         | success sobre white dá 3.30:1                                              |
+| `warning-text`| warning-deep `#b45309`   | warning-soft         | warning sobre white dá 3.19:1                                              |
+| `info-text`   | info                     | info-soft            | já passa; existe para a regra ser uma só                                   |
+| `error-text`  | error                    | error-soft           | já passa; idem                                                             |
+
+Regra prática: **`bg-accent` usa `accent`; `text-accent-text` usa o `-text`.**
+O mesmo vale para os quatro status. Moldura (`border-accent`, `border-warning`)
+continua no token base — 3:1 basta.
+
+Duas correções de `-content` vieram da mesma conferência:
+
+- `rose`/`accent-content` era white sobre rose: **2.87:1**, reprovado. Passou a
+  near-black (**6.76:1**), que é o mesmo conteúdo que os status suavizados já
+  usavam neste tema. Todo fill accent do escuro (CTA, item de nav ativo, linha
+  selecionada, `tag-accent`, `avatar-sq`) mudou junto.
+- `crimson`/`success-content` e `warning-content` eram white sobre verde e
+  âmbar: **3.30:1** e **3.19:1**. Passaram a ink (**5.84:1** e **6.04:1**).
+
+**Apagar é `color`, nunca `opacity`.** `opacity` cria um grupo de composição:
+tudo que está dentro apaga junto e **nenhum filho consegue escapar** — foi
+assim que o botão da `window-bar` ficou na opacidade de um `:disabled` e que o
+item atual do breadcrumb precisava de um `opacity-100` que não funcionava. O
+apagado do painel é o token `muted-text` (60% do `base-content`: **4.85:1** no
+claro, **6.40:1** no escuro), que herda e que qualquer filho sobrescreve.
+
+`opacity` continua legítima em dois lugares e só neles: `:disabled` (0.4) e a
+textura da scanline do §4.4. Em nenhum deles há um controle ativo dentro.
 
 ---
 
@@ -148,11 +191,11 @@ não existe sans separada.
 | Título de tela (`screen-title`)      | `text-3xl`→`4xl` (login: `5xl`→`6xl`), `font-black`, `uppercase`, **`italic`**, `tracking-tighter`; no login com `underline decoration-accent decoration-4 underline-offset-4` |
 | Kicker (`screen-kicker`)             | `font-mono text-xs font-bold uppercase tracking-widest text-accent`, precedido do `>` literal (`.sigil`)                                                                       |
 | Label de seção (`section-label`)     | igual ao kicker, ou `text-[10px] tracking-[0.2em]` na variante compacta; também com `>`                                                                                        |
-| Cabeçalho de tabela (`th`)           | `text-[10px] font-black uppercase tracking-[0.2em] opacity-60`                                                                                                                 |
+| Cabeçalho de tabela (`th`)           | `text-[10px] font-black uppercase tracking-[0.2em] text-muted-text` — o `th` pode conter o botão de ordenar, então nada de `opacity` |
 | Label de formulário                  | `text-xs font-bold uppercase tracking-widest`                                                                                                                                  |
 | Corpo / célula                       | `text-sm`/`text-base`, `leading-relaxed`; números tabulares (`tabular-nums`) em colunas numéricas                                                                              |
 | Valor de stat (`stat-value`)         | `text-3xl`→`4xl font-black tracking-tighter tabular-nums`                                                                                                                      |
-| Micro-texto (hora, id, status, meta) | `font-mono text-[10px] uppercase tracking-[0.2em]` + `opacity-40`–`60`                                                                                                         |
+| Micro-texto (hora, id, status, meta) | `font-mono text-[10px] uppercase tracking-[0.2em]` + `text-muted-text` (§2.4)                                                        |
 | IDs do Discord (snowflake)           | micro-texto, `select-all`, nunca truncado                                                                                                                                      |
 
 Padrões-chave: **caixa alta em tudo que não é corpo**, `tracking-tighter` nos
@@ -187,9 +230,11 @@ infinite`. Usado em "salvando…", "carregando…" e em placeholders vivos, no
    `bg-base-300`, `bg-base-300`. **No CoBot são quadrados** (§4.3 vale
    para tudo; o GoodChat usava círculo por herança e isso não é portado).
 8. **Barra de título de painel** (`window-bar`) — linha inferior de 2px em
-   `base-300` sobre `base-100`, nome do "arquivo" em micro-texto bold
-   `opacity-40` **em caixa alta** (`AUTOMOD.CFG`, `CASOS.LOG`,
-   `MEMBROS.DB`) e os WindowDots à direita. Todo card de configuração tem uma.
+   `base-300` sobre `base-100`, nome do "arquivo" em micro-texto bold **em
+   caixa alta** (`AUTOMOD.CFG`, `CASOS.LOG`, `MEMBROS.DB`) e os WindowDots à
+   direita. Todo card de configuração tem uma. O apagado é `.window-bar-title`
+   com `muted-text` e vale **só para o nome**: a barra também hospeda botões de
+   ação, e `opacity` na barra os apagaria junto (§2.4).
 9. **Levantar no hover** — `hover:-translate-y-1` + sombra `sm`→padrão, e
    `active:translate-y-0`. `transition-all duration-300`. Só em elementos
    **clicáveis** (tile, botão, linha-link, card-link). Linha de tabela comum
@@ -198,8 +243,18 @@ infinite`. Usado em "salvando…", "carregando…" e em placeholders vivos, no
 11. **Botão como CTA grande** — 3.25rem (md: 3.75rem), peso 900, caixa alta
     (§6.1). Em tabelas e barras usa-se o `icon-btn` compacto.
 12. **Foco visível** — `outline: 2px solid var(--color-accent)`,
-    `outline-offset: 2px`, sólido.
+    `outline-offset: 2px`, sólido, em **todo** controle. A regra mora fora de
+    `@layer` no `globals.css` de propósito: vários componentes shadcn vêm com
+    `outline-hidden`, que é utility e venceria uma regra em `@layer base`.
+    Dentro de overlay (`command`, `dropdown-menu`, `select`, item de sidebar) o
+    offset é negativo, senão o scroll corta o anel.
 13. **`prefers-reduced-motion`** — animações congeladas, scanline escondida.
+14. **Nada clicável parece desligado** — todo controle tem `cursor: pointer`
+    (o UA dá `default` a `<button>`), um `:hover` e um `:focus-visible`. As
+    regras genéricas ficam no `globals.css` **fora de `@layer`**, pelo mesmo
+    motivo do §4.12. E `opacity` decorativa nunca vai no container de um
+    controle — o apagado é `muted-text` (§2.4). Um controle com `opacity`
+    menor que a de um controle ativo é, por definição, um `:disabled`.
 
 **Não existem** (não inventar): glow de fósforo, vignette/curvatura de CRT, dot
 grid, dithering, glitch, fonte pixel, borda pixel-stepped, prompt de shell,
@@ -261,6 +316,11 @@ font-black uppercase tracking-widest`, `px-3 py-2`, hover accent + levanta,
   `disabled:opacity-40`. Uso: barra de ações de tabela, topbar, toggles.
 - Estado _loading_: texto vira `SALVANDO_` com `terminal-cursor`; botão
   `disabled`. Nunca spinner.
+- **Todo** controle — inclusive os que não são `btn-*`: `cursor: pointer`,
+  `:hover` e `:focus-visible` (§4.12, §4.14). `opacity` só em `:disabled`; um
+  botão apagado por decoração é indistinguível de um desligado (§2.4). Vale
+  também para a `tag` quando ela é clicável (legenda de gráfico, filtro
+  removível): ela ganha cursor e hover de fill accent.
 - shadcn `Button`: `variant` mapeado → `default`=`btn-goodchat`,
   `outline`=`btn-goodchat-outline`, `destructive`=`btn-goodchat-danger`,
   `ghost`/`icon`=`icon-btn`. `size` ignorado exceto `icon`.
@@ -277,7 +337,9 @@ gap-4`. shadcn `Card` recebe `panel`; `CardHeader` vira `window-bar`;
 
 - Wrapper `retro-border bg-base-200 retro-shadow overflow-x-auto`.
 - `thead`: fundo `base-100`, linha inferior `2px base-300`, `th` em micro-texto
-  §3. Coluna ordenável mostra `▲`/`▼` literal ao lado do label.
+  §3 (apagado por `muted-text`, nunca por `opacity` — a coluna ordenável é um
+  `<button>` dentro do `th`). Coluna ordenável mostra `▲`/`▼` literal ao lado
+  do label e tem `:hover` em `accent-text`.
 - `tbody tr`: linha separada por `1px base-300` com `opacity-30`; hover faz
   **fill** `color-mix(base-content 8%)` (não levanta); linha selecionada
   (checkbox) faz fill `accent` + `accent-content`; linha clicável (leva à
@@ -341,7 +403,7 @@ retro-shadow-sm`, item `px-3 py-2 text-sm`, item ativo = fill `accent`.
 
 `retro-border` 2px, `px-2 py-0.5`, micro-texto bold caixa alta. Variantes:
 `tag-accent`, `tag-error`, `tag-warning`, `tag-info`, `tag-success`,
-`tag-muted` (`base-200` + `opacity-70`). Mapeamento de ação de moderação em
+`tag-muted` (`base-200` + texto `muted-text`). Mapeamento de ação de moderação em
 §2.3. shadcn `Badge` recebe `tag` + variante; `variant="default"` = `tag-accent`.
 
 ### 6.7 Stats e gráficos
@@ -387,10 +449,20 @@ bg-base-100` h-3, fill sólido `accent`, sem radius. Para cotas
 
 - **Sidebar** (`shadcn sidebar`): `bg-base-100 border-r-2 border-base-300`,
   logo/nome do servidor no topo em `screen-kicker` + `screen-title` pequeno,
-  grupos com `section-label` (`> MODERAÇÃO`, `> COMUNIDADE`, `> SERVIDOR`),
   item = `px-3 py-2 text-sm font-bold uppercase tracking-wide`, ativo = fill
   `accent` + `accent-content` + sombra `sm`, hover = fill 8%. Abaixo de `lg`
   vira `sheet` com o mesmo conteúdo.
+- **Os seis grupos da nav** (`components/layout/nav.ts` é a lista única de
+  telas do painel): `PAINEL` · `MODERAÇÃO` · `COMUNIDADE` · `SERVIDOR`
+  (membros, cargos, canais, banidos, convites, eventos, emojis) ·
+  `CONFIGURAÇÃO` (tudo que é `/config/*` mais `/servidor`) · `SISTEMA`
+  (auditoria, saúde). O rótulo do grupo é um `<button>` com `section-label` e
+  `▾`/`▸`; o que está fechado vive em `localStorage` (`cobot-nav-collapsed`).
+  O grupo da tela aberta nunca colapsa.
+- **Busca de tela (`Ctrl+K` / `⌘K`)**: `CommandPalette` na topbar, `command`
+  dentro de `dialog` (§6.5), agrupado pelos mesmos grupos da nav. Cada item
+  casa por nome e por sinônimos (`keywords` do `NavItem`). O gatilho visível é
+  um `icon-btn` `BUSCAR` com o atalho ao lado em `muted-text`.
 - **Topbar**: `border-b-2 border-base-300 bg-base-100`, `breadcrumb` em
   micro-texto à esquerda, à direita `ThemeToggle`, status do bot
   (`presence-dot` + `ONLINE`/`OFFLINE` micro-texto) e avatar do admin
@@ -441,7 +513,9 @@ componente combina com variante — mirar na hook class.
   `base-300` `opacity-10`), **sem shimmer**; micro-texto `CARREGANDO_` com
   caret no cabeçalho. Tabela mostra 5 linhas skeleton na altura real.
 - **Loading de ação**: botão em `SALVANDO_` (§6.1); tabela em refetch mantém
-  dados e reduz `opacity-60` no `tbody`.
+  os dados e marca `aria-busy` no `tbody` — escurecer o corpo apagava junto as
+  linhas clicáveis (§2.4). Onde o refetch precisa aparecer, o caret do §4.5 na
+  barra de ferramentas conta a mesma coisa sem desligar controle nenhum.
 - **Vazio**: dentro do `panel`, centralizado, `screen-kicker` `> NADA AQUI`,
   linha `text-sm opacity-70` explicando, e um CTA (`btn-goodchat-outline`)
   quando houver ação óbvia (`CRIAR REGRA`). Sem ilustração.
@@ -493,3 +567,7 @@ Decisões novas do CoBot:
 5. Linha de tabela não levanta; faz fill (§6.3). "Levantar" é só para o que
    é um cartão.
 6. Gráficos com `type="linear"`, sem gradiente, sem animação (§6.7).
+7. **Apagado é cor, não `opacity`** (§2.4, §4.14), e os tokens `-text` existem
+   porque uma cor de fill não passa AA como cor de texto. Vieram da conferência
+   de contraste da Etapa 26, que também trocou `accent-content` do `rose` e
+   `success-content`/`warning-content` do `crimson`.
