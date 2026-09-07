@@ -48,7 +48,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 23  | Configurações do servidor e banidos                                        | concluída · 2026-09-07 |
 | 24  | Mensagens pelo painel                                                      | concluída · 2026-09-07 |
 | 25  | Convites, eventos e emojis                                                 | concluída · 2026-09-07 |
-| 26  | Organização e legibilidade do painel                                       | pendente     |
+| 26  | Organização e legibilidade do painel                                       | concluída · 2026-09-07 |
 
 ---
 
@@ -2258,33 +2258,63 @@ resto do mesmo problema em vez de esperar o próximo relato.
 
 **Tarefas:**
 
-- [ ] Varrer o painel atrás de outros controles interativos dentro de containers
+- [x] Varrer o painel atrás de outros controles interativos dentro de containers
       com `opacity` herdada, e de `<button>`/`<a>` sem estado de `:hover`,
       `:focus-visible` ou `cursor`. Corrigir a **causa** no CSS do tema, não caso
-      a caso nas telas.
-- [ ] Fixar a regra no styleguide: `opacity` decorativa nunca no container de um
-      controle — só no texto que ela quer apagar. Anotar em §4.8 e §6.1.
-- [ ] `:focus-visible` visível em todo controle (anel `accent` de 2px, radius 0),
+      a caso nas telas. — nove casos: `th` ordenável, lista do breadcrumb (que
+      tentava escapar com um `opacity-100` que `opacity` não permite), polegar
+      da scroll-area, `<tbody>` em refetch, legenda de gráfico, container do
+      period-picker, `×` dos dois pickers e os slots de descrição de
+      `dialog`/`card`/`popover`/`form`. `cursor: pointer` e `:hover` viraram
+      regra genérica em `globals.css`, fora de `@layer`.
+- [x] Fixar a regra no styleguide: `opacity` decorativa nunca no container de um
+      controle — só no texto que ela quer apagar. Anotar em §4.8 e §6.1. — virou
+      o motif §4.14 mais notas em §2.3, §3, §4.8, §6.1, §6.3, §6.6 e §8. O
+      apagado passou a ser o token `muted-text` (cor, que herda e que um filho
+      sobrescreve) no lugar de `opacity`.
+- [x] `:focus-visible` visível em todo controle (anel `accent` de 2px, radius 0),
       incluindo os que hoje só têm `:hover` — quem navega por teclado não vê
-      nada hoje.
-- [ ] Contraste: conferir cada par texto/fundo dos dois temas contra WCAG AA
+      nada hoje. — a regra saiu de `@layer base` (onde perdia para o
+      `outline-hidden` dos componentes shadcn) e ficou unlayered; dentro de
+      overlay o offset é negativo. Os `×` dos pickers, que eram
+      `tabIndex={-1}`, ganharam foco e `Enter`/`Espaço`.
+- [x] Contraste: conferir cada par texto/fundo dos dois temas contra WCAG AA
       (4.5:1 para texto, 3:1 para micro-texto ≥ 14px bold) e corrigir os tokens
-      em `globals.css`, que é o único lugar com hex (§2).
-- [ ] Reagrupar a nav, que hoje tem 6 itens em `SERVIDOR` e vai para 11:
+      em `globals.css`, que é o único lugar com hex (§2). — quatro reprovações:
+      `accent-content` do `rose` (branco sobre rose, 2.87:1 → near-black,
+      6.76:1), `success-content` e `warning-content` do `crimson` (3.30:1 e
+      3.19:1 → ink, 5.84:1 e 6.04:1) e o accent como **texto** no `crimson`
+      (4.34:1). Daí os tokens `-text` (§2.4): uma cor de fill não serve como cor
+      de texto. `app/globals.contrast.test.ts` lê o `globals.css` e refaz a
+      conta a cada `pnpm test`.
+- [x] Reagrupar a nav, que hoje tem 6 itens em `SERVIDOR` e vai para 11:
       `PAINEL` · `MODERAÇÃO` · `COMUNIDADE` · `SERVIDOR` (membros, cargos, canais,
       banidos, convites, eventos, emojis) · `CONFIGURAÇÃO` (os `/config/*`) ·
       `SISTEMA` (auditoria, saúde). Sidebar com grupos colapsáveis, estado em
       `localStorage`.
-- [ ] Busca de comando (`Ctrl+K`) que pula para qualquer tela pelo nome — com 20+
-      telas, procurar na sidebar já custa mais que digitar.
-- [ ] Cada tela de gestão ganha o mesmo esqueleto: `ScreenHeader` + `Panel` com
-      ações no topo + estado vazio com o que fazer a seguir.
-- [ ] Testes: os já existentes de `components/retro/`, mais um que garanta que
-      todo item da nav aponta para uma rota que existe.
+- [x] Busca de comando (`Ctrl+K`) que pula para qualquer tela pelo nome — com 20+
+      telas, procurar na sidebar já custa mais que digitar. — `CommandPalette`
+      na topbar, com gatilho visível `BUSCAR`; cada `NavItem` ganhou `keywords`
+      para achar a tela pelo sinônimo ("punições" → Casos).
+- [x] Cada tela de gestão ganha o mesmo esqueleto: `ScreenHeader` + `Panel` com
+      ações no topo + estado vazio com o que fazer a seguir. — as 12 telas já
+      tinham `ScreenHeader` + `Panel`; só faltava o estado vazio do histórico de
+      `/mensagens`. `/servidor` e `/system` são formulário, não lista: não têm
+      vazio a mostrar.
+- [x] Testes: os já existentes de `components/retro/`, mais um que garanta que
+      todo item da nav aponta para uma rota que existe. — `nav.test.ts` (rota
+      existe, href único, filtro por nível, casamento pela rota mais longa),
+      `globals.contrast.test.ts` e uma regressão em `retro.test.tsx` de que a
+      `window-bar` apaga o título e não as ações.
 
 **Arquivos criados/alterados:** `apps/web/app/globals.css`,
-`apps/web/components/layout/*`, `apps/web/components/retro/*`,
-`.harness/styleguide.md`.
+`apps/web/app/globals.contrast.test.ts` (novo),
+`apps/web/components/layout/{nav.ts,nav.test.ts,app-sidebar.tsx,topbar.tsx,command-palette.tsx}`,
+`apps/web/components/ui/{table,breadcrumb,scroll-area,dialog,card,popover,form}.tsx`,
+`apps/web/components/{data-table/data-table,charts/series-legend,period-picker,config/member-picker,config/discord-picker}.tsx`,
+`apps/web/components/retro/retro.test.tsx`, as telas que usavam `text-accent`/
+`text-warning` como cor de texto, `.harness/styleguide.md` (§2.1, §2.2, §2.4
+nova, §2.3, §3, §4.8, §4.12, §4.14 nova, §6.1, §6.3, §6.6, §6.9, §8, §10).
 
 **Critérios de aceite:**
 
