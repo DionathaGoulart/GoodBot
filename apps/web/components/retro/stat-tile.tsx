@@ -26,7 +26,7 @@ export function StatTile({
         <p
           className={cn(
             'text-[10px] uppercase tracking-[0.2em] tabular-nums',
-            delta >= 0 ? 'text-success' : 'text-error',
+            delta >= 0 ? 'text-success-text' : 'text-error-text',
           )}
         >
           {delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}%

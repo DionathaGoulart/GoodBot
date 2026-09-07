@@ -20,7 +20,7 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
       {reason === 'expired' ? (
         <p
           role="status"
-          className="border-2 border-info bg-base-200 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-info"
+          className="border-2 border-info bg-base-200 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-info-text"
         >
           ! SESSÃO EXPIRADA
         </p>

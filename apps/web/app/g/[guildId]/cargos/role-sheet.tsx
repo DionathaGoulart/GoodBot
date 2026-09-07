@@ -67,7 +67,7 @@ function PermissionsField() {
                   disabled={disabled}
                   onCheckedChange={() => toggle(name)}
                 />
-                <span className={DANGEROUS.has(name) ? 'text-error' : undefined}>
+                <span className={DANGEROUS.has(name) ? 'text-error-text' : undefined}>
                   {PERMISSION_LABELS[name]}
                 </span>
               </label>

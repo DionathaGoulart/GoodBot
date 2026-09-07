@@ -23,11 +23,19 @@
   --palette-noir-raised: #1a1a1a;
   --palette-near-black: #0d0d0d;
   --palette-crimson: #dc143c;
+  /* Crimson só passa AA como *fill*; como texto sobre cream fica em 4.34:1.
+     Esta é a mesma cor escurecida até 5.12:1, usada só em `--accent-text`. */
+  --palette-crimson-deep: #c8102e;
   --palette-rose: #e8729a;
   --palette-info: #2563eb;
   --palette-success: #16a34a;
   --palette-warning: #d97706;
   --palette-error: #dc2626;
+  /* Estes dois só passam AA como *fill* com texto ink; como texto sobre fundo
+     claro ficam em 3.3:1 e 3.2:1. Versões escurecidas até 5.02:1 para
+     `--success-text` / `--warning-text`. */
+  --palette-success-deep: #15803d;
+  --palette-warning-deep: #b45309;
   --palette-info-soft: #60a5fa;
   --palette-success-soft: #4ade80;
   --palette-warning-soft: #fbbf24;
@@ -55,18 +63,27 @@
   --base-content: var(--palette-ink);
   --accent: var(--palette-crimson);
   --accent-content: var(--palette-white);
+  /* §2.4 — accent quando é *texto*; o fill continua sendo `--accent`. */
+  --accent-text: var(--palette-crimson-deep);
   --secondary: var(--palette-ink);
   --secondary-content: var(--palette-white);
   --neutral: var(--palette-ink);
   --neutral-content: var(--palette-white);
   --info: var(--palette-info);
   --info-content: var(--palette-white);
+  /* Branco sobre estes dois verdes/âmbares fica em 3.3:1 e 3.2:1; o texto do
+     fill é ink, que passa com folga (5.8:1 e 6.0:1). §2.4. */
   --success: var(--palette-success);
-  --success-content: var(--palette-white);
+  --success-content: var(--palette-ink);
   --warning: var(--palette-warning);
-  --warning-content: var(--palette-white);
+  --warning-content: var(--palette-ink);
   --error: var(--palette-error);
   --error-content: var(--palette-white);
+  /* §2.4 — status quando é *texto* sobre `base-100`/`base-200`. */
+  --info-text: var(--palette-info);
+  --success-text: var(--palette-success-deep);
+  --warning-text: var(--palette-warning-deep);
+  --error-text: var(--palette-error);
   --shadow: var(--palette-ink);
   --scanline-color: var(--palette-scanline-light);
 }
@@ -80,7 +97,11 @@
   --base-300: var(--palette-cream);
   --base-content: var(--palette-cream);
   --accent: var(--palette-rose);
-  --accent-content: var(--palette-white);
+  /* Branco sobre rose fica em 2.87:1 e reprova AA; near-black dá 6.76:1 e é o
+     mesmo conteúdo que os status suavizados já usam neste tema. §2.4. */
+  --accent-content: var(--palette-near-black);
+  /* Rose como texto já passa nos dois fundos (6.5:1 / 6.1:1). */
+  --accent-text: var(--palette-rose);
   --secondary: var(--palette-cream);
   --secondary-content: var(--palette-noir);
   --neutral: var(--palette-cream);
@@ -93,6 +114,11 @@
   --warning-content: var(--palette-near-black);
   --error: var(--palette-error-soft);
   --error-content: var(--palette-near-black);
+  /* No escuro os status suavizados já passam AA como texto (6.3:1–10.4:1). */
+  --info-text: var(--palette-info-soft);
+  --success-text: var(--palette-success-soft);
+  --warning-text: var(--palette-warning-soft);
+  --error-text: var(--palette-error-soft);
   /* No escuro a sombra dura é accent — é a assinatura do tema. */
   --shadow: var(--palette-rose);
   --scanline-color: var(--palette-scanline-dark);
@@ -147,6 +173,7 @@
   --color-base-content: var(--base-content);
   --color-accent: var(--accent);
   --color-accent-content: var(--accent-content);
+  --color-accent-text: var(--accent-text);
   --color-secondary: var(--secondary);
   --color-secondary-content: var(--secondary-content);
   --color-neutral: var(--neutral);
@@ -159,6 +186,10 @@
   --color-warning-content: var(--warning-content);
   --color-error: var(--error);
   --color-error-content: var(--error-content);
+  --color-info-text: var(--info-text);
+  --color-success-text: var(--success-text);
+  --color-warning-text: var(--warning-text);
+  --color-error-text: var(--error-text);
 
   /* Aliases shadcn (§7). */
   --color-background: var(--background);
@@ -446,7 +477,8 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--color-accent);
+  /* §2.4 — accent de *texto*, que é o que passa AA sobre `base-100`. */
+  color: var(--color-accent-text);
 }
 
 .section-label {

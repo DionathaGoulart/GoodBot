@@ -157,7 +157,7 @@ export function MemberModeration({ member }: { member: GuildMemberDetail }) {
           <div className="flex flex-col gap-4 px-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="punish-reason">
-                Motivo<span className="text-accent"> *</span>
+                Motivo<span className="text-accent-text"> *</span>
               </Label>
               <Input
                 id="punish-reason"
@@ -172,7 +172,7 @@ export function MemberModeration({ member }: { member: GuildMemberDetail }) {
               <div className="flex flex-col gap-2">
                 <Label htmlFor="punish-duration">
                   Duração
-                  {spec.duration === 'required' ? <span className="text-accent"> *</span> : null}
+                  {spec.duration === 'required' ? <span className="text-accent-text"> *</span> : null}
                 </Label>
                 <DurationInput
                   id="punish-duration"

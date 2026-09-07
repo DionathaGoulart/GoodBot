@@ -46,7 +46,7 @@ function TypesField({ types }: { types: TicketTypeRow[] }) {
         return (
           <FormItem>
             <p className="section-label">
-              TIPOS OFERECIDOS<span className="text-accent"> *</span>
+              TIPOS OFERECIDOS<span className="text-accent-text"> *</span>
             </p>
             <FormControl>
               <div className="flex flex-col gap-2">

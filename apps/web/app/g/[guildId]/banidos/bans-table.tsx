@@ -200,7 +200,7 @@ export function BansTable({
       </form>
 
       {page.executorsResolved ? null : (
-        <p className="border-2 border-warning p-3 text-xs text-warning">
+        <p className="border-2 border-warning p-3 text-xs text-warning-text">
           ! O bot não tem a permissão Ver Registro de Auditoria, então a coluna POR fica vazia.
         </p>
       )}

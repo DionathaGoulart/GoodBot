@@ -222,7 +222,7 @@ export function ExpressionsScreen({
   return (
     <div className="flex flex-col gap-4">
       {overview.canManage ? null : (
-        <p className="border-2 border-warning p-3 text-xs text-warning">
+        <p className="border-2 border-warning p-3 text-xs text-warning-text">
           ! O bot não tem a permissão Gerenciar Expressões. A lista continua aparecendo, mas subir,
           renomear e apagar exige reconvidá-lo com ela.
         </p>
@@ -254,7 +254,7 @@ export function ExpressionsScreen({
                 onChange={(event) => setEmojiName(event.target.value)}
               />
               {emojiName && !emojiNameOk ? (
-                <p className="text-xs text-error">! Use só letras, números e _.</p>
+                <p className="text-xs text-error-text">! Use só letras, números e _.</p>
               ) : null}
             </div>
 
@@ -311,7 +311,7 @@ export function ExpressionsScreen({
                   <span className="screen-meta">PNG, JPEG, GIF OU WEBP · ATÉ 256 KB</span>
                 </div>
                 {emojiImage && targetSlots.full ? (
-                  <p className="border-2 border-error p-3 text-xs text-error">
+                  <p className="border-2 border-error p-3 text-xs text-error-text">
                     ! Os {String(targetSlots.limit)} slots de emojis{' '}
                     {emojiAnimated ? 'animados' : 'estáticos'} estão cheios. Apague um antes de
                     subir este.
@@ -480,7 +480,7 @@ export function ExpressionsScreen({
                   <span className="screen-meta">PNG OU GIF · ATÉ 512 KB</span>
                 </div>
                 {stickerImage && stickerSlots.full ? (
-                  <p className="border-2 border-error p-3 text-xs text-error">
+                  <p className="border-2 border-error p-3 text-xs text-error-text">
                     ! Os {String(stickerSlots.limit)} slots de stickers estão cheios. Apague um
                     antes de subir este.
                   </p>

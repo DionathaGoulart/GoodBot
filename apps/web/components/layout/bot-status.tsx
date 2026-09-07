@@ -52,7 +52,7 @@ export function BotStatusBanner({ status }: { status: BotStatus }) {
       role="status"
       className="flex flex-wrap items-center gap-2 border-b-2 border-warning bg-base-200 px-4 py-2"
     >
-      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-warning">
+      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-warning-text">
         ! BOT {status.presence === 'offline' ? 'OFFLINE' : 'RECONECTANDO'}
       </span>
       <span className="text-sm opacity-70">

@@ -63,7 +63,7 @@ export function AutomodRulesTable({
           <span className="font-bold">
             {row.original.name}
             {row.original.rule ? null : (
-              <span className="ml-2 text-error">! CONFIG INVÁLIDO</span>
+              <span className="ml-2 text-error-text">! CONFIG INVÁLIDO</span>
             )}
           </span>
         ),

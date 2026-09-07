@@ -246,13 +246,13 @@ function ChannelForm({
       </SheetHeader>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
-        {error ? <p className="screen-meta text-error">! {error}</p> : null}
+        {error ? <p className="screen-meta text-error-text">! {error}</p> : null}
         {loading ? <p className="screen-meta">CARREGANDO_</p> : null}
 
         <fieldset disabled={readOnly || loading} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="channel-name">
-              Nome<span className="text-accent"> *</span>
+              Nome<span className="text-accent-text"> *</span>
             </Label>
             <Input
               id="channel-name"

@@ -4,9 +4,9 @@ import { EmptyState } from './retro/states';
 
 /** §2.3 — verde entra, vermelho sai, amarelo muda. */
 const KIND_CLASS: Record<DiffKind, string> = {
-  added: 'border-success text-success',
-  removed: 'border-error text-error',
-  changed: 'border-warning text-warning',
+  added: 'border-success text-success-text',
+  removed: 'border-error text-error-text',
+  changed: 'border-warning text-warning-text',
 };
 
 const KIND_LABEL: Record<DiffKind, string> = {

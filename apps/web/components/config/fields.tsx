@@ -57,7 +57,7 @@ function Field({
         <FormItem>
           <FormLabel>
             {label}
-            {required ? <span className="text-accent"> *</span> : null}
+            {required ? <span className="text-accent-text"> *</span> : null}
           </FormLabel>
           {description ? <FormDescription>{description}</FormDescription> : null}
           <FormControl>{children(field)}</FormControl>

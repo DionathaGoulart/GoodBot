@@ -68,7 +68,7 @@ const AFK_LABEL: Record<number, string> = {
 
 /** Campo bloqueado mostra o porquê onde o campo estaria (§8, §6.8). */
 function Blocked({ reason }: { reason: string }) {
-  return <p className="border-2 border-warning p-3 text-xs text-warning">! {reason}</p>;
+  return <p className="border-2 border-warning p-3 text-xs text-warning-text">! {reason}</p>;
 }
 
 function Field({
