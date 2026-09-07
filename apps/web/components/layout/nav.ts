@@ -47,6 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Tags', href: '/config/tags' },
       { label: 'Reaction roles', href: '/config/reaction-roles' },
       { label: 'Tickets', href: '/config/tickets' },
+      { label: 'Redes sociais', href: '/config/social' },
     ],
   },
   {

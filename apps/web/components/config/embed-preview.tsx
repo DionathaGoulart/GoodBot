@@ -13,6 +13,13 @@ export const PREVIEW_VARS: Record<TemplateVariable, string> = {
   server: 'SERVIDOR',
   memberCount: '1204',
   ordinal: '1204º',
+  // Publicação (§5.8): o mesmo preview serve à tela de redes sociais.
+  title: 'Título da publicação',
+  url: 'https://exemplo.com/publicacao',
+  author: 'Canal de exemplo',
+  thumbnail: 'https://exemplo.com/capa.jpg',
+  platform: 'YouTube',
+  kind: 'vídeo',
 };
 
 /**

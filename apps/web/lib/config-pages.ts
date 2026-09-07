@@ -5,6 +5,7 @@ import {
   LogsPageSchema,
   ModerationConfigSchema,
   ReactionRolesConfigSchema,
+  SocialConfigSchema,
   TagsConfigSchema,
   TicketsConfigSchema,
   UtilitiesConfigSchema,
@@ -79,6 +80,13 @@ export const CONFIG_PAGES = {
     title: 'REACTION ROLES',
     file: 'CARGOS.CFG',
     description: 'Painéis de cargo por botão, select ou reação.',
+  },
+  social: {
+    module: 'social',
+    schema: SocialConfigSchema,
+    title: 'REDES SOCIAIS',
+    file: 'SOCIAL.CFG',
+    description: 'Avisa no Discord quando as contas configuradas publicam.',
   },
   tickets: {
     module: 'tickets',

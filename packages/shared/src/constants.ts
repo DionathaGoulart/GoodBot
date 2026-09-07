@@ -16,6 +16,7 @@ export const MODULES = [
   'tags',
   'utilities',
   'stats',
+  'social',
 ] as const;
 export type Module = (typeof MODULES)[number];
 
@@ -95,6 +96,22 @@ export const SCHEDULED_ACTION_KINDS = [
 ] as const;
 export type ScheduledActionKind = (typeof SCHEDULED_ACTION_KINDS)[number];
 
+/** Redes suportadas pelas notificações (PRD §5.8). */
+export const SOCIAL_PLATFORMS = ['youtube', 'twitch', 'instagram', 'tiktok'] as const;
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+
+/** O que uma conta pode anunciar. Nem toda plataforma aceita todos. */
+export const SOCIAL_KINDS = ['video', 'short', 'live', 'post'] as const;
+export type SocialKind = (typeof SOCIAL_KINDS)[number];
+
+/** Tipos que cada plataforma sabe entregar (PRD §5.8). */
+export const SOCIAL_KINDS_BY_PLATFORM = {
+  youtube: ['video', 'short', 'live'],
+  twitch: ['live'],
+  instagram: ['post'],
+  tiktok: ['video'],
+} as const satisfies Record<SocialPlatform, readonly SocialKind[]>;
+
 export const REACTION_ROLE_MODES = ['single', 'multiple', 'toggle'] as const;
 export type ReactionRoleMode = (typeof REACTION_ROLE_MODES)[number];
 
@@ -104,7 +121,11 @@ export type ReactionRoleStyle = (typeof REACTION_ROLE_STYLES)[number];
 export const TICKET_STATUSES = ['open', 'closed'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
-/** Variáveis aceitas em templates de mensagem (PRD §5.5). */
+/**
+ * Variáveis aceitas em templates de mensagem (PRD §5.5 e §5.8). As sete
+ * primeiras descrevem um membro; as seis últimas, uma publicação de rede
+ * social. O motor é o mesmo: quem não recebe valor fica literal no texto.
+ */
 export const TEMPLATE_VARIABLES = [
   'user',
   'mention',
@@ -113,6 +134,12 @@ export const TEMPLATE_VARIABLES = [
   'server',
   'memberCount',
   'ordinal',
+  'title',
+  'url',
+  'author',
+  'thumbnail',
+  'platform',
+  'kind',
 ] as const;
 export type TemplateVariable = (typeof TEMPLATE_VARIABLES)[number];
 
@@ -156,3 +183,20 @@ export const MAX_REGEX_PATTERN_LENGTH = 200;
 export const MESSAGE_CACHE_RETENTION_DAYS = 7;
 export const AUTOMOD_HITS_RETENTION_DAYS = 30;
 export const STATS_HOURLY_RETENTION_DAYS = 90;
+export const SOCIAL_POSTS_RETENTION_DAYS = 90;
+
+// ── Redes sociais (PRD §5.8) ────────────────────────────────────────────────
+
+/** Contas por servidor. Cada conta é uma chamada HTTP por ciclo. */
+export const MAX_SOCIAL_ACCOUNTS = 20;
+/** Intervalo padrão de polling de uma conta. */
+export const SOCIAL_DEFAULT_POLL_SECONDS = 300;
+export const SOCIAL_MIN_POLL_SECONDS = 60;
+export const SOCIAL_MAX_POLL_SECONDS = 6 * 60 * 60;
+/**
+ * Live do YouTube custa 100 unidades de cota por chamada num teto diário de
+ * 10.000: com 15 min entre checagens, um canal gasta 9.600 por dia e cabe.
+ */
+export const YOUTUBE_LIVE_POLL_SECONDS = 15 * 60;
+/** Falhas seguidas que desativam uma conta sozinha (PRD §5.8). */
+export const SOCIAL_MAX_FAILURES = 10;

@@ -7,5 +7,6 @@ export * from './messages';
 export * from './community';
 export * from './misc';
 export * from './stats';
+export * from './social';
 export * from './audit';
 export * from './relations';

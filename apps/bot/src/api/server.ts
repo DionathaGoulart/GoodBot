@@ -27,6 +27,7 @@ import { createMessageRoutes } from './routes/messages';
 import { createMetricsRoutes } from './routes/metrics';
 import { createModerationRoutes } from './routes/moderation';
 import { createRoleRoutes } from './routes/roles';
+import { createSocialRoutes } from './routes/social';
 
 import type { ApiDeps, ApiEnv } from './context';
 import type { AlertService } from '../services/alerts';
@@ -134,6 +135,7 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
   guilds.route('/:guildId/roles', createRoleRoutes(deps));
   guilds.route('/:guildId/channels', createChannelRoutes(deps));
   guilds.route('/:guildId/members', createMemberRoutes(deps));
+  guilds.route('/:guildId/social', createSocialRoutes(deps));
   guilds.route('/:guildId', createMessageRoutes(deps));
   app.route('/guilds', guilds);
 
