@@ -24,6 +24,9 @@ export default defineCommand({
     ),
   module: 'general',
   level: 'admin',
+  // Responde efêmero sem `defer`: sem esta marca, o adiamento automático de
+  // 2,5 s (lib/interaction.ts) abriria a resposta em público.
+  ephemeral: true,
   cooldown: 5,
   help: 'Recarrega a configuração do banco.',
   async execute({ interaction, config, guildId, settings }) {

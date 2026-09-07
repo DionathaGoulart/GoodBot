@@ -150,6 +150,8 @@ export const POLL_MAX_OPTIONS = 10;
 export const MAX_NAME_LENGTH = 64;
 /** Nome de slash command / menu de contexto (limite do Discord). */
 export const MAX_COMMAND_NAME_LENGTH = 32;
+/** Teto de um padrão de regex do filtro de palavras (PRD §7.3). */
+export const MAX_REGEX_PATTERN_LENGTH = 200;
 /** Retenções (PRD §8 e §5.6). */
 export const MESSAGE_CACHE_RETENTION_DAYS = 7;
 export const AUTOMOD_HITS_RETENTION_DAYS = 30;

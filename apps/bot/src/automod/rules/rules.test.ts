@@ -230,10 +230,21 @@ describe('wordsRule', () => {
     expect(check(config, 'olha SPAM42')).toBeNull();
   });
 
-  it('recusa regex com backtracking catastrófico', () => {
-    const matcher = compileWordMatcher(
-      WordsRuleConfigSchema.parse({ mode: 'regex', words: ['(a+)+$', 'ok\\d'] }),
-    );
+  it('o schema recusa regex com backtracking catastrófico', () => {
+    // Primeira barreira: o padrão nem chega a ser salvo pelo painel.
+    const result = WordsRuleConfigSchema.safeParse({ mode: 'regex', words: ['(a+)+$'] });
+    expect(result.success).toBe(false);
+  });
+
+  it('o compilador ignora um regex perigoso que chegue mesmo assim', () => {
+    // Segunda barreira: jsonb gravado antes desta validação, ou por outro
+    // caminho, não pode travar o automod inteiro.
+    const matcher = compileWordMatcher({
+      mode: 'regex',
+      words: ['(a+)+$', 'ok\\d'],
+      caseSensitive: false,
+      normalizeDiacritics: true,
+    });
     expect(matcher.rejected).toContain('(a+)+$');
     // O padrão seguro da mesma lista continua valendo.
     expect(matcher.match('ok1')).toBe('ok1');

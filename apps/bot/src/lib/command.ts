@@ -96,8 +96,17 @@ export interface CommandMeta {
   cooldown?: number;
   /** `deferReply` automático antes de `execute` (comandos que passam de 3s). */
   defer?: boolean;
-  /** Usado com `defer`: a resposta adiada nasce efêmera. */
+  /**
+   * A resposta adiada nasce efêmera. Vale para o `defer` e para o adiamento
+   * automático dos 2,5 s — um comando que responde efêmero **precisa** marcar
+   * isto, senão a rede de segurança adia em público.
+   */
   ephemeral?: boolean;
+  /**
+   * O comando responde com `showModal`, que exige a interação intacta. Desliga
+   * também o `deferReply` de segurança dos 2,5 s (ver `lib/interaction.ts`).
+   */
+  opensModal?: boolean;
   /** Descrição curta para o `/help` (default: a do builder). */
   help?: string;
 }

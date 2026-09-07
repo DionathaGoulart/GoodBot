@@ -46,7 +46,9 @@ export default defineUserContextCommand({
   module: 'moderation',
   level: 'mod',
   help: 'Abre um modal com ação, motivo e duração para punir o usuário.',
-  // Sem `defer`: `showModal` exige a interação ainda não respondida.
+  // Sem `defer`: `showModal` exige a interação ainda não respondida — e o
+  // `opensModal` desliga também o adiamento automático dos 2,5 s.
+  opensModal: true,
   async execute(ctx) {
     const { interaction } = ctx;
     const guild = requireGuild(interaction);
