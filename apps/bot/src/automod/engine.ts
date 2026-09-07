@@ -15,6 +15,7 @@ import { RaidService } from './raid';
 import { MESSAGE_RULES, SpamTracker, WordMatcherCache } from './rules/index';
 
 import type { AutomodRuntime, LoadedRule, MessageContext, Violation } from './types';
+import type { AuditService } from '../services/audit';
 import type { ConfigService } from '../services/config';
 import type { ModerationService } from '../services/moderation';
 import type { ModlogService } from '../services/modlog';
@@ -31,17 +32,15 @@ export const DEFAULT_RAID_MINUTES = 10;
 
 /** Por que uma mensagem não foi avaliada — vira `debug`, nunca erro. */
 export type SkipReason =
-  | 'module-disabled'
-  | 'no-rules'
-  | 'exempt-channel'
-  | 'exempt-role'
-  | 'exempt-moderator';
+  'module-disabled' | 'no-rules' | 'exempt-channel' | 'exempt-role' | 'exempt-moderator';
 
 export interface AutomodDeps {
   db: Db;
   config: ConfigService;
   moderation: ModerationService;
   modlog: ModlogService;
+  /** Trilha de auditoria (§6.5); ausente nos testes. */
+  audit?: Pick<AuditService, 'record'>;
   /** TTL do cache de regras (default 5 min, como o `ConfigService`). */
   ttl?: number;
   now?: () => number;
@@ -287,7 +286,8 @@ export class AutomodService {
   async enableRaidMode(guild: Guild, minutes?: number): Promise<number> {
     const rules = await this.getRules(guild.id);
     const raid = rules.find((loaded) => loaded.rule.type === 'raid');
-    const fallback = raid?.rule.type === 'raid' ? raid.rule.config.raidModeMinutes : DEFAULT_RAID_MINUTES;
+    const fallback =
+      raid?.rule.type === 'raid' ? raid.rule.config.raidModeMinutes : DEFAULT_RAID_MINUTES;
     const state = this.raid.activate({
       guildId: guild.id,
       source: 'manual',
@@ -346,6 +346,24 @@ export class AutomodService {
     } catch (error) {
       log.error({ err: error, ruleId: input.rule.id }, 'falha ao gravar o hit de automod');
     }
+
+    // A auditoria conta a mesma história do `automod_hits`, mas na linha do
+    // tempo do servidor: o ator é quem escreveu a mensagem, não o bot.
+    this.deps.audit?.record({
+      guildId: input.guild.id,
+      action: `automod.${input.rule.rule.type}`,
+      source: 'automod',
+      actor: { id: input.target.id, tag: input.target.tag },
+      target: { type: 'member', id: input.target.id },
+      reason: `${input.rule.rule.name}: ${input.violation.reason}`,
+      after: {
+        rule: input.rule.rule.name,
+        ruleId: input.rule.id,
+        actions: taken,
+        channelId: input.message?.channelId ?? null,
+        messageId: input.message?.id ?? null,
+      },
+    });
 
     this.deps.onHit?.({
       guildId: input.guild.id,

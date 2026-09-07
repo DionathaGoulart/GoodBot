@@ -4,6 +4,7 @@ import { MINUTE_MS, SECOND_MS } from '@cobot/shared';
 import { childLogger } from '../logger';
 import { fetchMember } from './moderation';
 
+import type { AuditService } from './audit';
 import type { ConfigService } from './config';
 import type { Db } from '@cobot/db';
 import type { AutoroleConfig } from '@cobot/shared';
@@ -34,17 +35,21 @@ export function selectAutoroleIds(config: AutoroleConfig, isBot: boolean): strin
 export interface AutoroleDeps {
   db: Db;
   config: ConfigService;
+  /** Trilha de auditoria (§6.5); ausente nos testes. */
+  audit?: Pick<AuditService, 'record'>;
 }
 
 /** Autorole na entrada e cargo de verificação por botão (PRD §5.5). */
 export class AutoroleService {
   private readonly db: Db;
   private readonly config: ConfigService;
+  private readonly audit: Pick<AuditService, 'record'> | undefined;
   private readonly timers = new Set<NodeJS.Timeout>();
 
   constructor(deps: AutoroleDeps) {
     this.db = deps.db;
     this.config = deps.config;
+    this.audit = deps.audit;
   }
 
   async onJoin(member: GuildMember): Promise<void> {
@@ -99,11 +104,22 @@ export class AutoroleService {
     try {
       await member.roles.add(roleIds, AUTOROLE_REASON);
       log.info({ guildId: member.guild.id, userId: member.id, roleIds }, 'autorole aplicado');
+      // Sem ator: quem deu o cargo foi a regra, e o bot é quem assina.
+      this.audit?.record({
+        guildId: member.guild.id,
+        action: 'autorole.apply',
+        source: 'event',
+        target: { type: 'member', id: member.id },
+        reason: AUTOROLE_REASON,
+        after: { roleIds },
+      });
     } catch (error) {
       // Cargo acima do bot, cargo apagado ou falta de `ManageRoles`: fica no
       // log, sem quebrar o evento de entrada.
-      log.warn({ err: error, guildId: member.guild.id, userId: member.id, roleIds },
-        'não foi possível aplicar o autorole');
+      log.warn(
+        { err: error, guildId: member.guild.id, userId: member.id, roleIds },
+        'não foi possível aplicar o autorole',
+      );
     }
   }
 

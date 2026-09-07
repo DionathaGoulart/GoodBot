@@ -91,6 +91,7 @@ describe('parseAuditFilters', () => {
     ).toEqual({
       actorId: '100000000000000001',
       action: 'config.update',
+      source: [],
       from: '',
       to: '',
       q: '',
@@ -98,11 +99,21 @@ describe('parseAuditFilters', () => {
     });
   });
 
+  it('lê a origem em lista e descarta o que não é origem', () => {
+    expect(parseAuditFilters({ source: 'automod,job' }).source).toEqual(['automod', 'job']);
+    // `?source=a&source=b` vale o mesmo que `?source=a,b`.
+    expect(parseAuditFilters({ source: ['event', 'dashboard'] }).source).toEqual([
+      'dashboard',
+      'event',
+    ]);
+    expect(parseAuditFilters({ source: 'inventada' }).source).toEqual([]);
+  });
+
   it('roundtrip da query', () => {
-    const url = 'actor=100000000000000001&action=member.ban&q=spam';
+    const url = 'actor=100000000000000001&action=member.ban&source=automod%2Cjob&q=spam';
     const filters = parseAuditFilters(Object.fromEntries(new URLSearchParams(url)));
     expect(auditFiltersToQuery(filters).toString()).toBe(
-      'actor=100000000000000001&action=member.ban&q=spam',
+      'actor=100000000000000001&action=member.ban&source=automod%2Cjob&q=spam',
     );
   });
 });

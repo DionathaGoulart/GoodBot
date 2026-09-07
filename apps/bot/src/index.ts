@@ -15,6 +15,7 @@ import { loadCommands, loadEvents } from './lib/loader';
 import { logger } from './logger';
 import { metrics } from './metrics';
 import { AlertService } from './services/alerts';
+import { AuditService } from './services/audit';
 import { AutoroleService } from './services/autorole';
 import { ConfigService } from './services/config';
 import { LockService } from './services/locks';
@@ -54,6 +55,8 @@ async function main(): Promise<void> {
   const client = createClient();
   const alerts = new AlertService({ webhookUrl: env.ALERT_WEBHOOK_URL });
   const config = new ConfigService(db);
+  // A trilha do que o bot faz sozinho (§6.5); o painel escreve na mesma tabela.
+  const audit = new AuditService({ db, client });
   const queue = new LogQueue({ client });
   const logs = new LogService({ db, config, queue });
   const messageCache = new MessageCacheService({ db });
@@ -77,25 +80,65 @@ async function main(): Promise<void> {
     client,
     config,
     modlog,
-    onCase: (kase) => void stats.recordCase(kase.guildId, kase.type),
+    onCase: (kase) => {
+      stats.recordCase(kase.guildId, kase.type);
+      // `automod` e `dashboard` já têm a sua própria linha (o hit da regra e o
+      // `withAudit` do painel); registrar de novo aqui duplicaria a história.
+      if (kase.source === 'automod' || kase.source === 'dashboard') return;
+      audit.record({
+        guildId: kase.guildId,
+        action: `case.${kase.type}`,
+        source: kase.source === 'escalation' ? 'job' : 'command',
+        actor: { id: kase.actorId, tag: kase.actorTag },
+        target: { type: 'member', id: kase.targetId },
+        reason: kase.reason,
+        after: {
+          caseNumber: kase.caseNumber,
+          targetTag: kase.targetTag,
+          durationMs: kase.durationMs,
+        },
+      });
+    },
   });
   const automod = new AutomodService({
     db,
     config,
     moderation,
     modlog,
+    audit,
     onHit: (hit) => void stats.recordAutomodHit(hit.guildId, hit.ruleId),
   });
   const locks = new LockService(db);
   const polls = new PollService({ db, client });
   const welcome = new WelcomeService({ config });
-  const autorole = new AutoroleService({ db, config });
+  const autorole = new AutoroleService({ db, config, audit });
   const reactionRoles = new ReactionRoleService({ db, client, config });
   const tickets = new TicketService({
     db,
     config,
-    onOpen: (ticket) => void stats.recordTicketOpen(ticket.guildId),
-    onClose: (ticket) => void stats.recordTicketClose(ticket.guildId),
+    onOpen: (ticket) => {
+      stats.recordTicketOpen(ticket.guildId);
+      audit.record({
+        guildId: ticket.guildId,
+        action: 'ticket.open',
+        source: 'event',
+        actor: ticket.userId,
+        target: { type: 'ticket', id: String(ticket.number) },
+        after: { channelId: ticket.channelId, typeId: ticket.typeId },
+      });
+    },
+    onClose: (ticket) => {
+      stats.recordTicketClose(ticket.guildId);
+      audit.record({
+        guildId: ticket.guildId,
+        action: 'ticket.close',
+        source: 'event',
+        ...(ticket.closedBy ? { actor: ticket.closedBy } : {}),
+        target: { type: 'ticket', id: String(ticket.number) },
+        reason: ticket.closeReason,
+        after: { channelId: ticket.channelId, transcriptUrl: ticket.transcriptUrl },
+      });
+    },
   });
   const social = new SocialProviders({
     ...(env.YOUTUBE_API_KEY ? { youtubeApiKey: env.YOUTUBE_API_KEY } : {}),
@@ -105,7 +148,7 @@ async function main(): Promise<void> {
     tiktokEnabled: env.SOCIAL_TIKTOK_ENABLED,
   });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
-  const socialJob = new SocialJob({ db, client, config, providers: social, alerts });
+  const socialJob = new SocialJob({ db, client, config, providers: social, alerts, audit });
   const statsRollup = new StatsRollupJob({ db, client, config });
   // As três retenções do PRD §8 num job só, porque é ele que alerta na falha.
   const retention = new RetentionJob({
@@ -157,6 +200,7 @@ async function main(): Promise<void> {
     social,
     messageCache,
     stats,
+    audit,
     logger,
     commands,
   };
@@ -280,10 +324,13 @@ function registerGauges(input: {
   metrics.process.register(() => process.memoryUsage().heapUsed, { kind: 'heap_used_bytes' });
   metrics.process.register(() => Date.now() - input.startedAt, { kind: 'uptime_ms' });
   metrics.gateway.register(() => (input.client.isReady() ? 1 : 0), { kind: 'ready' });
-  metrics.gateway.register(() => {
-    const ping = input.client.ws.ping;
-    return Number.isFinite(ping) && ping >= 0 ? Math.round(ping) : -1;
-  }, { kind: 'ping_ms' });
+  metrics.gateway.register(
+    () => {
+      const ping = input.client.ws.ping;
+      return Number.isFinite(ping) && ping >= 0 ? Math.round(ping) : -1;
+    },
+    { kind: 'ping_ms' },
+  );
   metrics.gateway.register(() => input.client.guilds.cache.size, { kind: 'guilds' });
 }
 

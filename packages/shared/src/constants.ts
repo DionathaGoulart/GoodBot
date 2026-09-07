@@ -37,6 +37,20 @@ export type CaseType = (typeof CASE_TYPES)[number];
 export const CASE_SOURCES = ['command', 'dashboard', 'automod', 'context', 'escalation'] as const;
 export type CaseSource = (typeof CASE_SOURCES)[number];
 
+/**
+ * Origem de uma linha de `audit_logs` (PRD §6.5). Até a Etapa 22 a tabela só
+ * guardava o que o painel fazia; agora ela conta também o que o bot faz
+ * sozinho, e a origem é o que separa as duas histórias.
+ *
+ * · `dashboard` — mutação feita por alguém no painel;
+ * · `command` — slash command ou menu de contexto no Discord;
+ * · `automod` — regra do automod que disparou;
+ * · `event` — reação do bot a um evento do gateway (entrada, reaction role);
+ * · `job` — trabalho periódico (anúncio de rede social, retenção, scheduler).
+ */
+export const AUDIT_SOURCES = ['dashboard', 'command', 'automod', 'event', 'job'] as const;
+export type AuditSource = (typeof AUDIT_SOURCES)[number];
+
 /** Tipos de regra de automod (PRD §5.2). */
 export const AUTOMOD_RULE_TYPES = ['spam', 'links', 'caps', 'words', 'mentions', 'raid'] as const;
 export type AutomodRuleType = (typeof AUTOMOD_RULE_TYPES)[number];
