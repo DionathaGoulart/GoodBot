@@ -38,6 +38,12 @@ export const GuildChannelSummarySchema = z.object({
   type: z.number().int(),
   parentId: SnowflakeSchema.nullable(),
   position: z.number().int(),
+  /**
+   * `false` quando o bot não consegue ver ou falar no canal. Opcional porque
+   * só as telas que escrevem mensagem precisam disso (Etapa 24); as outras
+   * continuam recebendo o resumo sem ele.
+   */
+  canSend: z.boolean().optional(),
 });
 export type GuildChannelSummary = z.infer<typeof GuildChannelSummarySchema>;
 

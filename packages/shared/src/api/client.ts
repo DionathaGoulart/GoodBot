@@ -27,6 +27,9 @@ import {
   MemberSearchQuerySchema,
 } from './members';
 import {
+  ChannelMessageSummarySchema,
+  DeleteMessageInputSchema,
+  MessageHistoryQuerySchema,
   PublishPanelInputSchema,
   SendMessageInputSchema,
   SendMessageResultSchema,
@@ -38,11 +41,7 @@ import {
   RoleMoveInputSchema,
   RoleWriteInputSchema,
 } from './roles';
-import {
-  SocialAccountSummarySchema,
-  SocialOverviewSchema,
-  SocialTestResultSchema,
-} from './social';
+import { SocialAccountSummarySchema, SocialOverviewSchema, SocialTestResultSchema } from './social';
 import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
 import { SocialAccountInputSchema } from '../config/social';
 
@@ -69,7 +68,14 @@ import type {
   GuildRoleSummary,
   MemberSearchQuery,
 } from './members';
-import type { PublishPanelInput, SendMessageInput, SendMessageResult } from './messages';
+import type {
+  ChannelMessageSummary,
+  DeleteMessageInput,
+  MessageHistoryQuery,
+  PublishPanelInput,
+  SendMessageInput,
+  SendMessageResult,
+} from './messages';
 import type { ModerationActionInput, ModerationActionResult } from './moderation';
 import type { ActorInput, MemberRolesInput, RoleMoveInput, RoleWriteInput } from './roles';
 import type { SocialAccountSummary, SocialOverview, SocialTestResult } from './social';
@@ -447,6 +453,31 @@ export function createInternalClient(options: InternalClientOptions) {
         body: SendMessageInputSchema.parse(input),
       }),
 
+    /** Últimas mensagens de um canal, para o painel escolher o que editar. */
+    channelMessages: (
+      guildId: string,
+      channelId: string,
+      query: Partial<MessageHistoryQuery> = {},
+    ): Promise<ChannelMessageSummary[]> =>
+      request(
+        ChannelMessageSummarySchema.array(),
+        `${guild(guildId)}/channels/${encodeURIComponent(channelId)}/messages`,
+        { query: MessageHistoryQuerySchema.parse(query) },
+      ),
+
+    /** Devolve o que foi apagado: é o que a auditoria do painel guarda. */
+    deleteMessage: (
+      guildId: string,
+      channelId: string,
+      messageId: string,
+      input: DeleteMessageInput,
+    ): Promise<ChannelMessageSummary> =>
+      request(
+        ChannelMessageSummarySchema,
+        `${guild(guildId)}/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`,
+        { method: 'DELETE', body: DeleteMessageInputSchema.parse(input) },
+      ),
+
     publishReactionRolePanel: (
       guildId: string,
       panelId: string,
@@ -502,10 +533,14 @@ export function createInternalClient(options: InternalClientOptions) {
       accountId: string,
       input: SocialAccountInput,
     ): Promise<SocialAccountSummary> =>
-      request(SocialAccountSummarySchema, `${guild(guildId)}/social/${encodeURIComponent(accountId)}`, {
-        method: 'PATCH',
-        body: SocialAccountInputSchema.parse(input),
-      }),
+      request(
+        SocialAccountSummarySchema,
+        `${guild(guildId)}/social/${encodeURIComponent(accountId)}`,
+        {
+          method: 'PATCH',
+          body: SocialAccountInputSchema.parse(input),
+        },
+      ),
 
     deleteSocialAccount: (guildId: string, accountId: string): Promise<{ ok: true }> =>
       request(ApiOkSchema, `${guild(guildId)}/social/${encodeURIComponent(accountId)}`, {

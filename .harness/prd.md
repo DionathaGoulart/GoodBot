@@ -198,7 +198,13 @@ actorId}` → executa a ação e cria caso (mesmo caminho que o slash command).
 - `POST /guilds/:id/config/invalidate` — `{module}` → bot recarrega cache
   daquele módulo (o painel chama após salvar).
 - `POST /guilds/:id/messages` — enviar/editar mensagem de welcome-test,
-  reaction-role panel, ticket panel.
+  reaction-role panel, ticket panel ou escrita à mão no painel (`dashboard`).
+  Menções só saem no que o corpo marcar; `@everyone` exige `actorId` com a
+  permissão no Discord. Balde próprio de 10/min por guild (§7.4).
+- `GET /guilds/:id/channels/:id/messages` — últimas 50 do canal, cada uma
+  relida como template para o painel abrir no editor.
+- `DELETE /guilds/:id/channels/:id/messages/:id` — apagar pelo painel;
+  devolve o que foi apagado, que é o que a auditoria guarda.
 - `POST /guilds/:id/reaction-roles/:id/publish`, `POST /tickets/panel/publish`.
 - `GET /guilds/:id/audit-log?type=&limit=` — proxy para audit log do Discord.
 
@@ -439,6 +445,8 @@ level)`.
   até 10 embeds por mensagem, flush a cada 2s) para não estourar 5 msgs/5s
   por canal.
 - Anti-raid em modo ban usa fila com concorrência 2.
+- Escrever mensagem pelo painel tem balde próprio (10/min por guild), bem
+  abaixo do teto por rota: é o endpoint mais fácil de abusar do painel.
 - API interna propaga `429` do Discord como `503 + retryAfter` para o painel
   mostrar toast "Discord limitou; tente em Ns".
 - Registro de comandos só quando o manifesto muda (hash em tabela `meta`).

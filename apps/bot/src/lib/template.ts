@@ -8,6 +8,7 @@ import type {
   BaseMessageOptions,
   Guild,
   GuildMember,
+  MessageMentionOptions,
   PartialGuildMember,
   User,
 } from 'discord.js';
@@ -50,6 +51,12 @@ export interface TemplateMessageOptions {
   user?: User;
   /** Resolve `thumbnail: 'server_icon'`. */
   guild?: Guild;
+  /**
+   * Quem a mensagem pode mencionar. O padrão (só usuários) é o que as
+   * mensagens do próprio bot precisam — `{mention}` tem que pingar quem
+   * entrou. O painel manda o dele, montado a partir das caixas do editor.
+   */
+  allowedMentions?: MessageMentionOptions;
 }
 
 function buildEmbed(template: EmbedTemplate, options: TemplateMessageOptions): EmbedBuilder {
@@ -77,8 +84,9 @@ function buildEmbed(template: EmbedTemplate, options: TemplateMessageOptions): E
 
 /**
  * Renderiza um `MessageTemplate` e o converte no payload do discord.js.
- * `allowedMentions` deixa passar só menções de usuário: nem `@everyone` nem
- * cargos, mesmo que alguém escreva isso no template pelo painel.
+ * `allowedMentions` deixa passar só menções de usuário por padrão: nem
+ * `@everyone` nem cargos, mesmo que alguém escreva isso no template pelo
+ * painel. Quem quiser outra coisa manda o campo explicitamente.
  */
 export function templateToMessage(
   template: MessageTemplate,
@@ -86,7 +94,9 @@ export function templateToMessage(
   options: TemplateMessageOptions = {},
 ): BaseMessageOptions {
   const rendered = renderMessageTemplate(template, vars);
-  const message: BaseMessageOptions = { allowedMentions: { parse: ['users'] } };
+  const message: BaseMessageOptions = {
+    allowedMentions: options.allowedMentions ?? { parse: ['users'] },
+  };
   if (rendered.content?.trim()) message.content = rendered.content;
   if (rendered.embed) message.embeds = [buildEmbed(rendered.embed, options)];
   return message;

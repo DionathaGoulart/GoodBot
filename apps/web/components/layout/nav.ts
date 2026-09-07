@@ -42,6 +42,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'COMUNIDADE',
     items: [
+      { label: 'Mensagens', href: '/mensagens' },
       { label: 'Boas-vindas', href: '/config/welcome' },
       { label: 'Autorole', href: '/config/autorole' },
       { label: 'Tags', href: '/config/tags' },
