@@ -43,6 +43,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 18  | Docker Compose (bot + Caddy) e build do painel                             | concluída · 2026-09-06 |
 | 19  | CI/CD: bot na Oracle, painel na Vercel                                     | em andamento |
 | 20  | Hardening e observabilidade                                                | pendente     |
+| 21  | Notificações de redes sociais                                              | pendente     |
 
 ---
 
@@ -1765,6 +1766,102 @@ ssh cobot 'cd /opt/cobot && docker compose ps && docker compose exec backup ls -
 ssh cobot 'sudo fail2ban-client status cobot-api'
 pnpm audit --audit-level high
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
+```
+
+▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
+
+---
+
+## Etapa 21 — Notificações de redes sociais
+
+**Contexto mínimo para esta etapa:** `CLAUDE.md`, `.harness/prd.md` §5.8, §7.3,
+§7.4, §8, `.harness/styleguide.md`, esta etapa, `apps/bot/src/scheduler.ts`,
+`apps/bot/src/services/templates.ts`, `packages/db/src/schema/index.ts`,
+`packages/shared/src/config/*.ts`, `apps/web/app/g/[guildId]/config/welcome/`
+(como referência de página de config).
+
+**Objetivo:** avisar num canal do Discord quando a conta configurada publica.
+YouTube (vídeo, short, live) e Twitch prontos; Instagram atrás dos
+pré-requisitos da Meta; TikTok como melhor esforço declarado.
+
+**Pré-requisitos:** Etapas 1–20. Produção estável.
+
+**⚠️ AÇÃO MANUAL (depende de contas fora do código):**
+
+1. **YouTube (live)**: criar projeto no Google Cloud, habilitar a *YouTube
+   Data API v3*, gerar API key → `YOUTUBE_API_KEY`. Só é preciso para
+   detectar lives; vídeo e short saem do RSS sem chave nenhuma.
+2. **Twitch**: registrar app em `dev.twitch.tv/console/apps` →
+   `TWITCH_CLIENT_ID` e `TWITCH_CLIENT_SECRET` (fluxo client credentials).
+3. **Instagram**: conta Business/Creator vinculada a uma Página do Facebook,
+   app na Meta com `instagram_basic` + `pages_show_list` aprovadas, e um
+   token de longa duração → `META_ACCESS_TOKEN`, `IG_USER_ID`. Sem isso o
+   painel mostra o módulo como indisponível, e está tudo bem.
+4. Cada segredo entra nos três cofres onde for usado (VM, GitHub, Vercel);
+   como o polling roda no bot, na prática só a VM precisa deles.
+
+**Tarefas:**
+
+- [ ] `packages/db`: schema `social_accounts` e `social_posts` (§8), com a
+      unique `(account_id, external_id)` que é a trava contra anúncio
+      duplicado; `db:generate`, revisar o SQL, `db:migrate`.
+- [ ] `packages/shared`: `SocialConfigSchema` (Zod) por plataforma, enum de
+      `platform` e de `kind`, payloads da API interna e schema do template.
+- [ ] `apps/bot/src/services/social/`: um provider por plataforma com a mesma
+      interface (`fetchLatest(account): Promise<SocialItem[]>`), para que o job
+      não conheça as diferenças de cada API:
+      - `youtube.ts` — RSS de uploads; `HEAD` em `/shorts/<id>` para separar
+        short de vídeo; live só se houver `YOUTUBE_API_KEY`, com intervalo
+        próprio de 15 min por causa da cota;
+      - `twitch.ts` — Helix `streams`, App Access Token cacheado até expirar,
+        dedupe por `stream.id`;
+      - `instagram.ts` — Graph API `/media`, desabilitado com motivo claro se
+        faltar credencial;
+      - `tiktok.ts` — melhor esforço, isolado e desligado por padrão.
+- [ ] `apps/bot`: job no scheduler existente (nada de cron novo), com
+      intervalo por conta, jitter para não bater todas as contas juntas,
+      backoff exponencial em erro e desativação após 10 falhas seguidas —
+      com alerta pelo webhook da Etapa 20.
+- [ ] Anúncio: renderiza o template (mesmo motor de `welcome`), respeita
+      `allowedMentions` restrito ao cargo configurado, grava `social_posts`
+      **antes** de enviar e guarda o `message_id` depois.
+- [ ] `apps/bot/src/api/routes/social.ts`: CRUD das contas para o painel
+      (Bearer + Zod + rate limit, como toda rota; PRD §5.7) e um
+      `POST /social/:id/test` que dispara um anúncio de teste.
+- [ ] `apps/web`: página `/g/[guildId]/config/social` — lista de contas,
+      formulário por plataforma, seletor de canal e de cargo, editor de
+      template com preview, botão "testar", e aviso explícito de
+      pré-requisito no Instagram e de instabilidade no TikTok.
+- [ ] Comando `/social list|add|remove|test` no bot, permissão de admin.
+- [ ] Retenção: `social_posts` por 90 dias, junto dos outros jobs de retenção.
+- [ ] Testes (Vitest): parser do RSS do YouTube com fixture real, dedupe por
+      `external_id`, classificação short/vídeo, backoff, e o schema Zod de
+      cada plataforma.
+- [ ] `.env.example` com as novas variáveis comentadas.
+- [ ] Atualizar o README (módulos) e o PRD §5.8 se algo mudar na prática.
+
+**Arquivos criados/alterados:** `packages/db/src/schema/social.ts`,
+`packages/shared/src/config/social.ts`, `apps/bot/src/services/social/*.ts`,
+`apps/bot/src/jobs/social.ts`, `apps/bot/src/api/routes/social.ts`,
+`apps/bot/src/commands/social.ts`, `apps/web/app/g/[guildId]/config/social/*`,
+`.env.example`, `README.md`.
+
+**Critérios de aceite:**
+
+- Publicar um vídeo (ou usar um canal de teste) gera **um** anúncio no canal
+  configurado, com título, link e thumbnail.
+- Reiniciar o bot no meio do ciclo não gera anúncio repetido.
+- Short é identificado como short; live avisa quando abre (com a API key).
+- Conta com credencial inválida desativa sozinha depois de 10 falhas, com
+  alerta, sem derrubar as outras contas.
+- Instagram sem credencial aparece como indisponível no painel, com o motivo.
+- `docker stats` continua dentro do orçamento da VM (bot < 300 MB).
+
+**Comandos de validação:**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+ssh cobot 'cd /opt/cobot && docker compose logs bot --tail 50 | grep social'
 ```
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
