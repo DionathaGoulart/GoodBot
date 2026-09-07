@@ -41,7 +41,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 16  | Gestão do servidor: membros, cargos, canais                                | concluída · 2026-09-06 |
 | 17  | Casos e auditoria do painel                                                | concluída · 2026-09-06 |
 | 18  | Docker Compose (bot + Caddy) e build do painel                             | concluída · 2026-09-06 |
-| 19  | CI/CD: bot na Oracle, painel na Vercel                                     | em andamento |
+| 19  | CI/CD: bot na Oracle, painel na Vercel                                     | concluída · 2026-09-07 |
 | 20  | Hardening e observabilidade                                                | pendente     |
 | 21  | Notificações de redes sociais                                              | pendente     |
 
@@ -1672,6 +1672,22 @@ curl -sI https://cobot.seudominio.com | head -5
 curl -s https://bot.seudominio.com/health
 curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer errado" https://bot.seudominio.com/guilds/$GUILD_ID/roles
 ```
+
+**Notas de execução (2026-09-07):**
+
+- O `bootstrap-server.sh` não pode usar `iptables -I INPUT 6` fixo: a posição
+  varia conforme as regras que a Oracle já entrega. O script calcula o índice
+  da regra `REJECT` da chain `INPUT` e insere as regras de 80/443 antes dela.
+- O job de deploy passou silencioso mesmo sem atualizar nada: o `ssh-action`
+  precisa de `docker login ghcr.io` na VM (pacote privado) e o script agora
+  falha se o `docker compose pull` não trouxer a imagem nova.
+- O Caddy precisa do `ACME_EMAIL` no `.env` da VM para emitir o certificado
+  sem prompt.
+- `/api/discord/channels` era pré-renderizada no build da Vercel e quebrava
+  por falta de sessão; marcada como dinâmica.
+- A sessão do Auth.js usava o `id` do provider como identidade; passou a usar
+  o snowflake do Discord, que é o que todos os queries filtram.
+- CI e Deploy verdes na `main` (deploy em ~1m30, bem abaixo do teto de 10 min).
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
