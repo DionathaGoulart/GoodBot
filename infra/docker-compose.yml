@@ -13,14 +13,26 @@ x-logging: &logging
 
 services:
   bot:
-    image: ${BOT_IMAGE:-cobot-bot:local}
+    # A imagem é construída pela CI e publicada no GHCR (Etapa 19); a VM só faz
+    # `pull`. `TAG` fixa um sha específico para rollback:
+    #   TAG=sha-1a2b3c4 docker compose ... up -d
+    # Para rodar a imagem local (`pnpm docker:build`), sobrescreva as duas:
+    #   BOT_IMAGE=cobot-bot TAG=local
+    image: ${BOT_IMAGE:-ghcr.io/dionathagoulart/cobot-bot}:${TAG:-latest}
     container_name: cobot-bot
     platform: linux/amd64
     build:
       context: ..
       dockerfile: infra/docker/bot.Dockerfile
     restart: unless-stopped
-    env_file: ../.env
+    # Duas origens possíveis, ambas opcionais: `../.env` é a raiz do monorepo
+    # (rodando do repositório) e `./.env` é `/opt/cobot/.env` na VM, onde só o
+    # compose e o Caddyfile são copiados.
+    env_file:
+      - path: ../.env
+        required: false
+      - path: ./.env
+        required: false
     environment:
       NODE_ENV: production
       INTERNAL_API_PORT: 3001
