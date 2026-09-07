@@ -1,5 +1,5 @@
 import { bitsToOverride, isEmptyOverride } from '@cobot/shared';
-import { OverwriteType } from 'discord.js';
+import { OverwriteType, PermissionFlagsBits } from 'discord.js';
 
 import type {
   AuditLogEntrySummary,
@@ -43,7 +43,24 @@ export function toChannelSummary(channel: GuildBasedChannel): GuildChannelSummar
     type: channel.type,
     parentId: channel.parentId,
     position: 'position' in channel ? channel.position : 0,
+    canSend: canBotSend(channel),
   };
+}
+
+/**
+ * O bot consegue escrever aqui? A tela de mensagens (§6.2) mostra o canal
+ * mesmo assim, desabilitado e com o motivo — some da lista é pior, porque
+ * quem configurou o canal fica sem entender para onde ele foi.
+ */
+export function canBotSend(channel: GuildBasedChannel): boolean {
+  if (!channel.isTextBased()) return false;
+  const me = channel.guild.members.me;
+  if (!me) return false;
+  const permissions = channel.permissionsFor(me);
+  return (
+    permissions?.has(PermissionFlagsBits.ViewChannel) === true &&
+    permissions.has(PermissionFlagsBits.SendMessages)
+  );
 }
 
 /**

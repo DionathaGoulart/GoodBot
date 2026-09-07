@@ -10,6 +10,13 @@ import type { ApiEnv } from '../context';
 export const IP_LIMIT_PER_MINUTE = 60;
 export const ROUTE_LIMIT_PER_MINUTE = 100;
 
+/**
+ * Teto de mensagens escritas pelo painel numa guild (PRD §7.4). Bem abaixo
+ * dos outros: mandar mensagem em canal é o endpoint mais fácil de abusar do
+ * painel inteiro, e ninguém escreve dez mensagens à mão por minuto.
+ */
+export const MESSAGE_LIMIT_PER_MINUTE = 10;
+
 interface Window {
   count: number;
   resetAt: number;
@@ -121,4 +128,18 @@ function tooMany(retryAfter: number): ApiHttpError {
     undefined,
     { 'retry-after': String(retryAfter) },
   );
+}
+
+/**
+ * Limite por guild, para pendurar numa rota específica. Independe do balde
+ * global por IP: o painel inteiro fala com a API de um punhado de IPs da
+ * Vercel, então contar por guild é o que separa "muita gente usando o painel"
+ * de "alguém floodando um canal".
+ */
+export function guildRateLimit(limiter: RateLimiter) {
+  return createMiddleware<ApiEnv>(async (c, next) => {
+    const hit = limiter.hit(c.req.param('guildId') ?? 'unknown');
+    if (!hit.allowed) throw tooMany(hit.retryAfter);
+    await next();
+  });
 }

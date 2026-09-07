@@ -52,7 +52,13 @@ export async function sendWelcomeTestAction(formData: FormData): Promise<ActionR
   }
 
   try {
-    await internalApi().sendMessage(guildId, { kind: 'welcome_test', ...parsed.data });
+    await internalApi().sendMessage(guildId, {
+      kind: 'welcome_test',
+      ...parsed.data,
+      // O teste imita a mensagem de verdade, e nela `{mention}` pinga quem
+      // entrou — só menção de usuário, nunca cargo nem @everyone.
+      allowedMentions: { users: true, roles: false, everyone: false },
+    });
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'O bot não respondeu.' };
   }
