@@ -1,0 +1,71 @@
+# CI — roda em todo push e em todo PR. É o portão de qualidade do repositório:
+# nada entra na `main` sem lint, typecheck, testes e build passando.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Um PR que recebe vários pushes só mantém a execução mais recente.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: lint · typecheck · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Os testes de `packages/db` são de integração: sem Postgres eles se
+    # auto-pulam (`describe.skipIf`), e aí a CI não estaria testando nada.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cobot
+          POSTGRES_PASSWORD: cobot
+          POSTGRES_DB: cobot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cobot -d cobot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://cobot:cobot@localhost:5432/cobot
+      NODE_ENV: test
+      TZ: America/Sao_Paulo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Migrations no Postgres de teste
+        run: pnpm db:migrate
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Testes
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
