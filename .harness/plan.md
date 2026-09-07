@@ -47,7 +47,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 22  | Painel vivo e histórico de ações                                           | concluída · 2026-09-07 |
 | 23  | Configurações do servidor e banidos                                        | concluída · 2026-09-07 |
 | 24  | Mensagens pelo painel                                                      | concluída · 2026-09-07 |
-| 25  | Convites, eventos e emojis                                                 | pendente     |
+| 25  | Convites, eventos e emojis                                                 | concluída · 2026-09-07 |
 | 26  | Organização e legibilidade do painel                                       | pendente     |
 
 ---
@@ -2195,25 +2195,25 @@ limites do cliente para economizar um fetch.
 
 **Tarefas:**
 
-- [ ] `packages/shared`: schemas de `CreateInviteInput` (canal, `maxAge`,
+- [x] `packages/shared`: schemas de `CreateInviteInput` (canal, `maxAge`,
       `maxUses`, `temporary`, `unique`), `ScheduledEventInput` (nome, descrição,
       início/fim, canal ou local externo, imagem de capa) e `ExpressionInput`
       (nome, imagem, cargos com acesso).
-- [ ] `apps/bot/src/api/routes/invites.ts`: `GET` (com usos e quem criou),
+- [x] `apps/bot/src/api/routes/invites.ts`: `GET` (com usos e quem criou),
       `POST`, `DELETE /:code`.
-- [ ] `apps/bot/src/api/routes/events.ts`: CRUD de eventos agendados; validar que
+- [x] `apps/bot/src/api/routes/events.ts`: CRUD de eventos agendados; validar que
       evento externo exige local e data de fim.
-- [ ] `apps/bot/src/api/routes/expressions.ts`: emojis e stickers — listar, subir
+- [x] `apps/bot/src/api/routes/expressions.ts`: emojis e stickers — listar, subir
       (data URL validada como na Etapa 23), renomear, apagar; recusar antes de
       chamar o Discord quando o slot do nível de boost já está cheio, dizendo
       quantos restam.
-- [ ] `apps/web`: `/g/[guildId]/convites`, `/g/[guildId]/eventos` e
+- [x] `apps/web`: `/g/[guildId]/convites`, `/g/[guildId]/eventos` e
       `/g/[guildId]/emojis`. Emojis em grade com preview 48px; eventos em lista
       com data em `pt-BR` e estado (agendado/ativo/encerrado).
-- [ ] Tudo em `audit_logs`, com o código do convite / id do evento / nome do
+- [x] Tudo em `audit_logs`, com o código do convite / id do evento / nome do
       emoji no alvo.
-- [ ] Nav: grupo `SERVIDOR` ganha os três itens.
-- [ ] Testes (Vitest): validação de evento externo sem local; contagem de slots
+- [x] Nav: grupo `SERVIDOR` ganha os três itens.
+- [x] Testes (Vitest): validação de evento externo sem local; contagem de slots
       de emoji por nível de boost.
 
 **Arquivos criados/alterados:** `packages/shared/src/api/{invites,events,expressions}.ts`,
