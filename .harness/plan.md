@@ -44,6 +44,11 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 19  | CI/CD: bot na Oracle, painel na Vercel                                     | concluída · 2026-09-07 |
 | 20  | Hardening e observabilidade                                                | concluída · 2026-09-07 |
 | 21  | Notificações de redes sociais                                              | concluída · 2026-09-07 |
+| 22  | Painel vivo e histórico de ações                                           | pendente     |
+| 23  | Configurações do servidor e banidos                                        | pendente     |
+| 24  | Mensagens pelo painel                                                      | pendente     |
+| 25  | Convites, eventos e emojis                                                 | pendente     |
+| 26  | Organização e legibilidade do painel                                       | pendente     |
 
 ---
 
@@ -1950,6 +1955,325 @@ ssh cobot 'cd /opt/cobot && docker compose logs bot --tail 50 | grep social'
   publicar um vídeo de verdade, de credenciais da Twitch/Meta e do
   `docker stats` na VM. O que dá para provar fora dela está coberto por
   testes (dedupe, backoff, short vs. vídeo, desativação no décimo erro).
+
+▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
+
+---
+
+## Etapa 22 — Painel vivo e histórico de ações
+
+**Contexto mínimo para esta etapa:** `CLAUDE.md`, `.harness/prd.md` §6.1, §6.5,
+§7.4, `.harness/styleguide.md`, esta etapa, `apps/web/components/layout/`,
+`apps/web/lib/audit.ts`, `apps/web/app/g/[guildId]/auditoria/`,
+`packages/db/src/schema/audit.ts`.
+
+**Objetivo:** o painel deixa de mostrar dados congelados desde o `F5` e passa a
+se atualizar sozinho; e a auditoria deixa de contar só o que foi feito *pelo
+painel* para contar tudo que o bot fez e por quê.
+
+**Pré-requisitos:** Etapas 1–21.
+
+**Decisão (2026-09-07):** atualização por **auto-refresh**, não por SSE. O
+painel roda na Vercel e o bot numa VM de 1 GB atrás do Caddy; manter uma
+conexão persistente por aba aberta custaria mais do que vale para um servidor
+de 13 pessoas, e ainda exigiria auth no stream. Um `router.refresh()` a cada
+N segundos usa o mesmo caminho de dados que já existe.
+
+**Tarefas:**
+
+- [ ] `apps/web/components/layout/auto-refresh.tsx`: client component que chama
+      `router.refresh()` num intervalo, **pausa com a aba escondida**
+      (`document.visibilityState`) e volta a rodar no `focus` — sem isto uma aba
+      esquecida bate na API do bot a noite inteira (PRD §7.4).
+- [ ] Intervalo por tela, não global: 10 s no dashboard e em membros/canais/
+      cargos, 30 s nas telas de config (que quase não mudam sozinhas), nunca
+      enquanto um formulário está sujo (`isDirty`) — atualizar por baixo de
+      alguém digitando é pior do que ficar velho.
+- [ ] Indicador na topbar: `ATUALIZADO HÁ 00:07` em micro-texto (§3) + botão
+      de refresh manual (`icon-btn`) que força a revalidação na hora.
+- [ ] Preferência do usuário: alternar auto-refresh liga/desliga, persistida em
+      `localStorage`; desligado, sobra o botão manual.
+- [ ] `packages/db`: acrescentar `source` (`dashboard` | `command` | `automod` |
+      `event` | `job`) e `reason` a `audit_logs`, com índice por `(guild_id,
+      source, created_at desc)`; `db:generate`, revisar o SQL, `db:migrate`.
+- [ ] `apps/bot`: passar a gravar em `audit_logs` também o que **o bot** faz
+      sozinho — automod aplicado, autorole dado, ticket aberto/fechado, cargo de
+      reaction role, anúncio de rede social —, sempre com quem disparou
+      (`actorId` do membro, ou o próprio bot quando a origem é uma regra).
+- [ ] Página `/auditoria`: filtros por origem, por ator e por período; coluna de
+      origem como `Tag` (§6.6); diff `before`/`after` já existente mantido.
+- [ ] Dashboard: card "Últimas ações" com as 10 mais recentes de qualquer
+      origem, cada uma linkando para o alvo (membro, caso, canal).
+- [ ] Testes (Vitest): o hook de auto-refresh não dispara com a aba escondida
+      nem com formulário sujo; o repositório de auditoria filtra por origem.
+
+**Arquivos criados/alterados:** `apps/web/components/layout/auto-refresh.tsx`,
+`apps/web/components/layout/topbar.tsx`, `apps/web/lib/audit.ts`,
+`apps/web/app/g/[guildId]/auditoria/*`, `packages/db/src/schema/audit.ts`,
+`packages/db/drizzle/0004_audit_source.sql`, `apps/bot/src/services/audit.ts`.
+
+**Critérios de aceite:**
+
+- Entrar alguém no servidor faz a lista de membros mudar sozinha em ≤ 10 s, sem
+  `F5`.
+- Aba em segundo plano não gera nenhuma requisição; voltar para ela atualiza na
+  hora.
+- Um automod que apagou uma mensagem aparece em `/auditoria` com origem
+  `automod` e o autor da mensagem como alvo.
+- Formulário de config sendo preenchido não é sobrescrito por um refresh.
+
+**Comandos de validação:**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+```
+
+▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
+
+---
+
+## Etapa 23 — Configurações do servidor e banidos
+
+**Contexto mínimo para esta etapa:** `CLAUDE.md`, `.harness/prd.md` §5.7, §6.3,
+§7.3, §9.2, §10, `.harness/styleguide.md`, esta etapa,
+`apps/bot/src/api/routes/guild.ts`, `apps/bot/src/api/routes/moderation.ts`,
+`apps/web/app/g/[guildId]/canais/` (como referência de tela de gestão).
+
+**Objetivo:** editar o servidor pelo painel — nome, ícone, banner, descrição,
+canal de sistema e nível de verificação — e ter uma tela de banidos de verdade,
+com busca e desbanimento.
+
+**Pré-requisitos:** Etapa 22. O bot precisa de `Manage Guild` e `Ban Members` no
+convite (PRD §10); se faltar, a tela mostra o motivo em vez de falhar no envio.
+
+**Tarefas:**
+
+- [ ] `packages/shared`: `GuildSettingsInputSchema` (nome 2–100, descrição ≤ 120,
+      `verificationLevel`, `systemChannelId`, `afkChannelId`, `afkTimeout`) e
+      `BanListQuerySchema`. Ícone e banner viajam como **data URL** validada por
+      tipo (`png`/`jpeg`/`gif`/`webp`) e tamanho (≤ 8 MB, o teto do Discord).
+- [ ] `apps/bot/src/api/routes/guild.ts`: `GET /guild` (dados atuais + o que o
+      bot pode editar), `PATCH /guild` (só `admin`), `GET /guild/bans` paginado
+      por cursor e `DELETE /guild/bans/:userId`. Bearer + Zod + rate limit, como
+      toda rota (PRD §5.7).
+- [ ] Recusar antes de chamar o Discord o que o servidor não suporta: banner
+      exige o boost nível 2, `INVITE_SPLASH` o nível 1. A resposta traz a
+      feature que falta, e o painel escreve isso em português.
+- [ ] Toda alteração vira uma linha de `audit_logs` com `before`/`after` — trocar
+      o ícone do servidor sem deixar rastro seria o pior tipo de poder no painel.
+- [ ] `apps/web`: página `/g/[guildId]/servidor` — formulário com upload de ícone
+      e banner (preview quadrado 2px, §6.2), campos de texto, seletores de canal,
+      e um aviso claro quando a permissão do bot ou o nível de boost impede algo.
+- [ ] `apps/web`: página `/g/[guildId]/banidos` — tabela com avatar, tag, ID,
+      motivo e quem baniu (do audit log do Discord), busca por ID/nome, botão
+      "desbanir" com confirmação e campo de motivo.
+- [ ] Desbanir pelo painel usa o **mesmo serviço** dos slash commands, para o
+      caso, o mod-log e a escalada saírem idênticos — só o `source` muda para
+      `dashboard`.
+- [ ] Nav: grupo `SERVIDOR` ganha "Servidor" e "Banidos".
+- [ ] Testes (Vitest): schema de upload rejeita tipo e tamanho fora do limite;
+      o gate de boost recusa banner sem a feature.
+
+**Arquivos criados/alterados:** `packages/shared/src/api/guild.ts`,
+`apps/bot/src/api/routes/guild.ts`, `apps/web/app/g/[guildId]/servidor/*`,
+`apps/web/app/g/[guildId]/banidos/*`, `apps/web/lib/guild.ts`,
+`apps/web/components/layout/nav.ts`.
+
+**Critérios de aceite:**
+
+- Trocar o nome e o ícone pelo painel reflete no Discord em segundos e aparece
+  em `/auditoria` com o valor antigo e o novo.
+- Servidor sem boost mostra o campo de banner desabilitado **com o motivo**, não
+  um erro depois de enviar.
+- A lista de banidos pagina além de 1000 banimentos sem travar.
+- Desbanir cria caso, escreve no mod-log e avisa por DM igual ao `/unban`.
+
+**Comandos de validação:**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+```
+
+▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
+
+---
+
+## Etapa 24 — Mensagens pelo painel
+
+**Contexto mínimo para esta etapa:** `CLAUDE.md`, `.harness/prd.md` §5.7, §6.2,
+§7.3, §7.4, §9.2, `.harness/styleguide.md`, esta etapa,
+`apps/bot/src/api/routes/messages.ts`, `apps/bot/src/lib/template.ts`,
+`apps/web/components/config/embed-preview.tsx`.
+
+**Objetivo:** escrever, enviar e editar mensagens do bot em qualquer canal, com
+o mesmo editor de embed que as telas de config já usam.
+
+**Pré-requisitos:** Etapa 23.
+
+**Tarefas:**
+
+- [ ] `packages/shared`: estender `SendMessageInputSchema` com edição
+      (`messageId`), resposta a mensagem, e `allowedMentions` **explícito** —
+      o padrão continua não mencionar ninguém; mencionar `@everyone` é um campo
+      que se marca de propósito e exige `admin`.
+- [ ] `apps/bot/src/api/routes/messages.ts`: `POST /messages` (já existe) ganha
+      edição e resposta; `GET /channels/:id/messages` devolve as últimas 50 para
+      escolher o que editar; `DELETE /channels/:id/messages/:messageId`.
+- [ ] Rate limit próprio para envio, mais apertado que o das rotas de config
+      (PRD §7.4): o painel não pode virar um caminho para floodar canal.
+- [ ] Toda mensagem enviada, editada ou apagada pelo painel vira `audit_logs`
+      com o conteúdo — este é o endpoint mais fácil de abusar do painel inteiro.
+- [ ] `apps/web`: página `/g/[guildId]/mensagens` — seletor de canal, editor com
+      abas *texto* / *embed* (reaproveitando `EmbedPreview`), preview ao lado,
+      lista das mensagens recentes do bot naquele canal com "editar" e "apagar".
+- [ ] Só `admin` envia; `mod` vê o histórico. Canal que o bot não enxerga sai do
+      seletor com o motivo.
+- [ ] Testes (Vitest): `allowedMentions` nasce vazio; `@everyone` sem `admin` é
+      recusado; edição de mensagem que não é do bot é recusada.
+
+**Arquivos criados/alterados:** `packages/shared/src/api/messages.ts`,
+`apps/bot/src/api/routes/messages.ts`, `apps/web/app/g/[guildId]/mensagens/*`,
+`apps/web/lib/messages.ts`, `apps/web/components/layout/nav.ts`.
+
+**Critérios de aceite:**
+
+- Mandar um embed pelo painel chega idêntico ao preview.
+- Editar uma mensagem antiga do bot funciona; tentar editar a de outro usuário é
+  recusado com mensagem clara.
+- Nenhuma menção sai sem ser marcada explicitamente.
+
+**Comandos de validação:**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+```
+
+▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
+
+---
+
+## Etapa 25 — Convites, eventos e emojis
+
+**Contexto mínimo para esta etapa:** `CLAUDE.md`, `.harness/prd.md` §5.7, §6.3,
+§7.2, §7.4, §10, `.harness/styleguide.md`, esta etapa, `apps/bot/src/client.ts`,
+`apps/bot/src/api/routes/guild.ts`.
+
+**Objetivo:** fechar a gestão do servidor pelo painel — criar e revogar convites,
+criar e editar eventos agendados, e subir/renomear/apagar emojis e stickers.
+
+**Pré-requisitos:** Etapa 24. Convite do bot com `Manage Guild`,
+`Create Instant Invite`, `Manage Events` e `Manage Expressions` (PRD §10).
+
+**Nota de cache:** `GuildInviteManager`, `GuildScheduledEventManager` e
+`GuildStickerManager` estão com limite **0** em `client.ts` de propósito (§7.2).
+Estas telas leem por REST sob demanda, com cache curto no painel — não mexa nos
+limites do cliente para economizar um fetch.
+
+**Tarefas:**
+
+- [ ] `packages/shared`: schemas de `CreateInviteInput` (canal, `maxAge`,
+      `maxUses`, `temporary`, `unique`), `ScheduledEventInput` (nome, descrição,
+      início/fim, canal ou local externo, imagem de capa) e `ExpressionInput`
+      (nome, imagem, cargos com acesso).
+- [ ] `apps/bot/src/api/routes/invites.ts`: `GET` (com usos e quem criou),
+      `POST`, `DELETE /:code`.
+- [ ] `apps/bot/src/api/routes/events.ts`: CRUD de eventos agendados; validar que
+      evento externo exige local e data de fim.
+- [ ] `apps/bot/src/api/routes/expressions.ts`: emojis e stickers — listar, subir
+      (data URL validada como na Etapa 23), renomear, apagar; recusar antes de
+      chamar o Discord quando o slot do nível de boost já está cheio, dizendo
+      quantos restam.
+- [ ] `apps/web`: `/g/[guildId]/convites`, `/g/[guildId]/eventos` e
+      `/g/[guildId]/emojis`. Emojis em grade com preview 48px; eventos em lista
+      com data em `pt-BR` e estado (agendado/ativo/encerrado).
+- [ ] Tudo em `audit_logs`, com o código do convite / id do evento / nome do
+      emoji no alvo.
+- [ ] Nav: grupo `SERVIDOR` ganha os três itens.
+- [ ] Testes (Vitest): validação de evento externo sem local; contagem de slots
+      de emoji por nível de boost.
+
+**Arquivos criados/alterados:** `packages/shared/src/api/{invites,events,expressions}.ts`,
+`apps/bot/src/api/routes/{invites,events,expressions}.ts`,
+`apps/web/app/g/[guildId]/{convites,eventos,emojis}/*`,
+`apps/web/components/layout/nav.ts`.
+
+**Critérios de aceite:**
+
+- Criar um convite de 1 uso pelo painel gera um link que funciona e some da lista
+  depois de usado.
+- Evento criado no painel aparece no Discord com capa e horário certos.
+- Subir um emoji com o slot cheio é recusado **antes** do upload, com a contagem.
+- `docker stats` continua dentro do orçamento da VM (bot < 300 MB).
+
+**Comandos de validação:**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+```
+
+▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
+
+---
+
+## Etapa 26 — Organização e legibilidade do painel
+
+**Contexto mínimo para esta etapa:** `CLAUDE.md`, `.harness/styleguide.md`
+inteiro, esta etapa, `apps/web/components/layout/nav.ts`,
+`apps/web/app/globals.css`, `apps/web/components/retro/`,
+`apps/web/components/ui/button.tsx`.
+
+**Objetivo:** com ~20 telas no painel, arrumar a navegação e fechar as brechas de
+legibilidade que fazem um controle parecer desligado. Nenhuma função nova.
+
+**Pré-requisitos:** Etapa 25.
+
+**Contexto (2026-09-07):** o `opacity: 0.4` da `window-bar` e a ausência de
+`cursor: pointer` já foram corrigidos fora do plano, depois de o usuário
+reportar botões "meio cinzas como se não fossem clicáveis". Esta etapa procura o
+resto do mesmo problema em vez de esperar o próximo relato.
+
+**Tarefas:**
+
+- [ ] Varrer o painel atrás de outros controles interativos dentro de containers
+      com `opacity` herdada, e de `<button>`/`<a>` sem estado de `:hover`,
+      `:focus-visible` ou `cursor`. Corrigir a **causa** no CSS do tema, não caso
+      a caso nas telas.
+- [ ] Fixar a regra no styleguide: `opacity` decorativa nunca no container de um
+      controle — só no texto que ela quer apagar. Anotar em §4.8 e §6.1.
+- [ ] `:focus-visible` visível em todo controle (anel `accent` de 2px, radius 0),
+      incluindo os que hoje só têm `:hover` — quem navega por teclado não vê
+      nada hoje.
+- [ ] Contraste: conferir cada par texto/fundo dos dois temas contra WCAG AA
+      (4.5:1 para texto, 3:1 para micro-texto ≥ 14px bold) e corrigir os tokens
+      em `globals.css`, que é o único lugar com hex (§2).
+- [ ] Reagrupar a nav, que hoje tem 6 itens em `SERVIDOR` e vai para 11:
+      `PAINEL` · `MODERAÇÃO` · `COMUNIDADE` · `SERVIDOR` (membros, cargos, canais,
+      banidos, convites, eventos, emojis) · `CONFIGURAÇÃO` (os `/config/*`) ·
+      `SISTEMA` (auditoria, saúde). Sidebar com grupos colapsáveis, estado em
+      `localStorage`.
+- [ ] Busca de comando (`Ctrl+K`) que pula para qualquer tela pelo nome — com 20+
+      telas, procurar na sidebar já custa mais que digitar.
+- [ ] Cada tela de gestão ganha o mesmo esqueleto: `ScreenHeader` + `Panel` com
+      ações no topo + estado vazio com o que fazer a seguir.
+- [ ] Testes: os já existentes de `components/retro/`, mais um que garanta que
+      todo item da nav aponta para uma rota que existe.
+
+**Arquivos criados/alterados:** `apps/web/app/globals.css`,
+`apps/web/components/layout/*`, `apps/web/components/retro/*`,
+`.harness/styleguide.md`.
+
+**Critérios de aceite:**
+
+- Nenhum controle clicável fica com `opacity` menor que a de um controle ativo.
+- Navegar o painel inteiro só pelo teclado é possível e visível.
+- `Ctrl+K` acha qualquer tela por nome.
+- Os dois temas passam em AA nos pares de cor documentados no styleguide.
+
+**Comandos de validação:**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+```
 
 ▶ Etapa concluída. Rode /clear antes de iniciar a próxima etapa para limpar o contexto.
 
