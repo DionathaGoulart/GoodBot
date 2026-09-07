@@ -37,7 +37,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 12  | Esqueleto do painel (Next.js, Auth.js, layout, 2 temas)                    | concluída · 2026-09-06 |
 | 13  | Dashboard de estatísticas                                                  | concluída · 2026-09-06 |
 | 14  | Configuração I: geral, moderação, logs, boas-vindas, autorole, tags        | concluída · 2026-09-06 |
-| 15  | Configuração II: automod, reaction roles, tickets, comandos                | pendente     |
+| 15  | Configuração II: automod, reaction roles, tickets, comandos                | concluída · 2026-09-06 |
 | 16  | Gestão do servidor: membros, cargos, canais                                | pendente     |
 | 17  | Casos e auditoria do painel                                                | pendente     |
 | 18  | Docker Compose (bot + Caddy) e build do painel                             | pendente     |
@@ -1285,26 +1285,26 @@ editores em `sheet`, e a página de permissões de comandos.
 
 **Tarefas:**
 
-- [ ] `components/data-table/`: wrapper TanStack Table + shadcn `table`
+- [x] `components/data-table/`: wrapper TanStack Table + shadcn `table`
       conforme styleguide §6.3 (toolbar, seleção, paginação, ordenação,
       estados). Reutilizado nas Etapas 16–17.
-- [ ] `automod`: tabela de regras (nome, tipo, ativa, hits 24h, ações,
+- [x] `automod`: tabela de regras (nome, tipo, ativa, hits 24h, ações,
       prioridade com botões ▲▼), `sheet` de criar/editar com formulário
       dinâmico por `type` (campos específicos + lista de ações com
       `DurationInput`), allowlists globais, card anti-raid com botão
       `ATIVAR MODO RAID` (API interna) e status.
-- [ ] `reaction-roles`: lista de painéis; editor: canal, `TemplateEditor`,
+- [x] `reaction-roles`: lista de painéis; editor: canal, `TemplateEditor`,
       modo, estilo, itens (emoji picker simples por texto, label, cargo),
       botões `PUBLICAR`/`ATUALIZAR`/`REMOVER` → API interna.
-- [ ] `tickets`: tabs `Tipos` (CRUD), `Painel` (canal, embed, tipos,
+- [x] `tickets`: tabs `Tipos` (CRUD), `Painel` (canal, embed, tipos,
       publicar), `Configuração` (transcript, log), `Tickets` (tabela
       aberto/fechado com link de transcript e botão `FECHAR` → API interna).
-- [ ] `commands`: tabela de comandos (lida do manifesto exposto por
+- [x] `commands`: tabela de comandos (lida do manifesto exposto por
       `GET /commands` na API interna — adicionar endpoint), por comando:
       ativo, cargos permitidos, canais permitidos/negados; salvo em
       `module_configs.utilities.commandOverrides`; bot lê no
       `interaction.ts` (ajuste pequeno no bot).
-- [ ] Testes: form dinâmico do automod gera payload válido para cada tipo;
+- [x] Testes: form dinâmico do automod gera payload válido para cada tipo;
       reordenação de prioridade; tabela pagina/ordena.
 
 **Arquivos criados/alterados:** `apps/web/components/data-table/*`,
