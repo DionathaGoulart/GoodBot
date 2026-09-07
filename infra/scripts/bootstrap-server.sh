@@ -8,7 +8,8 @@
 #   sudo bash infra/scripts/bootstrap-server.sh
 #
 # Faz: swap de 2 GB, portas 80/443 no iptables da Oracle, Docker Engine,
-# /opt/cobot com o compose, o Caddyfile e um .env esqueleto.
+# /opt/cobot com o compose, o Caddyfile e um .env esqueleto, fail2ban na API
+# e um `docker system prune` semanal.
 # Não faz (⚠️ ação manual): VCN/Security List, DNS, preencher o .env.
 set -euo pipefail
 
@@ -82,6 +83,10 @@ systemctl enable --now docker
 log "Diretório $APP_DIR"
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 750 "$APP_DIR"
 
+install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 750 "$APP_DIR/scripts"
+install -o "$SERVICE_USER" -g "$SERVICE_USER" -m 755 "$HERE/scripts/backup.sh" "$APP_DIR/scripts/backup.sh"
+install -o "$SERVICE_USER" -g "$SERVICE_USER" -m 755 "$HERE/scripts/restore.sh" "$APP_DIR/scripts/restore.sh"
+
 for file in docker-compose.yml Caddyfile; do
   if [[ -f "$HERE/$file" ]]; then
     install -o "$SERVICE_USER" -g "$SERVICE_USER" -m 640 "$HERE/$file" "$APP_DIR/$file"
@@ -108,6 +113,10 @@ INTERNAL_API_PORT=3001
 # Subdomínio da API do bot; o Caddy emite o certificado para ele.
 BOT_DOMAIN=
 ACME_EMAIL=
+# Webhook de Discord dos alertas operacionais (vazio = desligado).
+ALERT_WEBHOOK_URL=
+# Hora UTC do pg_dump diário (6 = 03:00 em São Paulo).
+BACKUP_HOUR=6
 NODE_ENV=production
 LOG_LEVEL=info
 TZ=America/Sao_Paulo
@@ -117,6 +126,35 @@ ENV
   echo ".env esqueleto criado — preencha antes do primeiro deploy."
 fi
 
+# ── 5. fail2ban na API do bot ────────────────────────────────────────────────
+# A API está na internet e o Bearer é a única barreira: 20 respostas 401 em
+# 5 minutos derrubam o IP (PRD §7.3, §11).
+log 'fail2ban na API'
+if ! command -v fail2ban-client >/dev/null; then
+  DEBIAN_FRONTEND=noninteractive apt-get update -qq
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fail2ban
+fi
+if [[ -f "$HERE/fail2ban/cobot-api.conf" ]]; then
+  install -m 644 "$HERE/fail2ban/cobot-api.conf" /etc/fail2ban/filter.d/cobot-api.conf
+  install -m 644 "$HERE/fail2ban/jail.local" /etc/fail2ban/jail.d/cobot.local
+  systemctl enable --now fail2ban
+  systemctl restart fail2ban
+  fail2ban-client status cobot-api || echo 'aviso: a jail não subiu — confira o backend do log (jail.local).' >&2
+else
+  echo "aviso: $HERE/fail2ban não encontrado — copie manualmente." >&2
+fi
+
+# ── 6. Faxina semanal do Docker ──────────────────────────────────────────────
+# O disco da VM é pequeno e cada deploy deixa uma imagem antiga para trás.
+log 'docker system prune semanal'
+cat >/etc/cron.weekly/cobot-docker-prune <<'CRON'
+#!/bin/sh
+# Remove imagens, containers e redes sem uso. `--volumes` NUNCA: o volume
+# `backups` e o `caddy_data` (certificados) moram aqui.
+docker system prune -af --filter 'until=168h' >/dev/null 2>&1
+CRON
+chmod 755 /etc/cron.weekly/cobot-docker-prune
+
 log 'Pronto'
 cat <<TXT
 Falta (⚠️ manual):
@@ -125,4 +163,6 @@ Falta (⚠️ manual):
   3. DNS: A de \$BOT_DOMAIN → IP público desta VM.
   4. Se o pacote no GHCR for privado: docker login ghcr.io -u <user> (PAT read:packages).
   5. Sair e entrar de novo no SSH para o grupo docker valer, e rodar: $APP_DIR/deploy.sh
+  6. Depois do primeiro backup (06:00Z), testar o restore num banco descartável:
+     $APP_DIR/scripts/restore.sh <dump> <URL de teste>  — ver docs/runbook.md.
 TXT
