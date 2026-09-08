@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { SnowflakeSchema } from '../config/common';
-import { SocialKindSchema, SocialPlatformSchema } from '../config/social';
+import { SocialKindSchema, SocialPlatformSchema, YOUTUBE_CHANNEL_ID_RE } from '../config/social';
 import { MessageTemplateSchema } from '../templates';
 
 /**
@@ -14,16 +14,14 @@ export const SocialAccountSummarySchema = z.object({
   externalId: z.string(),
   handle: z.string().nullable(),
   displayName: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
   discordChannelId: SnowflakeSchema,
   kinds: z.array(SocialKindSchema),
   template: MessageTemplateSchema,
   mentionRoleId: SnowflakeSchema.nullable(),
   enabled: z.boolean(),
-  pollIntervalSeconds: z.number().int(),
   /** ISO 8601; `null` enquanto o job não passou por ela. */
   lastCheckedAt: z.string().nullable(),
-  /** `external_id` da última publicação vista. */
-  lastExternalId: z.string().nullable(),
   failureCount: z.number().int(),
   /** Preenchido quando o bot desligou a conta sozinho. */
   disabledReason: z.string().nullable(),
@@ -31,26 +29,28 @@ export const SocialAccountSummarySchema = z.object({
 });
 export type SocialAccountSummary = z.infer<typeof SocialAccountSummarySchema>;
 
-/**
- * Estado de uma plataforma no processo do bot: sem `TWITCH_CLIENT_ID` a Twitch
- * não tem como funcionar, e o painel precisa dizer isso em vez de deixar o
- * usuário criar uma conta que nunca vai anunciar (PRD §5.8).
- */
-export const SocialPlatformStatusSchema = z.object({
-  platform: SocialPlatformSchema,
-  available: z.boolean(),
-  /** Motivo da indisponibilidade, em pt-BR, pronto para a tela. */
-  reason: z.string().nullable(),
-  /** Tipos que esta plataforma consegue anunciar agora. */
-  kinds: z.array(SocialKindSchema),
-});
-export type SocialPlatformStatus = z.infer<typeof SocialPlatformStatusSchema>;
-
 export const SocialOverviewSchema = z.object({
   accounts: z.array(SocialAccountSummarySchema),
-  platforms: z.array(SocialPlatformStatusSchema),
 });
 export type SocialOverview = z.infer<typeof SocialOverviewSchema>;
+
+/**
+ * `POST /social/resolve` — o painel manda o que o usuário digitou (URL da barra
+ * de endereços, `@handle` ou `UC…`) e o bot devolve o canal de verdade. É o bot
+ * quem fala com o YouTube, então é ele quem sabe se o canal existe.
+ */
+export const SocialResolveInputSchema = z.object({
+  input: z.string().trim().min(1, 'Cole a URL, o @handle ou o ID do canal.').max(256),
+});
+export type SocialResolveInput = z.infer<typeof SocialResolveInputSchema>;
+
+export const SocialResolveResultSchema = z.object({
+  channelId: z.string().regex(YOUTUBE_CHANNEL_ID_RE),
+  title: z.string().nullable(),
+  handle: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+});
+export type SocialResolveResult = z.infer<typeof SocialResolveResultSchema>;
 
 /** `POST /social/:id/test` — dispara um anúncio de mentira no canal da conta. */
 export const SocialTestResultSchema = z.object({
