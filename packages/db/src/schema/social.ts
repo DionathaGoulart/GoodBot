@@ -1,10 +1,19 @@
-import { bigserial, boolean, index, integer, jsonb, pgTable, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  bigserial,
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { createdAt, snowflake, text, timestamptz, updatedAt } from './_columns';
 import { socialKindEnum, socialPlatformEnum } from './enums';
 import { guilds } from './guilds';
 
-import type { MessageTemplate, SocialKind } from '@cobot/shared';
+import type { MessageTemplate, SocialKind, SocialPlatform } from '@cobot/shared';
 
 const guildRef = () =>
   snowflake('guild_id')
@@ -13,19 +22,22 @@ const guildRef = () =>
 
 /**
  * Uma conta observada pelo job de redes sociais (PRD §5.8). `external_id` é o
- * que a plataforma usa para identificar o perfil (`channel_id` do YouTube,
- * `user_login` da Twitch, `ig_user_id` do Instagram).
+ * `channel_id` do YouTube (`UC…`), resolvido no cadastro a partir da URL ou do
+ * `@handle`. O enum `social_platform` ainda tem os quatro valores da v1, mas
+ * `$type` diz a verdade: só `youtube` é escrito.
  */
 export const socialAccounts = pgTable(
   'social_accounts',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     guildId: guildRef(),
-    platform: socialPlatformEnum('platform').notNull(),
+    platform: socialPlatformEnum('platform').notNull().$type<SocialPlatform>(),
     externalId: text('external_id').notNull(),
     /** `@handle`, só para exibição. */
     handle: text('handle'),
     displayName: text('display_name'),
+    /** Avatar do canal, para a lista do painel. */
+    avatarUrl: text('avatar_url'),
     discordChannelId: snowflake('discord_channel_id').notNull(),
     kinds: socialKindEnum('kinds')
       .array()
@@ -35,10 +47,7 @@ export const socialAccounts = pgTable(
     template: jsonb('template').$type<MessageTemplate>().notNull(),
     mentionRoleId: snowflake('mention_role_id'),
     enabled: boolean('enabled').notNull().default(true),
-    pollIntervalSeconds: integer('poll_interval_s').notNull().default(300),
     lastCheckedAt: timestamptz('last_checked_at'),
-    /** Última publicação vista; o job usa para não reprocessar o feed inteiro. */
-    lastExternalId: text('last_external_id'),
     /** Falhas seguidas. Zera no primeiro sucesso; em 10 a conta se desliga. */
     failureCount: integer('failure_count').notNull().default(0),
     /** Por que o bot desligou a conta sozinho; `null` quando foi um humano. */
@@ -52,7 +61,6 @@ export const socialAccounts = pgTable(
       t.platform,
       t.externalId,
     ),
-    index('social_accounts_due_idx').on(t.enabled, t.lastCheckedAt),
   ],
 );
 
@@ -60,6 +68,9 @@ export const socialAccounts = pgTable(
  * Toda publicação já vista. A linha nasce **antes** do envio: se o bot cair no
  * meio, o restart encontra a linha e não anuncia de novo. A unique
  * `(account_id, external_id)` é a trava de verdade contra duplicata (PRD §5.8).
+ *
+ * Não há retenção aqui de propósito: podar a linha faria o vídeo antigo que
+ * ainda está no feed voltar a ser "novo" e ser anunciado outra vez.
  */
 export const socialPosts = pgTable(
   'social_posts',

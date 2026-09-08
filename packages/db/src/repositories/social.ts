@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { guilds } from '../schema/guilds';
 import { socialAccounts, socialPosts } from '../schema/social';
@@ -12,12 +12,12 @@ export interface SocialAccountInputRow {
   externalId: string;
   handle: string | null;
   displayName: string | null;
+  avatarUrl: string | null;
   discordChannelId: string;
   kinds: SocialKind[];
   template: MessageTemplate;
   mentionRoleId: string | null;
   enabled: boolean;
-  pollIntervalSeconds: number;
 }
 
 /** A guild pode ainda não ter linha própria (FK de `social_accounts`). */
@@ -36,7 +36,7 @@ export async function listSocialAccounts(
     .select()
     .from(socialAccounts)
     .where(eq(socialAccounts.guildId, guildId))
-    .orderBy(asc(socialAccounts.platform), asc(socialAccounts.createdAt));
+    .orderBy(asc(socialAccounts.createdAt));
 }
 
 export async function countSocialAccounts(db: DbExecutor, guildId: string): Promise<number> {
@@ -112,32 +112,16 @@ export async function deleteSocialAccount(
 }
 
 /**
- * Contas ligadas cujo intervalo já venceu, de todas as guilds. O job roda uma
- * vez por minuto e pega só o que está devendo checagem — é o que mantém uma
- * conta de 5 min e outra de 1 h no mesmo laço sem cron por conta.
+ * Todas as contas ligadas, de todas as guilds. O job percorre a lista inteira a
+ * cada passada: com o teto de contas por servidor não existe "conta vencida", e
+ * um laço só é mais fácil de entender do que uma query de vencimento.
  */
-export async function listDueSocialAccounts(
-  db: DbExecutor,
-  now: Date,
-  limit = 25,
-): Promise<SocialAccount[]> {
+export async function listEnabledSocialAccounts(db: DbExecutor): Promise<SocialAccount[]> {
   return db
     .select()
     .from(socialAccounts)
-    .where(
-      and(
-        eq(socialAccounts.enabled, true),
-        or(
-          isNull(socialAccounts.lastCheckedAt),
-          lt(
-            socialAccounts.lastCheckedAt,
-            sql`${now} - make_interval(secs => ${socialAccounts.pollIntervalSeconds})`,
-          ),
-        ),
-      ),
-    )
-    .orderBy(asc(socialAccounts.lastCheckedAt))
-    .limit(limit);
+    .where(eq(socialAccounts.enabled, true))
+    .orderBy(asc(socialAccounts.guildId), asc(socialAccounts.createdAt));
 }
 
 /** Marca a passada como feita. Chamado mesmo quando a checagem falhou. */
@@ -145,14 +129,10 @@ export async function touchSocialAccount(
   db: DbExecutor,
   id: string,
   checkedAt: Date,
-  lastExternalId?: string,
 ): Promise<void> {
   await db
     .update(socialAccounts)
-    .set({
-      lastCheckedAt: checkedAt,
-      ...(lastExternalId === undefined ? {} : { lastExternalId }),
-    })
+    .set({ lastCheckedAt: checkedAt })
     .where(eq(socialAccounts.id, id));
 }
 
@@ -214,6 +194,24 @@ export async function claimSocialPost(
   return row ?? null;
 }
 
+/**
+ * Se a publicação já foi vista. Existe para o provider poder **pular** o que já
+ * está anunciado antes de gastar requisições classificando: `claimSocialPost`
+ * continua sendo quem decide de verdade, este é só o atalho barato.
+ */
+export async function hasSocialPost(
+  db: DbExecutor,
+  accountId: string,
+  externalId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: socialPosts.id })
+    .from(socialPosts)
+    .where(and(eq(socialPosts.accountId, accountId), eq(socialPosts.externalId, externalId)))
+    .limit(1);
+  return row !== undefined;
+}
+
 export async function markSocialPostAnnounced(
   db: DbExecutor,
   id: number,
@@ -244,13 +242,4 @@ export async function listRecentSocialPosts(
     .where(eq(socialPosts.accountId, accountId))
     .orderBy(sql`${socialPosts.createdAt} desc`)
     .limit(limit);
-}
-
-/** Job de retenção: `social_posts` guarda 90 dias (PRD §8). */
-export async function deleteSocialPostsBefore(db: DbExecutor, before: Date): Promise<number> {
-  const rows = await db
-    .delete(socialPosts)
-    .where(lt(socialPosts.createdAt, before))
-    .returning({ id: socialPosts.id });
-  return rows.length;
 }
