@@ -181,6 +181,8 @@ export const DEFAULT_REASON = '[sem motivo]';
 export const MAX_MESSAGE_CONTENT_LENGTH = 2_000;
 export const MAX_EMBED_DESCRIPTION_LENGTH = 4_096;
 export const MAX_EMBED_TITLE_LENGTH = 256;
+/** O Discord não documenta um teto para `embed.url`; 512 é folga suficiente. */
+export const MAX_EMBED_URL_LENGTH = 512;
 export const MAX_EMBED_FIELDS = 25;
 export const MAX_EMBED_FIELD_NAME_LENGTH = 256;
 export const MAX_EMBED_FIELD_VALUE_LENGTH = 1_024;
