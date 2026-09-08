@@ -49,6 +49,7 @@ Cada etapa cabe em **uma sessão** do Claude Code com contexto limpo. Regras:
 | 24  | Mensagens pelo painel                                                      | concluída · 2026-09-07 |
 | 25  | Convites, eventos e emojis                                                 | concluída · 2026-09-07 |
 | 26  | Organização e legibilidade do painel                                       | concluída · 2026-09-07 |
+| 27  | Redes sociais v2 (só YouTube) → ver `.harness/plan-social.md`               | em andamento |
 
 ---
 

@@ -24,26 +24,42 @@ infra/            docker-compose, Caddy, Dockerfiles, deploy
 Cada módulo liga e desliga por servidor, tem uma página no painel e um schema
 Zod próprio em `packages/shared/src/config/`:
 
-| Módulo             | O que faz                                                         |
-| ------------------ | ----------------------------------------------------------------- |
-| **Moderação**      | ban, kick, timeout, warn, notas e casos numerados com mod-log      |
-| **Automod**        | spam, links, caps, palavras, menções e modo anti-raid              |
-| **Logs**           | mensagens, membros, servidor e voz em canais separados             |
-| **Boas-vindas**    | mensagem de entrada, de saída e DM, por template                   |
-| **Autorole**       | cargos na entrada e verificação por botão                          |
-| **Reaction roles** | painéis de cargo por botão, menu ou reação                         |
-| **Tickets**        | tipos, painel de abertura, transcript e fechamento                 |
-| **Tags**           | respostas salvas com autocomplete                                  |
-| **Utilidades**     | purge, lock, slowmode, lembretes, enquetes e info                  |
-| **Estatísticas**   | mensagens, entradas/saídas, voz e casos agregados por hora e dia   |
-| **Redes sociais**  | avisa quando a conta publica no YouTube, Twitch, Instagram, TikTok |
+| Módulo             | O que faz                                                        |
+| ------------------ | ---------------------------------------------------------------- |
+| **Moderação**      | ban, kick, timeout, warn, notas e casos numerados com mod-log    |
+| **Automod**        | spam, links, caps, palavras, menções e modo anti-raid            |
+| **Logs**           | mensagens, membros, servidor e voz em canais separados           |
+| **Boas-vindas**    | mensagem de entrada, de saída e DM, por template                 |
+| **Autorole**       | cargos na entrada e verificação por botão                        |
+| **Reaction roles** | painéis de cargo por botão, menu ou reação                       |
+| **Tickets**        | tipos, painel de abertura, transcript e fechamento               |
+| **Tags**           | respostas salvas com autocomplete                                |
+| **Utilidades**     | clear, purge, lock, slowmode, lembretes, enquetes e info         |
+| **Estatísticas**   | mensagens, entradas/saídas, voz e casos agregados por hora e dia |
+| **Redes sociais**  | avisa quando o canal do YouTube publica vídeo, short ou live     |
 
-O módulo de redes sociais funciona por polling, nunca por webhook de entrada.
-YouTube (vídeo e short) sai do feed RSS público, sem credencial; live no
-YouTube pede `YOUTUBE_API_KEY`, Twitch pede um app em `dev.twitch.tv` e
-Instagram exige conta Business/Creator com app aprovado na Meta. O TikTok é
-melhor esforço e nasce desligado. Sem a credencial, a plataforma aparece como
-indisponível no painel, com o motivo — ver `.env.example`.
+O módulo de redes sociais funciona por polling, nunca por webhook de entrada, e
+não pede credencial nenhuma: vídeo, short e live saem de páginas públicas do
+próprio YouTube (feed RSS, `watch?v=` e `/channel/<id>/live`). O intervalo do
+laço fica na config do módulo, no painel — uma passada percorre todas as contas
+ligadas, e cada conta são duas requisições ao YouTube.
+
+### Cadastrar um canal do YouTube
+
+Pelo painel, em **Redes sociais → `ADICIONAR CANAL`**: cole no campo
+"Canal do YouTube" a URL da barra de endereços
+(`https://www.youtube.com/@LofiGirl`), o `@handle` ou o ID `UC…` e clique
+`BUSCAR`. O bot resolve os três formatos, e o cartão com avatar e nome aparece
+antes de salvar — se o canal não existir, o erro sai no próprio campo. Depois
+escolha o canal do Discord, quais tipos anunciar (vídeos, shorts, lives), o
+cargo a mencionar (opcional) e o template.
+
+Pelo Discord é `/social add`, que aceita o mesmo campo livre e confirma com o
+nome e o avatar do canal. `/social list` mostra as contas e o estado de cada
+uma; `/social test` manda um anúncio de exemplo.
+
+A primeira passada de uma conta nova **não anuncia nada**: ela só marca o que
+já estava no feed e passa a avisar do próximo post em diante.
 
 ## Rodando localmente
 
@@ -136,7 +152,7 @@ deploy nunca é interrompido no meio.
 | Onde                        | Segredo                                                                                                                                    |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | GitHub Secrets              | `DATABASE_URL` (direta, para as migrations), `SSH_HOST`, `SSH_USER`, `SSH_KEY`; o GHCR usa o `GITHUB_TOKEN`                                |
-| `.env` em `/opt/cobot` (VM) | `DISCORD_TOKEN`, `GUILD_ID`, `DATABASE_URL` (direta), `INTERNAL_API_TOKEN`, `BOT_DOMAIN`, `ACME_EMAIL` e, se usar redes sociais, `YOUTUBE_API_KEY`, `TWITCH_CLIENT_ID/SECRET`, `META_ACCESS_TOKEN` |
+| `.env` em `/opt/cobot` (VM) | `DISCORD_TOKEN`, `GUILD_ID`, `DATABASE_URL` (direta), `INTERNAL_API_TOKEN`, `BOT_DOMAIN`, `ACME_EMAIL`                                     |
 | Variáveis da Vercel         | `DATABASE_URL` (pooler :6543), `AUTH_SECRET`, `AUTH_URL`, `DISCORD_CLIENT_ID/SECRET`, `INTERNAL_API_URL`, `INTERNAL_API_TOKEN`, `GUILD_ID` |
 
 O `INTERNAL_API_TOKEN` está na VM e na Vercel; rotacionar significa trocar nos
