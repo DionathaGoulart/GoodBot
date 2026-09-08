@@ -1,4 +1,3 @@
-import { VERSION } from '@cobot/shared';
 import { EmbedBuilder, type APIEmbedField } from 'discord.js';
 
 /** Cores de status do styleguide §2.1/§9 (hex cheios). */
@@ -52,9 +51,13 @@ export function infoEmbed(input: EmbedInput, embedColor = DEFAULT_EMBED_COLOR): 
   return build(input, embedColor);
 }
 
-/** Rodapé padrão do bot. */
+/**
+ * Rodapé do bot: só o que o chamador tem a dizer. A versão saía em todo embed
+ * público — o membro do servidor não tem o que fazer com ela. Sem sufixo o
+ * retorno é vazio e `build` não escreve rodapé nenhum.
+ */
 export function botFooter(suffix?: string): string {
-  return suffix ? `COBOT v${VERSION} · ${suffix}` : `COBOT v${VERSION}`;
+  return suffix ?? '';
 }
 
 /** IDs sempre em `inline code` — styleguide §9. */

@@ -1,4 +1,4 @@
-import { MINUTE_MS, SECOND_MS, VERSION } from '@cobot/shared';
+import { MINUTE_MS, SECOND_MS } from '@cobot/shared';
 
 import { STATUS_COLORS } from '../lib/embeds';
 import { childLogger } from '../logger';
@@ -124,7 +124,7 @@ export function buildPayload(input: AlertInput, suppressed = 0): unknown {
         description: input.description,
         color: LEVEL_COLOR[input.level ?? 'warning'],
         fields: fields.map((field) => ({ ...field, inline: true })),
-        footer: { text: `COBOT v${VERSION} · ALERTA` },
+        footer: { text: 'ALERTA' },
         timestamp: new Date().toISOString(),
       },
     ],
