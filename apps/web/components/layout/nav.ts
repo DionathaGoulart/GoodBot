@@ -1,10 +1,11 @@
 import { hasAccess, type AccessLevel } from '@/lib/auth/access';
 
 /**
- * §6.9 — a navegação inteira do painel. Com ~20 telas os seis itens que antes
- * moravam em `SERVIDOR` viraram três grupos: o que é **gestão** do servidor
- * (membros, cargos, canais…) fica em `SERVIDOR`, tudo que é `/config/*` vai
- * para `CONFIGURAÇÃO` e a auditoria/saúde para `SISTEMA`.
+ * §6.9 — a navegação inteira do painel, agrupada por **assunto**, que é como
+ * alguém procura: o que é punição está em `MODERAÇÃO` (inclusive banidos e
+ * auditoria), o que é convívio em `COMUNIDADE`, o inventário do servidor em
+ * `SERVIDOR`, todo `/config/*` em `CONFIGURAÇÃO` — atrás do índice `/config`,
+ * que explica tela por tela — e só a saúde do bot em `SISTEMA`.
  */
 export interface NavItem {
   label: string;
@@ -28,12 +29,19 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'MODERAÇÃO',
-    items: [{ label: 'Casos', href: '/casos', keywords: ['punições', 'histórico', 'ban', 'warn'] }],
+    items: [
+      { label: 'Casos', href: '/casos', keywords: ['punições', 'histórico', 'ban', 'warn'] },
+      { label: 'Banidos', href: '/banidos', keywords: ['bans', 'desbanir'] },
+      { label: 'Auditoria', href: '/auditoria', keywords: ['audit', 'quem mudou'] },
+    ],
   },
   {
     label: 'COMUNIDADE',
     items: [
       { label: 'Mensagens', href: '/mensagens', keywords: ['anúncio', 'embed', 'enviar'] },
+      { label: 'Convites', href: '/convites', keywords: ['invites', 'links'] },
+      { label: 'Eventos', href: '/eventos', keywords: ['agenda', 'scheduled'] },
+      { label: 'Emojis', href: '/emojis', keywords: ['figurinhas', 'stickers', 'expressões'] },
     ],
   },
   {
@@ -42,17 +50,25 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Membros', href: '/membros', keywords: ['usuários', 'pessoas'] },
       { label: 'Cargos', href: '/cargos', keywords: ['roles', 'permissões'] },
       { label: 'Canais', href: '/canais', keywords: ['channels', 'categorias'] },
-      { label: 'Banidos', href: '/banidos', keywords: ['bans', 'desbanir'] },
-      { label: 'Convites', href: '/convites', keywords: ['invites', 'links'] },
-      { label: 'Eventos', href: '/eventos', keywords: ['agenda', 'scheduled'] },
-      { label: 'Emojis', href: '/emojis', keywords: ['figurinhas', 'stickers', 'expressões'] },
+      {
+        label: 'Servidor',
+        href: '/servidor',
+        minimum: 'admin',
+        keywords: ['nome', 'ícone', 'banner', 'vanity'],
+      },
     ],
   },
   {
+    // Mesma ordem do índice `/config`: bot, moderação, comunidade.
     label: 'CONFIGURAÇÃO',
     items: [
+      {
+        label: 'Todas as telas',
+        href: '/config',
+        keywords: ['configurações', 'índice', 'ajustes', 'settings'],
+      },
       { label: 'Geral', href: '/config/general', keywords: ['prefixo', 'idioma', 'fuso'] },
-      { label: 'Servidor', href: '/servidor', minimum: 'admin', keywords: ['nome', 'ícone'] },
+      { label: 'Comandos', href: '/config/commands', keywords: ['slash', 'permissões'] },
       { label: 'Moderação', href: '/config/moderation', keywords: ['punições', 'escalonamento'] },
       { label: 'Automod', href: '/config/automod', keywords: ['filtro', 'spam', 'regras'] },
       { label: 'Logs', href: '/config/logs', keywords: ['mod-log', 'eventos'] },
@@ -61,14 +77,12 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Tags', href: '/config/tags', keywords: ['respostas', 'atalhos'] },
       { label: 'Reaction roles', href: '/config/reaction-roles', keywords: ['reação', 'cargo'] },
       { label: 'Tickets', href: '/config/tickets', keywords: ['suporte', 'atendimento'] },
-      { label: 'Redes sociais', href: '/config/social', keywords: ['twitch', 'youtube', 'feed'] },
-      { label: 'Comandos', href: '/config/commands', keywords: ['slash', 'permissões'] },
+      { label: 'Redes sociais', href: '/config/social', keywords: ['youtube', 'live', 'feed'] },
     ],
   },
   {
     label: 'SISTEMA',
     items: [
-      { label: 'Auditoria', href: '/auditoria', keywords: ['audit', 'quem mudou'] },
       { label: 'Saúde', href: '/system', minimum: 'owner', keywords: ['health', 'status', 'fila'] },
     ],
   },
@@ -93,7 +107,9 @@ export function navItemForPath(guildId: string, pathname: string): NavItem | nul
   for (const group of NAV_GROUPS) {
     for (const item of group.items) {
       const matches =
-        item.href === '' ? rest === '' || rest === '/' : rest === item.href || rest.startsWith(`${item.href}/`);
+        item.href === ''
+          ? rest === '' || rest === '/'
+          : rest === item.href || rest.startsWith(`${item.href}/`);
       if (matches && (!best || item.href.length > best.href.length)) best = item;
     }
   }
