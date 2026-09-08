@@ -1,6 +1,5 @@
 import { Panel } from '@/components/retro/panel';
 import { ScreenHeader } from '@/components/retro/screen-header';
-import { Tag } from '@/components/retro/tag';
 import { hasAccess } from '@/lib/auth/access';
 import { requireGuildAccess } from '@/lib/auth/require';
 import { CONFIG_PAGES } from '@/lib/config-pages';
@@ -10,7 +9,6 @@ import { loadSocial } from '@/lib/social';
 
 import { AccountsTable } from './accounts';
 import { SocialConfigForm } from './form';
-import { PLATFORM_LABEL } from './labels';
 
 export const metadata = { title: 'Redes sociais · CoBot' };
 
@@ -26,7 +24,6 @@ export default async function SocialConfigPage({
     loadChannelNames(guildId),
   ]);
   const readOnly = !hasAccess(session.level, 'admin');
-  const unavailable = social.platforms.filter((platform) => !platform.available);
 
   return (
     <>
@@ -45,27 +42,8 @@ export default async function SocialConfigPage({
         </Panel>
       ) : null}
 
-      {/*
-        O PRD §5.8 é explícito: o painel tem que dizer na cara do usuário o que
-        não funciona, em vez de deixar criar uma conta que nunca anunciaria.
-      */}
-      {unavailable.length > 0 ? (
-        <Panel title="PRE-REQUISITOS.TXT" tone="warning">
-          {unavailable.map((platform) => (
-            <p key={platform.platform} className="flex flex-wrap items-baseline gap-2">
-              <Tag tone="muted">{PLATFORM_LABEL[platform.platform]}</Tag>
-              <span>{platform.reason}</span>
-            </p>
-          ))}
-          <p className="screen-meta">
-            O TikTok é melhor esforço: depende da página pública e pode parar a qualquer momento.
-          </p>
-        </Panel>
-      ) : null}
-
       <AccountsTable
         accounts={social.accounts}
-        platforms={social.platforms}
         channelNames={channelNames}
         embedColor={general.settings.embedColor}
         readOnly={readOnly}

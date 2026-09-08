@@ -1,7 +1,13 @@
 'use server';
 
-import { removeSocialAccount, saveSocialAccount, testSocialAccount } from '@/lib/social';
+import {
+  removeSocialAccount,
+  resolveSocialChannel,
+  saveSocialAccount,
+  testSocialAccount,
+} from '@/lib/social';
 
+import type { ResolveChannelResult } from '@/lib/social';
 import type { ActionResult } from '@/lib/module-config';
 
 /**
@@ -19,4 +25,8 @@ export async function deleteSocialAccountAction(formData: FormData): Promise<Act
 
 export async function testSocialAccountAction(formData: FormData): Promise<ActionResult> {
   return testSocialAccount(formData);
+}
+
+export async function resolveSocialChannelAction(input: string): Promise<ResolveChannelResult> {
+  return resolveSocialChannel(input);
 }

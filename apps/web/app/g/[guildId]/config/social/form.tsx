@@ -3,7 +3,7 @@
 import type { SocialConfig } from '@cobot/shared';
 
 import { ConfigForm } from '@/components/config/config-form';
-import { NumberField, SwitchField } from '@/components/config/fields';
+import { NumberField } from '@/components/config/fields';
 import { ModuleToggle } from '@/components/config/module-toggle';
 import { Panel } from '@/components/retro/panel';
 
@@ -16,29 +16,16 @@ export function SocialConfigForm({
 }) {
   return (
     <ConfigForm page="social" defaultValues={values} readOnly={readOnly}>
-      <ModuleToggle description="Avisa num canal quando as contas configuradas publicam." />
+      <ModuleToggle description="Avisa num canal quando os canais configurados publicam no YouTube." />
 
-      <Panel title="LIMITES.CFG">
+      <Panel title="POLLING.CFG">
         <NumberField
-          name="maxAccounts"
-          label="Máximo de contas"
-          description="Cada conta é uma chamada HTTP por ciclo; o orçamento da VM é apertado."
-          min={1}
-          max={20}
-          suffix="CONTAS"
-        />
-        <NumberField
-          name="defaultPollIntervalSeconds"
-          label="Intervalo padrão"
-          description="Usado ao criar uma conta nova. Cada conta pode ter o seu."
+          name="pollIntervalSeconds"
+          label="Checar a cada"
+          description="Vale para todos os canais: uma passada percorre a lista inteira e cada canal faz duas requisições ao YouTube. Mudar aqui vale já na próxima passada, sem reiniciar o bot."
           min={60}
-          max={21_600}
+          max={1800}
           suffix="SEGUNDOS"
-        />
-        <SwitchField
-          name="announceBacklog"
-          label="Anunciar o que já existia"
-          description="Desligado, a primeira passada de uma conta nova só marca as publicações antigas como vistas. Ligado, o feed inteiro cai no canal de uma vez."
         />
       </Panel>
     </ConfigForm>

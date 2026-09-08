@@ -3,22 +3,33 @@
 import * as React from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  SOCIAL_DEFAULT_TEMPLATES,
-  SOCIAL_EXTERNAL_ID,
-  SOCIAL_KINDS_BY_PLATFORM,
-  SOCIAL_PLATFORMS,
+  SOCIAL_DEFAULT_TEMPLATE,
+  SOCIAL_KIND_HEADLINE,
+  SOCIAL_KIND_LABEL,
+  SOCIAL_KINDS,
+  SOCIAL_TEMPLATE_VARIABLES,
   SocialAccountInputSchema,
   type SocialAccountInput,
   type SocialKind,
-  type SocialPlatform,
-  type SocialPlatformStatus,
 } from '@cobot/shared';
 import { useFormContext, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { saveSocialAccountAction } from '@/app/actions/social';
-import { DiscordField, NumberField, SwitchField, TemplateField, TextField } from '@/components/config/fields';
-import { Form, FormDescription, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { resolveSocialChannelAction, saveSocialAccountAction } from '@/app/actions/social';
+import { DiscordField, SwitchField, TemplateField } from '@/components/config/fields';
+import type { TemplatePreviewMode } from '@/components/config/template-editor';
+import { AvatarSq } from '@/components/retro/avatar-sq';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
 import {
   Sheet,
   SheetContent,
@@ -28,32 +39,167 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 
-import { KIND_LABEL, PLATFORM_LABEL } from './labels';
-
 export const EMPTY_ACCOUNT: SocialAccountInput = {
   platform: 'youtube',
   externalId: '',
   handle: null,
   displayName: null,
+  avatarUrl: null,
   discordChannelId: '',
-  kinds: ['video', 'short'],
-  template: SOCIAL_DEFAULT_TEMPLATES.youtube,
+  kinds: [...SOCIAL_KINDS],
+  template: SOCIAL_DEFAULT_TEMPLATE,
   mentionRoleId: null,
   enabled: true,
-  pollIntervalSeconds: 300,
+};
+
+/** Um título de exemplo por tipo, para o preview não dizer "vídeo" numa live. */
+const PREVIEW_TITLE: Record<SocialKind, string> = {
+  video: 'Título do vídeo novo',
+  short: 'Título do short',
+  live: 'Título da transmissão',
 };
 
 /**
- * Os tipos que a conta anuncia. Cada plataforma aceita um conjunto próprio, e
- * o que o bot não consegue entregar agora (live sem API key) aparece marcado
- * como indisponível em vez de sumir — é a diferença entre "não existe" e
- * "falta uma chave", e o usuário precisa saber qual é.
+ * O mesmo template renderizado nos três tipos. `{headline}` e `{kind}` mudam a
+ * frase inteira, então ver só o caso "vídeo" esconderia justamente o texto que
+ * costuma sair errado (PRD §5.8).
  */
-function KindsField({ platform, status }: { platform: SocialPlatform; status?: SocialPlatformStatus }) {
+const PREVIEW_MODES: TemplatePreviewMode[] = SOCIAL_KINDS.map((kind) => ({
+  id: kind,
+  label: SOCIAL_KIND_LABEL[kind].toUpperCase(),
+  vars: {
+    kind: SOCIAL_KIND_LABEL[kind],
+    headline: SOCIAL_KIND_HEADLINE[kind],
+    title: PREVIEW_TITLE[kind],
+    url:
+      kind === 'short'
+        ? 'https://www.youtube.com/shorts/dQw4w9WgXcQ'
+        : 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  },
+}));
+
+/**
+ * O campo que resolve o canal. Quem fala com o YouTube é o bot: o painel manda
+ * o que a pessoa colou (URL, `@handle` ou `UC…`) e recebe de volta o `UC…` com
+ * nome e avatar. Salvar sem passar por aqui é impossível — `externalId` é o
+ * campo do formulário e ele só é preenchido pela resolução.
+ */
+function ChannelField({ readOnly }: { readOnly: boolean }) {
+  const { watch, setValue, setError, clearErrors } = useFormContext<SocialAccountInput>();
+  const externalId = watch('externalId');
+  const displayName = watch('displayName');
+  const handle = watch('handle');
+  const avatarUrl = watch('avatarUrl');
+
+  const [query, setQuery] = React.useState('');
+  const [searching, setSearching] = React.useState(false);
+  // Na edição o cartão já vem pronto; a busca só volta com `TROCAR CANAL`.
+  const [changing, setChanging] = React.useState(false);
+  const showSearch = externalId === '' || changing;
+
+  const search = async () => {
+    const value = query.trim();
+    if (value === '') {
+      setError('externalId', { message: 'Cole a URL, o @handle ou o ID do canal.' });
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const result = await resolveSocialChannelAction(value);
+      if (!result.ok) {
+        setError('externalId', { message: result.message });
+        return;
+      }
+      const { channelId, title, handle: resolvedHandle, avatarUrl: resolvedAvatar } = result.channel;
+      const dirty = { shouldDirty: true };
+      setValue('externalId', channelId, { ...dirty, shouldValidate: true });
+      setValue('displayName', title, dirty);
+      setValue('handle', resolvedHandle, dirty);
+      setValue('avatarUrl', resolvedAvatar, dirty);
+      clearErrors('externalId');
+      setQuery('');
+      setChanging(false);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  return (
+    <FormField
+      name="externalId"
+      render={() => (
+        <FormItem>
+          <FormLabel>
+            Canal do YouTube<span className="text-accent-text"> *</span>
+          </FormLabel>
+          <FormDescription>
+            Cole a URL da barra de endereços, o @handle ou o ID (UC…). O bot confirma que o canal
+            existe antes de salvar.
+          </FormDescription>
+
+          {showSearch ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <FormControl>
+                <Input
+                  className="min-w-0 flex-1"
+                  disabled={readOnly || searching}
+                  placeholder="youtube.com/@canal"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  // Enter dentro do campo buscaria e salvaria ao mesmo tempo:
+                  // o submit do formulário fica para o botão SALVAR.
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    void search();
+                  }}
+                />
+              </FormControl>
+              <button
+                type="button"
+                className="icon-btn"
+                disabled={readOnly || searching}
+                onClick={() => void search()}
+              >
+                {searching ? 'BUSCANDO_' : 'BUSCAR'}
+              </button>
+              {externalId === '' ? null : (
+                <button type="button" className="icon-btn" onClick={() => setChanging(false)}>
+                  CANCELAR
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 border-2 border-base-300 bg-base-100 p-3">
+              <AvatarSq src={avatarUrl} name={displayName ?? externalId} size={40} />
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-bold">{displayName ?? externalId}</span>
+                <span className="screen-meta truncate">{handle ?? externalId}</span>
+              </span>
+              {readOnly ? null : (
+                <button
+                  type="button"
+                  className="icon-btn ml-auto shrink-0"
+                  onClick={() => setChanging(true)}
+                >
+                  TROCAR CANAL
+                </button>
+              )}
+            </div>
+          )}
+
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
+/** Os três tipos que o YouTube entrega. Todos disponíveis: não há chave nem cota. */
+function KindsField() {
   const { watch, setValue, formState } = useFormContext<SocialAccountInput>();
   const selected = watch('kinds');
-  const supported: readonly SocialKind[] = SOCIAL_KINDS_BY_PLATFORM[platform];
-  const available: readonly SocialKind[] = status?.kinds ?? supported;
 
   const toggle = (kind: SocialKind) => {
     const next: SocialKind[] = selected.includes(kind)
@@ -62,32 +208,33 @@ function KindsField({ platform, status }: { platform: SocialPlatform; status?: S
     setValue('kinds', next, { shouldDirty: true, shouldValidate: true });
   };
 
+  // `FormField` é o que dá contexto a `FormLabel`/`FormMessage`; sem ele os
+  // dois estouram no primeiro render da sheet, mesmo sem nenhum erro de campo.
   return (
-    <FormItem>
-      <FormLabel>
-        Anunciar<span className="text-accent-text"> *</span>
-      </FormLabel>
-      <FormDescription>O que dispara uma mensagem no canal.</FormDescription>
-      <div className="flex flex-wrap gap-2">
-        {supported.map((kind) => {
-          const usable = available.includes(kind);
-          return (
-            <button
-              key={kind}
-              type="button"
-              disabled={formState.disabled || !usable}
-              className={selected.includes(kind) ? 'icon-btn border-accent text-accent-text' : 'icon-btn'}
-              onClick={() => toggle(kind)}
-              title={usable ? undefined : 'Indisponível neste bot; veja o aviso da plataforma.'}
-            >
-              {KIND_LABEL[kind].toUpperCase()}
-              {usable ? '' : ' (N/D)'}
-            </button>
-          );
-        })}
-      </div>
-      <FormMessage />
-    </FormItem>
+    <FormField
+      name="kinds"
+      render={() => (
+        <FormItem>
+          <FormLabel>
+            O que anunciar<span className="text-accent-text"> *</span>
+          </FormLabel>
+          <FormDescription>O que dispara uma mensagem no canal do Discord.</FormDescription>
+          <div className="flex flex-col gap-2">
+            {SOCIAL_KINDS.map((kind) => (
+              <label key={kind} className="flex cursor-pointer items-center gap-2 text-sm">
+                <Checkbox
+                  checked={selected.includes(kind)}
+                  disabled={formState.disabled}
+                  onCheckedChange={() => toggle(kind)}
+                />
+                {SOCIAL_KIND_LABEL[kind].toUpperCase()}
+              </label>
+            ))}
+          </div>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
   );
 }
 
@@ -97,19 +244,14 @@ export interface AccountEditing {
   id: string | null;
 }
 
-/**
- * Editor de conta. O formulário troca template e tipos padrão ao mudar de
- * plataforma, porque um template de live não faz sentido num feed de fotos.
- */
+/** Editor de um canal observado. */
 export function AccountSheet({
   editing,
-  platforms,
   embedColor,
   readOnly,
   onClose,
 }: {
   editing: AccountEditing | null;
-  platforms: SocialPlatformStatus[];
   embedColor: number;
   readOnly: boolean;
   onClose: (changed: boolean) => void;
@@ -122,20 +264,10 @@ export function AccountSheet({
     disabled: readOnly,
   });
   const [saving, setSaving] = React.useState(false);
-  const platform = form.watch('platform');
-  const status = platforms.find((item) => item.platform === platform);
-  const format = SOCIAL_EXTERNAL_ID[platform];
 
   React.useEffect(() => {
     if (editing) form.reset(editing.account);
   }, [editing, form]);
-
-  /** Trocar de plataforma reinicia o que só faz sentido nela. */
-  const changePlatform = (next: SocialPlatform) => {
-    form.setValue('platform', next, { shouldDirty: true });
-    form.setValue('kinds', [...SOCIAL_KINDS_BY_PLATFORM[next]], { shouldDirty: true });
-    form.setValue('template', SOCIAL_DEFAULT_TEMPLATES[next], { shouldDirty: true });
-  };
 
   const onSubmit = form.handleSubmit(async (values) => {
     setSaving(true);
@@ -162,9 +294,9 @@ export function AccountSheet({
     <Sheet open={editing !== null} onOpenChange={(open) => !open && onClose(false)}>
       <SheetContent className="w-full sm:max-w-3xl">
         <SheetHeader>
-          <SheetTitle>{editing?.id ? 'EDITAR CONTA' : 'NOVA CONTA'}</SheetTitle>
+          <SheetTitle>{editing?.id ? 'EDITAR CANAL' : 'NOVO CANAL'}</SheetTitle>
           <SheetDescription>
-            O bot só olha o feed: nada é publicado em seu nome em nenhuma rede.
+            O bot só olha o feed público: nada é publicado em seu nome no YouTube.
           </SheetDescription>
         </SheetHeader>
 
@@ -174,46 +306,7 @@ export function AccountSheet({
             className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4"
           >
             <fieldset disabled={readOnly} className="flex flex-col gap-4">
-              <FormItem>
-                <FormLabel>
-                  Plataforma<span className="text-accent-text"> *</span>
-                </FormLabel>
-                <div className="flex flex-wrap gap-2">
-                  {SOCIAL_PLATFORMS.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      disabled={readOnly || Boolean(editing?.id)}
-                      className={value === platform ? 'icon-btn border-accent text-accent-text' : 'icon-btn'}
-                      onClick={() => changePlatform(value)}
-                    >
-                      {PLATFORM_LABEL[value].toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-                {editing?.id ? (
-                  <FormDescription>
-                    A plataforma não muda depois de criada: crie outra conta.
-                  </FormDescription>
-                ) : null}
-              </FormItem>
-
-              {status && !status.available ? (
-                <p className="border-2 border-warning p-3 text-warning-text">{status.reason}</p>
-              ) : null}
-
-              <TextField
-                name="externalId"
-                label={format.label}
-                description={format.hint}
-                placeholder={format.label}
-                required
-              />
-              <TextField
-                name="displayName"
-                label="Nome de exibição"
-                description="Como a conta aparece nas listas do painel. Opcional."
-              />
+              <ChannelField readOnly={readOnly} />
               <DiscordField
                 kind="channel"
                 name="discordChannelId"
@@ -227,25 +320,19 @@ export function AccountSheet({
                 description="Único cargo que a mensagem pode pingar. Deixe vazio para não mencionar ninguém."
                 placeholder="Nenhum cargo"
               />
-              <KindsField platform={platform} {...(status ? { status } : {})} />
-              <NumberField
-                name="pollIntervalSeconds"
-                label="Checar a cada"
-                description="Mínimo 60s. Lives do YouTube usam 15 min de qualquer forma, por causa da cota da API."
-                min={60}
-                max={21_600}
-                suffix="SEGUNDOS"
-              />
+              <KindsField />
               <TemplateField
                 name="template"
                 label="Mensagem"
-                description="Variáveis: {title}, {url}, {author}, {platform}, {kind}. A capa da publicação vira a imagem do embed."
+                description="{headline} vira “publicou um vídeo novo”, “publicou um short” ou “está ao vivo”, conforme o caso — troque o tipo no preview para conferir os três. A capa da publicação vira a imagem do embed."
                 embedColor={embedColor}
+                variables={SOCIAL_TEMPLATE_VARIABLES}
+                previewModes={PREVIEW_MODES}
                 required
               />
               <SwitchField
                 name="enabled"
-                label="Conta ligada"
+                label="Canal ligado"
                 description="Salvar com isto ligado também zera o contador de falhas."
               />
             </fieldset>
