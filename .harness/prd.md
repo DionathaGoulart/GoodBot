@@ -218,65 +218,103 @@ ou Redis pub/sub depois sem tocar nos módulos.
 
 ### 5.8 Notificações de redes sociais
 
-Avisa num canal do Discord quando a conta configurada publica algo. Uma
-**conta** = plataforma + identificador externo + canal de destino + template.
-Várias contas por servidor, cada uma com seu canal e sua menção opcional.
+Avisa num canal do Discord quando o canal do YouTube configurado publica um
+**vídeo**, um **short** ou abre uma **live**. Uma **conta** = canal do YouTube
++ canal de destino no Discord + tipos escolhidos + template. Várias contas por
+servidor (teto de 20), cada uma com seu canal e sua menção opcional.
+
+Desde a v2 o módulo é **só YouTube e sem credencial nenhuma**: nada de API
+key, de cota, de projeto no Google Cloud. Os três sinais saem de páginas
+públicas do próprio YouTube. Twitch, Instagram e TikTok saíram do código —
+ver a nota de futuro no fim da seção.
 
 Tudo por **polling** no scheduler do bot, nunca por webhook de entrada: a API
 do bot está exposta na internet e §7.3 proíbe rota sem autenticação além do
-`/health`. O intervalo é configurável por plataforma (padrão 5 min), com
-backoff ao errar e desativação automática após 10 falhas seguidas (com
-alerta).
+`/health`.
+
+**Um laço, um intervalo.** `social.pollIntervalSeconds` (padrão 180 s, mín.
+60, máx. 1800) vale para a instância inteira: cada passada percorre **todas**
+as contas ligadas em sequência, com 500 ms entre contas. Não há intervalo por
+conta, lote, jitter nem backoff exponencial — com o teto de 20 contas a
+passada inteira cabe folgada dentro do menor intervalo. O intervalo é relido a
+cada passada, então mudá-lo no painel vale na passada seguinte, sem restart.
+Erro numa conta não interrompe as outras: `failure_count` sobe, a décima falha
+seguida desliga a conta com `disabled_reason` e alerta, e o primeiro sucesso
+zera o contador.
 
 Idempotência é o requisito central: cada publicação vista vira uma linha em
-`social_posts` antes do envio. Nada é anunciado duas vezes, mesmo com restart
-do bot no meio do ciclo.
+`social_posts` **antes** do envio. Nada é anunciado duas vezes, mesmo com
+restart do bot no meio do ciclo. A unique `(account_id, external_id)` é a
+trava de verdade.
 
-- **YouTube** — feed RSS público do canal
-  (`/feeds/videos.xml?channel_id=UC…`), sem API key e sem cota. Cobre
-  **vídeos** e **shorts**; distinguir os dois exige um `HEAD` em
-  `youtube.com/shorts/<id>` (200 = short, redirect = vídeo comum). **Lives**
-  não aparecem no RSS de forma confiável: exigem a Data API v3
-  (`search?eventType=live`, 100 unidades de cota por chamada, teto diário de
-  10.000) — ou seja, live custa uma API key e um intervalo mais folgado (15
-  min). O usuário escolhe quais tipos quer: vídeo, short, live.
-- **Twitch** — Helix `streams?user_login=…` com App Access Token (client
-  credentials). Avisa quando a live abre; não re-anuncia enquanto continuar a
-  mesma sessão (`stream.id`). Preferido sobre EventSub justamente por não
-  exigir rota pública de callback.
-- **Instagram/Reels** — Graph API da Meta (`/{ig-user-id}/media`). ⚠️ Exige
-  conta **Business ou Creator** vinculada a uma Página do Facebook, um app na
-  Meta e as permissões `instagram_basic` + `pages_show_list` aprovadas. Sem
-  isso o módulo não tem como funcionar, e o painel deve dizer isso na cara do
-  usuário em vez de falhar silenciosamente.
-- **TikTok** — sem API pública que sirva: a Content Posting API é de
-  publicação, e a Display API exige aprovação comercial. Fica como **melhor
-  esforço**, atrás de um aviso explícito no painel de que pode parar de
-  funcionar a qualquer momento e sem promessa de suporte.
+**Como o detector funciona.** Por conta, a cada passada:
 
-Template por conta, com as variáveis `{title}`, `{url}`, `{author}`,
-`{thumbnail}`, `{platform}`, `{kind}`; texto ou embed, seguindo o mesmo
-motor de templates das boas-vindas (§5.5). Menção opcional a um cargo, com
-`allowedMentions` restrito a ele.
+1. **RSS** `feeds/videos.xml?channel_id=UC…` → as 5 entradas mais novas. É o
+   que descobre vídeo e short, e traz título, autor, capa e data.
+2. **Sonda de live** `GET /channel/UC…/live` → se o `<link rel="canonical">`
+   apontar para `watch?v=ID` **e** o HTML tiver `"isLive":true`, `ID` é
+   candidato a live. Canonical apontando para o próprio canal, ou
+   `"isUpcoming":true`, significa "nenhuma live agora". Canonical **ausente**
+   é erro (a página mudou), não "sem live" — assim uma mudança no YouTube
+   desliga a conta com alerta em vez de deixar o módulo mudo.
+3. Para cada ID que ainda **não** está em `social_posts`: `HEAD
+   youtube.com/shorts/ID` responde `200` para short e `303` para vídeo comum;
+   se não for short, `GET watch?v=ID` separa `"isUpcoming":true` (em espera),
+   `"isLive":true` (live) e o resto (vídeo). O resultado final fica em cache
+   em memória por ID — é imutável. Erro de rede na classificação vira
+   **vídeo**: errar o rótulo é melhor que não avisar.
+4. Filtra pelos tipos da conta e anuncia em ordem cronológica, com a linha
+   gravada antes do envio.
 
-**Notas de implementação (Etapa 21).** Três decisões que o desenho acima não
-fixava e que valem para quem for mexer no módulo depois:
+Custo por conta por passada: um GET pequeno (RSS), um GET de ~350 KB gzip
+(a sonda de live) e nada mais, já que a classificação só roda para ID novo.
+Todas as requisições ao YouTube levam o cookie `SOCS=CAI`, que evita a parede
+de consentimento de IPs europeus.
 
-- `{thumbnail}` existe como variável de texto, mas a capa da publicação entra
-  mesmo como **imagem do embed**, e só quando o template não define uma imagem
-  própria. Um card com a capa é o que dá ao anúncio a cara que se espera.
+Regras que caem daí:
+
 - A **primeira passada de uma conta nova não anuncia nada**: ela grava em
   `social_posts` o que já existia e passa a avisar do próximo post em diante.
   Sem isso, adicionar um canal antigo despejaria o feed inteiro no canal.
-  `social.announceBacklog` inverte esse comportamento, e nasce desligado.
-- O **IG User ID não é variável de ambiente**: ele identifica cada conta e
-  entra no painel, junto do canal e do template. Da Meta vem só o
-  `META_ACCESS_TOKEN`, que é do app e vale para todas as contas.
-- A conta guarda `poll_interval_s` próprio, mas a busca de **live no YouTube**
-  respeita os 15 min da cota mesmo que a conta esteja em 1 min.
-- O backoff de uma conta em falha vive **em memória**: um restart tenta de
-  novo na hora (o que se quer depois de um deploy), enquanto o contador de
-  falhas — que é o que desliga a conta no décimo erro — fica no banco.
+- **Live agendada não é anunciada.** Fica em espera — não entra em
+  `social_posts`, não é cacheada — e é reavaliada a cada passada até virar
+  live de verdade. Premiere se comporta igual e é anunciada como live.
+- **Live que terminou não vira "vídeo novo".** O VOD tem o mesmo `videoId`, e
+  a unique em `social_posts` já bloqueia.
+- **`social_posts` não tem retenção.** Podar a linha faria o vídeo antigo que
+  ainda está no feed voltar a ser "novo" e ser anunciado outra vez — foi um
+  bug real da v1, com retenção de 90 dias.
+
+**Cadastro.** O campo é um só e aceita a URL da barra de endereços, o
+`@handle` ou o `UC…` direto; `POST /social/resolve` (Bearer, como toda rota)
+devolve `{ channelId, title, handle, avatarUrl }` ou 400 com mensagem em
+pt-BR, e o painel mostra o cartão do canal antes de salvar. `/social add` faz
+o mesmo pelo Discord. O que fica guardado é sempre o `UC…`.
+
+**Template** por conta, com as variáveis `{title}`, `{url}`, `{author}`,
+`{thumbnail}`, `{platform}`, `{kind}` e `{headline}`; texto ou embed, no mesmo
+motor de templates das boas-vindas (§5.5). Menção opcional a um cargo, com
+`allowedMentions` restrito a ele. Duas decisões que o desenho não fixava:
+
+- `{headline}` existe porque um texto só precisa servir aos três tipos:
+  "publicou um vídeo novo", "publicou um short", "está ao vivo". Sem ela o
+  template padrão fica errado em pelo menos um dos casos.
+- `{thumbnail}` existe como variável de texto, mas a capa entra mesmo como
+  **imagem do embed**, e só quando o template não define uma imagem própria.
+  Um card com a capa é o que dá ao anúncio a cara que se espera.
+
+**Futuro — outras plataformas.** Twitch, Instagram e TikTok foram removidos do
+código na v2 (nenhum usuário, muita superfície). O enum `social_platform` do
+Postgres mantém os quatro valores (remover valor de enum exige recriar o
+tipo). Quando uma delas voltar, entra como um serviço ao lado do YouTube, sem
+registro genérico, e com os pré-requisitos já levantados na v1: **Twitch** por
+Helix `streams?user_login=…` com App Access Token (client credentials),
+preferido sobre EventSub por não exigir rota pública de callback;
+**Instagram** pela Graph API da Meta (`/{ig-user-id}/media`), que exige conta
+Business ou Creator vinculada a uma Página, um app na Meta e as permissões
+`instagram_basic` + `pages_show_list` aprovadas; **TikTok** sem API pública
+que sirva (a Content Posting API é de publicação, a Display API exige
+aprovação comercial), ou seja, melhor esforço e aviso explícito no painel.
 
 ## 6. Requisitos funcionais — Painel
 
@@ -492,16 +530,20 @@ log_configs       (guild_id, kind PK(guild_id,kind), enabled, channel_id, ignore
 message_cache     (message_id PK, guild_id, channel_id, author_id, content, attachments jsonb, created_at)
                    -- só se módulo logs ativo; retenção 7 dias; usado para recuperar conteúdo em delete
 welcome_configs   (guild_id PK, join_enabled, join_channel_id, join_template jsonb, leave_*, dm_enabled, dm_template jsonb)
-social_accounts   (id PK, guild_id, platform enum(youtube|twitch|instagram|tiktok),
-                   external_id (channel_id/user_login/ig_user_id), handle, display_name,
+social_accounts   (id PK uuid, guild_id, platform enum(youtube|twitch|instagram|tiktok),
+                   external_id (channel_id UC… do YouTube), handle, display_name, avatar_url,
                    discord_channel_id, kinds[] (video|short|live|post), template jsonb,
-                   mention_role_id, enabled, poll_interval_s, last_checked_at,
-                   last_external_id, failure_count, disabled_reason, created_at, updated_at)
+                   mention_role_id, enabled, last_checked_at,
+                   failure_count, disabled_reason, created_at, updated_at)
                    unique (guild_id, platform, external_id)
+                   -- os enums guardam os valores da v1 (remover valor de enum exige recriar
+                   -- o tipo), mas desde a v2 só 'youtube' é escrito em platform e só
+                   -- video|short|live em kinds; 'post' é herança do Instagram (§5.8)
 social_posts      (id PK, guild_id, account_id FK, external_id, kind, url, title,
                    published_at, announced_at, message_id)
                    unique (account_id, external_id)  -- a trava contra anúncio duplicado
-                   -- retenção 90 dias
+                   -- sem retenção de propósito: podar a linha re-anuncia o vídeo que
+                   -- ainda está no feed (§5.8)
 autorole_configs  (guild_id PK, human_role_ids[], bot_role_ids[], delay_s, verify_enabled, verify_channel_id, verify_message_id, verify_role_id)
 reaction_role_panels (id, guild_id, channel_id, message_id, mode enum(single|multiple|toggle), style enum(buttons|select|reactions), content jsonb)
 reaction_role_items  (id, panel_id FK, role_id, emoji, label, description, position)
