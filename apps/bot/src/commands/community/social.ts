@@ -6,37 +6,51 @@ import {
   listSocialAccounts,
 } from '@cobot/db';
 import {
-  SOCIAL_DEFAULT_TEMPLATES,
-  SOCIAL_EXTERNAL_ID,
-  SOCIAL_KINDS_BY_PLATFORM,
-  SOCIAL_PLATFORMS,
+  MAX_SOCIAL_ACCOUNTS,
+  SOCIAL_DEFAULT_TEMPLATE,
+  SOCIAL_KIND_LABEL,
+  SOCIAL_KINDS,
+  SOCIAL_MAX_FAILURES,
+  SOCIAL_PLATFORM,
   SocialAccountInputSchema,
   UserFacingError,
-  type SocialPlatform,
 } from '@cobot/shared';
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { defineCommand } from '../../lib/command';
 import { botFooter, code, infoEmbed, successEmbed } from '../../lib/embeds';
-import {
-  buildSocialMessage,
-  KIND_LABEL,
-  PLATFORM_LABEL,
-  sampleSocialItem,
-} from '../../services/social/announce';
+import { buildSocialMessage, sampleSocialItem } from '../../services/social/announce';
+import { SocialProviderError } from '../../services/social/types';
 
 import type { CommandContext } from '../../lib/command';
 import type { SocialAccount } from '@cobot/db';
 
-const PLATFORM_CHOICES = SOCIAL_PLATFORMS.map((platform) => ({
-  name: PLATFORM_LABEL[platform],
-  value: platform,
-}));
-
 /** Como uma conta aparece na lista e no autocomplete. */
 function label(account: SocialAccount): string {
-  const name = account.displayName ?? account.handle ?? account.externalId;
-  return `${PLATFORM_LABEL[account.platform]} · ${name}`;
+  return account.displayName ?? account.handle ?? account.externalId;
+}
+
+/** Nome e `@handle` na mesma linha; o `@handle` some quando não foi resolvido. */
+function nameLine(account: SocialAccount): string {
+  return account.handle && account.displayName
+    ? `${account.displayName} · ${account.handle}`
+    : label(account);
+}
+
+/**
+ * O estado da conta em uma linha, igual ao da tabela do painel: ligada com a
+ * hora da última passada, falhando com o contador, ou desligada com o motivo.
+ */
+function stateLine(account: SocialAccount): string {
+  if (!account.enabled) {
+    return `**Desligada** — ${account.disabledReason ?? 'desligada à mão'}`;
+  }
+  if (account.failureCount > 0) {
+    return `**Falhando** — ${String(account.failureCount)}/${String(SOCIAL_MAX_FAILURES)} erros seguidos`;
+  }
+  return account.lastCheckedAt
+    ? `Ligada · checada <t:${String(Math.floor(account.lastCheckedAt.getTime() / 1000))}:R>`
+    : 'Ligada · ainda não checada';
 }
 
 async function requireModule(ctx: CommandContext): Promise<void> {
@@ -61,35 +75,28 @@ async function requireAccount(ctx: CommandContext, id: string): Promise<SocialAc
 /**
  * `/social` (PRD §5.8). O painel é o lugar de editar template e tipos; aqui
  * ficam as quatro operações que se resolvem sem sair do Discord: ver o que está
- * configurado, começar a observar uma conta, parar e testar o anúncio.
+ * configurado, começar a observar um canal, parar e testar o anúncio.
  */
 export default defineCommand({
   data: new SlashCommandBuilder()
     .setName('social')
-    .setDescription('Notificações de redes sociais')
+    .setDescription('Notificações do YouTube')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand((sub) =>
-      sub.setName('list').setDescription('Mostra as contas observadas neste servidor'),
+      sub.setName('list').setDescription('Mostra os canais observados neste servidor'),
     )
     .addSubcommand((sub) =>
       sub
         .setName('add')
-        .setDescription('Passa a avisar quando uma conta publicar')
+        .setDescription('Passa a avisar quando um canal do YouTube publicar')
         .addStringOption((option) =>
           option
-            .setName('plataforma')
-            .setDescription('Onde a conta publica')
-            .addChoices(...PLATFORM_CHOICES)
-            .setRequired(true),
-        )
-        .addStringOption((option) =>
-          option
-            .setName('id')
-            .setDescription('ID do canal (YouTube), login (Twitch), IG User ID ou @ do TikTok')
+            .setName('canal')
+            .setDescription('URL do canal, @handle ou ID (UC…)')
             .setRequired(true),
         )
         .addChannelOption((option) =>
-          option.setName('canal').setDescription('Onde anunciar').setRequired(true),
+          option.setName('destino').setDescription('Onde anunciar').setRequired(true),
         )
         .addRoleOption((option) =>
           option.setName('cargo').setDescription('Cargo mencionado no anúncio (opcional)'),
@@ -98,11 +105,11 @@ export default defineCommand({
     .addSubcommand((sub) =>
       sub
         .setName('remove')
-        .setDescription('Para de observar uma conta')
+        .setDescription('Para de observar um canal')
         .addStringOption((option) =>
           option
             .setName('conta')
-            .setDescription('Qual conta remover')
+            .setDescription('Qual canal remover')
             .setAutocomplete(true)
             .setRequired(true),
         ),
@@ -114,7 +121,7 @@ export default defineCommand({
         .addStringOption((option) =>
           option
             .setName('conta')
-            .setDescription('Qual conta testar')
+            .setDescription('Qual canal testar')
             .setAutocomplete(true)
             .setRequired(true),
         ),
@@ -124,7 +131,7 @@ export default defineCommand({
   cooldown: 5,
   defer: true,
   ephemeral: true,
-  help: 'Avisa no Discord quando uma conta publica no YouTube, Twitch, Instagram ou TikTok.',
+  help: 'Avisa no Discord quando um canal do YouTube publica vídeo, short ou live.',
 
   async autocomplete({ interaction, db, guildId }) {
     const accounts = await listSocialAccounts(db, guildId);
@@ -148,7 +155,7 @@ export default defineCommand({
           embeds: [
             infoEmbed(
               {
-                title: 'Nenhuma conta observada',
+                title: 'Nenhum canal observado',
                 description:
                   'Use `/social add` ou a página **Redes sociais** do painel para começar.',
                 footer: botFooter(),
@@ -164,14 +171,12 @@ export default defineCommand({
         embeds: [
           infoEmbed(
             {
-              title: `Contas observadas (${String(accounts.length)})`,
+              title: `Canais observados (${String(accounts.length)})`,
               fields: accounts.slice(0, 25).map((account) => ({
-                name: label(account),
+                name: nameLine(account).slice(0, 256),
                 value:
-                  `<#${account.discordChannelId}> · ${account.kinds.map((k) => KIND_LABEL[k]).join(', ')}\n` +
-                  (account.enabled
-                    ? `A cada ${String(Math.round(account.pollIntervalSeconds / 60))} min`
-                    : `**Desligada** — ${account.disabledReason ?? 'desligada à mão'}`),
+                  `<#${account.discordChannelId}> · ${account.kinds.map((k) => SOCIAL_KIND_LABEL[k]).join(', ')}\n` +
+                  stateLine(account),
                 inline: false,
               })),
               footer: botFooter(),
@@ -184,37 +189,45 @@ export default defineCommand({
     }
 
     if (sub === 'add') {
-      const platform = ctx.interaction.options.getString('plataforma', true) as SocialPlatform;
-      const externalId = ctx.interaction.options.getString('id', true).trim();
-      const channel = ctx.interaction.options.getChannel('canal', true);
+      const input = ctx.interaction.options.getString('canal', true).trim();
+      const destination = ctx.interaction.options.getChannel('destino', true);
       const role = ctx.interaction.options.getRole('cargo');
 
-      const reason = ctx.social.get(platform).unavailableReason();
-      if (reason) throw new UserFacingError(reason, { code: 'PLATFORM_UNAVAILABLE' });
+      // URL, @handle ou UC…: quem traduz é o provider, que também confirma que
+      // o canal existe antes de a conta ir para o banco.
+      let channel;
+      try {
+        channel = await ctx.social.resolveChannel(input);
+      } catch (error) {
+        if (error instanceof SocialProviderError) {
+          throw new UserFacingError(error.message, { code: 'CHANNEL_NOT_FOUND' });
+        }
+        throw error;
+      }
 
-      // O comando dá os tipos e o template padrão da plataforma; ajustar isso é
-      // trabalho do painel, que tem preview.
+      // O comando dá os três tipos e o template padrão; ajustar isso é trabalho
+      // do painel, que tem preview.
       const parsed = SocialAccountInputSchema.safeParse({
-        platform,
-        externalId,
-        handle: externalId,
-        displayName: null,
-        discordChannelId: channel.id,
-        kinds: [...SOCIAL_KINDS_BY_PLATFORM[platform]],
-        template: SOCIAL_DEFAULT_TEMPLATES[platform],
+        platform: SOCIAL_PLATFORM,
+        externalId: channel.channelId,
+        handle: channel.handle,
+        displayName: channel.title,
+        avatarUrl: channel.avatarUrl,
+        discordChannelId: destination.id,
+        kinds: [...SOCIAL_KINDS],
+        template: SOCIAL_DEFAULT_TEMPLATE,
         mentionRoleId: role?.id ?? null,
         enabled: true,
       });
       if (!parsed.success) {
         throw new UserFacingError(
-          parsed.error.issues[0]?.message ?? SOCIAL_EXTERNAL_ID[platform].message,
+          parsed.error.issues[0]?.message ?? 'Não consegui usar esse canal.',
           { code: 'INVALID_ACCOUNT' },
         );
       }
 
-      const { maxAccounts } = await ctx.config.get(ctx.guildId, 'social');
-      if ((await countSocialAccounts(ctx.db, ctx.guildId)) >= maxAccounts) {
-        throw new UserFacingError(`Limite de ${String(maxAccounts)} contas atingido.`, {
+      if ((await countSocialAccounts(ctx.db, ctx.guildId)) >= MAX_SOCIAL_ACCOUNTS) {
+        throw new UserFacingError(`Limite de ${String(MAX_SOCIAL_ACCOUNTS)} contas atingido.`, {
           code: 'TOO_MANY_ACCOUNTS',
         });
       }
@@ -224,31 +237,33 @@ export default defineCommand({
         externalId: parsed.data.externalId,
         handle: parsed.data.handle,
         displayName: parsed.data.displayName,
+        avatarUrl: parsed.data.avatarUrl,
         discordChannelId: parsed.data.discordChannelId,
         kinds: parsed.data.kinds,
         template: parsed.data.template,
         mentionRoleId: parsed.data.mentionRoleId,
         enabled: parsed.data.enabled,
-        pollIntervalSeconds: parsed.data.pollIntervalSeconds,
       });
       if (!account) {
-        throw new UserFacingError('Este servidor já observa essa conta.', {
+        throw new UserFacingError('Este servidor já observa esse canal.', {
           code: 'ACCOUNT_EXISTS',
         });
       }
 
-      await ctx.interaction.editReply({
-        embeds: [
-          successEmbed({
-            title: 'Conta adicionada',
-            description:
-              `${label(account)} → <#${account.discordChannelId}>.\n` +
-              'A primeira passada só marca o que já existe; o próximo post é que vira anúncio.',
-            fields: [{ name: 'ID', value: code(account.id), inline: false }],
-            footer: botFooter(),
-          }),
-        ],
+      // O avatar do canal como thumbnail é o que confirma, de relance, que o
+      // bot resolveu o canal certo — o `UC…` sozinho não diz nada a ninguém.
+      const embed = successEmbed({
+        title: 'Canal adicionado',
+        description:
+          `${nameLine(account)} → <#${account.discordChannelId}>.\n` +
+          `Anuncia ${account.kinds.map((k) => SOCIAL_KIND_LABEL[k]).join(', ')}. ` +
+          'A primeira passada só marca o que já existe; a próxima publicação é que vira anúncio.',
+        fields: [{ name: 'ID do canal', value: code(account.externalId), inline: false }],
+        footer: botFooter(),
       });
+      if (account.avatarUrl) embed.setThumbnail(account.avatarUrl);
+
+      await ctx.interaction.editReply({ embeds: [embed] });
       return;
     }
 
@@ -258,8 +273,8 @@ export default defineCommand({
       await ctx.interaction.editReply({
         embeds: [
           successEmbed({
-            title: 'Conta removida',
-            description: `${label(account)} não será mais observada.`,
+            title: 'Canal removido',
+            description: `${label(account)} não será mais observado.`,
             footer: botFooter(),
           }),
         ],

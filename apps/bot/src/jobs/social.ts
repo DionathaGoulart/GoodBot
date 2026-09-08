@@ -1,111 +1,106 @@
 import {
   claimSocialPost,
-  listDueSocialAccounts,
+  hasSocialPost,
+  listEnabledSocialAccounts,
   markSocialPostAnnounced,
   recordSocialFailure,
   releaseSocialPost,
   resetSocialFailures,
   touchSocialAccount,
 } from '@cobot/db';
-import { MINUTE_MS, SECOND_MS, SOCIAL_MAX_FAILURES } from '@cobot/shared';
+import {
+  SECOND_MS,
+  SOCIAL_ACCOUNT_DELAY_MS,
+  SOCIAL_DEFAULT_POLL_SECONDS,
+  SOCIAL_KIND_LABEL,
+  SOCIAL_MAX_FAILURES,
+} from '@cobot/shared';
 
 import { childLogger } from '../logger';
-import { KIND_LABEL, buildSocialMessage } from '../services/social/announce';
+import { buildSocialMessage } from '../services/social/announce';
 
 import type { AlertService } from '../services/alerts';
 import type { AuditService } from '../services/audit';
 import type { ConfigService } from '../services/config';
-import type { SocialProviders } from '../services/social/index';
-import type { SocialItem } from '../services/social/types';
+import type { SocialItem, SocialProvider } from '../services/social/types';
 import type { Db, SocialAccount } from '@cobot/db';
+import type { SocialConfig } from '@cobot/shared';
 import type { Client, GuildTextBasedChannel } from 'discord.js';
 
 const log = childLogger('social');
-
-/**
- * O laço roda de minuto em minuto e cada conta decide sozinha se já é hora —
- * é o que deixa uma conta de 5 min e outra de 1 h conviverem sem um cron por
- * conta (PRD §5.8).
- */
-export const SOCIAL_INTERVAL_MS = MINUTE_MS;
-
-/** Contas por passada. Mais que isto não cabe numa janela de um minuto. */
-export const SOCIAL_BATCH_SIZE = 10;
-
-/** Base e teto do backoff exponencial de uma conta que está falhando. */
-export const SOCIAL_BACKOFF_BASE_MS = 2 * MINUTE_MS;
-export const SOCIAL_BACKOFF_MAX_MS = 2 * 60 * MINUTE_MS;
-
-/** Espalha as chamadas dentro da passada em vez de disparar todas juntas. */
-export const SOCIAL_JITTER_MS = 2 * SECOND_MS;
-
-/**
- * Quanto esperar antes de tentar de novo depois de `failures` erros seguidos:
- * 2, 4, 8, 16… minutos, com teto de 2 h. Uma API fora do ar não pode virar
- * uma chamada por minuto durante horas.
- */
-export function socialBackoffMs(failures: number): number {
-  if (failures <= 0) return 0;
-  const exponent = Math.min(failures - 1, 20);
-  return Math.min(SOCIAL_BACKOFF_BASE_MS * 2 ** exponent, SOCIAL_BACKOFF_MAX_MS);
-}
 
 export interface SocialJobDeps {
   db: Db;
   client: Client;
   config: ConfigService;
-  providers: SocialProviders;
+  provider: SocialProvider;
   alerts?: Pick<AlertService, 'emit'>;
   /** Trilha de auditoria (§6.5); ausente nos testes. */
   audit?: Pick<AuditService, 'record'>;
-  intervalMs?: number;
-  batchSize?: number;
-  /** `0` nos testes: ninguém quer esperar o jitter numa suíte. */
-  jitterMs?: number;
+  /** `0` nos testes: ninguém quer esperar meio segundo por conta numa suíte. */
+  accountDelayMs?: number;
   now?: () => number;
-  random?: () => number;
 }
 
 /**
- * Polling das contas de rede social (PRD §5.8). Três invariantes:
+ * Polling das contas de rede social (PRD §5.8). Um laço, um intervalo: a cada
+ * passada percorre **todas** as contas ligadas em sequência, com uma pausa
+ * curta entre elas. Não há intervalo por conta nem backoff exponencial — com o
+ * teto de 20 contas por servidor a passada inteira cabe folgada no menor
+ * intervalo, e o que precisa sobreviver a um restart (o contador de falhas)
+ * está no banco.
+ *
+ * Três invariantes:
  *
  * · **nunca anuncia duas vezes** — a linha em `social_posts` nasce antes do
  *   envio, e a unique `(account_id, external_id)` é quem decide;
  * · **nunca derruba as outras contas** — cada conta é isolada num try/catch;
- * · **nunca fica batendo numa API morta** — backoff exponencial e desativação
- *   automática no décimo erro seguido, com alerta.
+ * · **nunca fica batendo numa API morta** — desativação automática no décimo
+ *   erro seguido, com alerta.
  */
 export class SocialJob {
   private readonly deps: SocialJobDeps;
   private readonly now: () => number;
-  private readonly random: () => number;
   private timer: NodeJS.Timeout | null = null;
   private running = false;
+  private stopped = true;
   /**
-   * Quando cada conta em falha pode ser tentada de novo. Vive em memória de
-   * propósito: um restart limpa o backoff e tenta na hora, que é o que se quer
-   * depois de um deploy; o que precisa sobreviver — o contador de falhas — está
-   * no banco.
+   * Intervalo em vigor, relido da config a cada passada. Começa no padrão para
+   * a primeira passada, que acontece antes de qualquer leitura.
    */
-  private readonly nextAttempt = new Map<string, number>();
+  private intervalMs = SOCIAL_DEFAULT_POLL_SECONDS * SECOND_MS;
 
   constructor(deps: SocialJobDeps) {
     this.deps = deps;
     this.now = deps.now ?? Date.now;
-    this.random = deps.random ?? Math.random;
   }
 
+  /**
+   * Reagenda a si mesmo ao fim de cada passada com o intervalo que estiver na
+   * config naquele momento: mudar o intervalo no painel vale na passada
+   * seguinte, sem restart e sem o job precisar ouvir invalidação.
+   */
   start(): void {
-    if (this.timer) return;
-    const interval = this.deps.intervalMs ?? SOCIAL_INTERVAL_MS;
-    this.timer = setInterval(() => void this.tick(), interval);
-    this.timer.unref();
-    log.info({ intervalMs: interval }, 'job de redes sociais iniciado');
+    if (!this.stopped) return;
+    this.stopped = false;
+    log.info('job de redes sociais iniciado');
+    this.schedule();
   }
 
   stop(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.stopped = true;
+    if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+  }
+
+  private schedule(): void {
+    if (this.stopped) return;
+    this.timer = setTimeout(() => {
+      void this.tick().finally(() => {
+        this.schedule();
+      });
+    }, this.intervalMs);
+    this.timer.unref();
   }
 
   /** Uma passada. Nunca lança: o laço não pode morrer por uma API instável. */
@@ -113,16 +108,24 @@ export class SocialJob {
     if (this.running) return 0;
     this.running = true;
     try {
-      const accounts = await listDueSocialAccounts(
-        this.deps.db,
-        new Date(this.now()),
-        this.deps.batchSize ?? SOCIAL_BATCH_SIZE,
-      );
+      const accounts = await listEnabledSocialAccounts(this.deps.db);
+      const delay = this.deps.accountDelayMs ?? SOCIAL_ACCOUNT_DELAY_MS;
+      /** Uma leitura de config por guild, não uma por conta. */
+      const configs = new Map<string, SocialConfig>();
 
       let checked = 0;
       for (const account of accounts) {
-        if (!this.ready(account)) continue;
-        await this.jitter();
+        let config = configs.get(account.guildId);
+        if (!config) {
+          config = await this.deps.config.get(account.guildId, 'social');
+          configs.set(account.guildId, config);
+          this.intervalMs = config.pollIntervalSeconds * SECOND_MS;
+        }
+        if (!config.enabled) {
+          // Módulo desligado na guild: nem chamada de API, nem linha tocada.
+          continue;
+        }
+        if (checked > 0 && delay > 0) await sleep(delay);
         await this.check(account);
         checked += 1;
       }
@@ -135,50 +138,30 @@ export class SocialJob {
     }
   }
 
-  private ready(account: SocialAccount): boolean {
-    const next = this.nextAttempt.get(account.id);
-    return next === undefined || next <= this.now();
-  }
-
-  private async jitter(): Promise<void> {
-    const max = this.deps.jitterMs ?? SOCIAL_JITTER_MS;
-    if (max <= 0) return;
-    await new Promise((resolve) => {
-      const timer = setTimeout(resolve, Math.floor(this.random() * max));
-      timer.unref();
-    });
-  }
-
   /** Uma conta: busca, anuncia o que é novo e atualiza o estado dela. */
   private async check(account: SocialAccount): Promise<void> {
     const at = new Date(this.now());
     try {
-      const config = await this.deps.config.get(account.guildId, 'social');
-      if (!config.enabled) {
-        // Módulo desligado: marca a passada para não voltar a cada minuto.
-        await touchSocialAccount(this.deps.db, account.id, at);
-        return;
-      }
-
-      const provider = this.deps.providers.get(account.platform);
-      const items = await provider.fetchLatest({
+      const items = await this.deps.provider.fetchLatest({
         id: account.id,
         platform: account.platform,
         externalId: account.externalId,
         kinds: account.kinds,
+        // O provider não fala com o banco: quem sabe o que já foi anunciado é
+        // o job, e é esta consulta que evita reclassificar o feed inteiro.
+        isKnown: (externalId) => hasSocialPost(this.deps.db, account.id, externalId),
       });
 
       // A primeira passada de uma conta nova só marca o que já existe como
       // visto: sem isto o canal receberia o feed inteiro de uma vez.
-      const backlog = account.lastCheckedAt === null && !config.announceBacklog;
+      const backlog = account.lastCheckedAt === null;
       // As publicações chegam da mais nova para a mais antiga; anunciar em
       // ordem cronológica deixa o canal legível.
       for (const item of [...items].reverse()) {
         await this.announce(account, item, backlog);
       }
 
-      await touchSocialAccount(this.deps.db, account.id, at, items[0]?.externalId);
-      this.nextAttempt.delete(account.id);
+      await touchSocialAccount(this.deps.db, account.id, at);
       if (account.failureCount > 0) await resetSocialFailures(this.deps.db, account.id);
     } catch (error) {
       await touchSocialAccount(this.deps.db, account.id, at);
@@ -229,16 +212,13 @@ export class SocialJob {
         }),
       );
       await markSocialPostAnnounced(this.deps.db, post.id, message.id);
-      log.info(
-        { accountId: account.id, platform: account.platform, kind: item.kind },
-        'publicação anunciada',
-      );
+      log.info({ accountId: account.id, kind: item.kind }, 'publicação anunciada');
       this.deps.audit?.record({
         guildId: account.guildId,
         action: `social.announce.${account.platform}`,
         source: 'job',
         target: { type: 'channel', id: account.discordChannelId },
-        reason: `${account.handle} publicou ${KIND_LABEL[item.kind]}`,
+        reason: `${account.handle ?? account.externalId} publicou ${SOCIAL_KIND_LABEL[item.kind]}`,
         after: {
           accountId: account.id,
           handle: account.handle,
@@ -262,7 +242,7 @@ export class SocialJob {
     return channel;
   }
 
-  /** Conta a falha, agenda o backoff e avisa quando a conta se desliga. */
+  /** Conta a falha e avisa quando a conta se desliga sozinha. */
   private async fail(account: SocialAccount, error: unknown): Promise<void> {
     const reason = error instanceof Error ? error.message : String(error);
     const updated = await recordSocialFailure(
@@ -272,26 +252,31 @@ export class SocialJob {
       reason.slice(0, 200),
     );
     const failures = updated?.failureCount ?? account.failureCount + 1;
-    this.nextAttempt.set(account.id, this.now() + socialBackoffMs(failures));
 
     const label = account.handle ?? account.externalId;
     log.warn(
-      { accountId: account.id, platform: account.platform, failures, err: error },
+      { accountId: account.id, failures, err: error },
       'falha ao checar conta de rede social',
     );
 
     if (updated && !updated.enabled) {
-      this.nextAttempt.delete(account.id);
       log.error({ accountId: account.id, reason }, 'conta de rede social desativada');
       this.deps.alerts?.emit({
         kind: `social:${account.id}`,
         title: 'Conta de rede social desativada',
         description:
-          `\`${account.platform}/${label}\` falhou ${String(failures)} vezes seguidas e foi ` +
-          'desligada. As outras contas continuam normalmente.',
+          `\`${label}\` falhou ${String(failures)} vezes seguidas e foi desligada. ` +
+          'As outras contas continuam normalmente.',
         level: 'danger',
         fields: [{ name: 'Motivo', value: reason.slice(0, 200) }],
       });
     }
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref();
+  });
 }

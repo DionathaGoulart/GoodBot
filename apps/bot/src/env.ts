@@ -25,20 +25,8 @@ const EnvSchema = z.object({
   ALERT_WEBHOOK_URL: z.preprocess(blankToUndefined, z.url().optional()),
   /** Volume de backups montado read-only; sem ele o painel não mostra o card. */
   BACKUP_DIR: z.preprocess(blankToUndefined, z.string().optional()),
-  /**
-   * Notificações de redes sociais (PRD §5.8). Todas opcionais: sem a chave, a
-   * plataforma correspondente se declara indisponível e o painel mostra o
-   * motivo, em vez de o canal ficar mudo sem explicação.
-   */
-  YOUTUBE_API_KEY: z.preprocess(blankToUndefined, z.string().optional()),
-  TWITCH_CLIENT_ID: z.preprocess(blankToUndefined, z.string().optional()),
-  TWITCH_CLIENT_SECRET: z.preprocess(blankToUndefined, z.string().optional()),
-  META_ACCESS_TOKEN: z.preprocess(blankToUndefined, z.string().optional()),
-  /** TikTok é melhor esforço e nasce desligado (PRD §5.8). */
-  SOCIAL_TIKTOK_ENABLED: z.preprocess(
-    (value) => value === 'true' || value === '1',
-    z.boolean().default(false),
-  ),
+  // As notificações de rede social não têm variável nenhuma: desde a v2 o
+  // módulo só lê páginas públicas do YouTube, sem chave e sem cota (PRD §5.8).
   /** Sha do commit da imagem, injetado pela CI no build (`GIT_SHA`). */
   GIT_SHA: z.preprocess(blankToUndefined, z.string().optional()),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
