@@ -13,6 +13,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from '@/components/ui/sidebar';
 
 import { groupLabelForPath, navGroupsFor } from './nav';
@@ -89,6 +90,13 @@ export function AppSidebar({
   // cliente, depois da hidratação.
   const collapsed = useSyncExternalStore(subscribe, readCollapsed, () => NONE);
 
+  // No celular a navegação acontece dentro da gaveta: sem fechá-la a tela nova
+  // carrega atrás dela e a pessoa fica olhando o menu.
+  const { isMobile, setOpenMobile } = useSidebar();
+  const closeOnMobile = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+  }, [isMobile, setOpenMobile]);
+
   const toggle = useCallback((label: string) => {
     const current = readCollapsed();
     writeCollapsed(
@@ -130,7 +138,9 @@ export function AppSidebar({
                     return (
                       <SidebarMenuItem key={item.label}>
                         <SidebarMenuButton asChild isActive={isActive}>
-                          <Link href={href}>{item.label}</Link>
+                          <Link href={href} onClick={closeOnMobile}>
+                            {item.label}
+                          </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );
