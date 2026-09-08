@@ -53,7 +53,12 @@ function SheetContent({
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          'fixed z-50 flex flex-col gap-4 bg-base-200 bg-clip-padding data-open:animate-enter text-sm text-base-content transition duration-200 ease-in-out data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t-2 data-[side=bottom]:border-base-300 data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r-2 data-[side=left]:border-base-300 data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l-2 data-[side=right]:border-base-300 data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b-2 data-[side=top]:border-base-300 data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm',
+          // Largura fica com quem usa: `cn` só concatena (não é `tailwind-merge`),
+          // e uma classe com seletor de atributo aqui — `data-[side=right]:w-3/4`
+          // — ganharia por especificidade do `w-full sm:max-w-2xl` passado em
+          // `className`, prendendo toda sheet em 384px. Sem largura própria a
+          // sheet encosta nos dois lados: quem monta uma passa a sua.
+          'fixed z-50 flex flex-col gap-4 bg-base-200 bg-clip-padding data-open:animate-enter text-sm text-base-content transition duration-200 ease-in-out data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t-2 data-[side=bottom]:border-base-300 data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:border-r-2 data-[side=left]:border-base-300 data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:border-l-2 data-[side=right]:border-base-300 data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b-2 data-[side=top]:border-base-300',
           className,
         )}
         {...props}
