@@ -5,6 +5,7 @@ import {
   SocialAccountInputSchema,
   type SocialAccountInput,
   type SocialOverview,
+  type SocialResolveResult,
 } from '@cobot/shared';
 import { revalidatePath } from 'next/cache';
 
@@ -28,7 +29,6 @@ export async function loadSocial(guildId: string): Promise<SocialPageData> {
   } catch (error) {
     return {
       accounts: [],
-      platforms: [],
       error:
         error instanceof InternalApiError
           ? `O bot não respondeu: ${error.message}`
@@ -53,7 +53,7 @@ function accountId(formData: FormData): string | null {
 
 /**
  * Toda escrita passa pela API do bot, não pelo banco direto: é o processo do
- * bot que sabe se a plataforma tem credencial e se ele enxerga o canal. Salvar
+ * bot que fala com o YouTube e que sabe se enxerga o canal do Discord. Salvar
  * uma conta que nunca anunciaria seria pior do que recusar na hora.
  */
 function toActionResult(error: unknown): ActionResult {
@@ -123,13 +123,32 @@ export async function removeSocialAccount(formData: FormData): Promise<ActionRes
     return toActionResult(error);
   }
 
-  await withAudit(
-    { id: session.user.id, tag: session.user.name },
-    'social.account.delete',
-    { type: 'social_account', id },
-  );
+  await withAudit({ id: session.user.id, tag: session.user.name }, 'social.account.delete', {
+    type: 'social_account',
+    id,
+  });
   revalidatePath(PATH(guildId));
   return { ok: true };
+}
+
+/**
+ * Campo "canal do YouTube" do formulário: o painel manda o que o usuário colou
+ * (URL, `@handle` ou `UC…`) e o bot devolve o canal de verdade, já com nome e
+ * avatar. Quem fala com o YouTube é o bot, nunca o Next.
+ */
+export type ResolveChannelResult =
+  { ok: true; channel: SocialResolveResult } | { ok: false; message: string };
+
+export async function resolveSocialChannel(input: string): Promise<ResolveChannelResult> {
+  const guildId = defaultGuildId();
+  await requireGuildAccess(guildId, 'admin');
+
+  try {
+    return { ok: true, channel: await internalApi().resolveSocialChannel(guildId, input) };
+  } catch (error) {
+    const { message } = toActionResult(error);
+    return { ok: false, message: message ?? 'Não foi possível falar com o bot.' };
+  }
 }
 
 /** Botão `TESTAR`: manda um anúncio de mentira no canal configurado da conta. */
