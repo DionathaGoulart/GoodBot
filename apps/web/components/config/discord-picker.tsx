@@ -28,15 +28,25 @@ export type PickerKind = 'channel' | 'role';
 /**
  * Uma promessa por tipo, no módulo: a lista de canais é a mesma em todos os
  * pickers da página e o route handler já cacheia 60s do lado do servidor.
+ *
+ * A entrada expira junto com esse cache do servidor. Sem prazo, uma aba
+ * deixada aberta durante uma configuração continuava oferecendo canais
+ * renomeados, movidos ou apagados desde que a página abriu.
  */
-const cache = new Map<string, Promise<DiscordOption[]>>();
+const CACHE_TTL_MS = 60_000;
+const cache = new Map<string, { at: number; options: Promise<DiscordOption[]> }>();
 
 async function fetchOptions(
   kind: PickerKind,
   types: number[],
   includeEveryone: boolean,
 ): Promise<DiscordOption[]> {
-  const response = await fetch(kind === 'channel' ? '/api/discord/channels' : '/api/discord/roles');
+  // `no-store`: quem decide o quanto a lista pode envelhecer é o route
+  // handler, não a heurística de cache do browser.
+  const response = await fetch(
+    kind === 'channel' ? '/api/discord/channels' : '/api/discord/roles',
+    { cache: 'no-store' },
+  );
   if (!response.ok) throw new Error('O bot não respondeu.');
   const body: unknown = await response.json();
   return kind === 'channel'
@@ -63,8 +73,10 @@ function useDiscordOptions(
     if (!enabled || entry) return;
     let active = true;
 
-    const pending = cache.get(key) ?? fetchOptions(kind, types, includeEveryone);
-    cache.set(key, pending);
+    const hit = cache.get(key);
+    const fresh = hit && Date.now() - hit.at < CACHE_TTL_MS ? hit.options : undefined;
+    const pending = fresh ?? fetchOptions(kind, types, includeEveryone);
+    if (!fresh) cache.set(key, { at: Date.now(), options: pending });
 
     pending.then(
       (options) => {

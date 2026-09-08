@@ -41,6 +41,20 @@ describe('DiscordPicker', () => {
     expect(document.body.textContent).not.toContain(ROLES[0]!.id);
   });
 
+  // A lista vinha do cache do browser e ficava presa numa aba aberta durante
+  // uma configuração: canal criado ou renomeado no meio do caminho não
+  // aparecia, e o que já tinha sumido continuava na lista.
+  it('pede a lista sem o cache do browser', async () => {
+    const fetchMock = mockRoles();
+
+    render(
+      <DiscordPicker kind="role" includeEveryone multiple value={[ROLES[0]!.id]} onChange={vi.fn()} />,
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock).toHaveBeenCalledWith('/api/discord/roles', { cache: 'no-store' });
+  });
+
   it('não pergunta ao bot quando não há nada escolhido', () => {
     const fetchMock = mockRoles();
 
