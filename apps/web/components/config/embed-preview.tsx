@@ -20,6 +20,7 @@ export const PREVIEW_VARS: Record<TemplateVariable, string> = {
   thumbnail: 'https://exemplo.com/capa.jpg',
   platform: 'YouTube',
   kind: 'vídeo',
+  headline: 'publicou um vídeo novo',
 };
 
 /**
@@ -30,10 +31,13 @@ export const PREVIEW_VARS: Record<TemplateVariable, string> = {
 export function EmbedPreview({
   template,
   embedColor,
+  vars,
 }: {
   template: MessageTemplate | null;
   /** Cor padrão da guild, usada quando o embed não define a dele. */
   embedColor: number;
+  /** Sobrescreve os valores de exemplo (a tela de redes sociais troca por tipo). */
+  vars?: Partial<Record<TemplateVariable, string>>;
 }) {
   if (!template) {
     return (
@@ -43,7 +47,7 @@ export function EmbedPreview({
     );
   }
 
-  const rendered = renderMessageTemplate(template, PREVIEW_VARS);
+  const rendered = renderMessageTemplate(template, { ...PREVIEW_VARS, ...vars });
   const color = colorToHex(rendered.embed?.color ?? embedColor);
 
   return (
