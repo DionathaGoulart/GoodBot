@@ -433,7 +433,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  /* Quebra a linha antes de empurrar a página: nas telas estreitas o nome do
+     arquivo e os botões do painel não cabem lado a lado. */
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
   padding: 0.75rem 1rem;
   border-bottom: var(--frame-border) solid var(--color-base-300);
   background-color: var(--color-base-100);

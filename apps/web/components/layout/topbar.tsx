@@ -25,10 +25,14 @@ export function Topbar({
   level: AccessLevel;
 }) {
   return (
-    <header className="flex items-center gap-3 border-b-2 border-base-300 bg-base-100 px-4 py-3">
-      <SidebarTrigger className="icon-btn lg:hidden" />
-      <Breadcrumbs guildId={guildId} guildName={guildName} />
-      <div className="ml-auto flex items-center gap-3">
+    // `min-w-0` no trilho do breadcrumb e `shrink-0` nos controles: no celular
+    // é o caminho que encolhe, não a fila de botões da direita.
+    <header className="flex items-center gap-2 border-b-2 border-base-300 bg-base-100 px-4 py-3 sm:gap-3">
+      <SidebarTrigger className="icon-btn shrink-0 lg:hidden" />
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <Breadcrumbs guildId={guildId} guildName={guildName} />
+      </div>
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <CommandPalette guildId={guildId} level={level} />
         <AutoRefreshIndicator />
         <BotStatusIndicator status={status} />

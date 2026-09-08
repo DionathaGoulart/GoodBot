@@ -50,7 +50,10 @@ export function CommandPalette({ guildId, level }: { guildId: string; level: Acc
         aria-label="Buscar tela"
       >
         BUSCAR
-        <span aria-hidden className="text-muted-text">CTRL+K</span>
+        {/* O atalho só existe em teclado: some com o resto da barra no celular. */}
+        <span aria-hidden className="hidden text-muted-text sm:inline">
+          CTRL+K
+        </span>
       </button>
 
       <CommandDialog

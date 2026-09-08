@@ -21,7 +21,9 @@ export function ScreenHeader({
         <h1 className="screen-title">{title}</h1>
         {meta ? <p className="screen-meta">{meta}</p> : null}
       </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+      {/* As ações quebram linha: no celular quatro botões de período não cabem
+          na mesma faixa do título e empurrariam a página na horizontal. */}
+      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </header>
   );
 }
