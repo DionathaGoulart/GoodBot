@@ -350,6 +350,7 @@ function ChannelForm({
               value={[]}
               onChange={addOverride}
               placeholder="ADICIONAR CARGO"
+              includeEveryone
             />
             <Tag tone="muted">{overrides.length} OVERRIDE(S)</Tag>
           </fieldset>

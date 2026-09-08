@@ -23,7 +23,10 @@ export async function loadChannelNames(guildId: string): Promise<Record<string, 
 export async function loadRoleNames(guildId: string): Promise<Record<string, string>> {
   try {
     const roles = await cachedInternalApi(CACHE_SECONDS).roles(guildId);
-    return Object.fromEntries(roles.map((role) => [role.id, `@${role.name}`]));
+    // O `@everyone` já vem com `@` no nome — dobrar viraria `@@everyone`.
+    return Object.fromEntries(
+      roles.map((role) => [role.id, role.name.startsWith('@') ? role.name : `@${role.name}`]),
+    );
   } catch {
     return {};
   }

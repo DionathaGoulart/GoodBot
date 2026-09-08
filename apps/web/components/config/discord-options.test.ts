@@ -68,6 +68,17 @@ describe('rolesToOptions', () => {
     ];
     expect(rolesToOptions(roles).map((o) => o.label)).toEqual(['Admin', 'Membro']);
   });
+
+  it('inclui o @everyone sem o arroba quando o campo pede', () => {
+    const roles: GuildRoleSummary[] = [
+      { id: '1', name: '@everyone', color: 0, position: 0, managed: false, hoist: false, mentionable: false, permissions: '0' },
+      { id: '2', name: 'Membro', color: 0, position: 1, managed: false, hoist: false, mentionable: false, permissions: '0' },
+    ];
+    expect(rolesToOptions(roles, { includeEveryone: true }).map((o) => o.label)).toEqual([
+      'Membro',
+      'everyone',
+    ]);
+  });
 });
 
 describe('cor do embed', () => {

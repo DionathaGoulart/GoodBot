@@ -31,17 +31,27 @@ export type PickerKind = 'channel' | 'role';
  */
 const cache = new Map<string, Promise<DiscordOption[]>>();
 
-async function fetchOptions(kind: PickerKind, types: number[]): Promise<DiscordOption[]> {
+async function fetchOptions(
+  kind: PickerKind,
+  types: number[],
+  includeEveryone: boolean,
+): Promise<DiscordOption[]> {
   const response = await fetch(kind === 'channel' ? '/api/discord/channels' : '/api/discord/roles');
   if (!response.ok) throw new Error('O bot não respondeu.');
   const body: unknown = await response.json();
   return kind === 'channel'
     ? channelsToOptions(GuildChannelSummarySchema.array().parse(body), types)
-    : rolesToOptions(GuildRoleSummarySchema.array().parse(body));
+    : rolesToOptions(GuildRoleSummarySchema.array().parse(body), { includeEveryone });
 }
 
-function useDiscordOptions(kind: PickerKind, types: number[], enabled: boolean) {
-  const key = kind === 'channel' ? `channel:${types.join(',')}` : 'role';
+function useDiscordOptions(
+  kind: PickerKind,
+  types: number[],
+  enabled: boolean,
+  includeEveryone: boolean,
+) {
+  // `includeEveryone` entra na chave: as duas listas de cargo convivem no cache.
+  const key = kind === 'channel' ? `channel:${types.join(',')}` : `role:${includeEveryone}`;
   // Uma entrada por chave em vez de um `loading` que o efeito precisaria ligar
   // na hora: `loading` vira o simples "abriu e ainda não tem entrada".
   const [loaded, setLoaded] = React.useState<
@@ -53,7 +63,7 @@ function useDiscordOptions(kind: PickerKind, types: number[], enabled: boolean) 
     if (!enabled || entry) return;
     let active = true;
 
-    const pending = cache.get(key) ?? fetchOptions(kind, types);
+    const pending = cache.get(key) ?? fetchOptions(kind, types, includeEveryone);
     cache.set(key, pending);
 
     pending.then(
@@ -110,6 +120,8 @@ export interface DiscordPickerProps {
   placeholder?: string;
   /** Só para canais; padrão = canais de texto. */
   channelTypes?: number[];
+  /** Só para cargos; o `@everyone` só aparece onde ele significa algo. */
+  includeEveryone?: boolean;
   id?: string;
 }
 
@@ -126,6 +138,7 @@ export function DiscordPicker({
   disabled = false,
   placeholder,
   channelTypes = TEXT_CHANNEL_TYPES,
+  includeEveryone = false,
   id,
 }: DiscordPickerProps) {
   const [open, setOpen] = React.useState(false);
@@ -137,6 +150,7 @@ export function DiscordPicker({
     kind,
     channelTypes,
     open || value.length > 0,
+    includeEveryone,
   );
 
   const byId = React.useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);

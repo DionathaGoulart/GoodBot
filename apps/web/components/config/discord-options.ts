@@ -63,11 +63,26 @@ export function channelsToOptions(
     }));
 }
 
-export function rolesToOptions(roles: GuildRoleSummary[]): DiscordOption[] {
+/** O `@everyone` já vem com `@` no nome; o picker desenha o dele por fora. */
+export const EVERYONE_ROLE_NAME = '@everyone';
+
+/**
+ * Cargos do picker, do mais alto para o mais baixo. O `@everyone` fica de fora
+ * por padrão — configurar um módulo "para o @everyone" não quer dizer nada —,
+ * mas o override de canal precisa dele: é ele que fecha o canal (§6.3).
+ */
+export function rolesToOptions(
+  roles: GuildRoleSummary[],
+  { includeEveryone = false }: { includeEveryone?: boolean } = {},
+): DiscordOption[] {
   return roles
-    .filter((role) => role.name !== '@everyone')
+    .filter((role) => includeEveryone || role.name !== EVERYONE_ROLE_NAME)
     .sort((a, b) => b.position - a.position)
-    .map((role) => ({ id: role.id, label: role.name, color: role.color }));
+    .map((role) => ({
+      id: role.id,
+      label: role.name === EVERYONE_ROLE_NAME ? 'everyone' : role.name,
+      color: role.color,
+    }));
 }
 
 /** Inteiro RGB → `#rrggbb`, o único lugar do painel onde um hex é dado. */
