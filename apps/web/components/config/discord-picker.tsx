@@ -130,7 +130,14 @@ export function DiscordPicker({
 }: DiscordPickerProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
-  const { options, error, loading } = useDiscordOptions(kind, channelTypes, open);
+  // A lista não serve só para escolher: sem ela o campo fechado não sabe o
+  // nome do que já está escolhido e mostraria o snowflake cru. Por isso ela
+  // também carrega quando há valor — o cache do módulo evita a repetição.
+  const { options, error, loading } = useDiscordOptions(
+    kind,
+    channelTypes,
+    open || value.length > 0,
+  );
 
   const byId = React.useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
   const visible = React.useMemo(() => filterOptions(options, query), [options, query]);
@@ -153,7 +160,11 @@ export function DiscordPicker({
     onChange(value.includes(optionId) ? value.filter((v) => v !== optionId) : [...value, optionId]);
   }
 
-  const label = (optionId: string) => byId.get(optionId)?.label ?? optionId;
+  /**
+   * Enquanto a lista não chega, um `…` no lugar do snowflake — o ID cru não
+   * diz nada a ninguém. Se ela falhar, o ID volta: dá para copiar e conferir.
+   */
+  const label = (optionId: string) => byId.get(optionId)?.label ?? (loading ? '…' : optionId);
   const empty = value.length === 0;
 
   return (
