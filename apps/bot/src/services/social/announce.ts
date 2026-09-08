@@ -1,4 +1,9 @@
-import { MAX_MESSAGE_CONTENT_LENGTH } from '@cobot/shared';
+import {
+  MAX_MESSAGE_CONTENT_LENGTH,
+  SOCIAL_KIND_HEADLINE,
+  SOCIAL_KIND_LABEL,
+  SOCIAL_PLATFORM_LABEL,
+} from '@cobot/shared';
 import { EmbedBuilder } from 'discord.js';
 
 import { sanitizeVar, templateToMessage } from '../../lib/template';
@@ -7,20 +12,6 @@ import type { SocialItem } from './types';
 import type { MessageTemplate, SocialKind, SocialPlatform, TemplateVars } from '@cobot/shared';
 import type { BaseMessageOptions } from 'discord.js';
 
-export const PLATFORM_LABEL: Record<SocialPlatform, string> = {
-  youtube: 'YouTube',
-  twitch: 'Twitch',
-  instagram: 'Instagram',
-  tiktok: 'TikTok',
-};
-
-export const KIND_LABEL: Record<SocialKind, string> = {
-  video: 'vídeo',
-  short: 'short',
-  live: 'live',
-  post: 'publicação',
-};
-
 /** As variáveis de template de uma publicação (PRD §5.8). */
 export function socialVars(item: SocialItem, platform: SocialPlatform): TemplateVars {
   return {
@@ -28,8 +19,9 @@ export function socialVars(item: SocialItem, platform: SocialPlatform): Template
     url: item.url,
     author: sanitizeVar(item.author),
     thumbnail: item.thumbnail ?? '',
-    platform: PLATFORM_LABEL[platform],
-    kind: KIND_LABEL[item.kind],
+    platform: SOCIAL_PLATFORM_LABEL[platform],
+    kind: SOCIAL_KIND_LABEL[item.kind],
+    headline: sanitizeVar(item.headline || SOCIAL_KIND_HEADLINE[item.kind]),
   };
 }
 
@@ -83,7 +75,8 @@ export function sampleSocialItem(platform: SocialPlatform, kind: SocialKind): So
   return {
     externalId: 'teste',
     kind,
-    title: `Exemplo de ${KIND_LABEL[kind]} no ${PLATFORM_LABEL[platform]}`,
+    headline: SOCIAL_KIND_HEADLINE[kind],
+    title: `Exemplo de ${SOCIAL_KIND_LABEL[kind]} no ${SOCIAL_PLATFORM_LABEL[platform]}`,
     url: 'https://example.com/exemplo',
     author: 'Canal de exemplo',
     thumbnail: null,

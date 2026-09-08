@@ -1,78 +1,100 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { parseYouTubeFeed, YouTubeProvider } from './youtube';
+import {
+  CANAL_POR_HANDLE,
+  CANAL_SEM_HANDLE,
+  FEED,
+  FEED_COM_LIVE,
+  LIVE_EM_ANDAMENTO,
+  LIVE_SEM_CANONICAL,
+  LIVE_SEM_TRANSMISSAO,
+  PAGINA_404,
+  WATCH_AGENDADA,
+  WATCH_VIDEO,
+  WATCH_VIDEO_DO_FEED,
+  WATCH_VOD_DE_LIVE,
+} from './__fixtures__/youtube';
+import {
+  parseCanonical,
+  parseChannelInput,
+  parseChannelPage,
+  parseWatchState,
+  parseYouTubeFeed,
+  YouTubeProvider,
+} from './youtube';
+
+import type { SocialAccountRef } from './types';
+import type { SocialKind } from '@cobot/shared';
+
+const CANAL = 'UCabcdefghijklmnopqrstuv';
+const LOFI = 'UCSJ4gkVC6NrvII8umztf0Ow';
+const SEM_LIVE = 'UC_x5XG1OV2P6uZZ5FSM9Ttw';
+const LIVE_ID = 'rFZHOHl-L8A';
+const AVATAR =
+  'https://yt3.googleusercontent.com/_BSh2VVvVMzqBoKyWbQnyC35XFOV-ZbXavf9nfu3ZjpFUGEImQnlWt9ZlpfGQBqWEbGNc4rPWg=s900-c-k-c0x00ffffff-no-rj';
+
+interface FakeOptions {
+  feed?: string;
+  feedStatus?: number;
+  /** IDs que a rota `/shorts/<id>` reconhece com `200`. */
+  shorts?: readonly string[];
+  /** Corpo de `/channel/<id>/live`. */
+  live?: string;
+  /** `videoId` → HTML de `watch?v=`. */
+  watch?: Record<string, string>;
+  /** Caminho da página de canal (`/@LofiGirl`, `/c/lofi`) → HTML. */
+  pages?: Record<string, string>;
+}
 
 /**
- * Recorte fiel de `youtube.com/feeds/videos.xml?channel_id=…`: mesmos
- * namespaces, mesma ordem de tags, mesma forma do `media:group`. Se o YouTube
- * mudar o formato, é este teste que avisa.
+ * O YouTube inteiro em vinte linhas: feed, `HEAD /shorts`, `/live`, `watch` e
+ * páginas de canal. Tudo o que não está declarado responde `404`, que é o que
+ * o YouTube faz de verdade.
  */
-const FEED = `<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015"
-      xmlns:media="http://search.yahoo.com/mrss/"
-      xmlns="http://www.w3.org/2005/Atom">
-  <link rel="self" href="http://www.youtube.com/feeds/videos.xml?channel_id=UCabcdefghijklmnopqrstuv"/>
-  <id>yt:channel:UCabcdefghijklmnopqrstuv</id>
-  <yt:channelId>UCabcdefghijklmnopqrstuv</yt:channelId>
-  <title>Canal de Teste</title>
-  <author>
-    <name>Canal de Teste</name>
-    <uri>https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv</uri>
-  </author>
-  <published>2020-01-01T00:00:00+00:00</published>
-  <entry>
-    <id>yt:video:aaaaaaaaaaa</id>
-    <yt:videoId>aaaaaaaaaaa</yt:videoId>
-    <yt:channelId>UCabcdefghijklmnopqrstuv</yt:channelId>
-    <title>Café &amp; código: o vídeo n&#186; 3</title>
-    <link rel="alternate" href="https://www.youtube.com/watch?v=aaaaaaaaaaa"/>
-    <author>
-      <name>Canal de Teste</name>
-      <uri>https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv</uri>
-    </author>
-    <published>2026-09-06T18:30:00+00:00</published>
-    <updated>2026-09-06T19:00:00+00:00</updated>
-    <media:group>
-      <media:title>Café &amp; código: o vídeo n&#186; 3</media:title>
-      <media:content url="https://www.youtube.com/v/aaaaaaaaaaa?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
-      <media:thumbnail url="https://i4.ytimg.com/vi/aaaaaaaaaaa/hqdefault.jpg" width="480" height="360"/>
-      <media:description>Descrição qualquer.</media:description>
-    </media:group>
-  </entry>
-  <entry>
-    <id>yt:video:bbbbbbbbbbb</id>
-    <yt:videoId>bbbbbbbbbbb</yt:videoId>
-    <title>Um short</title>
-    <link rel="alternate" href="https://www.youtube.com/watch?v=bbbbbbbbbbb"/>
-    <author><name>Canal de Teste</name></author>
-    <published>2026-09-05T10:00:00+00:00</published>
-    <media:group>
-      <media:thumbnail url="https://i4.ytimg.com/vi/bbbbbbbbbbb/hqdefault.jpg" width="480" height="360"/>
-    </media:group>
-  </entry>
-</feed>`;
-
-const ACCOUNT = {
-  id: 'conta-1',
-  platform: 'youtube' as const,
-  externalId: 'UCabcdefghijklmnopqrstuv',
-  kinds: ['video', 'short'] as const,
-};
-
-/** `fetch` de mentira: feed no RSS e 200/303 conforme o vídeo seja short. */
-function fakeFetch(shorts: string[], feed = FEED) {
+function fakeYouTube(options: FakeOptions = {}) {
   return vi.fn((input: string | URL | Request) => {
     const url = String(input);
     if (url.includes('/feeds/videos.xml')) {
-      return Promise.resolve(new Response(feed, { status: 200 }));
+      return Promise.resolve(
+        new Response(options.feed ?? FEED, { status: options.feedStatus ?? 200 }),
+      );
     }
-    const videoId = url.split('/shorts/')[1] ?? '';
-    // O YouTube responde 200 só quando a rota /shorts/<id> é mesmo um short;
-    // caso contrário redireciona para o watch?v=.
+    if (url.includes('/shorts/')) {
+      const id = url.split('/shorts/')[1] ?? '';
+      return Promise.resolve(
+        new Response(null, { status: options.shorts?.includes(id) ? 200 : 303 }),
+      );
+    }
+    if (url.includes('/watch?v=')) {
+      const id = url.split('/watch?v=')[1] ?? '';
+      const body = options.watch?.[id];
+      return Promise.resolve(
+        body ? new Response(body, { status: 200 }) : new Response(PAGINA_404, { status: 404 }),
+      );
+    }
+    if (url.endsWith('/live')) {
+      return Promise.resolve(new Response(options.live ?? LIVE_SEM_TRANSMISSAO, { status: 200 }));
+    }
+    const body = options.pages?.[new URL(url).pathname];
     return Promise.resolve(
-      new Response(null, { status: shorts.includes(videoId) ? 200 : 303 }),
+      body ? new Response(body, { status: 200 }) : new Response(PAGINA_404, { status: 404 }),
     );
   }) as unknown as typeof globalThis.fetch;
+}
+
+function calls(mock: typeof globalThis.fetch): string[] {
+  return (mock as unknown as { mock: { calls: unknown[][] } }).mock.calls.map(([url]) => String(url));
+}
+
+function account(overrides: Partial<SocialAccountRef> = {}): SocialAccountRef {
+  return {
+    id: 'conta-1',
+    platform: 'youtube',
+    externalId: CANAL,
+    kinds: ['video', 'short'] as SocialKind[],
+    isKnown: () => Promise.resolve(false),
+    ...overrides,
+  };
 }
 
 describe('parseYouTubeFeed', () => {
@@ -106,10 +128,233 @@ describe('parseYouTubeFeed', () => {
   });
 });
 
-describe('YouTubeProvider', () => {
+describe('parseCanonical', () => {
+  it('lê o canonical de uma live e o de um canal', () => {
+    expect(parseCanonical(LIVE_EM_ANDAMENTO)).toBe(
+      `https://www.youtube.com/watch?v=${LIVE_ID}`,
+    );
+    expect(parseCanonical(LIVE_SEM_TRANSMISSAO)).toBe(
+      `https://www.youtube.com/channel/${SEM_LIVE}`,
+    );
+  });
+
+  it('devolve null quando a tag sumiu, em vez de lançar', () => {
+    expect(parseCanonical(LIVE_SEM_CANONICAL)).toBeNull();
+    expect(parseCanonical('')).toBeNull();
+  });
+});
+
+describe('parseWatchState', () => {
+  it('reconhece a transmissão em andamento com título e autor', () => {
+    const state = parseWatchState(LIVE_EM_ANDAMENTO);
+
+    expect(state).toMatchObject({ isLive: true, isUpcoming: false, isLiveContent: true });
+    // A rota `/live` não serve `og:title`: o título tem de sair do
+    // `<meta name="title">` ou do `videoDetails`.
+    expect(state.title).toBe('lofi hip hop radio 📚 beats to relax/study to');
+    expect(state.author).toBe('Lofi Girl');
+    // …e não serve `og:image` nenhuma; quem inventa a capa é o `probeLive`.
+    expect(state.thumbnail).toBeNull();
+  });
+
+  it('reconhece a live agendada sem confundi-la com uma em andamento', () => {
+    expect(parseWatchState(WATCH_AGENDADA)).toMatchObject({
+      isLive: false,
+      isUpcoming: true,
+      isLiveContent: true,
+    });
+  });
+
+  it('num vídeo comum nada é live', () => {
+    const state = parseWatchState(WATCH_VIDEO);
+
+    expect(state).toMatchObject({ isLive: false, isUpcoming: false, isLiveContent: false });
+    expect(state.title).toBe('Me at the zoo');
+    // O `&amp;` da URL da capa tem de voltar a ser `&`.
+    expect(state.thumbnail).toContain('hqdefault.jpg?sqp=');
+    expect(state.thumbnail).not.toContain('&amp;');
+  });
+
+  it('o VOD de uma live não está ao vivo, mesmo sendo conteúdo de live', () => {
+    // É por isso que o provider olha `"isLive"`, e não `"isLiveContent"`:
+    // senão a gravação seria anunciada como uma segunda transmissão.
+    expect(parseWatchState(WATCH_VOD_DE_LIVE)).toMatchObject({
+      isLive: false,
+      isLiveContent: true,
+    });
+  });
+
+  it('não acha nada num HTML vazio, e não lança', () => {
+    expect(parseWatchState('')).toEqual({
+      isLive: false,
+      isUpcoming: false,
+      isLiveContent: false,
+      title: null,
+      author: null,
+      thumbnail: null,
+    });
+  });
+});
+
+describe('parseChannelPage', () => {
+  it('tira UC…, nome, @handle e avatar da página de um handle', () => {
+    expect(parseChannelPage(CANAL_POR_HANDLE)).toEqual({
+      channelId: LOFI,
+      title: 'Lofi Girl',
+      handle: '@LofiGirl',
+      avatarUrl: AVATAR,
+    });
+  });
+
+  it('aceita canal sem @handle no JSON — o UC… continua saindo do canonical', () => {
+    expect(parseChannelPage(CANAL_SEM_HANDLE)).toMatchObject({
+      channelId: CANAL,
+      title: 'Canal de Teste',
+      handle: null,
+    });
+  });
+
+  it('sem canonical não há channelId, e nada explode', () => {
+    expect(parseChannelPage(LIVE_SEM_CANONICAL).channelId).toBeNull();
+    expect(parseChannelPage('<html></html>')).toEqual({
+      channelId: null,
+      title: null,
+      handle: null,
+      avatarUrl: null,
+    });
+  });
+});
+
+describe('parseChannelInput', () => {
+  it('aceita as formas que uma pessoa realmente tem em mãos', () => {
+    expect(parseChannelInput(LOFI)).toEqual({ channelId: LOFI });
+    expect(parseChannelInput(`  ${LOFI}  `)).toEqual({ channelId: LOFI });
+    expect(parseChannelInput('@LofiGirl')).toEqual({
+      pageUrl: 'https://www.youtube.com/@LofiGirl',
+    });
+    expect(parseChannelInput('https://www.youtube.com/@LofiGirl')).toEqual({
+      pageUrl: 'https://www.youtube.com/@LofiGirl',
+    });
+    expect(parseChannelInput('youtube.com/@LofiGirl')).toEqual({
+      pageUrl: 'https://www.youtube.com/@LofiGirl',
+    });
+    expect(parseChannelInput('https://m.youtube.com/@LofiGirl?si=abc')).toEqual({
+      pageUrl: 'https://www.youtube.com/@LofiGirl',
+    });
+    expect(parseChannelInput(`https://www.youtube.com/channel/${LOFI}`)).toEqual({
+      channelId: LOFI,
+    });
+    expect(parseChannelInput('https://www.youtube.com/c/LofiGirl')).toEqual({
+      pageUrl: 'https://www.youtube.com/c/LofiGirl',
+    });
+    expect(parseChannelInput('https://www.youtube.com/user/LofiGirl/videos')).toEqual({
+      pageUrl: 'https://www.youtube.com/user/LofiGirl',
+    });
+  });
+
+  it('recusa o que não é canal do YouTube', () => {
+    expect(parseChannelInput('https://www.twitch.tv/lofigirl')).toBeNull();
+    expect(parseChannelInput('não é um canal')).toBeNull();
+    expect(parseChannelInput('https://www.youtube.com/watch?v=rFZHOHl-L8A')).toBeNull();
+    expect(parseChannelInput('')).toBeNull();
+  });
+});
+
+describe('YouTubeProvider.classify', () => {
+  it('200 em /shorts/<id> é short — e o segundo pedido sai do cache', async () => {
+    const fetchMock = fakeYouTube({ shorts: ['bbbbbbbbbbb'] });
+    const provider = new YouTubeProvider({ fetch: fetchMock });
+
+    expect(await provider.classify('bbbbbbbbbbb')).toBe('short');
+    expect(await provider.classify('bbbbbbbbbbb')).toBe('short');
+    expect(calls(fetchMock)).toHaveLength(1);
+  });
+
+  it('303 em /shorts/<id> manda a decisão para o watch: vídeo comum', async () => {
+    const fetchMock = fakeYouTube({ watch: { aaaaaaaaaaa: WATCH_VIDEO_DO_FEED } });
+    const provider = new YouTubeProvider({ fetch: fetchMock });
+
+    expect(await provider.classify('aaaaaaaaaaa')).toBe('video');
+    expect(calls(fetchMock)).toEqual([
+      'https://www.youtube.com/shorts/aaaaaaaaaaa',
+      'https://www.youtube.com/watch?v=aaaaaaaaaaa',
+    ]);
+  });
+
+  it('reconhece a live pelo watch', async () => {
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({ watch: { 'rFZHOHl-L8A': LIVE_EM_ANDAMENTO } }),
+    });
+    expect(await provider.classify('rFZHOHl-L8A')).toBe('live');
+  });
+
+  it('a agendada não é cacheada: ela ainda vai virar outra coisa', async () => {
+    const fetchMock = fakeYouTube({ watch: { ccccccccccc: WATCH_AGENDADA } });
+    const provider = new YouTubeProvider({ fetch: fetchMock });
+
+    expect(await provider.classify('ccccccccccc')).toBe('upcoming');
+    expect(await provider.classify('ccccccccccc')).toBe('upcoming');
+    // Duas requisições por passada, das duas vezes: nada foi guardado.
+    expect(calls(fetchMock)).toHaveLength(4);
+  });
+
+  it('erro de rede vira vídeo — errar o rótulo é melhor que não avisar', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.reject(new Error('rede fora')),
+    ) as unknown as typeof globalThis.fetch;
+
+    expect(await new YouTubeProvider({ fetch: fetchMock }).classify('aaaaaaaaaaa')).toBe('video');
+  });
+});
+
+describe('YouTubeProvider.probeLive', () => {
+  it('canonical de watch + isLive viram um item de live', async () => {
+    const provider = new YouTubeProvider({ fetch: fakeYouTube({ live: LIVE_EM_ANDAMENTO }) });
+    const item = await provider.probeLive(LOFI);
+
+    expect(item).toMatchObject({
+      externalId: 'rFZHOHl-L8A',
+      kind: 'live',
+      headline: 'está ao vivo',
+      title: 'lofi hip hop radio 📚 beats to relax/study to',
+      url: 'https://www.youtube.com/watch?v=rFZHOHl-L8A',
+      author: 'Lofi Girl',
+      // A rota `/live` não tem `og:image`: a capa é deduzida do ID.
+      thumbnail: 'https://i.ytimg.com/vi/rFZHOHl-L8A/hqdefault.jpg',
+    });
+  });
+
+  it('canonical apontando para o canal significa: não tem live', async () => {
+    const provider = new YouTubeProvider({ fetch: fakeYouTube({ live: LIVE_SEM_TRANSMISSAO }) });
+    expect(await provider.probeLive(SEM_LIVE)).toBeNull();
+  });
+
+  it('agendada não é live: fica em espera e não vira item', async () => {
+    const provider = new YouTubeProvider({ fetch: fakeYouTube({ live: WATCH_AGENDADA }) });
+    expect(await provider.probeLive(CANAL)).toBeNull();
+  });
+
+  it('canonical ausente é falha, não "sem live" — a conta precisa alertar', async () => {
+    const provider = new YouTubeProvider({ fetch: fakeYouTube({ live: LIVE_SEM_CANONICAL }) });
+    await expect(provider.probeLive(CANAL)).rejects.toThrow(/mudou de formato/);
+  });
+
+  it('quando a live está no feed, título e capa vêm de lá', async () => {
+    const provider = new YouTubeProvider({ fetch: fakeYouTube({ live: LIVE_EM_ANDAMENTO }) });
+    const entries = parseYouTubeFeed(FEED_COM_LIVE);
+    const item = await provider.probeLive(LOFI, entries);
+
+    expect(item?.thumbnail).toBe('https://i4.ytimg.com/vi/rFZHOHl-L8A/hqdefault_live.jpg');
+    expect(item?.publishedAt?.toISOString()).toBe('2026-09-08T09:00:00.000Z');
+  });
+});
+
+describe('YouTubeProvider.fetchLatest', () => {
   it('classifica short e vídeo pelo HEAD em /shorts/<id>', async () => {
-    const provider = new YouTubeProvider({ fetch: fakeFetch(['bbbbbbbbbbb']) });
-    const items = await provider.fetchLatest(ACCOUNT);
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({ shorts: ['bbbbbbbbbbb'], watch: { aaaaaaaaaaa: WATCH_VIDEO_DO_FEED } }),
+    });
+    const items = await provider.fetchLatest(account());
 
     expect(items.map((item) => [item.externalId, item.kind])).toEqual([
       ['aaaaaaaaaaa', 'video'],
@@ -117,67 +362,145 @@ describe('YouTubeProvider', () => {
     ]);
     // O link do short é o da rota /shorts, que é como o Discord dá o preview.
     expect(items[1]?.url).toBe('https://www.youtube.com/shorts/bbbbbbbbbbb');
+    expect(items[0]?.headline).toBe('publicou um vídeo novo');
+    expect(items[1]?.headline).toBe('publicou um short');
   });
 
   it('devolve só os tipos que a conta pediu', async () => {
-    const provider = new YouTubeProvider({ fetch: fakeFetch(['bbbbbbbbbbb']) });
-    const items = await provider.fetchLatest({ ...ACCOUNT, kinds: ['short'] });
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({ shorts: ['bbbbbbbbbbb'], watch: { aaaaaaaaaaa: WATCH_VIDEO_DO_FEED } }),
+    });
+    const items = await provider.fetchLatest(account({ kinds: ['short'] }));
 
     expect(items).toHaveLength(1);
     expect(items[0]?.kind).toBe('short');
   });
 
-  it('trata falha na checagem de short como vídeo comum, sem perder o anúncio', async () => {
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-      if (url.includes('/feeds/videos.xml')) {
-        return Promise.resolve(new Response(FEED, { status: 200 }));
-      }
-      return Promise.reject(new Error('rede fora'));
-    }) as unknown as typeof globalThis.fetch;
+  it('ID já anunciado não custa nem uma requisição de classificação', async () => {
+    const fetchMock = fakeYouTube({ shorts: ['bbbbbbbbbbb'], watch: { aaaaaaaaaaa: WATCH_VIDEO_DO_FEED } });
+    const provider = new YouTubeProvider({ fetch: fetchMock });
 
-    const items = await new YouTubeProvider({ fetch: fetchMock }).fetchLatest(ACCOUNT);
-    expect(items.every((item) => item.kind === 'video')).toBe(true);
+    const items = await provider.fetchLatest(
+      account({ isKnown: (id) => Promise.resolve(id === 'aaaaaaaaaaa') }),
+    );
+
+    expect(items.map((item) => item.externalId)).toEqual(['bbbbbbbbbbb']);
+    expect(calls(fetchMock)).toEqual([
+      'https://www.youtube.com/feeds/videos.xml?channel_id=UCabcdefghijklmnopqrstuv',
+      'https://www.youtube.com/shorts/bbbbbbbbbbb',
+    ]);
   });
 
-  it('não consulta a Data API sem chave, e sem chave não há live', async () => {
-    const fetchMock = fakeFetch([]);
-    const items = await new YouTubeProvider({ fetch: fetchMock }).fetchLatest({
-      ...ACCOUNT,
-      kinds: ['live'],
+  it('a live da sonda que também está no feed aparece uma vez só', async () => {
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({
+        feed: FEED_COM_LIVE,
+        live: LIVE_EM_ANDAMENTO,
+        shorts: ['bbbbbbbbbbb'],
+        watch: { aaaaaaaaaaa: WATCH_VIDEO_DO_FEED },
+      }),
+    });
+    const items = await provider.fetchLatest(account({ kinds: ['video', 'short', 'live'] }));
+
+    expect(items.map((item) => [item.externalId, item.kind])).toEqual([
+      // A live vem na frente: é a publicação mais recente por definição.
+      ['rFZHOHl-L8A', 'live'],
+      ['aaaaaaaaaaa', 'video'],
+      ['bbbbbbbbbbb', 'short'],
+    ]);
+  });
+
+  it('a agendada some do resultado e não é reservada', async () => {
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({
+        feed: FEED.replace('aaaaaaaaaaa', 'ccccccccccc').replace('aaaaaaaaaaa', 'ccccccccccc'),
+        watch: { ccccccccccc: WATCH_AGENDADA },
+        shorts: ['bbbbbbbbbbb'],
+      }),
+    });
+    const items = await provider.fetchLatest(account({ kinds: ['video', 'short', 'live'] }));
+
+    expect(items.map((item) => item.externalId)).toEqual(['bbbbbbbbbbb']);
+  });
+
+  it('conta que só quer live não baixa o feed', async () => {
+    const fetchMock = fakeYouTube({ live: LIVE_EM_ANDAMENTO });
+    await new YouTubeProvider({ fetch: fetchMock }).fetchLatest(account({ kinds: ['live'] }));
+
+    expect(calls(fetchMock)).toEqual([`https://www.youtube.com/channel/${CANAL}/live`]);
+  });
+
+  it('não existe mais chamada à Data API, com ou sem chave', async () => {
+    const fetchMock = fakeYouTube({ live: LIVE_EM_ANDAMENTO, watch: { aaaaaaaaaaa: WATCH_VIDEO_DO_FEED } });
+    await new YouTubeProvider({ fetch: fetchMock }).fetchLatest(
+      account({ kinds: ['video', 'short', 'live'] }),
+    );
+
+    expect(calls(fetchMock).some((url) => url.includes('googleapis'))).toBe(false);
+  });
+});
+
+describe('YouTubeProvider.resolveChannel', () => {
+  it('resolve um @handle para UC…, nome e avatar', async () => {
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({ pages: { '/@LofiGirl': CANAL_POR_HANDLE } }),
     });
 
-    expect(items).toEqual([]);
-    const calls = (fetchMock as unknown as { mock: { calls: unknown[][] } }).mock.calls;
-    expect(calls.some(([url]) => String(url).includes('googleapis'))).toBe(false);
+    expect(await provider.resolveChannel('https://www.youtube.com/@LofiGirl')).toEqual({
+      channelId: LOFI,
+      title: 'Lofi Girl',
+      handle: '@LofiGirl',
+      avatarUrl: AVATAR,
+    });
   });
 
-  it('sem API key, live fica indisponível mas a plataforma continua utilizável', () => {
-    const semChave = new YouTubeProvider();
-    expect(semChave.unavailableReason()).toBeNull();
-    expect(semChave.liveUnavailableReason()).toContain('YOUTUBE_API_KEY');
-    expect(new YouTubeProvider({ apiKey: 'k' }).liveUnavailableReason()).toBeNull();
+  it('aceita as URLs legadas /c/ e /user/', async () => {
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({
+        pages: { '/c/LofiGirl': CANAL_POR_HANDLE, '/user/LofiGirl': CANAL_SEM_HANDLE },
+      }),
+    });
+
+    expect((await provider.resolveChannel('youtube.com/c/LofiGirl')).channelId).toBe(LOFI);
+    expect((await provider.resolveChannel('youtube.com/user/LofiGirl')).channelId).toBe(CANAL);
   });
 
-  it('respeita o intervalo próprio de 15 min da busca de live (cota da API)', async () => {
-    let agora = 0;
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const url = String(input);
-      if (url.includes('googleapis')) {
-        return Promise.resolve(new Response(JSON.stringify({ items: [] }), { status: 200 }));
-      }
-      return Promise.resolve(new Response(FEED, { status: 200 }));
-    }) as unknown as typeof globalThis.fetch;
+  it('um UC… é confirmado pelo feed, sem baixar a página do canal', async () => {
+    const fetchMock = fakeYouTube();
+    const provider = new YouTubeProvider({ fetch: fetchMock });
 
-    const provider = new YouTubeProvider({ apiKey: 'k', fetch: fetchMock, now: () => agora });
-    const account = { ...ACCOUNT, kinds: ['live'] as const };
+    expect(await provider.resolveChannel(CANAL)).toEqual({
+      channelId: CANAL,
+      title: 'Canal de Teste',
+      handle: null,
+      avatarUrl: null,
+    });
+    expect(calls(fetchMock)).toEqual([
+      `https://www.youtube.com/feeds/videos.xml?channel_id=${CANAL}`,
+    ]);
+  });
 
-    await provider.fetchLatest(account);
-    agora += 60_000;
-    await provider.fetchLatest(account);
+  it('UC… que o feed não conhece é recusado com mensagem legível', async () => {
+    const provider = new YouTubeProvider({ fetch: fakeYouTube({ feedStatus: 404 }) });
+    await expect(provider.resolveChannel(CANAL)).rejects.toThrow(
+      'Não encontrei esse canal no YouTube.',
+    );
+  });
 
-    const calls = (fetchMock as unknown as { mock: { calls: unknown[][] } }).mock.calls;
-    const buscas = calls.filter(([url]) => String(url).includes('googleapis'));
-    expect(buscas).toHaveLength(1);
+  it('handle inexistente é recusado sem criar nada', async () => {
+    const provider = new YouTubeProvider({ fetch: fakeYouTube() });
+    await expect(provider.resolveChannel('@naoexiste-xyz')).rejects.toThrow(
+      'Não encontrei esse canal no YouTube.',
+    );
+  });
+
+  it('entrada que não é do YouTube nem chega a virar requisição', async () => {
+    const fetchMock = fakeYouTube();
+    const provider = new YouTubeProvider({ fetch: fetchMock });
+
+    await expect(provider.resolveChannel('https://www.twitch.tv/lofigirl')).rejects.toThrow(
+      'Não encontrei esse canal no YouTube.',
+    );
+    expect(calls(fetchMock)).toEqual([]);
   });
 });

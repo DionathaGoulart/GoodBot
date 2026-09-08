@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSocialMessage, socialVars } from './announce';
+import { buildSocialMessage, sampleSocialItem, socialVars } from './announce';
 
 import type { SocialItem } from './types';
 
 const ITEM: SocialItem = {
   externalId: 'aaaaaaaaaaa',
   kind: 'video',
+  headline: 'publicou um vídeo novo',
   title: 'Título @everyone',
   url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa',
   author: 'Canal',
@@ -25,6 +26,18 @@ describe('socialVars', () => {
     const vars = socialVars(ITEM, 'youtube');
     expect(vars.platform).toBe('YouTube');
     expect(vars.kind).toBe('vídeo');
+  });
+
+  it('usa o headline que o provider mandou', () => {
+    expect(socialVars({ ...ITEM, kind: 'live', headline: 'está ao vivo' }, 'youtube').headline).toBe(
+      'está ao vivo',
+    );
+  });
+
+  it('cai no headline do tipo quando o item não trouxe um', () => {
+    expect(socialVars({ ...ITEM, kind: 'short', headline: '' }, 'youtube').headline).toBe(
+      'publicou um short',
+    );
   });
 });
 
@@ -57,6 +70,21 @@ describe('buildSocialMessage', () => {
   it('sem cargo, a mensagem não pinga ninguém', () => {
     const message = buildSocialMessage({ content: '{title}' }, ITEM, 'youtube');
     expect(message.allowedMentions).toEqual({ parse: [], roles: [] });
+  });
+
+  it('{headline} dá o verbo certo a cada tipo com um template só', () => {
+    const template = { content: '{author} {headline}' };
+    const frase = (item: SocialItem) => buildSocialMessage(template, item, 'youtube').content;
+
+    expect(frase(ITEM)).toBe('Canal publicou um vídeo novo');
+    expect(frase({ ...ITEM, kind: 'short', headline: 'publicou um short' })).toBe(
+      'Canal publicou um short',
+    );
+    expect(frase({ ...ITEM, kind: 'live', headline: 'está ao vivo' })).toBe('Canal está ao vivo');
+  });
+
+  it('o anúncio de teste também traz o headline do tipo', () => {
+    expect(sampleSocialItem('youtube', 'live').headline).toBe('está ao vivo');
   });
 
   it('não sobrescreve a imagem escolhida no template', () => {

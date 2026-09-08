@@ -5,6 +5,13 @@ export interface SocialItem {
   /** ID estável na plataforma; é a chave do dedupe em `social_posts`. */
   externalId: string;
   kind: SocialKind;
+  /**
+   * O verbo do anúncio, já pronto para o template: "publicou um vídeo novo",
+   * "publicou um short", "está ao vivo". Fica no item, e não só no `kind`,
+   * porque é o provider quem sabe o que aconteceu — "publicou" uma live não
+   * quer dizer nada (PRD §5.8).
+   */
+  headline: string;
   title: string;
   url: string;
   /** Nome de quem publicou, como a plataforma devolve. */
@@ -19,23 +26,23 @@ export interface SocialAccountRef {
   platform: SocialPlatform;
   externalId: string;
   kinds: readonly SocialKind[];
+  /**
+   * Se a publicação já está em `social_posts`. O provider usa para **não**
+   * gastar requisições classificando o que já foi anunciado — a consulta é do
+   * job, porque provider não fala com o banco.
+   */
+  isKnown(externalId: string): Promise<boolean>;
 }
 
 /**
- * Todo provider tem a mesma cara para o job não conhecer as diferenças entre
- * uma API REST com OAuth e um feed RSS público.
+ * A cara que o job enxerga. Hoje só o YouTube a implementa; a interface fica
+ * porque é ela que mantém o job ignorante de RSS, de canonical e de `/shorts`.
  *
  * `fetchLatest` devolve as publicações **mais recentes primeiro** e pode
- * lançar: o job conta a falha, aplica backoff e desliga a conta no décimo erro.
+ * lançar: o job conta a falha e desliga a conta no décimo erro seguido.
  */
 export interface SocialProvider {
   readonly platform: SocialPlatform;
-  /**
-   * Motivo pelo qual a plataforma não funciona neste processo (credencial
-   * faltando, integração desligada); `null` quando está tudo certo. O painel
-   * mostra este texto em vez de deixar criar uma conta que nunca anunciaria.
-   */
-  unavailableReason(): string | null;
   fetchLatest(account: SocialAccountRef): Promise<SocialItem[]>;
 }
 
