@@ -1,5 +1,5 @@
-import { createDb, deleteSocialPostsBefore } from '@cobot/db';
-import { DAY_MS, SOCIAL_POSTS_RETENTION_DAYS, VERSION } from '@cobot/shared';
+import { createDb } from '@cobot/db';
+import { VERSION } from '@cobot/shared';
 import { sql } from 'drizzle-orm';
 
 import { createApiServer } from './api/server';
@@ -27,7 +27,7 @@ import { createModlogService } from './services/modlog';
 import { PollService } from './services/polls';
 import { ReactionRoleService } from './services/reaction-roles';
 import { Scheduler } from './services/scheduler';
-import { SocialProviders } from './services/social/index';
+import { YouTubeProvider } from './services/social/index';
 import { StatsService } from './services/stats';
 import { TicketService } from './services/tickets';
 import { WelcomeService } from './services/welcome';
@@ -140,28 +140,19 @@ async function main(): Promise<void> {
       });
     },
   });
-  const social = new SocialProviders({
-    ...(env.YOUTUBE_API_KEY ? { youtubeApiKey: env.YOUTUBE_API_KEY } : {}),
-    ...(env.TWITCH_CLIENT_ID ? { twitchClientId: env.TWITCH_CLIENT_ID } : {}),
-    ...(env.TWITCH_CLIENT_SECRET ? { twitchClientSecret: env.TWITCH_CLIENT_SECRET } : {}),
-    ...(env.META_ACCESS_TOKEN ? { metaAccessToken: env.META_ACCESS_TOKEN } : {}),
-    tiktokEnabled: env.SOCIAL_TIKTOK_ENABLED,
-  });
+  const social = new YouTubeProvider();
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
-  const socialJob = new SocialJob({ db, client, config, providers: social, alerts, audit });
+  const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
   const statsRollup = new StatsRollupJob({ db, client, config });
-  // As três retenções do PRD §8 num job só, porque é ele que alerta na falha.
+  // As retenções do PRD §8 num job só, porque é ele que alerta na falha.
   const retention = new RetentionJob({
     alerts,
     tasks: [
       { name: 'message_cache', run: () => messageCache.cleanup() },
       { name: 'automod_hits', run: () => automod.cleanup() },
       { name: 'stats_rollup', run: () => runStatsRollup(statsRollup, client) },
-      {
-        name: 'social_posts',
-        run: () =>
-          deleteSocialPostsBefore(db, new Date(Date.now() - SOCIAL_POSTS_RETENTION_DAYS * DAY_MS)),
-      },
+      // `social_posts` não entra aqui: podar a linha faria um vídeo que ainda
+      // está no feed voltar a ser "novo" e ser anunciado outra vez.
     ],
   });
   // A coleção nasce antes do `ctx` porque a API também a expõe (`GET /commands`).

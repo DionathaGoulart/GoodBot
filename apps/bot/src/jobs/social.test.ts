@@ -1,19 +1,22 @@
-import { DEFAULT_SOCIAL_CONFIG, SOCIAL_DEFAULT_TEMPLATES } from '@cobot/shared';
+import { DEFAULT_SOCIAL_CONFIG, SOCIAL_DEFAULT_TEMPLATE } from '@cobot/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { SocialAccountRef } from '../services/social/types';
 import type { SocialAccount } from '@cobot/db';
 
 const {
-  listDueSocialAccounts,
+  listEnabledSocialAccounts,
   claimSocialPost,
+  hasSocialPost,
   markSocialPostAnnounced,
   releaseSocialPost,
   recordSocialFailure,
   resetSocialFailures,
   touchSocialAccount,
 } = vi.hoisted(() => ({
-  listDueSocialAccounts: vi.fn(),
+  listEnabledSocialAccounts: vi.fn(),
   claimSocialPost: vi.fn(),
+  hasSocialPost: vi.fn(),
   markSocialPostAnnounced: vi.fn(),
   releaseSocialPost: vi.fn(),
   recordSocialFailure: vi.fn(),
@@ -22,8 +25,9 @@ const {
 }));
 
 vi.mock('@cobot/db', () => ({
-  listDueSocialAccounts,
+  listEnabledSocialAccounts,
   claimSocialPost,
+  hasSocialPost,
   markSocialPostAnnounced,
   releaseSocialPost,
   recordSocialFailure,
@@ -31,9 +35,10 @@ vi.mock('@cobot/db', () => ({
   touchSocialAccount,
 }));
 
-const { SocialJob, socialBackoffMs } = await import('./social');
+const { SocialJob } = await import('./social');
 
 const GUILD_ID = '900000000000000000';
+const OTHER_GUILD_ID = '900000000000000001';
 const CHANNEL_ID = '800000000000000000';
 
 function fakeAccount(overrides: Partial<SocialAccount> = {}): SocialAccount {
@@ -42,17 +47,16 @@ function fakeAccount(overrides: Partial<SocialAccount> = {}): SocialAccount {
     guildId: GUILD_ID,
     platform: 'youtube',
     externalId: 'UCabcdefghijklmnopqrstuv',
-    handle: 'canal',
-    displayName: null,
+    handle: '@canal',
+    displayName: 'Canal',
+    avatarUrl: null,
     discordChannelId: CHANNEL_ID,
     kinds: ['video'],
-    template: SOCIAL_DEFAULT_TEMPLATES.youtube,
+    template: SOCIAL_DEFAULT_TEMPLATE,
     mentionRoleId: null,
     enabled: true,
-    pollIntervalSeconds: 300,
     // `lastCheckedAt` preenchido = a conta já rodou, então nada é backlog.
     lastCheckedAt: new Date('2026-09-01T00:00:00Z'),
-    lastExternalId: 'antigo',
     failureCount: 0,
     disabledReason: null,
     createdAt: new Date('2026-09-01T00:00:00Z'),
@@ -65,6 +69,7 @@ function fakeItem(externalId: string) {
   return {
     externalId,
     kind: 'video' as const,
+    headline: 'publicou um vídeo novo',
     title: 'Vídeo novo',
     url: `https://www.youtube.com/watch?v=${externalId}`,
     author: 'Canal',
@@ -77,7 +82,7 @@ function makeDeps(items: ReturnType<typeof fakeItem>[], overrides: Record<string
   const send = vi.fn(() => Promise.resolve({ id: 'msg-1' }));
   const channel = { isTextBased: () => true, isDMBased: () => false, send };
   const guild = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } };
-  const fetchLatest = vi.fn(() => Promise.resolve(items));
+  const fetchLatest = vi.fn((_account: SocialAccountRef) => Promise.resolve(items));
 
   return {
     send,
@@ -89,8 +94,8 @@ function makeDeps(items: ReturnType<typeof fakeItem>[], overrides: Record<string
         get: () => Promise.resolve({ ...DEFAULT_SOCIAL_CONFIG, enabled: true }),
         getSettings: () => Promise.resolve({ embedColor: 0xdc143c }),
       } as never,
-      providers: { get: () => ({ platform: 'youtube', unavailableReason: () => null, fetchLatest }) } as never,
-      jitterMs: 0,
+      provider: { platform: 'youtube' as const, fetchLatest } as never,
+      accountDelayMs: 0,
       ...overrides,
     },
   };
@@ -102,24 +107,13 @@ beforeEach(() => {
     Promise.resolve({ id: 1, externalId: input.externalId }),
   );
   recordSocialFailure.mockResolvedValue(null);
-});
-
-describe('socialBackoffMs', () => {
-  // Os números vêm escritos à mão: mudar o backoff no job tem que quebrar o
-  // teste, não ser acompanhado por ele em silêncio.
-  it('cresce em dobro a cada falha e para no teto de duas horas', () => {
-    expect(socialBackoffMs(0)).toBe(0);
-    expect(socialBackoffMs(1)).toBe(2 * 60_000);
-    expect(socialBackoffMs(2)).toBe(4 * 60_000);
-    expect(socialBackoffMs(3)).toBe(8 * 60_000);
-    expect(socialBackoffMs(30)).toBe(120 * 60_000);
-  });
+  hasSocialPost.mockResolvedValue(false);
 });
 
 describe('SocialJob', () => {
   it('anuncia uma publicação nova e grava a mensagem', async () => {
     const { deps, send } = makeDeps([fakeItem('novo')]);
-    listDueSocialAccounts.mockResolvedValue([fakeAccount()]);
+    listEnabledSocialAccounts.mockResolvedValue([fakeAccount()]);
 
     await new SocialJob(deps).tick();
 
@@ -133,7 +127,7 @@ describe('SocialJob', () => {
 
   it('não anuncia duas vezes a mesma publicação', async () => {
     const { deps, send } = makeDeps([fakeItem('repetido')]);
-    listDueSocialAccounts.mockResolvedValue([fakeAccount()]);
+    listEnabledSocialAccounts.mockResolvedValue([fakeAccount()]);
     // A unique (account_id, external_id) recusou: o job já viu esta publicação.
     claimSocialPost.mockResolvedValue(null);
 
@@ -144,7 +138,7 @@ describe('SocialJob', () => {
 
   it('anuncia do mais antigo para o mais novo', async () => {
     const { deps, send } = makeDeps([fakeItem('novo'), fakeItem('velho')]);
-    listDueSocialAccounts.mockResolvedValue([fakeAccount()]);
+    listEnabledSocialAccounts.mockResolvedValue([fakeAccount()]);
 
     await new SocialJob(deps).tick();
 
@@ -157,7 +151,7 @@ describe('SocialJob', () => {
 
   it('na primeira passada só marca o que já existia como visto', async () => {
     const { deps, send } = makeDeps([fakeItem('antigo-1'), fakeItem('antigo-2')]);
-    listDueSocialAccounts.mockResolvedValue([fakeAccount({ lastCheckedAt: null })]);
+    listEnabledSocialAccounts.mockResolvedValue([fakeAccount({ lastCheckedAt: null })]);
 
     await new SocialJob(deps).tick();
 
@@ -167,7 +161,7 @@ describe('SocialJob', () => {
 
   it('devolve a reserva quando o envio falha, para tentar de novo depois', async () => {
     const { deps, send } = makeDeps([fakeItem('novo')]);
-    listDueSocialAccounts.mockResolvedValue([fakeAccount()]);
+    listEnabledSocialAccounts.mockResolvedValue([fakeAccount()]);
     send.mockRejectedValueOnce(new Error('canal sumiu'));
 
     await new SocialJob(deps).tick();
@@ -176,70 +170,90 @@ describe('SocialJob', () => {
     expect(markSocialPostAnnounced).not.toHaveBeenCalled();
   });
 
-  it('uma conta que falha não impede as outras e entra em backoff', async () => {
+  it('passa `isKnown` ao provider, ligado a `social_posts`', async () => {
+    const { deps, fetchLatest } = makeDeps([]);
+    listEnabledSocialAccounts.mockResolvedValue([fakeAccount()]);
+    hasSocialPost.mockResolvedValue(true);
+
+    await new SocialJob(deps).tick();
+
+    const ref = fetchLatest.mock.calls[0]?.[0];
+    await expect(ref?.isKnown('abc')).resolves.toBe(true);
+    expect(hasSocialPost).toHaveBeenCalledWith({}, 'conta-1', 'abc');
+  });
+
+  it('uma conta que falha não impede as outras', async () => {
     const quebrada = fakeAccount({ id: 'quebrada' });
     const boa = fakeAccount({ id: 'boa' });
     const { deps, send } = makeDeps([fakeItem('novo')]);
-    listDueSocialAccounts.mockResolvedValue([quebrada, boa]);
+    listEnabledSocialAccounts.mockResolvedValue([quebrada, boa]);
 
     const fetchLatest = vi
       .fn()
-      .mockRejectedValueOnce(new Error('API fora'))
+      .mockRejectedValueOnce(new Error('YouTube fora'))
       .mockResolvedValue([fakeItem('novo')]);
-    const deps2 = {
-      ...deps,
-      providers: { get: () => ({ unavailableReason: () => null, fetchLatest }) } as never,
-      now: () => 0,
-    };
     recordSocialFailure.mockResolvedValue({ ...quebrada, failureCount: 1, enabled: true });
 
-    const job = new SocialJob(deps2);
-    await job.tick();
+    const checked = await new SocialJob({
+      ...deps,
+      provider: { platform: 'youtube', fetchLatest } as never,
+    }).tick();
 
+    expect(checked).toBe(2);
     expect(send).toHaveBeenCalledOnce();
     expect(recordSocialFailure).toHaveBeenCalledOnce();
-
-    // Na passada seguinte a conta em backoff é pulada; a boa continua.
-    fetchLatest.mockClear();
-    await job.tick();
-    expect(fetchLatest).toHaveBeenCalledOnce();
   });
 
   it('alerta quando o banco desativa a conta no décimo erro', async () => {
     const conta = fakeAccount();
     const emit = vi.fn();
-    const fetchLatest = vi.fn(() => Promise.reject(new Error('token inválido')));
+    const fetchLatest = vi.fn(() => Promise.reject(new Error('a página do canal mudou')));
     const { deps } = makeDeps([]);
-    listDueSocialAccounts.mockResolvedValue([conta]);
+    listEnabledSocialAccounts.mockResolvedValue([conta]);
     recordSocialFailure.mockResolvedValue({
       ...conta,
       failureCount: 10,
       enabled: false,
-      disabledReason: 'token inválido',
+      disabledReason: 'a página do canal mudou',
     });
 
     await new SocialJob({
       ...deps,
       alerts: { emit },
-      providers: { get: () => ({ unavailableReason: () => null, fetchLatest }) } as never,
+      provider: { platform: 'youtube', fetchLatest } as never,
     }).tick();
 
     expect(emit).toHaveBeenCalledOnce();
     expect(emit.mock.calls[0]?.[0]).toMatchObject({ level: 'danger' });
   });
 
-  it('módulo desligado na guild não gasta chamada de API', async () => {
+  it('módulo desligado na guild não gasta chamada nem toca a linha', async () => {
     const { deps, fetchLatest } = makeDeps([fakeItem('novo')], {
       config: {
         get: () => Promise.resolve(DEFAULT_SOCIAL_CONFIG),
         getSettings: () => Promise.resolve({ embedColor: 0 }),
       },
     });
-    listDueSocialAccounts.mockResolvedValue([fakeAccount()]);
+    listEnabledSocialAccounts.mockResolvedValue([fakeAccount()]);
+
+    expect(await new SocialJob(deps).tick()).toBe(0);
+    expect(fetchLatest).not.toHaveBeenCalled();
+    expect(touchSocialAccount).not.toHaveBeenCalled();
+  });
+
+  it('lê a config uma vez por guild, não uma por conta', async () => {
+    const get = vi.fn(() => Promise.resolve({ ...DEFAULT_SOCIAL_CONFIG, enabled: true }));
+    const { deps } = makeDeps([], {
+      config: { get, getSettings: () => Promise.resolve({ embedColor: 0 }) },
+    });
+    listEnabledSocialAccounts.mockResolvedValue([
+      fakeAccount({ id: 'a' }),
+      fakeAccount({ id: 'b' }),
+      fakeAccount({ id: 'c', guildId: OTHER_GUILD_ID }),
+    ]);
 
     await new SocialJob(deps).tick();
 
-    expect(fetchLatest).not.toHaveBeenCalled();
-    expect(touchSocialAccount).toHaveBeenCalledOnce();
+    expect(get).toHaveBeenCalledTimes(2);
   });
 });
