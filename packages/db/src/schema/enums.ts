@@ -8,8 +8,8 @@ import {
   REACTION_ROLE_MODES,
   REACTION_ROLE_STYLES,
   SCHEDULED_ACTION_KINDS,
-  SOCIAL_KINDS,
-  SOCIAL_PLATFORMS,
+  SOCIAL_KIND_ENUM_VALUES,
+  SOCIAL_PLATFORM_ENUM_VALUES,
   STAT_GRANULARITIES,
   STAT_KINDS,
   TICKET_STATUSES,
@@ -29,5 +29,5 @@ export const reactionRoleStyleEnum = pgEnum('reaction_role_style', REACTION_ROLE
 export const ticketStatusEnum = pgEnum('ticket_status', TICKET_STATUSES);
 export const statKindEnum = pgEnum('stat_kind', STAT_KINDS);
 export const statGranularityEnum = pgEnum('stat_granularity', STAT_GRANULARITIES);
-export const socialPlatformEnum = pgEnum('social_platform', SOCIAL_PLATFORMS);
-export const socialKindEnum = pgEnum('social_kind', SOCIAL_KINDS);
+export const socialPlatformEnum = pgEnum('social_platform', SOCIAL_PLATFORM_ENUM_VALUES);
+export const socialKindEnum = pgEnum('social_kind', SOCIAL_KIND_ENUM_VALUES);
