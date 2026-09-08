@@ -7,6 +7,7 @@ import {
   MAX_EMBED_FIELDS,
   MAX_EMBED_FOOTER_LENGTH,
   MAX_EMBED_TITLE_LENGTH,
+  MAX_EMBED_URL_LENGTH,
   MAX_MESSAGE_CONTENT_LENGTH,
   TEMPLATE_VARIABLES,
   type TemplateVariable,
@@ -16,6 +17,13 @@ import {
 export type TemplateVars = Partial<Record<TemplateVariable, string | number>>;
 
 const PLACEHOLDER_RE = /\{([a-zA-Z][a-zA-Z0-9]*)\}/g;
+/** Mesma forma, sem `g`: `.test` de regex global carrega `lastIndex`. */
+const HAS_PLACEHOLDER_RE = /\{[a-zA-Z][a-zA-Z0-9]*\}/;
+
+/** `true` quando o texto tem ao menos um `{placeholder}` para renderizar. */
+export function hasPlaceholder(value: string): boolean {
+  return HAS_PLACEHOLDER_RE.test(value);
+}
 
 /**
  * Substitui `{user}`, `{server}`, `{memberCount}`, … pelos valores em `vars`.
@@ -48,7 +56,18 @@ export const EmbedTemplateSchema = z
   .object({
     title: z.string().max(MAX_EMBED_TITLE_LENGTH).optional(),
     description: z.string().max(MAX_EMBED_DESCRIPTION_LENGTH).optional(),
-    url: z.url().optional(),
+    /**
+     * Link do card (o título vira clicável). Aceita `{url}` além de uma URL
+     * literal: num anúncio de rede social o endereço só existe na hora de
+     * renderizar. Quem monta o embed descarta o que não virou URL de verdade.
+     */
+    url: z
+      .string()
+      .max(MAX_EMBED_URL_LENGTH)
+      .refine((value) => hasPlaceholder(value) || z.url().safeParse(value).success, {
+        message: 'Informe uma URL ou um texto com {url}',
+      })
+      .optional(),
     /** `null` = usar `guild_settings.embed_color`. */
     color: EmbedColorSchema.nullable().default(null),
     fields: z
@@ -97,6 +116,7 @@ export function renderMessageTemplate(tpl: MessageTemplate, vars: TemplateVars):
       ...tpl.embed,
       title: r(tpl.embed.title),
       description: r(tpl.embed.description),
+      url: r(tpl.embed.url),
       footer: r(tpl.embed.footer),
       fields: tpl.embed.fields.map((f) => ({
         ...f,
