@@ -1,6 +1,7 @@
 import 'server-only';
 
 import {
+  getAllModuleConfigs,
   getGuildSettings,
   getLogConfigs,
   getModuleConfig,
@@ -44,6 +45,18 @@ export async function loadModuleConfig<M extends Module>(
   module: M,
 ): Promise<ModuleConfigResult<M>> {
   return getModuleConfig(db(), guildId, module);
+}
+
+/**
+ * `module → ligado?` de todos os módulos numa query. A tela índice de
+ * `/config` mostra onze telas de uma vez; onze `getModuleConfig` seriam onze
+ * idas ao banco para ler o mesmo `enabled`.
+ */
+export async function loadModulesEnabled(guildId: string): Promise<Record<Module, boolean>> {
+  const all = await getAllModuleConfigs(db(), guildId);
+  return Object.fromEntries(
+    Object.entries(all).map(([module, result]) => [module, result.config.enabled]),
+  ) as Record<Module, boolean>;
 }
 
 /** `guild_settings` + módulo `general` no formato do formulário. */

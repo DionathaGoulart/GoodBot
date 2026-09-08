@@ -453,18 +453,26 @@ bg-base-100` h-3, fill sólido `accent`, sem radius. Para cotas
   `accent` + `accent-content` + sombra `sm`, hover = fill 8%. Abaixo de `lg`
   vira `sheet` com o mesmo conteúdo.
 - **Os seis grupos da nav** (`components/layout/nav.ts` é a lista única de
-  telas do painel): `PAINEL` · `MODERAÇÃO` · `COMUNIDADE` · `SERVIDOR`
-  (membros, cargos, canais, banidos, convites, eventos, emojis) ·
-  `CONFIGURAÇÃO` (tudo que é `/config/*` mais `/servidor`) · `SISTEMA`
-  (auditoria, saúde). O rótulo do grupo é um `<button>` com `section-label` e
-  `▾`/`▸`; o que está fechado vive em `localStorage` (`cobot-nav-collapsed`).
-  O grupo da tela aberta nunca colapsa.
+  telas do painel), agrupados por assunto: `PAINEL` (dashboard) ·
+  `MODERAÇÃO` (casos, banidos, auditoria) · `COMUNIDADE` (mensagens,
+  convites, eventos, emojis) · `SERVIDOR` (membros, cargos, canais, servidor)
+  · `CONFIGURAÇÃO` (o índice `/config` e todo `/config/*`, na ordem bot →
+  moderação → comunidade) · `SISTEMA` (saúde). O rótulo do grupo é um
+  `<button>` com `section-label` e `▾`/`▸`; o que está fechado vive em
+  `localStorage` (`cobot-nav-collapsed`). O grupo da tela aberta nunca
+  colapsa.
+- **Índice de configuração** (`/config`): um `panel` por família de
+  `CONFIG_GROUPS` (`BOT.DIR`, `MODERACAO.DIR`, `COMUNIDADE.DIR`), com um card
+  por tela — nome, `tag` `LIGADO`/`DESLIGADO` do módulo, a descrição de
+  `CONFIG_PAGES` e o nome de arquivo em micro-texto. Card = `border-2` sobre
+  `base-100` com `hover:bg-base-200`; o anel de foco é o global do §6.1.
 - **Busca de tela (`Ctrl+K` / `⌘K`)**: `CommandPalette` na topbar, `command`
   dentro de `dialog` (§6.5), agrupado pelos mesmos grupos da nav. Cada item
   casa por nome e por sinônimos (`keywords` do `NavItem`). O gatilho visível é
   um `icon-btn` `BUSCAR` com o atalho ao lado em `muted-text`.
 - **Topbar**: `border-b-2 border-base-300 bg-base-100`, `breadcrumb` em
-  micro-texto à esquerda, à direita `ThemeToggle`, status do bot
+  micro-texto à esquerda (`servidor / GRUPO / tela`; o grupo é o mesmo da
+  sidebar e some abaixo de `sm`), à direita `ThemeToggle`, status do bot
   (`presence-dot` + `ONLINE`/`OFFLINE` micro-texto) e avatar do admin
   (`avatar-sq` 32px) com `dropdown-menu` (sair).
 - **Cabeçalho de página**: `screen-kicker` (`> AUTOMOD`) + `screen-title`
