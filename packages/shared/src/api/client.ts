@@ -60,7 +60,13 @@ import {
   RoleMoveInputSchema,
   RoleWriteInputSchema,
 } from './roles';
-import { SocialAccountSummarySchema, SocialOverviewSchema, SocialTestResultSchema } from './social';
+import {
+  SocialAccountSummarySchema,
+  SocialOverviewSchema,
+  SocialResolveInputSchema,
+  SocialResolveResultSchema,
+  SocialTestResultSchema,
+} from './social';
 import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
 import { SocialAccountInputSchema } from '../config/social';
 
@@ -76,7 +82,11 @@ import type {
 import type { CommandSummary } from './commands';
 import type { ApiError } from './common';
 import type { InvalidateInput } from './config';
-import type { GuildScheduledEventList, GuildScheduledEventSummary, ScheduledEventInput } from './events';
+import type {
+  GuildScheduledEventList,
+  GuildScheduledEventSummary,
+  ScheduledEventInput,
+} from './events';
 import type {
   EmojiCreateInput,
   EmojiUpdateInput,
@@ -108,7 +118,12 @@ import type {
 } from './messages';
 import type { ModerationActionInput, ModerationActionResult } from './moderation';
 import type { ActorInput, MemberRolesInput, RoleMoveInput, RoleWriteInput } from './roles';
-import type { SocialAccountSummary, SocialOverview, SocialTestResult } from './social';
+import type {
+  SocialAccountSummary,
+  SocialOverview,
+  SocialResolveResult,
+  SocialTestResult,
+} from './social';
 import type { CloseTicketInput, CloseTicketResult } from './tickets';
 import type { SocialAccountInput } from '../config/social';
 import type { z } from 'zod';
@@ -341,11 +356,10 @@ export function createInternalClient(options: InternalClientOptions) {
       ),
 
     deleteEmoji: (guildId: string, emojiId: string, input: ActorInput): Promise<{ ok: true }> =>
-      request(
-        ApiOkSchema,
-        `${guild(guildId)}/expressions/emojis/${encodeURIComponent(emojiId)}`,
-        { method: 'DELETE', body: ActorInputSchema.parse(input) },
-      ),
+      request(ApiOkSchema, `${guild(guildId)}/expressions/emojis/${encodeURIComponent(emojiId)}`, {
+        method: 'DELETE',
+        body: ActorInputSchema.parse(input),
+      }),
 
     createSticker: (guildId: string, input: StickerCreateInput): Promise<GuildStickerSummary> =>
       request(GuildStickerSummarySchema, `${guild(guildId)}/expressions/stickers`, {
@@ -647,9 +661,19 @@ export function createInternalClient(options: InternalClientOptions) {
         { method: 'POST' },
       ),
 
-    /** Contas observadas + o que cada plataforma consegue fazer (PRD §5.8). */
+    /** Contas observadas neste servidor (PRD §5.8). */
     social: (guildId: string): Promise<SocialOverview> =>
       request(SocialOverviewSchema, `${guild(guildId)}/social`),
+
+    /**
+     * URL, `@handle` ou `UC…` → o canal de verdade. O painel chama antes de
+     * salvar: quem fala com o YouTube é o bot, não o Next.
+     */
+    resolveSocialChannel: (guildId: string, input: string): Promise<SocialResolveResult> =>
+      request(SocialResolveResultSchema, `${guild(guildId)}/social/resolve`, {
+        method: 'POST',
+        body: SocialResolveInputSchema.parse({ input }),
+      }),
 
     createSocialAccount: (
       guildId: string,

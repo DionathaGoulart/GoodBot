@@ -110,21 +110,27 @@ export const SCHEDULED_ACTION_KINDS = [
 ] as const;
 export type ScheduledActionKind = (typeof SCHEDULED_ACTION_KINDS)[number];
 
-/** Redes suportadas pelas notificações (PRD §5.8). */
-export const SOCIAL_PLATFORMS = ['youtube', 'twitch', 'instagram', 'tiktok'] as const;
-export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+/**
+ * Valores do enum `social_platform` no Postgres. Desde a v2 só `youtube` é
+ * atendido (PRD §5.8): os outros três continuam aqui porque apagar valor de
+ * enum no Postgres exige recriar o tipo, e nenhuma linha os usa. Quem quiser
+ * saber o que o bot atende usa `SocialPlatform`, não esta lista.
+ */
+export const SOCIAL_PLATFORM_ENUM_VALUES = ['youtube', 'twitch', 'instagram', 'tiktok'] as const;
 
-/** O que uma conta pode anunciar. Nem toda plataforma aceita todos. */
-export const SOCIAL_KINDS = ['video', 'short', 'live', 'post'] as const;
+/** A única plataforma que o bot observa. */
+export const SOCIAL_PLATFORM = 'youtube';
+export type SocialPlatform = typeof SOCIAL_PLATFORM;
+
+/**
+ * Valores do enum `social_kind` no Postgres. `post` é herança da v1 (Instagram)
+ * e não é mais produzido; fica pelo mesmo motivo das plataformas.
+ */
+export const SOCIAL_KIND_ENUM_VALUES = ['video', 'short', 'live', 'post'] as const;
+
+/** O que uma conta pode anunciar. */
+export const SOCIAL_KINDS = ['video', 'short', 'live'] as const;
 export type SocialKind = (typeof SOCIAL_KINDS)[number];
-
-/** Tipos que cada plataforma sabe entregar (PRD §5.8). */
-export const SOCIAL_KINDS_BY_PLATFORM = {
-  youtube: ['video', 'short', 'live'],
-  twitch: ['live'],
-  instagram: ['post'],
-  tiktok: ['video'],
-} as const satisfies Record<SocialPlatform, readonly SocialKind[]>;
 
 export const REACTION_ROLE_MODES = ['single', 'multiple', 'toggle'] as const;
 export type ReactionRoleMode = (typeof REACTION_ROLE_MODES)[number];
@@ -135,12 +141,8 @@ export type ReactionRoleStyle = (typeof REACTION_ROLE_STYLES)[number];
 export const TICKET_STATUSES = ['open', 'closed'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
-/**
- * Variáveis aceitas em templates de mensagem (PRD §5.5 e §5.8). As sete
- * primeiras descrevem um membro; as seis últimas, uma publicação de rede
- * social. O motor é o mesmo: quem não recebe valor fica literal no texto.
- */
-export const TEMPLATE_VARIABLES = [
+/** As que descrevem um membro (PRD §5.5): entrada, saída e DM de boas-vindas. */
+export const MEMBER_TEMPLATE_VARIABLES = [
   'user',
   'mention',
   'tag',
@@ -148,12 +150,28 @@ export const TEMPLATE_VARIABLES = [
   'server',
   'memberCount',
   'ordinal',
+] as const;
+
+/** As que descrevem uma publicação de rede social (PRD §5.8). */
+export const SOCIAL_TEMPLATE_VARIABLES = [
   'title',
   'url',
   'author',
   'thumbnail',
   'platform',
   'kind',
+  'headline',
+] as const;
+
+/**
+ * Variáveis aceitas em templates de mensagem (PRD §5.5 e §5.8). O motor é o
+ * mesmo para os dois grupos: quem não recebe valor fica literal no texto. Cada
+ * tela oferece só o grupo que sabe preencher — `{memberCount}` num anúncio do
+ * YouTube nunca teria valor.
+ */
+export const TEMPLATE_VARIABLES = [
+  ...MEMBER_TEMPLATE_VARIABLES,
+  ...SOCIAL_TEMPLATE_VARIABLES,
 ] as const;
 export type TemplateVariable = (typeof TEMPLATE_VARIABLES)[number];
 
@@ -199,20 +217,46 @@ export const MAX_REGEX_PATTERN_LENGTH = 200;
 export const MESSAGE_CACHE_RETENTION_DAYS = 7;
 export const AUTOMOD_HITS_RETENTION_DAYS = 30;
 export const STATS_HOURLY_RETENTION_DAYS = 90;
-export const SOCIAL_POSTS_RETENTION_DAYS = 90;
+// `social_posts` não tem retenção de propósito: podar a linha faria uma
+// publicação antiga voltar a ser "nova" no feed e ser anunciada de novo.
 
 // ── Redes sociais (PRD §5.8) ────────────────────────────────────────────────
 
-/** Contas por servidor. Cada conta é uma chamada HTTP por ciclo. */
+/** Contas por servidor. Cada conta são duas chamadas HTTP por passada. */
 export const MAX_SOCIAL_ACCOUNTS = 20;
-/** Intervalo padrão de polling de uma conta. */
-export const SOCIAL_DEFAULT_POLL_SECONDS = 300;
+/** Intervalo do laço, igual para todas as contas da instância (PRD §5.8). */
+export const SOCIAL_DEFAULT_POLL_SECONDS = 180;
 export const SOCIAL_MIN_POLL_SECONDS = 60;
-export const SOCIAL_MAX_POLL_SECONDS = 6 * 60 * 60;
-/**
- * Live do YouTube custa 100 unidades de cota por chamada num teto diário de
- * 10.000: com 15 min entre checagens, um canal gasta 9.600 por dia e cabe.
- */
-export const YOUTUBE_LIVE_POLL_SECONDS = 15 * 60;
+export const SOCIAL_MAX_POLL_SECONDS = 30 * 60;
+/** Pausa entre duas contas na mesma passada, para não rajar no YouTube. */
+export const SOCIAL_ACCOUNT_DELAY_MS = 500;
 /** Falhas seguidas que desativam uma conta sozinha (PRD §5.8). */
 export const SOCIAL_MAX_FAILURES = 10;
+
+/**
+ * Como cada tipo é chamado na interface. Mora aqui, e não no bot, porque o
+ * painel escreve os mesmos rótulos na tabela de contas e no preview do
+ * template: dois lugares dizendo "short" e "live" de jeitos diferentes seria
+ * a mesma configuração com dois nomes.
+ */
+export const SOCIAL_KIND_LABEL: Record<SocialKind, string> = {
+  video: 'vídeo',
+  short: 'short',
+  live: 'live',
+};
+
+/**
+ * O que a frase do anúncio diz, por tipo — o valor de `{headline}`. Existe
+ * porque um template só para os três tipos não tem verbo que sirva: "{author}
+ * publicou" fica errado numa live, e "está ao vivo" fica errado num short.
+ */
+export const SOCIAL_KIND_HEADLINE: Record<SocialKind, string> = {
+  video: 'publicou um vídeo novo',
+  short: 'publicou um short',
+  live: 'está ao vivo',
+};
+
+/** O valor de `{platform}`. Uma plataforma só desde a v2. */
+export const SOCIAL_PLATFORM_LABEL: Record<SocialPlatform, string> = {
+  youtube: 'YouTube',
+};
