@@ -117,6 +117,7 @@ Métricas de cada regra (hits por dia) vão para stats (§5.6).
 
 | Comando             | Notas                                                                                                                                                                                                                    |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/clear`            | limpeza rápida do canal: quantidade opcional (padrão 50, máximo 500), usuário e canal opcionais; mesmo motor do `/purge`, sem os filtros finos e preservando mensagens fixadas |
 | `/purge`            | quantidade (1–500), filtros: user, apenas_bots, contém (texto), apenas_links, apenas_anexos, antes_de/depois_de (message id); respeita limite de 14 dias do bulk delete e faz delete individual para o resto (com aviso) |
 | `/slowmode`         | segundos (0–21600), canal opcional                                                                                                                                                                                       |
 | `/lock` / `/unlock` | canal opcional, motivo; nega `SendMessages` ao @everyone (e cargos configurados) preservando overrides anteriores para restaurar                                                                                         |
