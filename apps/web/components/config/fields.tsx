@@ -25,9 +25,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { colorToHex, hexToColor, TEXT_CHANNEL_TYPES } from './discord-options';
 import { DiscordPicker } from './discord-picker';
 import { DurationInput } from './duration-input';
-import { TemplateEditor } from './template-editor';
+import { TemplateEditor, type TemplatePreviewMode } from './template-editor';
 
-import type { MessageTemplate } from '@cobot/shared';
+import type { MessageTemplate, TemplateVariable } from '@cobot/shared';
 
 /**
  * Os campos das telas de configuração. Todos falam com o react-hook-form pelo
@@ -260,14 +260,22 @@ export function ColorField(props: FieldProps): React.ReactElement {
 
 export function TemplateField({
   embedColor,
+  variables,
+  previewModes,
   ...props
-}: FieldProps & { embedColor: number }): React.ReactElement {
+}: FieldProps & {
+  embedColor: number;
+  variables?: readonly TemplateVariable[];
+  previewModes?: TemplatePreviewMode[];
+}): React.ReactElement {
   return (
     <Field {...props}>
       {(field) => (
         <TemplateEditor
           value={(field.value as MessageTemplate | null) ?? null}
           embedColor={embedColor}
+          variables={variables}
+          previewModes={previewModes}
           disabled={field.disabled}
           onChange={field.onChange}
         />

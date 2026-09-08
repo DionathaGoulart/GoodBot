@@ -1,7 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { TEMPLATE_VARIABLES, type EmbedTemplate, type MessageTemplate } from '@cobot/shared';
+import {
+  TEMPLATE_VARIABLES,
+  type EmbedTemplate,
+  type MessageTemplate,
+  type TemplateVariable,
+} from '@cobot/shared';
 
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -20,14 +25,16 @@ function VariableBar({
   target,
   onInsert,
   disabled,
+  variables,
 }: {
   target: React.RefObject<HTMLTextAreaElement | null>;
   onInsert: (next: string) => void;
   disabled?: boolean;
+  variables: readonly TemplateVariable[];
 }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {TEMPLATE_VARIABLES.map((variable) => (
+      {variables.map((variable) => (
         <button
           key={variable}
           type="button"
@@ -54,12 +61,26 @@ function VariableBar({
   );
 }
 
+/**
+ * Um jeito de ver o mesmo template. A tela de redes sociais tem três (vídeo,
+ * short, live), porque `{headline}` e `{kind}` mudam a frase inteira; as demais
+ * telas têm um só e a barra de troca nem aparece.
+ */
+export interface TemplatePreviewMode {
+  id: string;
+  label: string;
+  vars: Partial<Record<TemplateVariable, string>>;
+}
+
 export interface TemplateEditorProps {
   value: MessageTemplate | null;
   onChange: (value: MessageTemplate | null) => void;
   disabled?: boolean;
   embedColor: number;
   id?: string;
+  /** Quais variáveis a barra oferece; o padrão é todas. */
+  variables?: readonly TemplateVariable[];
+  previewModes?: TemplatePreviewMode[];
 }
 
 /**
@@ -73,9 +94,13 @@ export function TemplateEditor({
   disabled,
   embedColor,
   id,
+  variables = TEMPLATE_VARIABLES,
+  previewModes,
 }: TemplateEditorProps) {
   const contentRef = React.useRef<HTMLTextAreaElement>(null);
   const descriptionRef = React.useRef<HTMLTextAreaElement>(null);
+  const [mode, setMode] = React.useState(0);
+  const preview = previewModes?.[Math.min(mode, previewModes.length - 1)];
 
   const template = value ?? {};
   const patch = (next: Partial<MessageTemplate>) => onChange({ ...template, ...next });
@@ -102,6 +127,7 @@ export function TemplateEditor({
           <VariableBar
             target={contentRef}
             disabled={disabled}
+            variables={variables}
             onInsert={(next) => patch({ content: next === '' ? undefined : next })}
           />
         </div>
@@ -151,6 +177,7 @@ export function TemplateEditor({
               <VariableBar
                 target={descriptionRef}
                 disabled={disabled}
+                variables={variables}
                 onInsert={(next) => patchEmbed({ description: next === '' ? undefined : next })}
               />
             </div>
@@ -173,7 +200,24 @@ export function TemplateEditor({
 
       <div className="flex flex-col gap-2">
         <p className="section-label">PREVIEW</p>
-        <EmbedPreview template={value} embedColor={embedColor} />
+        {previewModes && previewModes.length > 1 ? (
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tipo do preview">
+            {previewModes.map((option, index) => (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={index === mode}
+                className={
+                  index === mode ? 'icon-btn border-accent text-accent-text' : 'icon-btn'
+                }
+                onClick={() => setMode(index)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <EmbedPreview template={value} embedColor={embedColor} vars={preview?.vars} />
       </div>
     </div>
   );
