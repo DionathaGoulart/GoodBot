@@ -58,7 +58,11 @@ function SheetContent({
           // — ganharia por especificidade do `w-full sm:max-w-2xl` passado em
           // `className`, prendendo toda sheet em 384px. Sem largura própria a
           // sheet encosta nos dois lados: quem monta uma passa a sua.
-          'fixed z-50 flex flex-col gap-4 bg-base-200 bg-clip-padding data-open:animate-enter text-sm text-base-content transition duration-200 ease-in-out data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t-2 data-[side=bottom]:border-base-300 data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:border-r-2 data-[side=left]:border-base-300 data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:border-l-2 data-[side=right]:border-base-300 data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b-2 data-[side=top]:border-base-300',
+          // `h-dvh` e não `h-full`: um elemento `fixed` mede 100% contra o
+          // viewport grande, o de barra de endereço recolhida, então no celular
+          // o rodapé da sheet — o botão de salvar — ficava atrás da barra do
+          // navegador. `dvh` acompanha a barra entrando e saindo.
+          'fixed z-50 flex flex-col gap-4 bg-base-200 bg-clip-padding data-open:animate-enter text-sm text-base-content transition duration-200 ease-in-out data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:max-h-dvh data-[side=bottom]:border-t-2 data-[side=bottom]:border-base-300 data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-dvh data-[side=left]:border-r-2 data-[side=left]:border-base-300 data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-dvh data-[side=right]:border-l-2 data-[side=right]:border-base-300 data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:max-h-dvh data-[side=top]:border-b-2 data-[side=top]:border-base-300',
           className,
         )}
         {...props}
@@ -81,7 +85,9 @@ function SheetHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-header"
-      className={cn('flex flex-col gap-0.5 p-4', className)}
+      // `pr-14` reserva a coluna do botão de fechar: sem ela um título longo
+      // passa por baixo do X nas telas estreitas.
+      className={cn('flex flex-col gap-0.5 p-4 pr-14', className)}
       {...props}
     />
   );
@@ -91,7 +97,12 @@ function SheetFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-footer"
-      className={cn('mt-auto flex flex-col gap-2 p-4', className)}
+      // O `pb` respeita o indicador de home do iPhone; sem ele o botão encosta
+      // na barra do sistema e fica difícil de acertar.
+      className={cn(
+        'mt-auto flex flex-col gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]',
+        className,
+      )}
       {...props}
     />
   );
