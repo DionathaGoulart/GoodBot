@@ -38,8 +38,10 @@ export default function proxy(request: NextRequest) {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''}`,
     // O Tailwind injeta estilos no dev e o Next usa `style` inline em produção.
     "style-src 'self' 'unsafe-inline'",
-    // Avatares e ícones do Discord.
-    "img-src 'self' data: https://cdn.discordapp.com",
+    // Avatares e ícones do Discord, e o avatar do canal e a capa do vídeo que
+    // o módulo social resolve no YouTube (PRD §5.8) — o painel mostra os dois
+    // direto da origem, sem proxy.
+    "img-src 'self' data: https://cdn.discordapp.com https://yt3.googleusercontent.com https://yt3.ggpht.com https://i.ytimg.com",
     "font-src 'self'",
     "connect-src 'self'",
     "frame-ancestors 'none'",
