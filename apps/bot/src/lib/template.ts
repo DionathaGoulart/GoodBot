@@ -59,13 +59,19 @@ export interface TemplateMessageOptions {
   allowedMentions?: MessageMentionOptions;
 }
 
+function isHttpUrl(value: string): boolean {
+  return URL.canParse(value) && /^https?:$/.test(new URL(value).protocol);
+}
+
 function buildEmbed(template: EmbedTemplate, options: TemplateMessageOptions): EmbedBuilder {
   const embed = new EmbedBuilder().setColor(
     template.color ?? options.embedColor ?? DEFAULT_EMBED_COLOR,
   );
   if (template.title) embed.setTitle(template.title);
   if (template.description) embed.setDescription(template.description);
-  if (template.url) embed.setURL(template.url);
+  // Um `{url}` sem valor fica literal no template renderizado; o discord.js
+  // recusaria o embed inteiro, então o link some em vez de derrubar o anúncio.
+  if (template.url && isHttpUrl(template.url)) embed.setURL(template.url);
   if (template.fields.length > 0) embed.addFields(template.fields);
   if (template.footer) embed.setFooter({ text: template.footer });
   if (template.image) embed.setImage(template.image);
