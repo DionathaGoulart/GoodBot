@@ -20,7 +20,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 import type { TagRow } from '@/lib/tags';
 
@@ -125,18 +132,22 @@ function TagSheet({
         </SheetHeader>
 
         <Form {...form}>
-          <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
-            <fieldset disabled={editing?.isEdit} className="flex flex-col gap-4">
-              <TextField
-                name="name"
-                label="Nome"
-                description="É o que vai depois de /tag. Não dá para renomear depois: o contador de usos é da linha."
-                required
-              />
-            </fieldset>
-            <TemplateField name="content" label="Conteúdo" embedColor={embedColor} required />
+          <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+            {/* Só os campos rolam. Com o rodapé dentro da área rolável o SALVAR
+                sai da tela e só volta no fim do formulário — pior no mobile. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
+              <fieldset disabled={editing?.isEdit} className="flex flex-col gap-4">
+                <TextField
+                  name="name"
+                  label="Nome"
+                  description="É o que vai depois de /tag. Não dá para renomear depois: o contador de usos é da linha."
+                  required
+                />
+              </fieldset>
+              <TemplateField name="content" label="Conteúdo" embedColor={embedColor} required />
+            </div>
 
-            <SheetFooter className="px-0">
+            <SheetFooter className="border-t-2 border-base-300">
               <button type="submit" className="btn-goodchat" disabled={saving}>
                 {saving ? 'SALVANDO_' : 'SALVAR'}
               </button>

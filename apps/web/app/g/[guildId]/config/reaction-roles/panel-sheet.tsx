@@ -15,12 +15,7 @@ import { useFieldArray, useForm, useFormContext } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { savePanelAction } from '@/app/actions/modules';
-import {
-  DiscordField,
-  SelectField,
-  TemplateField,
-  TextField,
-} from '@/components/config/fields';
+import { DiscordField, SelectField, TemplateField, TextField } from '@/components/config/fields';
 import { EmptyState } from '@/components/retro/states';
 import { Form } from '@/components/ui/form';
 import {
@@ -58,8 +53,7 @@ function ItemsField({ style }: { style: ReactionRoleStyle }) {
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const disabled = formState.disabled;
 
-  const add = () =>
-    append({ roleId: '', emoji: null, label: '', description: null });
+  const add = () => append({ roleId: '', emoji: null, label: '', description: null });
 
   if (fields.length === 0) {
     return (
@@ -194,44 +188,40 @@ export function PanelSheet({
         </SheetHeader>
 
         <Form {...form}>
-          <form
-            onSubmit={onSubmit}
-            className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4"
-          >
-            <fieldset disabled={readOnly} className="flex flex-col gap-4">
-              <DiscordField name="channelId" kind="channel" label="Canal" required />
-              <SelectField
-                name="mode"
-                label="Modo"
-                description="Como os cargos se comportam quando o membro escolhe."
-                options={REACTION_ROLE_MODES.map((value) => ({
-                  value,
-                  label: MODE_LABEL[value],
-                }))}
-                required
-              />
-              <SelectField
-                name="style"
-                label="Estilo"
-                options={REACTION_ROLE_STYLES.map((value) => ({
-                  value,
-                  label: STYLE_LABEL[value],
-                }))}
-                required
-              />
-              <TemplateField
-                name="content"
-                label="Mensagem"
-                embedColor={embedColor}
-                required
-              />
-              <ItemsField style={style} />
-            </fieldset>
+          <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+            {/* Só os campos rolam. Com o rodapé dentro da área rolável o SALVAR
+                sai da tela e só volta no fim do formulário — pior no mobile. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
+              <fieldset disabled={readOnly} className="flex flex-col gap-4">
+                <DiscordField name="channelId" kind="channel" label="Canal" required />
+                <SelectField
+                  name="mode"
+                  label="Modo"
+                  description="Como os cargos se comportam quando o membro escolhe."
+                  options={REACTION_ROLE_MODES.map((value) => ({
+                    value,
+                    label: MODE_LABEL[value],
+                  }))}
+                  required
+                />
+                <SelectField
+                  name="style"
+                  label="Estilo"
+                  options={REACTION_ROLE_STYLES.map((value) => ({
+                    value,
+                    label: STYLE_LABEL[value],
+                  }))}
+                  required
+                />
+                <TemplateField name="content" label="Mensagem" embedColor={embedColor} required />
+                <ItemsField style={style} />
+              </fieldset>
+            </div>
 
             {readOnly ? (
-              <p className="screen-meta">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
+              <p className="screen-meta px-4">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
             ) : (
-              <SheetFooter className="px-0">
+              <SheetFooter className="border-t-2 border-base-300">
                 <button type="submit" className="btn-goodchat" disabled={saving}>
                   {saving ? 'SALVANDO_' : 'SALVAR'}
                 </button>

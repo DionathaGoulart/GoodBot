@@ -143,30 +143,31 @@ export function RoleSheet({
         </SheetHeader>
 
         <Form {...form}>
-          <form
-            onSubmit={onSubmit}
-            className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4"
-          >
-            <fieldset disabled={readOnly} className="flex flex-col gap-4">
-              <TextField name="name" label="Nome" required />
-              <ColorField name="color" label="Cor" description="Preto = sem cor." />
-              <SwitchField
-                name="hoist"
-                label="Separar na lista"
-                description="Mostra os membros deste cargo num grupo próprio."
-              />
-              <SwitchField
-                name="mentionable"
-                label="Mencionável"
-                description="Deixa qualquer um mencionar o cargo."
-              />
-              <PermissionsField />
-            </fieldset>
+          <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+            {/* Só os campos rolam. Com o rodapé dentro da área rolável o SALVAR
+                sai da tela e só volta no fim do formulário — pior no mobile. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
+              <fieldset disabled={readOnly} className="flex flex-col gap-4">
+                <TextField name="name" label="Nome" required />
+                <ColorField name="color" label="Cor" description="Preto = sem cor." />
+                <SwitchField
+                  name="hoist"
+                  label="Separar na lista"
+                  description="Mostra os membros deste cargo num grupo próprio."
+                />
+                <SwitchField
+                  name="mentionable"
+                  label="Mencionável"
+                  description="Deixa qualquer um mencionar o cargo."
+                />
+                <PermissionsField />
+              </fieldset>
+            </div>
 
             {readOnly ? (
-              <p className="screen-meta">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
+              <p className="screen-meta px-4">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
             ) : (
-              <SheetFooter className="px-0">
+              <SheetFooter className="border-t-2 border-base-300">
                 <button type="submit" className="btn-goodchat" disabled={saving}>
                   {saving ? 'SALVANDO_' : 'SALVAR'}
                 </button>

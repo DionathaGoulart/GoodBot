@@ -112,7 +112,10 @@ function LinesField({
           setText(event.target.value);
           setValue(
             name,
-            event.target.value.split('\n').map((line) => line.trim()).filter(Boolean),
+            event.target.value
+              .split('\n')
+              .map((line) => line.trim())
+              .filter(Boolean),
             { shouldDirty: true, shouldValidate: true },
           );
         }}
@@ -229,7 +232,13 @@ function TypeFields({ type }: { type: AutomodRuleType }) {
   if (type === 'mentions') {
     return (
       <>
-        <NumberField name="config.maxMentions" label="Menções por mensagem" min={1} max={50} required />
+        <NumberField
+          name="config.maxMentions"
+          label="Menções por mensagem"
+          min={1}
+          max={50}
+          required
+        />
         <SwitchField name="config.countRoles" label="Contar menções de cargo" />
         <SwitchField
           name="config.blockEveryone"
@@ -426,7 +435,9 @@ export function RuleSheet({
         toast.error('ERRO', { description: result.message });
         return;
       }
-      toast.success('SALVO', { description: result.message ?? `A regra ${values.name} está no ar.` });
+      toast.success('SALVO', {
+        description: result.message ?? `A regra ${values.name} está no ar.`,
+      });
       onClose(true);
     } finally {
       setSaving(false);
@@ -444,44 +455,45 @@ export function RuleSheet({
         </SheetHeader>
 
         <Form {...form}>
-          <form
-            onSubmit={onSubmit}
-            className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4"
-          >
-            <fieldset disabled={readOnly} className="flex flex-col gap-4">
-              <TextField name="name" label="Nome" required />
-              <SelectField
-                name="type"
-                label="Tipo"
-                options={AUTOMOD_RULE_TYPES.map((value) => ({
-                  value,
-                  label: TYPE_LABEL[value],
-                }))}
-                required
-              />
-              <SwitchField name="enabled" label="Regra ativa" />
-              <TypeFields type={type} />
-              <ActionsField type={type} />
-              <DiscordField
-                name="exemptRoleIds"
-                kind="role"
-                multiple
-                label="Cargos isentos desta regra"
-                placeholder="Nenhum"
-              />
-              <DiscordField
-                name="exemptChannelIds"
-                kind="channel"
-                multiple
-                label="Canais isentos desta regra"
-                placeholder="Nenhum"
-              />
-            </fieldset>
+          <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+            {/* Só os campos rolam. Com o rodapé dentro da área rolável o SALVAR
+                sai da tela e só volta no fim do formulário — pior no mobile. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
+              <fieldset disabled={readOnly} className="flex flex-col gap-4">
+                <TextField name="name" label="Nome" required />
+                <SelectField
+                  name="type"
+                  label="Tipo"
+                  options={AUTOMOD_RULE_TYPES.map((value) => ({
+                    value,
+                    label: TYPE_LABEL[value],
+                  }))}
+                  required
+                />
+                <SwitchField name="enabled" label="Regra ativa" />
+                <TypeFields type={type} />
+                <ActionsField type={type} />
+                <DiscordField
+                  name="exemptRoleIds"
+                  kind="role"
+                  multiple
+                  label="Cargos isentos desta regra"
+                  placeholder="Nenhum"
+                />
+                <DiscordField
+                  name="exemptChannelIds"
+                  kind="channel"
+                  multiple
+                  label="Canais isentos desta regra"
+                  placeholder="Nenhum"
+                />
+              </fieldset>
+            </div>
 
             {readOnly ? (
-              <p className="screen-meta">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
+              <p className="screen-meta px-4">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
             ) : (
-              <SheetFooter className="px-0">
+              <SheetFooter className="border-t-2 border-base-300">
                 <button type="submit" className="btn-goodchat" disabled={saving}>
                   {saving ? 'SALVANDO_' : 'SALVAR'}
                 </button>

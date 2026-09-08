@@ -8,12 +8,7 @@ import { toast } from 'sonner';
 
 import { saveTicketTypeAction } from '@/app/actions/modules';
 import { CHANNEL_TYPES } from '@/components/config/discord-options';
-import {
-  DiscordField,
-  NumberField,
-  TemplateField,
-  TextField,
-} from '@/components/config/fields';
+import { DiscordField, NumberField, TemplateField, TextField } from '@/components/config/fields';
 import { Form } from '@/components/ui/form';
 import {
   Sheet,
@@ -95,50 +90,51 @@ export function TypeSheet({
         </SheetHeader>
 
         <Form {...form}>
-          <form
-            onSubmit={onSubmit}
-            className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4"
-          >
-            <fieldset disabled={readOnly} className="flex flex-col gap-4">
-              <TextField name="name" label="Nome" required />
-              <DiscordField
-                name="categoryId"
-                kind="channel"
-                channelTypes={[CHANNEL_TYPES.category]}
-                label="Categoria"
-                description="Onde o canal do ticket é criado."
-                required
-              />
-              <DiscordField
-                name="supportRoleIds"
-                kind="role"
-                multiple
-                label="Cargos de suporte"
-                description="Quem enxerga e atende os tickets deste tipo."
-              />
-              <TemplateField
-                name="openingMessage"
-                label="Mensagem de abertura"
-                embedColor={embedColor}
-              />
-              <NumberField
-                name="maxOpenPerUser"
-                label="Tickets abertos por membro"
-                description="Vazio herda o limite do módulo."
-                min={1}
-                max={20}
-              />
-              <TextField
-                name="namingPattern"
-                label="Padrão de nome"
-                description="Vazio herda o padrão do módulo. Aceita {number}, {user} e {type}."
-              />
-            </fieldset>
+          <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+            {/* Só os campos rolam. Com o rodapé dentro da área rolável o SALVAR
+                sai da tela e só volta no fim do formulário — pior no mobile. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
+              <fieldset disabled={readOnly} className="flex flex-col gap-4">
+                <TextField name="name" label="Nome" required />
+                <DiscordField
+                  name="categoryId"
+                  kind="channel"
+                  channelTypes={[CHANNEL_TYPES.category]}
+                  label="Categoria"
+                  description="Onde o canal do ticket é criado."
+                  required
+                />
+                <DiscordField
+                  name="supportRoleIds"
+                  kind="role"
+                  multiple
+                  label="Cargos de suporte"
+                  description="Quem enxerga e atende os tickets deste tipo."
+                />
+                <TemplateField
+                  name="openingMessage"
+                  label="Mensagem de abertura"
+                  embedColor={embedColor}
+                />
+                <NumberField
+                  name="maxOpenPerUser"
+                  label="Tickets abertos por membro"
+                  description="Vazio herda o limite do módulo."
+                  min={1}
+                  max={20}
+                />
+                <TextField
+                  name="namingPattern"
+                  label="Padrão de nome"
+                  description="Vazio herda o padrão do módulo. Aceita {number}, {user} e {type}."
+                />
+              </fieldset>
+            </div>
 
             {readOnly ? (
-              <p className="screen-meta">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
+              <p className="screen-meta px-4">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
             ) : (
-              <SheetFooter className="px-0">
+              <SheetFooter className="border-t-2 border-base-300">
                 <button type="submit" className="btn-goodchat" disabled={saving}>
                   {saving ? 'SALVANDO_' : 'SALVAR'}
                 </button>

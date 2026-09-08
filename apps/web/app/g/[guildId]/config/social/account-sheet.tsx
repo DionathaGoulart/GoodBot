@@ -111,7 +111,12 @@ function ChannelField({ readOnly }: { readOnly: boolean }) {
         setError('externalId', { message: result.message });
         return;
       }
-      const { channelId, title, handle: resolvedHandle, avatarUrl: resolvedAvatar } = result.channel;
+      const {
+        channelId,
+        title,
+        handle: resolvedHandle,
+        avatarUrl: resolvedAvatar,
+      } = result.channel;
       const dirty = { shouldDirty: true };
       setValue('externalId', channelId, { ...dirty, shouldValidate: true });
       setValue('displayName', title, dirty);
@@ -301,46 +306,47 @@ export function AccountSheet({
         </SheetHeader>
 
         <Form {...form}>
-          <form
-            onSubmit={onSubmit}
-            className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4"
-          >
-            <fieldset disabled={readOnly} className="flex flex-col gap-4">
-              <ChannelField readOnly={readOnly} />
-              <DiscordField
-                kind="channel"
-                name="discordChannelId"
-                label="Canal do anúncio"
-                required
-              />
-              <DiscordField
-                kind="role"
-                name="mentionRoleId"
-                label="Cargo mencionado"
-                description="Único cargo que a mensagem pode pingar. Deixe vazio para não mencionar ninguém."
-                placeholder="Nenhum cargo"
-              />
-              <KindsField />
-              <TemplateField
-                name="template"
-                label="Mensagem"
-                description="{headline} vira “publicou um vídeo novo”, “publicou um short” ou “está ao vivo”, conforme o caso — troque o tipo no preview para conferir os três. A capa da publicação vira a imagem do embed."
-                embedColor={embedColor}
-                variables={SOCIAL_TEMPLATE_VARIABLES}
-                previewModes={PREVIEW_MODES}
-                required
-              />
-              <SwitchField
-                name="enabled"
-                label="Canal ligado"
-                description="Salvar com isto ligado também zera o contador de falhas."
-              />
-            </fieldset>
+          <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+            {/* Só os campos rolam. Com o rodapé dentro da área rolável o SALVAR
+                sai da tela e só volta no fim do formulário — pior no mobile. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
+              <fieldset disabled={readOnly} className="flex flex-col gap-4">
+                <ChannelField readOnly={readOnly} />
+                <DiscordField
+                  kind="channel"
+                  name="discordChannelId"
+                  label="Canal do anúncio"
+                  required
+                />
+                <DiscordField
+                  kind="role"
+                  name="mentionRoleId"
+                  label="Cargo mencionado"
+                  description="Único cargo que a mensagem pode pingar. Deixe vazio para não mencionar ninguém."
+                  placeholder="Nenhum cargo"
+                />
+                <KindsField />
+                <TemplateField
+                  name="template"
+                  label="Mensagem"
+                  description="{headline} vira “publicou um vídeo novo”, “publicou um short” ou “está ao vivo”, conforme o caso — troque o tipo no preview para conferir os três. A capa da publicação vira a imagem do embed."
+                  embedColor={embedColor}
+                  variables={SOCIAL_TEMPLATE_VARIABLES}
+                  previewModes={PREVIEW_MODES}
+                  required
+                />
+                <SwitchField
+                  name="enabled"
+                  label="Canal ligado"
+                  description="Salvar com isto ligado também zera o contador de falhas."
+                />
+              </fieldset>
+            </div>
 
             {readOnly ? (
-              <p className="screen-meta">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
+              <p className="screen-meta px-4">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
             ) : (
-              <SheetFooter className="px-0">
+              <SheetFooter className="border-t-2 border-base-300">
                 <button type="submit" className="btn-goodchat" disabled={saving}>
                   {saving ? 'SALVANDO_' : 'SALVAR'}
                 </button>

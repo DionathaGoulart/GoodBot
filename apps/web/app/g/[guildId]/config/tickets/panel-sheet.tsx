@@ -33,9 +33,7 @@ function TypesField({ types }: { types: TicketTypeRow[] }) {
   const { formState } = useFormContext<TicketPanelInput>();
 
   if (types.length === 0) {
-    return (
-      <EmptyState description="Cadastre um tipo na aba TIPOS antes de montar o painel." />
-    );
+    return <EmptyState description="Cadastre um tipo na aba TIPOS antes de montar o painel." />;
   }
 
   return (
@@ -142,20 +140,21 @@ export function TicketPanelSheet({
         </SheetHeader>
 
         <Form {...form}>
-          <form
-            onSubmit={onSubmit}
-            className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4"
-          >
-            <fieldset disabled={readOnly} className="flex flex-col gap-4">
-              <DiscordField name="channelId" kind="channel" label="Canal" required />
-              <TemplateField name="content" label="Mensagem" embedColor={embedColor} required />
-              <TypesField types={types} />
-            </fieldset>
+          <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+            {/* Só os campos rolam. Com o rodapé dentro da área rolável o SALVAR
+                sai da tela e só volta no fim do formulário — pior no mobile. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
+              <fieldset disabled={readOnly} className="flex flex-col gap-4">
+                <DiscordField name="channelId" kind="channel" label="Canal" required />
+                <TemplateField name="content" label="Mensagem" embedColor={embedColor} required />
+                <TypesField types={types} />
+              </fieldset>
+            </div>
 
             {readOnly ? (
-              <p className="screen-meta">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
+              <p className="screen-meta px-4">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
             ) : (
-              <SheetFooter className="px-0">
+              <SheetFooter className="border-t-2 border-base-300">
                 <button type="submit" className="btn-goodchat" disabled={saving}>
                   {saving ? 'SALVANDO_' : 'SALVAR'}
                 </button>
