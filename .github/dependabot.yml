@@ -33,3 +33,10 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    groups:
+      # Um PR por action virava cinco PRs numa segunda-feira, e nenhum deles
+      # é testado por um PR: o `ci.yml` não usa as actions do docker e o
+      # `deploy.yml` só roda em push na `main`. Num PR só, o review é uma
+      # leitura de diff e o primeiro deploy depois do merge valida o conjunto.
+      acoes:
+        patterns: ['*']
