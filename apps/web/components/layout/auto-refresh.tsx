@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useOffline } from 'next/offline';
 import { PauseIcon, PlayIcon, RefreshCwIcon } from 'lucide-react';
 
 /**
@@ -11,13 +12,17 @@ import { PauseIcon, PlayIcon, RefreshCwIcon } from 'lucide-react';
  * pessoas, e ainda pediria auth no stream. Um refresh periódico usa exatamente
  * o mesmo caminho de dados que o `F5` já usava.
  *
- * Três coisas seguram o gatilho, e as três importam:
+ * Quatro coisas seguram o gatilho, e as quatro importam:
  *
  * · **aba escondida** — sem isso uma aba esquecida bate na API do bot a noite
  *   inteira, e a API do bot tem rate limit por IP (PRD §7.4);
  * · **formulário sujo** — trocar o conteúdo da tela por baixo de quem está
  *   digitando é pior do que mostrar um dado velho;
- * · **preferência desligada** — quem não quer, fica só com o botão manual.
+ * · **preferência desligada** — quem não quer, fica só com o botão manual;
+ * · **sem rede** — um `router.refresh()` cujo pedido RSC falha faz o Next
+ *   recarregar a página inteira no `location.href`, e essa recarga também
+ *   falha: sobra a tela de erro do browser. Revalidar offline não traz dado
+ *   novo nenhum, então nem tentamos.
  */
 
 /** Telas de configuração quase não mudam sozinhas; o resto muda a toda hora. */
@@ -31,13 +36,29 @@ export function refreshIntervalFor(pathname: string): number {
   return /^\/g\/[^/]+\/config(\/|$)/.test(pathname) ? CONFIG_INTERVAL_MS : LIVE_INTERVAL_MS;
 }
 
+/**
+ * Volta a valer a partir de quanto tempo depois da última revalidação. No
+ * celular `visibilitychange` e `focus` chegam os dois quando a aba volta:
+ * sem isto, uma volta vira duas revalidações coladas.
+ */
+const RESUME_GRACE_MS = 2_000;
+
+/**
+ * `navigator.onLine` só é confiável no negativo — `true` não promete rede,
+ * mas `false` é rede desligada mesmo, e é o caso que importa aqui.
+ */
+export function isOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
 /** A decisão inteira do gatilho, isolada do React para poder ser testada. */
 export function shouldRefresh(state: {
   enabled: boolean;
   hidden: boolean;
   paused: boolean;
+  offline: boolean;
 }): boolean {
-  return state.enabled && !state.hidden && !state.paused;
+  return state.enabled && !state.hidden && !state.paused && !state.offline;
 }
 
 interface AutoRefreshValue {
@@ -141,6 +162,12 @@ export function AutoRefreshProvider({ children }: { children: React.ReactNode })
 
     let timer: ReturnType<typeof setInterval> | undefined;
 
+    const tick = () => {
+      const hidden = document.visibilityState === 'hidden';
+      if (!shouldRefresh({ enabled, paused, hidden, offline: isOffline() })) return;
+      refresh();
+    };
+
     const stop = () => {
       if (timer !== undefined) clearInterval(timer);
       timer = undefined;
@@ -148,30 +175,33 @@ export function AutoRefreshProvider({ children }: { children: React.ReactNode })
 
     const start = () => {
       stop();
-      timer = setInterval(() => {
-        if (document.visibilityState === 'hidden') return;
-        refresh();
-      }, intervalMs);
+      timer = setInterval(tick, intervalMs);
     };
 
-    const onVisibility = () => {
+    /**
+     * Voltar para a aba atualiza na hora: ela ficou parada o tempo todo. Os
+     * três eventos que trazem a aba de volta caem aqui, e o `RESUME_GRACE_MS`
+     * é o que impede que uma volta só dispare três revalidações.
+     */
+    const resume = () => {
       if (document.visibilityState === 'hidden') {
         stop();
         return;
       }
-      // Voltar para a aba atualiza na hora: ela ficou parada o tempo todo.
-      refresh();
+      if (Date.now() - stamp.current >= RESUME_GRACE_MS) tick();
       start();
     };
 
     if (document.visibilityState !== 'hidden') start();
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('focus', onVisibility);
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('focus', resume);
+    window.addEventListener('online', resume);
 
     return () => {
       stop();
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('focus', onVisibility);
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('focus', resume);
+      window.removeEventListener('online', resume);
     };
   }, [enabled, paused, intervalMs, refresh]);
 
@@ -218,6 +248,13 @@ export function elapsedLabel(ms: number): string {
  */
 export function AutoRefreshIndicator() {
   const context = useAutoRefresh();
+  /**
+   * `next/offline`: o próprio router marca offline quando um pedido falha na
+   * rede, não só quando o sistema desliga a interface. Enquanto isso ele
+   * segura os pedidos em vez de recarregar a página — o indicador é o que
+   * conta essa espera para quem está olhando.
+   */
+  const offline = useOffline();
   // `0` no servidor: o indicador só existe depois da hidratação, e assim não
   // há como o HTML do servidor discordar do primeiro render do cliente.
   const now = React.useSyncExternalStore(
@@ -229,16 +266,24 @@ export function AutoRefreshIndicator() {
   if (!context || now === 0) return null;
 
   const label = elapsedLabel(now - context.refreshedAt());
-  const state = !context.enabled ? 'PAUSADO' : context.paused ? 'ESPERANDO' : `HÁ ${label}`;
+  const state = offline
+    ? 'SEM REDE'
+    : !context.enabled
+      ? 'PAUSADO'
+      : context.paused
+        ? 'ESPERANDO'
+        : `HÁ ${label}`;
 
   return (
     <div className="flex items-center gap-1.5">
       <span
         className="screen-meta hidden sm:inline"
         title={
-          context.paused
-            ? 'Formulário com alterações não salvas: o painel não se atualiza sozinho enquanto isso.'
-            : 'Última atualização automática da tela.'
+          offline
+            ? 'Sem conexão: o painel volta a se atualizar sozinho quando a rede voltar.'
+            : context.paused
+              ? 'Formulário com alterações não salvas: o painel não se atualiza sozinho enquanto isso.'
+              : 'Última atualização automática da tela.'
         }
       >
         ATUALIZADO {state}

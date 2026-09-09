@@ -45,6 +45,19 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Pacotes do workspace são consumidos direto do fonte (TypeScript).
   transpilePackages: ['@cobot/shared', '@cobot/db'],
+  experimental: {
+    /**
+     * Sem isto, um pedido RSC que falha na rede vira navegação de página
+     * inteira: o router do Next devolve a própria URL como se fosse um
+     * redirecionamento externo e o browser recarrega no `location.href`
+     * (`fetch-server-response.ts`: "If fetch fails handle it like a mpa
+     * navigation"). No celular isso acontece toda vez que o painel revalida
+     * com o rádio ainda voltando — a recarga também falha e o Chrome mostra
+     * a própria tela de erro, que só o F5 tira. Com `useOffline` o router
+     * espera a conexão voltar e refaz o pedido, sem sair da página.
+     */
+    useOffline: true,
+  },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

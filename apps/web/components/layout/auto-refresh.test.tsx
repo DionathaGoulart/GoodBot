@@ -16,11 +16,20 @@ import {
 
 const refresh = vi.fn();
 let pathname = '/g/1/membros';
+let offline = false;
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh }),
   usePathname: () => pathname,
 }));
+
+vi.mock('next/offline', () => ({ useOffline: () => offline }));
+
+/** O happy-dom não deixa escrever em `navigator.onLine`; este stub deixa. */
+function setOnline(online: boolean): void {
+  offline = !online;
+  Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => online });
+}
 
 /** O happy-dom não deixa escrever em `visibilityState`; este stub deixa. */
 function setVisibility(state: 'visible' | 'hidden'): void {
@@ -39,6 +48,7 @@ beforeEach(() => {
   refresh.mockClear();
   pathname = '/g/1/membros';
   setVisibility('visible');
+  setOnline(true);
   window.localStorage.clear();
   vi.useFakeTimers();
 });
@@ -59,11 +69,13 @@ describe('refreshIntervalFor', () => {
 });
 
 describe('shouldRefresh', () => {
-  it('só dispara com a aba visível, sem pausa e com a preferência ligada', () => {
-    expect(shouldRefresh({ enabled: true, hidden: false, paused: false })).toBe(true);
-    expect(shouldRefresh({ enabled: true, hidden: true, paused: false })).toBe(false);
-    expect(shouldRefresh({ enabled: true, hidden: false, paused: true })).toBe(false);
-    expect(shouldRefresh({ enabled: false, hidden: false, paused: false })).toBe(false);
+  it('só dispara com a aba visível, com rede, sem pausa e com a preferência ligada', () => {
+    const on = { enabled: true, hidden: false, paused: false, offline: false };
+    expect(shouldRefresh(on)).toBe(true);
+    expect(shouldRefresh({ ...on, hidden: true })).toBe(false);
+    expect(shouldRefresh({ ...on, paused: true })).toBe(false);
+    expect(shouldRefresh({ ...on, enabled: false })).toBe(false);
+    expect(shouldRefresh({ ...on, offline: true })).toBe(false);
   });
 });
 
@@ -166,6 +178,53 @@ describe('AutoRefreshProvider', () => {
 
     act(() => void vi.advanceTimersByTime(LIVE_INTERVAL_MS * 3));
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('não revalida sem rede e volta a revalidar quando ela volta', () => {
+    render(
+      <AutoRefreshProvider>
+        <AutoRefreshIndicator />
+      </AutoRefreshProvider>,
+    );
+
+    act(() => {
+      setOnline(false);
+      window.dispatchEvent(new Event('offline'));
+    });
+
+    // Um `router.refresh()` que falha na rede vira recarga da página inteira,
+    // e a recarga também falha: é a tela de erro do browser que o usuário vê.
+    act(() => void vi.advanceTimersByTime(LIVE_INTERVAL_MS * 3));
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.getByText(/SEM REDE/)).toBeInTheDocument();
+
+    act(() => {
+      setOnline(true);
+      window.dispatchEvent(new Event('online'));
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('uma volta para a aba revalida uma vez só, não uma por evento', () => {
+    render(
+      <AutoRefreshProvider>
+        <AutoRefreshIndicator />
+      </AutoRefreshProvider>,
+    );
+
+    act(() => {
+      setVisibility('hidden');
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    act(() => void vi.advanceTimersByTime(LIVE_INTERVAL_MS * 5));
+
+    // O celular manda os dois ao desbloquear; só o primeiro revalida.
+    act(() => {
+      setVisibility('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('usa o intervalo mais lento nas telas de config', () => {
