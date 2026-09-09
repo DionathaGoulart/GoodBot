@@ -152,6 +152,12 @@ export const MEMBER_TEMPLATE_VARIABLES = [
   'ordinal',
 ] as const;
 
+/**
+ * As do agradecimento de impulso. Ficam à parte porque só a mensagem de boost
+ * sabe preencher: `{boostCount}` numa mensagem de entrada nunca teria valor.
+ */
+export const BOOST_TEMPLATE_VARIABLES = ['boostCount', 'boostTier'] as const;
+
 /** As que descrevem uma publicação de rede social (PRD §5.8). */
 export const SOCIAL_TEMPLATE_VARIABLES = [
   'title',
@@ -171,6 +177,7 @@ export const SOCIAL_TEMPLATE_VARIABLES = [
  */
 export const TEMPLATE_VARIABLES = [
   ...MEMBER_TEMPLATE_VARIABLES,
+  ...BOOST_TEMPLATE_VARIABLES,
   ...SOCIAL_TEMPLATE_VARIABLES,
 ] as const;
 export type TemplateVariable = (typeof TEMPLATE_VARIABLES)[number];

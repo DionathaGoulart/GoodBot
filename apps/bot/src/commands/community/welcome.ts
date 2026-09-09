@@ -10,6 +10,7 @@ const KIND_LABEL: Record<WelcomeKind, string> = {
   join: 'entrada',
   leave: 'saída',
   dm: 'DM de entrada',
+  boost: 'agradecimento de impulso',
 };
 
 export default defineCommand({
@@ -29,6 +30,7 @@ export default defineCommand({
               { name: 'entrada', value: 'join' },
               { name: 'saída', value: 'leave' },
               { name: 'DM de entrada', value: 'dm' },
+              { name: 'agradecimento de impulso', value: 'boost' },
             ),
         ),
     ),

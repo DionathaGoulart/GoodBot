@@ -1,4 +1,4 @@
-import { welcomeMemberAdd, welcomeMemberRemove } from './members';
+import { welcomeMemberAdd, welcomeMemberBoost, welcomeMemberRemove } from './members';
 import { reactionRoleAdd, reactionRoleRemove } from './reaction-roles';
 
 import type { EventHandler } from '../../lib/event';
@@ -7,6 +7,7 @@ import type { EventHandler } from '../../lib/event';
 export const communityEvents: readonly EventHandler[] = [
   welcomeMemberAdd,
   welcomeMemberRemove,
+  welcomeMemberBoost,
   reactionRoleAdd,
   reactionRoleRemove,
 ];
