@@ -4,6 +4,7 @@ import { lock, lockdown, unlock } from './lock';
 import poll from './poll';
 import purge from './purge';
 import remind from './remind';
+import say from './say';
 import slowmode from './slowmode';
 import stats from './stats';
 
@@ -23,5 +24,6 @@ export const utilitiesCommands: readonly AnyCommand[] = [
   roleinfo,
   remind,
   poll,
+  say,
   stats,
 ];
