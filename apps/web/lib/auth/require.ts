@@ -32,7 +32,15 @@ export async function resolveGuildSession(
 
   let level = session.level;
   if (isStale(session.checkedAt)) {
-    level = await resolveGuildLevel(session.user.id);
+    // Reconfirmar é melhor esforço: se a API do bot não responde (429 numa
+    // rajada de escrita, deploy, rede), vale o nível que veio na sessão em vez
+    // de derrubar a página inteira com um erro. Quem nunca teve nível segue
+    // em `none` e é barrado logo abaixo.
+    try {
+      level = await resolveGuildLevel(session.user.id);
+    } catch {
+      level = session.level;
+    }
   }
 
   const verdict = checkGuildAccess({ ...session, level }, guildId, minimum);

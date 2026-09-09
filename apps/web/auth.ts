@@ -2,7 +2,7 @@ import NextAuth from 'next-auth';
 import Discord from 'next-auth/providers/discord';
 
 import { env } from '@/lib/env';
-import { isStale, resolveGuildLevel } from '@/lib/auth/resolve';
+import { isStale, resolveGuildLevel, retryAt } from '@/lib/auth/resolve';
 
 import type { AccessLevel } from '@/lib/auth/access';
 
@@ -63,9 +63,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
         if (!userId) return token;
         if (cobot.guildId === config.GUILD_ID && !isStale(cobot.checkedAt)) return token;
 
-        cobot.level = await resolveGuildLevel(userId);
-        cobot.guildId = config.GUILD_ID;
-        cobot.checkedAt = Date.now();
+        // Um `jwt` que lança faz o Auth.js descartar o token inteiro, e o
+        // painel cai em `/login` no meio da sessão. Falar com a API do bot é a
+        // parte que falha: numa rajada de escrita o teto de 60 req/min por IP
+        // devolve 429 (a Vercel sai toda pelo mesmo IP) e a permissão não tem
+        // como ser confirmada. Nesse caso vale o nível que já estava no token.
+        try {
+          cobot.level = await resolveGuildLevel(userId);
+          cobot.guildId = config.GUILD_ID;
+          cobot.checkedAt = Date.now();
+        } catch {
+          // Sem nível anterior desta guild não há o que preservar; segue sem
+          // permissão e tenta de novo na próxima requisição.
+          if (cobot.guildId !== config.GUILD_ID || !cobot.level) return token;
+          cobot.checkedAt = retryAt();
+        }
         return token;
       },
       session({ session, token }) {

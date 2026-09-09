@@ -9,12 +9,7 @@ import { env } from '../env';
 import { internalApi } from '../internal-api';
 import { resolveAccessLevel, type AccessLevel } from './access';
 
-/** Janela de cache da permissão na sessão (PRD §6). */
-export const ACCESS_CHECK_TTL_MS = 15 * 60 * 1000;
-
-export function isStale(checkedAt: number | undefined, now = Date.now()): boolean {
-  return !checkedAt || now - checkedAt > ACCESS_CHECK_TTL_MS;
-}
+export { ACCESS_CHECK_TTL_MS, isStale, retryAt } from './access';
 
 /**
  * Pergunta ao bot (cache de membros e cargos ao vivo) e ao banco (cargos

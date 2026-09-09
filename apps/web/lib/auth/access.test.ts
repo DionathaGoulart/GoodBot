@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkGuildAccess, hasAccess, resolveAccessLevel } from './access';
+import {
+  ACCESS_CHECK_TTL_MS,
+  ACCESS_RETRY_DELAY_MS,
+  checkGuildAccess,
+  hasAccess,
+  isStale,
+  resolveAccessLevel,
+  retryAt,
+} from './access';
 
 const GUILD = '111111111111111111';
 const EVERYONE = GUILD; // o cargo `@everyone` tem o id da guild
@@ -109,5 +117,37 @@ describe('checkGuildAccess', () => {
   it('nega quando o nível não alcança', () => {
     expect(checkGuildAccess(session, GUILD, 'admin')).toBe('denied');
     expect(checkGuildAccess({ ...session, level: 'none' }, GUILD, 'mod')).toBe('denied');
+  });
+});
+
+describe('isStale', () => {
+  const now = 1_700_000_000_000;
+
+  it('sem checagem anterior está velho', () => {
+    expect(isStale(undefined, now)).toBe(true);
+    expect(isStale(0, now)).toBe(true);
+  });
+
+  it('dentro da janela está fresco', () => {
+    expect(isStale(now, now)).toBe(false);
+    expect(isStale(now - ACCESS_CHECK_TTL_MS, now)).toBe(false);
+  });
+
+  it('passou da janela está velho', () => {
+    expect(isStale(now - ACCESS_CHECK_TTL_MS - 1, now)).toBe(true);
+  });
+});
+
+describe('retryAt', () => {
+  const now = 1_700_000_000_000;
+
+  it('segura a permissão por mais um minuto e não além', () => {
+    const checkedAt = retryAt(now);
+    expect(isStale(checkedAt, now + ACCESS_RETRY_DELAY_MS)).toBe(false);
+    expect(isStale(checkedAt, now + ACCESS_RETRY_DELAY_MS + 1)).toBe(true);
+  });
+
+  it('não revive uma permissão que já estava velha', () => {
+    expect(isStale(retryAt(now), now)).toBe(false);
   });
 });

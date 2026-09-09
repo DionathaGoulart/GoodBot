@@ -9,6 +9,30 @@ export type AccessLevel = (typeof ACCESS_LEVELS)[number];
 const ADMINISTRATOR = 1n << 3n;
 const MANAGE_GUILD = 1n << 5n;
 
+/** Janela de cache da permissão na sessão (PRD §6). */
+export const ACCESS_CHECK_TTL_MS = 15 * 60 * 1000;
+
+/**
+ * Quanto esperar antes de repetir uma checagem que falhou. Sem isto, uma API
+ * do bot fora do ar faz cada requisição do painel tentar de novo, e o teto de
+ * 60 req/min por IP nunca se recupera — a Vercel sai toda pelo mesmo IP.
+ */
+export const ACCESS_RETRY_DELAY_MS = 60 * 1000;
+
+export function isStale(checkedAt: number | undefined, now = Date.now()): boolean {
+  return !checkedAt || now - checkedAt > ACCESS_CHECK_TTL_MS;
+}
+
+/**
+ * `checkedAt` que mantém a permissão válida por mais `ACCESS_RETRY_DELAY_MS` e
+ * só então volta a ser recarregada. Usado quando a checagem com o bot falhou e
+ * o nível anterior foi preservado: sem isso a sessão tentaria de novo a cada
+ * requisição e nunca sairia do 429.
+ */
+export function retryAt(now = Date.now()): number {
+  return now - ACCESS_CHECK_TTL_MS + ACCESS_RETRY_DELAY_MS;
+}
+
 export function rankOf(level: AccessLevel): number {
   return ACCESS_LEVELS.indexOf(level);
 }
