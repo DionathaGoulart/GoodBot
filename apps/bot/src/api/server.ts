@@ -12,6 +12,8 @@ import { withGuild } from './middleware/guild';
 import {
   IP_LIMIT_PER_MINUTE,
   ROUTE_LIMIT_PER_MINUTE,
+  TRUSTED_IP_LIMIT_PER_MINUTE,
+  TRUSTED_ROUTE_LIMIT_PER_MINUTE,
   createRateLimiter,
   rateLimit,
 } from './middleware/rate-limit';
@@ -95,9 +97,14 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
 
   const ipLimiter = createRateLimiter({ limit: IP_LIMIT_PER_MINUTE });
   const routeLimiter = createRateLimiter({ limit: ROUTE_LIMIT_PER_MINUTE });
+  const trustedIpLimiter = createRateLimiter({ limit: TRUSTED_IP_LIMIT_PER_MINUTE });
+  const trustedRouteLimiter = createRateLimiter({ limit: TRUSTED_ROUTE_LIMIT_PER_MINUTE });
 
   app.use('*', requestId());
-  app.use('*', rateLimit({ ipLimiter, routeLimiter }));
+  app.use(
+    '*',
+    rateLimit({ ipLimiter, routeLimiter, trustedIpLimiter, trustedRouteLimiter, token }),
+  );
   const tooLarge = (c: Context) =>
     c.json(apiError('BODY_TOO_LARGE', 'Corpo da requisição grande demais.'), 413);
   const standardBody = bodyLimit({ maxSize: MAX_BODY_BYTES, onError: tooLarge });

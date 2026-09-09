@@ -3,12 +3,31 @@ import { getConnInfo } from '@hono/node-server/conninfo';
 import { createMiddleware } from 'hono/factory';
 
 import { ApiHttpError } from '../errors';
+import { isAuthorized } from './auth';
 
 import type { ApiEnv } from '../context';
 
-/** Teto por IP e por rota (PRD §7.3). */
+/** Teto por IP e por rota para quem chega sem token (PRD §7.3). */
 export const IP_LIMIT_PER_MINUTE = 60;
 export const ROUTE_LIMIT_PER_MINUTE = 100;
+
+/**
+ * Teto de quem apresenta o `INTERNAL_API_TOKEN`. Bem mais alto porque o balde
+ * apertado existe contra scanner e flood anônimo, e o painel não é nem uma
+ * coisa nem outra: ele roda na Vercel e **sai todo por um punhado de IPs**, de
+ * modo que o teto por IP contava o painel inteiro como um cliente só.
+ *
+ * O efeito era o painel se estrangular sozinho. Uma tela que reordena cargos
+ * gasta ~4 chamadas por clique (a escrita, mais o `member` e o `roles` que a
+ * revalidação refaz), então bastava um punhado de cliques por minuto para o
+ * teto de 60 devolver 429 no meio do trabalho de quem estava autenticado.
+ *
+ * Quem tem o token já pode fazer tudo que a API oferece; segurá-lo em 60/min
+ * não protege de nada, só atrapalha o uso legítimo. A defesa contra vazamento
+ * do token é rotacioná-lo, não racioná-lo.
+ */
+export const TRUSTED_IP_LIMIT_PER_MINUTE = 600;
+export const TRUSTED_ROUTE_LIMIT_PER_MINUTE = 600;
 
 /**
  * Teto de mensagens escritas pelo painel numa guild (PRD §7.4). Bem abaixo
@@ -98,9 +117,22 @@ export function routeKey(method: string, path: string): string {
 export interface RateLimitMiddlewareOptions {
   ipLimiter: RateLimiter;
   routeLimiter: RateLimiter;
+  /**
+   * Baldes de quem apresenta o token. Opcionais para o middleware seguir
+   * montável sem eles (testes), e nesse caso todo mundo cai no balde apertado.
+   */
+  trustedIpLimiter?: RateLimiter;
+  trustedRouteLimiter?: RateLimiter;
+  token?: string;
 }
 
-export function rateLimit({ ipLimiter, routeLimiter }: RateLimitMiddlewareOptions) {
+export function rateLimit({
+  ipLimiter,
+  routeLimiter,
+  trustedIpLimiter,
+  trustedRouteLimiter,
+  token,
+}: RateLimitMiddlewareOptions) {
   return createMiddleware<ApiEnv>(async (c, next) => {
     let remote = 'local';
     try {
@@ -110,10 +142,21 @@ export function rateLimit({ ipLimiter, routeLimiter }: RateLimitMiddlewareOption
     }
     const ip = clientIp(c.req.header('x-forwarded-for'), remote);
 
-    const byIp = ipLimiter.hit(ip);
+    // Este middleware continua vindo **antes** da auth, para que uma inundação
+    // sem token custe o mínimo. Conferir o Bearer aqui é só um SHA-256, e é o
+    // que separa o painel autenticado do tráfego anônimo — sem isso os dois
+    // dividem o mesmo balde por IP e o painel se estrangula sozinho.
+    const trusted =
+      trustedIpLimiter !== undefined &&
+      trustedRouteLimiter !== undefined &&
+      token !== undefined &&
+      isAuthorized(c.req.header('authorization'), token);
+
+    const byIp = (trusted ? trustedIpLimiter : ipLimiter).hit(ip);
     if (!byIp.allowed) throw tooMany(byIp.retryAfter);
 
-    const byRoute = routeLimiter.hit(routeKey(c.req.method, new URL(c.req.url).pathname));
+    const routeK = routeKey(c.req.method, new URL(c.req.url).pathname);
+    const byRoute = (trusted ? trustedRouteLimiter : routeLimiter).hit(routeK);
     if (!byRoute.allowed) throw tooMany(byRoute.retryAfter);
 
     await next();

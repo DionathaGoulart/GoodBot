@@ -273,6 +273,34 @@ describe('rate limit', () => {
     expect(blocked.status).toBe(429);
     expect(blocked.headers.get('retry-after')).toBeTruthy();
   });
+
+  // O painel roda na Vercel e sai todo por um punhado de IPs: no balde
+  // apertado ele contava como um cliente só e se estrangulava sozinho.
+  it('quem manda o token tem balde próprio e passa das 60', async () => {
+    const { app } = makeApp();
+    const request = () =>
+      app.request('/health', {
+        headers: { ...auth, 'x-forwarded-for': '203.0.113.8' },
+      });
+
+    for (let i = 0; i < 120; i += 1) {
+      expect((await request()).status).toBe(200);
+    }
+  });
+
+  // O balde largo é do token, não do IP: um token errado não compra folga.
+  it('token errado continua no balde apertado', async () => {
+    const { app } = makeApp();
+    const request = () =>
+      app.request('/health', {
+        headers: { authorization: 'Bearer nao-e-o-token', 'x-forwarded-for': '203.0.113.9' },
+      });
+
+    for (let i = 0; i < 60; i += 1) {
+      expect((await request()).status).toBe(200);
+    }
+    expect((await request()).status).toBe(429);
+  });
 });
 
 describe('rotas desconhecidas', () => {
