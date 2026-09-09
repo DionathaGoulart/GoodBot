@@ -194,7 +194,17 @@ export function DiscordPicker({
   const empty = value.length === 0;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    /**
+     * `modal` não é enfeite: o picker vive dentro de `Sheet`s, e o `Sheet` é
+     * um `Dialog` do Radix, que monta um `RemoveScroll` liberando só o próprio
+     * conteúdo (`shards: [contentRef]`). O `PopoverContent` sai num portal no
+     * `body`, fora desse conteúdo — então o `react-remove-scroll` cancelava
+     * todo `touchmove`/`wheel` dentro da lista: no celular ela simplesmente
+     * não rolava, e quem tinha mais canais do que cabe na altura máxima via
+     * só os primeiros. Com `modal` o popover monta o próprio lock, que passa
+     * a ser o do topo da pilha e libera a rolagem dentro dele.
+     */
+    <Popover modal open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         id={id}
         type="button"
@@ -250,7 +260,26 @@ export function DiscordPicker({
             onValueChange={setQuery}
             placeholder={kind === 'channel' ? 'Buscar canal…' : 'Buscar cargo…'}
           />
-          <CommandList>
+          <CommandList
+            /**
+             * Inline porque o `cn` do projeto só concatena: um `max-h-*` aqui
+             * conviveria com o `max-h-72` do `CommandList` e quem decidiria
+             * seria a ordem do CSS gerado, não esta linha. A altura útil é a
+             * que o Radix mede entre o gatilho e a borda da tela, menos o
+             * campo de busca e o respiro da moldura — assim a lista usa a tela
+             * inteira antes de precisar rolar.
+             *
+             * `scrollbarWidth` desfaz o `no-scrollbar` do componente pelo
+             * mesmo motivo (e porque o Chrome ignora `::-webkit-scrollbar`
+             * quando a propriedade padrão está definida): uma lista que rola
+             * sem nada indicando isso é uma lista que parece incompleta.
+             */
+            style={{
+              maxHeight:
+                'min(60vh, calc(var(--radix-popover-content-available-height, 22rem) - 4.5rem))',
+              scrollbarWidth: 'thin',
+            }}
+          >
             {loading ? <p className="screen-meta terminal-cursor p-3">CARREGANDO</p> : null}
             {error ? <p className="p-3 text-[10px] uppercase tracking-[0.2em] text-error-text">! {error}</p> : null}
             {!loading && !error && visible.length === 0 ? (
