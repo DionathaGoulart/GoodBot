@@ -2,7 +2,7 @@ import { MAX_MESSAGE_CONTENT_LENGTH } from '@cobot/shared';
 import { PermissionFlagsBits } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 
-import say, { mentionOptions, preview } from './say';
+import say, { mentionOptions, pinOutcome, preview } from './say';
 
 import type { APIApplicationCommandOption } from 'discord.js';
 
@@ -52,5 +52,24 @@ describe('preview', () => {
     const short = preview(long);
     expect(short.endsWith('…')).toBe(true);
     expect(short.length).toBeLessThan(long.length);
+  });
+});
+
+describe('pinOutcome', () => {
+  it('no chat de canal de voz nem culpa o limite de fixadas', () => {
+    const outcome = pinOutcome(true, false);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.detail).toContain('canal de voz');
+    expect(outcome.detail).not.toContain('50');
+  });
+
+  it('fixou: diz que fixou', () => {
+    expect(pinOutcome(false, true)).toEqual({ ok: true, detail: 'Fixada no canal.' });
+  });
+
+  it('falhou num canal de texto: aponta o limite de fixadas', () => {
+    const outcome = pinOutcome(false, false);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.detail).toContain('50');
   });
 });

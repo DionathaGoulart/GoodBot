@@ -17,6 +17,7 @@ import { logEmbed } from '../../lib/log-embeds';
 import type { CommandContext } from '../../lib/command';
 import type {
   GuildTextBasedChannel,
+  Message,
   MessageMentionOptions,
   MessageMentionTypes,
   ModalSubmitInteraction,
@@ -129,6 +130,35 @@ export function preview(content: string): string {
     : content;
 }
 
+/**
+ * O resultado de fixar, já com a frase que vai para quem mandou. O chat de um
+ * canal de voz não tem mensagem fixada no Discord: dizer "confira o limite de
+ * 50" ali mandaria a pessoa procurar um problema que não existe.
+ */
+export function pinOutcome(
+  voiceChat: boolean,
+  ok: boolean,
+): { ok: boolean; detail: string } {
+  if (voiceChat) {
+    return { ok: false, detail: 'Não dá para fixar: o chat de canal de voz do Discord não tem mensagem fixada.' };
+  }
+  return ok
+    ? { ok: true, detail: 'Fixada no canal.' }
+    : { ok: false, detail: 'Não consegui fixar: confira o limite de 50 fixadas do canal.' };
+}
+
+async function pin(
+  message: Message,
+  channel: GuildTextBasedChannel,
+): Promise<{ ok: boolean; detail: string }> {
+  if (channel.isVoiceBased()) return pinOutcome(true, false);
+  const ok = await message
+    .pin()
+    .then(() => true)
+    .catch(() => false);
+  return pinOutcome(false, ok);
+}
+
 async function publish(
   ctx: CommandContext,
   submit: ModalSubmitInteraction,
@@ -150,18 +180,13 @@ async function publish(
     ),
   });
 
-  // Fixar é o passo que pode falhar sozinho (o canal já tem 50 fixadas, o bot
-  // perdeu a permissão). A mensagem já saiu, então isso vira aviso, não erro.
-  const pinned = shouldPin
-    ? await sent
-        .pin()
-        .then(() => true)
-        .catch(() => false)
-    : null;
+  // Fixar é o passo que pode falhar sozinho, e a mensagem já saiu: isso vira
+  // aviso, não erro. O chat de canal de voz nem tenta — o Discord não tem
+  // mensagem fixada ali, então a chamada só voltaria com um erro opaco.
+  const pinned = shouldPin ? await pin(sent, channel) : null;
 
   const lines = [`Publicada em <#${channel.id}>. [Ver mensagem](${sent.url})`];
-  if (pinned === true) lines.push('Fixada no canal.');
-  if (pinned === false) lines.push('Não consegui fixar: confira o limite de 50 fixadas do canal.');
+  if (pinned) lines.push(pinned.detail);
 
   await submit.editReply({
     embeds: [
@@ -182,7 +207,7 @@ async function publish(
         fields: [
           { name: 'Moderador', value: `<@${ctx.member.id}>\n${code(ctx.member.id)}`, inline: true },
           { name: 'Canal', value: `<#${channel.id}>`, inline: true },
-          { name: 'Fixada', value: pinned === true ? 'sim' : 'não', inline: true },
+          { name: 'Fixada', value: pinned?.ok ? 'sim' : 'não', inline: true },
           { name: 'Conteúdo', value: preview(content) },
         ],
         footer: `MENSAGEM: ${sent.id}`,
