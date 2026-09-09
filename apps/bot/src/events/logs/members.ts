@@ -3,7 +3,17 @@ import { AuditLogEvent, Events, time, TimestampStyles } from 'discord.js';
 
 import { findAuditEntry } from '../../lib/audit-log';
 import { defineEvent } from '../../lib/event';
-import { executorField, logEmbed, logFooter, roleMentions, userValue } from '../../lib/log-embeds';
+import {
+  actor,
+  executorField,
+  logEmbed,
+  logFooter,
+  reasonSuffix,
+  roleMentions,
+  sentence,
+  userMention,
+  userValue,
+} from '../../lib/log-embeds';
 import { fieldValue } from '../../services/logs';
 
 import type { BotContext } from '../../lib/command';
@@ -26,6 +36,10 @@ export const guildMemberAdd = defineEvent(Events.GuildMemberAdd, async (ctx, mem
   const embed = logEmbed({
     title: 'Membro entrou',
     tone: 'create',
+    description: sentence(
+      `${userMention(member.user)} entrou no servidor`,
+      `agora são ${member.guild.memberCount} membros`,
+    ),
     fields: [
       { name: 'Usuário', value: userValue(member.user), inline: true },
       { name: 'Membros', value: String(member.guild.memberCount), inline: true },
@@ -65,6 +79,10 @@ export const guildMemberRemove = defineEvent(Events.GuildMemberRemove, async (ct
   const embed = logEmbed({
     title: 'Membro saiu',
     tone: 'delete',
+    description: sentence(
+      `${userMention(member.user)} saiu do servidor`,
+      `restam ${member.guild.memberCount} membros`,
+    ),
     fields,
     footer: logFooter(`USUÁRIO: ${member.id}`),
   });
@@ -96,6 +114,12 @@ export const guildMemberUpdate = defineEvent(
         logEmbed({
           title: 'Apelido alterado',
           tone: 'update',
+          description: sentence(
+            `${actor(audit.executor)} mudou o apelido de ${userMention(newMember.user)}`,
+            `de "${oldMember.nickname ?? newMember.user.username}"`,
+            `para "${newMember.nickname ?? newMember.user.username}"`,
+            reasonSuffix(audit.reason),
+          ),
           fields: [
             { name: 'Usuário', value: userValue(newMember.user), inline: true },
             ...executorField(audit.executor, audit.reason),
@@ -130,6 +154,16 @@ export const guildMemberUpdate = defineEvent(
         logEmbed({
           title: 'Cargos alterados',
           tone: 'update',
+          description: sentence(
+            actor(audit.executor),
+            added.length > 0 && `deu ${roleMentions(added)}`,
+            added.length > 0 && removed.length > 0 && 'e',
+            removed.length > 0 && `tirou ${roleMentions(removed)}`,
+            added.length > 0 && removed.length === 0
+              ? `a ${userMention(newMember.user)}`
+              : `de ${userMention(newMember.user)}`,
+            reasonSuffix(audit.reason),
+          ),
           fields,
           footer: logFooter(`USUÁRIO: ${newMember.id}`),
         }),
@@ -141,6 +175,9 @@ export const guildMemberUpdate = defineEvent(
         logEmbed({
           title: 'Avatar do servidor alterado',
           tone: 'update',
+          description: sentence(
+            `${userMention(newMember.user)} trocou o próprio avatar neste servidor`,
+          ),
           fields: [{ name: 'Usuário', value: userValue(newMember.user), inline: true }],
           footer: logFooter(`USUÁRIO: ${newMember.id}`),
         }),
@@ -171,6 +208,11 @@ export const guildBanAdd = defineEvent(Events.GuildBanAdd, async (ctx, ban) => {
   const embed = logEmbed({
     title: 'Usuário banido (fora do bot)',
     tone: 'delete',
+    description: sentence(
+      `${actor(audit.executor)} baniu ${userMention(ban.user)}`,
+      'direto pelo Discord, sem passar pelo bot',
+      reasonSuffix(audit.reason ?? ban.reason),
+    ),
     fields: [
       { name: 'Usuário', value: userValue(ban.user), inline: true },
       ...executorField(audit.executor, audit.reason ?? ban.reason),
@@ -195,6 +237,11 @@ export const guildBanRemove = defineEvent(Events.GuildBanRemove, async (ctx, ban
   const embed = logEmbed({
     title: 'Usuário desbanido (fora do bot)',
     tone: 'create',
+    description: sentence(
+      `${actor(audit.executor)} desbaniu ${userMention(ban.user)}`,
+      'direto pelo Discord, sem passar pelo bot',
+      reasonSuffix(audit.reason),
+    ),
     fields: [
       { name: 'Usuário', value: userValue(ban.user), inline: true },
       ...executorField(audit.executor, audit.reason),

@@ -1,7 +1,16 @@
 import { Events } from 'discord.js';
 
 import { defineEvent } from '../../lib/event';
-import { channelValue, logEmbed, logFooter, userIdValue, userValue } from '../../lib/log-embeds';
+import {
+  channelMention,
+  channelValue,
+  logEmbed,
+  logFooter,
+  sentence,
+  userIdValue,
+  userMention,
+  userValue,
+} from '../../lib/log-embeds';
 
 import type { APIEmbedField, VoiceState } from 'discord.js';
 
@@ -20,11 +29,13 @@ export const voiceStateUpdate = defineEvent(
       value: member ? userValue(member.user) : userIdValue(userId),
       inline: true,
     };
+    // A frase precisa do mesmo sujeito do field, mas só da menção.
+    const who = member ? userMention(member.user) : userMention({ id: userId });
     const roleIds = member ? [...member.roles.cache.keys()] : undefined;
     // O canal relevante para os ignorados é o de destino (ou o de origem, na saída).
     const contextChannel = newState.channelId ?? oldState.channelId;
 
-    const embed = voiceEmbed(oldState, newState, userField);
+    const embed = voiceEmbed(oldState, newState, userField, who);
     if (!embed) return;
 
     await ctx.logs.emit(
@@ -40,6 +51,7 @@ function voiceEmbed(
   oldState: VoiceState,
   newState: VoiceState,
   userField: APIEmbedField,
+  who: string,
 ): ReturnType<typeof logEmbed> | null {
   const footer = logFooter(`USUÁRIO: ${newState.id}`);
 
@@ -47,6 +59,7 @@ function voiceEmbed(
     return logEmbed({
       title: 'Entrou em call',
       tone: 'create',
+      description: sentence(`${who} entrou em ${channelMention(newState.channelId)}`),
       fields: [
         userField,
         {
@@ -63,6 +76,7 @@ function voiceEmbed(
     return logEmbed({
       title: 'Saiu da call',
       tone: 'delete',
+      description: sentence(`${who} saiu de ${channelMention(oldState.channelId)}`),
       fields: [
         userField,
         {
@@ -79,6 +93,10 @@ function voiceEmbed(
     return logEmbed({
       title: 'Mudou de call',
       tone: 'update',
+      description: sentence(
+        `${who} saiu de ${channelMention(oldState.channelId)}`,
+        `e entrou em ${channelMention(newState.channelId)}`,
+      ),
       fields: [
         userField,
         {
@@ -111,6 +129,10 @@ function voiceEmbed(
   return logEmbed({
     title: 'Estado de voz alterado',
     tone: 'update',
+    description: sentence(
+      `${who} foi ${changes.join(' e ')}`,
+      newState.channelId ? `em ${channelMention(newState.channelId)}` : null,
+    ),
     fields: [
       userField,
       ...(newState.channelId

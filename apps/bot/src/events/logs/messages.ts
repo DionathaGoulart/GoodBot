@@ -1,7 +1,16 @@
 import { AttachmentBuilder, Events } from 'discord.js';
 
 import { defineEvent } from '../../lib/event';
-import { channelValue, logEmbed, logFooter, userIdValue, userValue } from '../../lib/log-embeds';
+import {
+  channelMention,
+  channelValue,
+  logEmbed,
+  logFooter,
+  sentence,
+  userIdValue,
+  userMention,
+  userValue,
+} from '../../lib/log-embeds';
 import { fieldValue, formatDiff, quoteBlock } from '../../services/logs';
 
 import type { BotContext } from '../../lib/command';
@@ -67,7 +76,12 @@ export const messageUpdate = defineEvent(
     const embed = logEmbed({
       title: 'Mensagem editada',
       tone: 'update',
-      description: `[ir para a mensagem](${messageLink(guildId, message.channelId, message.id)})`,
+      description: [
+        sentence(
+          `${userMention(message.author)} editou uma mensagem em ${channelMention(message.channelId)}`,
+        ),
+        `[ir para a mensagem](${messageLink(guildId, message.channelId, message.id)})`,
+      ].join('\n'),
       fields: [
         { name: 'Autor', value: userValue(message.author), inline: true },
         { name: 'Canal', value: channelValue(message.channelId), inline: true },
@@ -121,6 +135,14 @@ export const messageDelete = defineEvent(Events.MessageDelete, async (ctx, messa
   const embed = logEmbed({
     title: 'Mensagem apagada',
     tone: 'delete',
+    // Quem apagou não vem no evento: pode ter sido o próprio autor ou um mod,
+    // e o audit log só registra o segundo caso. A frase fica na voz passiva em
+    // vez de acusar a pessoa errada.
+    description: sentence(
+      'Uma mensagem de',
+      authorId ? userMention({ id: authorId }) : 'um usuário desconhecido',
+      `foi apagada em ${channelMention(message.channelId)}`,
+    ),
     fields,
     footer: logFooter(`MENSAGEM: ${message.id}`),
   });
@@ -149,6 +171,10 @@ export const messageDeleteBulk = defineEvent(
     const embed = logEmbed({
       title: 'Mensagens apagadas em massa',
       tone: 'delete',
+      description: sentence(
+        `${messages.size} mensagens foram apagadas de uma vez em ${channelMention(channel.id)}`,
+        config.bulkDeleteAttachFile ? 'o conteúdo vai no arquivo anexo' : null,
+      ),
       fields: [
         { name: 'Quantidade', value: String(messages.size), inline: true },
         { name: 'Canal', value: channelValue(channel.id, channel.name), inline: true },

@@ -2,7 +2,18 @@ import { AuditLogEvent, ChannelType, Events } from 'discord.js';
 
 import { findAuditEntry } from '../../lib/audit-log';
 import { defineEvent } from '../../lib/event';
-import { channelValue, executorField, logEmbed, logFooter, roleValue } from '../../lib/log-embeds';
+import {
+  actor,
+  channelMention,
+  channelValue,
+  executorField,
+  logEmbed,
+  logFooter,
+  reasonSuffix,
+  roleMention,
+  roleValue,
+  sentence,
+} from '../../lib/log-embeds';
 import { fieldValue } from '../../services/logs';
 
 import type { BotContext } from '../../lib/command';
@@ -44,6 +55,15 @@ async function emitServer(
   await ctx.logs.emit(guild.id, 'server', { embeds: [embed] });
 }
 
+/**
+ * Os nomes dos campos que mudaram, em minúscula, para caber na frase de
+ * resumo: "editou #geral (nome, tópico)". Assim o card diz o que mudou antes
+ * de a pessoa precisar ler os fields.
+ */
+function changeLabels(fields: readonly APIEmbedField[]): string {
+  return fields.map((field) => field.name.toLowerCase()).join(', ');
+}
+
 // ── canais ──────────────────────────────────────────────────────────────────
 
 export const channelCreate = defineEvent(Events.ChannelCreate, async (ctx, channel) => {
@@ -62,6 +82,11 @@ export const channelCreate = defineEvent(Events.ChannelCreate, async (ctx, chann
     logEmbed({
       title: 'Canal criado',
       tone: 'create',
+      description: sentence(
+        `${actor(audit.executor)} criou o canal de ${channelTypeLabel(channel.type)}`,
+        channelMention(channel.id),
+        reasonSuffix(audit.reason),
+      ),
       fields: [
         { name: 'Canal', value: channelValue(channel.id, channel.name), inline: true },
         { name: 'Tipo', value: channelTypeLabel(channel.type), inline: true },
@@ -91,6 +116,12 @@ export const channelDelete = defineEvent(Events.ChannelDelete, async (ctx, chann
     logEmbed({
       title: 'Canal apagado',
       tone: 'delete',
+      // A menção viraria "#deleted-channel": o nome é a única pista que sobra.
+      description: sentence(
+        `${actor(audit.executor)} apagou o canal de ${channelTypeLabel(channel.type)}`,
+        `#${channel.name}`,
+        reasonSuffix(audit.reason),
+      ),
       fields: [
         { name: 'Canal', value: fieldValue(`#${channel.name}`), inline: true },
         { name: 'Tipo', value: channelTypeLabel(channel.type), inline: true },
@@ -121,6 +152,11 @@ export const channelUpdate = defineEvent(Events.ChannelUpdate, async (ctx, oldCh
     logEmbed({
       title: 'Canal editado',
       tone: 'update',
+      description: sentence(
+        `${actor(audit.executor)} editou ${channelMention(channel.id)}`,
+        `(${changeLabels(changes)})`,
+        reasonSuffix(audit.reason),
+      ),
       fields: [
         { name: 'Canal', value: channelValue(channel.id, channel.name), inline: true },
         ...executorField(audit.executor, audit.reason),
@@ -189,6 +225,10 @@ export const roleCreate = defineEvent(Events.GuildRoleCreate, async (ctx, role) 
     logEmbed({
       title: 'Cargo criado',
       tone: 'create',
+      description: sentence(
+        `${actor(audit.executor)} criou o cargo ${roleMention(role.id)}`,
+        reasonSuffix(audit.reason),
+      ),
       fields: [
         { name: 'Cargo', value: roleValue(role.id, role.name), inline: true },
         ...executorField(audit.executor, audit.reason),
@@ -214,6 +254,11 @@ export const roleDelete = defineEvent(Events.GuildRoleDelete, async (ctx, role) 
     logEmbed({
       title: 'Cargo apagado',
       tone: 'delete',
+      // Cargo apagado não tem menção que resolva: sobra o nome.
+      description: sentence(
+        `${actor(audit.executor)} apagou o cargo ${role.name}`,
+        reasonSuffix(audit.reason),
+      ),
       fields: [
         { name: 'Cargo', value: fieldValue(role.name), inline: true },
         ...executorField(audit.executor, audit.reason),
@@ -242,6 +287,11 @@ export const roleUpdate = defineEvent(Events.GuildRoleUpdate, async (ctx, oldRol
     logEmbed({
       title: 'Cargo editado',
       tone: 'update',
+      description: sentence(
+        `${actor(audit.executor)} editou o cargo ${roleMention(role.id)}`,
+        `(${changeLabels(changes)})`,
+        reasonSuffix(audit.reason),
+      ),
       fields: [
         { name: 'Cargo', value: roleValue(role.id, role.name), inline: true },
         ...executorField(audit.executor, audit.reason),
@@ -299,6 +349,7 @@ export const emojiCreate = defineEvent(Events.GuildEmojiCreate, async (ctx, emoj
     logEmbed({
       title: 'Emoji criado',
       tone: 'create',
+      description: sentence(`O emoji :${emoji.name}: foi adicionado ao servidor`),
       fields: [
         { name: 'Emoji', value: `${emoji.toString()} ${fieldValue(emoji.name)}`, inline: true },
       ],
@@ -317,6 +368,7 @@ export const emojiDelete = defineEvent(Events.GuildEmojiDelete, async (ctx, emoj
     logEmbed({
       title: 'Emoji apagado',
       tone: 'delete',
+      description: sentence(`O emoji :${emoji.name}: foi removido do servidor`),
       fields: [{ name: 'Emoji', value: fieldValue(emoji.name), inline: true }],
       footer: logFooter(`EMOJI: ${emoji.id}`),
     }),
@@ -358,6 +410,11 @@ export const guildUpdate = defineEvent(Events.GuildUpdate, async (ctx, oldGuild,
     logEmbed({
       title: 'Servidor editado',
       tone: 'update',
+      description: sentence(
+        `${actor(audit.executor)} mudou as configurações do servidor`,
+        `(${changeLabels(fields)})`,
+        reasonSuffix(audit.reason),
+      ),
       fields: [...executorField(audit.executor, audit.reason), ...fields],
       footer: logFooter(`SERVIDOR: ${guild.id}`),
     }),

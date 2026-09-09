@@ -1,6 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 
-import { code, formatTitle, STATUS_COLORS } from './embeds';
+import { formatTitle, STATUS_COLORS } from './embeds';
 
 import type { APIEmbedField } from 'discord.js';
 
@@ -26,6 +26,11 @@ export type LogTone = keyof typeof LOG_COLORS;
 export interface LogEmbedInput {
   title: string;
   tone: LogTone;
+  /**
+   * A frase que resume o evento em linguagem de gente: quem fez, o quê, onde.
+   * É a primeira coisa lida no card, e na maioria dos logs já basta — os
+   * fields abaixo ficam para o detalhe de quem quiser conferir.
+   */
   description?: string;
   fields?: APIEmbedField[];
   /** Vira o rodapé; IDs entram aqui (`ID DA MENSAGEM: …`). */
@@ -45,31 +50,51 @@ export function logEmbed(input: LogEmbedInput): EmbedBuilder {
   return embed;
 }
 
-/** Menção + tag + ID em `inline code` — IDs nunca aparecem soltos. */
+// ── menções ─────────────────────────────────────────────────────────────────
+//
+// O cliente do Discord resolve `<@id>`, `<#id>` e `<@&id>` no nome, com link.
+// Repetir o snowflake ao lado só ocupa a largura do card com um número que
+// ninguém lê — quando o ID importa (suporte, busca no audit log) ele está no
+// rodapé, que é onde se procura por ele.
+
+export function userMention(user: UserLike): string {
+  return `<@${user.id}>`;
+}
+
+export function channelMention(channelId: string): string {
+  return `<#${channelId}>`;
+}
+
+export function roleMention(roleId: string): string {
+  return `<@&${roleId}>`;
+}
+
+/** Menção + tag, para o field de usuário. */
 export function userValue(user: UserLike): string {
-  const label = user.tag ? `<@${user.id}> ${user.tag}` : `<@${user.id}>`;
-  return `${label}\n${code(user.id)}`;
+  return user.tag ? `${userMention(user)} (${user.tag})` : userMention(user);
 }
 
 /** Mesma forma, quando só se conhece o ID (autor fora do cache). */
 export function userIdValue(userId: string): string {
-  return `<@${userId}>\n${code(userId)}`;
+  return userMention({ id: userId });
 }
 
+/**
+ * Field de canal. O nome vai junto só quando o canal **não existe mais** — aí
+ * a menção viraria "#deleted-channel" e o nome é a única pista que sobra.
+ */
 export function channelValue(channelId: string, name?: string | null): string {
-  const label = name ? `<#${channelId}> ${name}` : `<#${channelId}>`;
-  return `${label}\n${code(channelId)}`;
+  return name ? `${channelMention(channelId)} (#${name})` : channelMention(channelId);
 }
 
 export function roleValue(roleId: string, name?: string | null): string {
-  const label = name ? `<@&${roleId}> ${name}` : `<@&${roleId}>`;
-  return `${label}\n${code(roleId)}`;
+  return name ? `${roleMention(roleId)} (${name})` : roleMention(roleId);
 }
 
 /** Lista de menções de cargo, ou um traço quando vazia. */
 export function roleMentions(roleIds: readonly string[], max = 20): string {
   if (roleIds.length === 0) return '—';
-  const shown = roleIds.slice(0, max).map((id) => `<@&${id}>`);
+  const shown = roleIds.slice(0, max).map((id) => roleMention(id));
   const rest = roleIds.length - shown.length;
   return rest > 0 ? `${shown.join(' ')} +${rest}` : shown.join(' ');
 }
@@ -86,4 +111,34 @@ export function executorField(executor: UserLike | null, reason?: string | null)
   const fields: APIEmbedField[] = [{ name: 'Por', value: userValue(executor), inline: true }];
   if (reason) fields.push({ name: 'Motivo', value: reason, inline: true });
   return fields;
+}
+
+// ── frase de resumo ─────────────────────────────────────────────────────────
+
+/**
+ * Quem fez a ação. O audit log só responde quando a mudança passou por ele e
+ * dentro do timeout de `findAuditEntry`; sem resposta o log não pode inventar
+ * um autor, e "alguém" é mais honesto que omitir o sujeito da frase.
+ */
+export function actor(executor: UserLike | null): string {
+  return executor ? userMention(executor) : 'alguém';
+}
+
+/**
+ * Junta os pedaços de uma frase e fecha com ponto. Pedaços vazios somem, o que
+ * deixa o call site escrever a parte opcional inline (`canal && \`em ${canal}\``)
+ * sem montar array condicional.
+ */
+export function sentence(...parts: (string | null | undefined | false)[]): string {
+  const text = parts.filter((part): part is string => Boolean(part)).join(' ');
+  if (!text) return '';
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+/**
+ * `sentence` + o motivo do audit log entre parênteses, que é o "por quê" de
+ * toda ação de moderação feita fora do bot.
+ */
+export function reasonSuffix(reason?: string | null): string | null {
+  return reason ? `Motivo: ${reason}` : null;
 }
