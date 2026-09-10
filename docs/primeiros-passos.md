@@ -23,11 +23,23 @@ No [Developer Portal](https://discord.com/developers/applications):
    Members, Message Content). Sem _Message Content_ o automod não vê nada.
 4. **General Information**: copie o Application ID → `DISCORD_CLIENT_ID`.
 5. **OAuth2**: copie o Client Secret → `DISCORD_CLIENT_SECRET`.
-6. **OAuth2 > Redirects**: adicione
-   `http://localhost:3000/api/auth/callback/discord`.
-7. **OAuth2 > URL Generator**: escopos `bot` e `applications.commands`, as
+6. **OAuth2 > Redirects**: adicione as três. A primeira é o login do painel;
+   as outras duas são os fluxos de convite (§7.2), e o Discord exige que cada
+   uma esteja registrada literalmente:
+
+   ```
+   http://localhost:3000/api/auth/callback/discord
+   http://invite.localhost:3000/api/invite/callback
+   http://demo.localhost:3000/api/invite/callback
+   ```
+
+7. **Installation > Install Link: `None`.** Senão o Discord oferece o botão
+   "Add App" do perfil do bot, que instala **sem** passar pelos nossos links —
+   e esse servidor entraria no registro sem classificação nenhuma.
+8. **OAuth2 > URL Generator**: escopos `bot` e `applications.commands`, as
    permissões do PRD §10, e use a URL para convidar o bot ao seu servidor de
-   testes.
+   testes. (Em produção quem monta essa URL é o painel, em `invite.` e
+   `demo.`; o gerador serve para o servidor de testes.)
 
 Ligue o **Modo desenvolvedor** no Discord (Configurações > Avançado) para
 conseguir copiar IDs. Botão direito no servidor > **Copiar ID do servidor** →
@@ -169,6 +181,50 @@ que dá ordem de 10⁵ membros somados. O consumo real está no `rssBytes` do
 
 Se um dia apertar, a saída não é VM maior: é pôr teto no `GuildMemberManager`
 (`apps/bot/src/client.ts`) e buscar membro sob demanda.
+
+## 7.2 Os dois links de convite
+
+Em produção o bot não é convidado pela URL crua do Discord: ela não conta ao
+bot por onde a pessoa veio, e é justamente isso que decide se o servidor entra
+na fila ou já sai atendendo. Por isso existem **dois links nossos**, cada um no
+seu subdomínio:
+
+| Link                               | Status na entrada | O bot atende?         |
+| ---------------------------------- | ----------------- | --------------------- |
+| `https://invite.goodbot.<domínio>` | `pending`         | não, espera aprovação |
+| `https://demo.goodbot.<domínio>`   | `demo`            | sim, por 1 hora       |
+
+O caminho é sempre o mesmo: a pessoa abre o link, lê o que vai acontecer e
+clica; nós assinamos um `state` (HMAC do `AUTH_SECRET`, válido por 15 minutos)
+e mandamos ao OAuth do Discord com o `redirect_uri` de volta para o **mesmo**
+subdomínio. Na volta, trocamos o `code` com o Discord — é essa troca, e não o
+`guild_id` da URL, que prova que a instalação aconteceu — e gravamos a linha em
+`guild_registry`.
+
+Três regras que caem de graça disso, porque uma linha que já existe nunca tem o
+status sobrescrito:
+
+- servidor **bloqueado** continua bloqueado, use quem usar o link;
+- servidor **já aprovado** não volta para a fila nem vira demo com prazo;
+- a **demo não se renova**: quem já usou a sua espera aprovação como qualquer
+  um, senão dava para ficar renovando de hora em hora.
+
+### Testar na sua máquina
+
+Os subdomínios de `localhost` resolvem para 127.0.0.1 nos navegadores atuais,
+então não é preciso mexer no `hosts`:
+
+```
+http://invite.localhost:3000
+http://demo.localhost:3000
+```
+
+Com o `pnpm dev` rodando, abra um dos dois. Se cair no painel em vez da tela de
+convite, o `Host` chegou sem o rótulo — confira a URL. As duas URLs de callback
+precisam estar em **OAuth2 > Redirects** (§2).
+
+O `http://localhost:3000/convite` mostra os dois links, o que é útil para
+conferir de onde eles apontam sem decorar os subdomínios.
 
 ## 8. Depois daqui
 

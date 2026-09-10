@@ -32,6 +32,24 @@ export type Module = (typeof MODULES)[number];
 export const GUILD_STATUSES = ['pending', 'approved', 'demo', 'blocked'] as const;
 export type GuildStatus = (typeof GUILD_STATUSES)[number];
 
+/**
+ * Os dois caminhos de entrada do bot (plano, Etapa 2). O convite do Discord
+ * **não** conta ao bot por onde a pessoa veio, então cada fluxo tem o seu
+ * próprio subdomínio (`invite.` e `demo.`): o link passa por nós, nós é que
+ * chamamos o OAuth, e o `state` assinado devolve o fluxo no callback.
+ *
+ * `invite` entra como `pending` (espera aprovação); `demo` entra atendido e
+ * com prazo.
+ */
+export const INVITE_FLOWS = ['invite', 'demo'] as const;
+export type InviteFlow = (typeof INVITE_FLOWS)[number];
+
+/** O status com que cada fluxo registra o servidor. */
+export const INVITE_FLOW_STATUS: Record<InviteFlow, GuildStatus> = {
+  invite: 'pending',
+  demo: 'demo',
+};
+
 /** Tipos de caso de moderação (PRD §5.1). */
 export const CASE_TYPES = [
   'ban',
@@ -201,6 +219,20 @@ export const MINUTE_MS = 60 * SECOND_MS;
 export const HOUR_MS = 60 * MINUTE_MS;
 export const DAY_MS = 24 * HOUR_MS;
 export const WEEK_MS = 7 * DAY_MS;
+
+/**
+ * Quanto tempo o bot atende um servidor que entrou pelo link de demonstração
+ * (plano, Etapa 2). É fixo de propósito: a demo existe para mostrar o produto,
+ * não para virar um plano gratuito com prazo negociável.
+ */
+export const DEMO_DURATION_MS = HOUR_MS;
+
+/**
+ * Validade do `state` assinado do convite. Curta porque ele só precisa
+ * sobreviver ao tempo de escolher o servidor na tela do Discord; um `state`
+ * antigo que vaze não serve para nada depois disso.
+ */
+export const INVITE_STATE_TTL_MS = 15 * MINUTE_MS;
 
 /** Timeout nativo do Discord: no máximo 28 dias. */
 export const MAX_TIMEOUT_MS = 28 * DAY_MS;

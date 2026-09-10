@@ -1,9 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { classifyHost, SITE_HOST_HEADER, type SiteHost } from '@/lib/hosts';
 import { authLimiter, clientIp } from '@/lib/rate-limit';
 
 /**
- * Duas responsabilidades:
+ * Quatro responsabilidades:
  *
  * 1. **CSP com nonce.** O nonce muda a cada resposta, então a CSP não pode
  *    morar no `next.config.ts` (que só emite headers estáticos) — os demais
@@ -11,15 +12,19 @@ import { authLimiter, clientIp } from '@/lib/rate-limit';
  *    mesmo nonce (`.harness/styleguide.md` §0.2, PRD §7.3).
  * 2. **Porta de `/g/*`.** Sem cookie de sessão nem adianta renderizar; a
  *    autorização de verdade é do `requireGuildAccess`, no servidor.
- * 3. **Rate limit de `/api/auth/*`.** O fluxo de OAuth é o único endpoint que
- *    responde a quem ainda não tem sessão; as escritas são limitadas mais
+ * 3. **Rate limit de `/api/auth/*` e `/api/invite/*`.** São os endpoints que
+ *    respondem a quem ainda não tem sessão; as escritas são limitadas mais
  *    adiante, no `requireGuildAccess` (PRD §7.3).
+ * 4. **Roteamento por hostname.** Um projeto só na Vercel serve os quatro
+ *    domínios (plano, §3); quem separa é o subdomínio, resolvido aqui.
  *
  * O arquivo se chama `proxy.ts` porque o Next 16 aposentou `middleware.ts`;
  * a API é a mesma.
  */
 export default function proxy(request: NextRequest) {
-  if (request.nextUrl.pathname.startsWith('/api/auth/')) {
+  const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith('/api/auth/') || pathname.startsWith('/api/invite/')) {
     const hit = authLimiter.hit(clientIp(request.headers));
     if (!hit.allowed) {
       return NextResponse.json(
@@ -50,18 +55,54 @@ export default function proxy(request: NextRequest) {
     "object-src 'none'",
   ].join('; ');
 
+  const site = classifyHost(request.headers.get('host'));
   const headers = new Headers(request.headers);
   headers.set('x-nonce', nonce);
+  headers.set(SITE_HOST_HEADER, site);
 
-  if (request.nextUrl.pathname.startsWith('/g/') && !hasSessionCookie(request)) {
+  const withCsp = (response: NextResponse): NextResponse => {
+    response.headers.set('Content-Security-Policy', csp);
+    return response;
+  };
+
+  if (site !== 'app') {
+    const destino = rotaDoHost(site, pathname);
+    if (destino === null) {
+      return withCsp(NextResponse.redirect(new URL('/', request.url)));
+    }
+    if (destino !== pathname) {
+      return withCsp(NextResponse.rewrite(new URL(destino, request.url), { request: { headers } }));
+    }
+  }
+
+  if (pathname.startsWith('/g/') && !hasSessionCookie(request)) {
     const login = new URL('/login', request.url);
     login.searchParams.set('reason', 'expired');
     return NextResponse.redirect(login);
   }
 
-  const response = NextResponse.next({ request: { headers } });
-  response.headers.set('Content-Security-Policy', csp);
-  return response;
+  return withCsp(NextResponse.next({ request: { headers } }));
+}
+
+/**
+ * O que cada subdomínio serve. Devolve o caminho a servir, ou `null` para
+ * mandar de volta à raiz do próprio host.
+ *
+ * A regra é fechada de propósito: `invite.` e `demo.` existem para uma coisa
+ * só, e um `/g/<id>` respondendo neles seria o painel inteiro exposto num
+ * hostname que não deveria ter sessão. `admin.` fica reservado para a Etapa 4
+ * — até lá, ele responde 404, que é o correto para uma rota que não existe.
+ */
+function rotaDoHost(site: Exclude<SiteHost, 'app'>, pathname: string): string | null {
+  // A autenticação e o próprio fluxo de convite valem em todos os hosts.
+  if (pathname.startsWith('/api/')) return pathname;
+
+  if (site === 'admin') {
+    return pathname === '/' ? '/admin' : pathname.startsWith('/admin') ? pathname : null;
+  }
+
+  if (pathname === '/') return '/convite';
+  return pathname.startsWith('/convite') ? pathname : null;
 }
 
 /** Auth.js prefixa o cookie com `__Secure-` quando serve por HTTPS. */

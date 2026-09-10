@@ -195,16 +195,23 @@ App Router. **Server Components por padrão**; `"use client"` só onde há estad
 de formulário ou interação.
 
 ```
+proxy.ts        CSP com nonce, porta de `/g/*`, rate limit e o roteamento
+                por hostname (ver 5.1)
 app/
   g/[guildId]/
     servidor, canais, cargos, membros, casos, banidos, convites,
     eventos, emojis, mensagens, auditoria, system
     config/     general, moderation, automod, logs, welcome, autorole,
                 reaction-roles, tickets, tags, social, commands
+  convite/      as telas dos links de convite (`invite.` e `demo.`)
   actions/      Server Actions: auth, cases, config, guild, messages,
                 modules, social
-  api/          auth (Auth.js), health, cases/export, discord/*
+  api/          auth (Auth.js), invite/{start,callback}, health,
+                cases/export, discord/*
 lib/
+  hosts.ts          de qual dos quatro subdomínios veio a requisição (puro)
+  site-url.ts       a URL absoluta de cada um, derivada do `AUTH_URL`
+  invite/           state assinado, OAuth de convite e escrita no registro
   registry.ts       os servidores atendidos, lidos de `guild_registry`
   internal-api.ts   o cliente da API do bot, com o token do servidor
   module-config.ts  ponte entre o form do painel e o schema Zod do módulo
@@ -215,6 +222,28 @@ components/
   config/     formulários de módulo
   charts/     estatísticas
 ```
+
+### 5.1 Um projeto, quatro hostnames
+
+O painel na Vercel serve quatro domínios, e quem os separa é o `proxy.ts`:
+
+| Host                   | Serve                                      |
+| ---------------------- | ------------------------------------------ |
+| `goodbot.<domínio>`    | o painel                                   |
+| `invite.<goodbot>`     | `/convite` no fluxo que entra como `pending` |
+| `demo.<goodbot>`       | `/convite` no fluxo que entra como `demo`  |
+| `admin.<goodbot>`      | `/admin`, o painel do dono (Etapa 4 do plano) |
+
+A classificação é pelo **primeiro rótulo** do host (`lib/hosts.ts`), não por
+uma lista de domínios em variável: trocar de domínio não mexe em código, e
+`invite.localhost:3000` funciona em dev sem configuração. O que continua vindo
+do ambiente é a URL absoluta (`AUTH_URL`), porque o `redirect_uri` do OAuth
+tem de bater exatamente com o que está registrado no Discord — e montá-lo a
+partir do header `Host` seria deixar o cliente escolher.
+
+`invite.` e `demo.` servem **só** `/convite*` e `/api/*`; qualquer outro
+caminho volta para a raiz do próprio host. Sem isso o painel inteiro
+responderia num hostname que não deveria ter sessão.
 
 O caminho de uma edição no painel:
 

@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  classifyHost,
+  hostOfInviteFlow,
+  inviteFlowOf,
+  siteFromHeaders,
+  SITE_HOST_HEADER,
+} from './hosts';
+
+function headers(values: Record<string, string>) {
+  return { get: (name: string) => values[name.toLowerCase()] ?? null };
+}
+
+describe('classifyHost', () => {
+  it('reconhece os três subdomínios em qualquer domínio', () => {
+    expect(classifyHost('invite.goodbot.dionatha.com.br')).toBe('invite');
+    expect(classifyHost('demo.goodbot.dionatha.com.br')).toBe('demo');
+    expect(classifyHost('admin.goodbot.dionatha.com.br')).toBe('admin');
+    expect(classifyHost('invite.goodbot.com.br')).toBe('invite');
+  });
+
+  it('funciona em dev, onde os hosts têm porta e um rótulo só', () => {
+    expect(classifyHost('invite.localhost:3000')).toBe('invite');
+    expect(classifyHost('demo.localhost:3000')).toBe('demo');
+    expect(classifyHost('localhost:3000')).toBe('app');
+  });
+
+  it('ignora caixa', () => {
+    expect(classifyHost('DEMO.Goodbot.Dionatha.com.br')).toBe('demo');
+  });
+
+  it('cai em `app` no host do painel, num preview e sem host', () => {
+    expect(classifyHost('goodbot.dionatha.com.br')).toBe('app');
+    expect(classifyHost('goodbot-git-main.vercel.app')).toBe('app');
+    expect(classifyHost(null)).toBe('app');
+    expect(classifyHost('')).toBe('app');
+  });
+
+  it('não confunde um rótulo que só começa igual', () => {
+    expect(classifyHost('invitex.goodbot.dionatha.com.br')).toBe('app');
+    expect(classifyHost('goodbot.invite.com')).toBe('app');
+  });
+});
+
+describe('siteFromHeaders', () => {
+  it('prefere o que o proxy resolveu', () => {
+    expect(siteFromHeaders(headers({ [SITE_HOST_HEADER]: 'demo', host: 'goodbot.com' }))).toBe(
+      'demo',
+    );
+  });
+
+  it('recai no header Host quando o proxy não passou por ali', () => {
+    expect(siteFromHeaders(headers({ host: 'invite.goodbot.com' }))).toBe('invite');
+  });
+
+  it('descarta um valor inventado no header', () => {
+    expect(siteFromHeaders(headers({ [SITE_HOST_HEADER]: 'root', host: 'goodbot.com' }))).toBe(
+      'app',
+    );
+  });
+});
+
+describe('fluxo ↔ host', () => {
+  it('vai e volta', () => {
+    expect(inviteFlowOf('invite')).toBe('invite');
+    expect(inviteFlowOf('demo')).toBe('demo');
+    expect(inviteFlowOf('app')).toBeNull();
+    expect(inviteFlowOf('admin')).toBeNull();
+    expect(hostOfInviteFlow('invite')).toBe('invite');
+    expect(hostOfInviteFlow('demo')).toBe('demo');
+  });
+});

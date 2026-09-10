@@ -233,3 +233,41 @@ export function mergePermissions(current: string, names: readonly PermissionName
   const kept = toBitfield(current) & ~known;
   return (kept | toBitfield(permissionsToBitfield(names))).toString();
 }
+
+/**
+ * O que o bot pede ao ser convidado (PRD §10). Sem `Administrator`: cada
+ * permissão daqui cobre uma tela ou um comando, e a que faltar degrada aquela
+ * parte em vez de derrubar o resto.
+ *
+ * A lista mora aqui, e não no painel, porque o número que vai na URL do
+ * convite tem de sair dos mesmos bits que o teste de `apps/bot` confere contra
+ * o `PermissionFlagsBits` do discord.js.
+ */
+export const BOT_INVITE_PERMISSION_NAMES = [
+  'ViewChannel',
+  'SendMessages',
+  'SendMessagesInThreads',
+  'EmbedLinks',
+  'AttachFiles',
+  'ReadMessageHistory',
+  'ManageMessages',
+  'ManageChannels',
+  'ManageRoles',
+  'ManageGuild',
+  'KickMembers',
+  'BanMembers',
+  'ModerateMembers',
+  'ViewAuditLog',
+  'ManageThreads',
+  'AddReactions',
+  'UseExternalEmojis',
+  'MuteMembers',
+  'DeafenMembers',
+  'MoveMembers',
+  'CreateInstantInvite',
+  'ManageEvents',
+  'ManageGuildExpressions',
+] as const satisfies readonly PermissionName[];
+
+/** O `permissions=` da URL de convite, em decimal como o Discord espera. */
+export const BOT_INVITE_PERMISSIONS = permissionsToBitfield(BOT_INVITE_PERMISSION_NAMES);
