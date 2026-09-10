@@ -11,21 +11,18 @@ Docker Compose com Caddy na frente; o **painel** roda na Vercel; o
 
 ## Antes de agir (obrigatório em toda sessão)
 
-1. Leia `.harness/prd.md` — requisitos, modelo de dados, permissões, decisões.
-2. Leia `.harness/styleguide.md` se a tarefa tocar em `apps/web` ou em embeds.
-3. Abra `.harness/plan.md`, veja a tabela **Estado** e leia **somente a etapa
-   atual** (a primeira com status `pendente` ou `em andamento`). A etapa lista
-   o "Contexto mínimo" — leia exatamente aqueles arquivos, não o repo inteiro.
-4. Marque a etapa como `em andamento` na tabela antes de começar e como
-   `concluída` ao terminar (com a data), junto com os checkboxes das tarefas.
-5. Não pule etapas nem antecipe trabalho de etapas futuras. Se algo de uma
-   etapa futura for pré-requisito real, faça o mínimo e anote na etapa futura.
-6. Toda etapa termina com a linha `▶ Etapa concluída. Rode /clear antes de
-iniciar a próxima etapa para limpar o contexto.` — repita-a ao usuário.
+1. Leia `.harness/architecture.md` — o mapa do código: o que cada camada faz,
+   onde cada coisa mora e por quê. É o caminho mais curto para se situar sem
+   ler o repositório inteiro.
+2. Leia `.harness/prd.md` — requisitos, modelo de dados, permissões, decisões.
+3. Leia `.harness/styleguide.md` se a tarefa tocar em `apps/web` ou em embeds.
+4. Leia apenas os arquivos que a tarefa exige. O `architecture.md` diz onde
+   procurar; não varra o repositório por hábito.
 
 A stack está **definida** no PRD §12. Não proponha alternativas (nem Redis,
-nem Prisma, nem outro framework web). Pontos que exigem ação manual do usuário
-estão marcados no plano com `⚠️ AÇÃO MANUAL`; pare e peça quando chegar neles.
+nem Prisma, nem outro framework web). Quando uma tarefa depender de uma ação
+que só o usuário pode fazer (criar recurso num provedor, preencher segredo,
+aprovar app numa plataforma), pare e peça — não invente contorno.
 
 ## Layout do repositório
 

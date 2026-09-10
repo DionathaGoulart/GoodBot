@@ -26,3 +26,6 @@ Thumbs.db
 
 # next
 next-env.d.ts
+
+# planos de trabalho locais — não versionar
+plan.md
