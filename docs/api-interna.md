@@ -1,0 +1,161 @@
+# A API interna do bot
+
+O bot expõe uma API HTTP (Hono). É por ela que o painel e o CLI de guild fazem
+tudo — o painel **não** fala com o Discord diretamente. Este guia é para quem
+quer falar com ela direto, ou adicionar uma rota nova.
+
+Base: `http://localhost:3001` em dev, `https://bot.<dominio>` em produção.
+
+## 1. Autenticação
+
+Toda rota exige `Authorization: Bearer <INTERNAL_API_TOKEN>`. A única exceção é
+`/health`.
+
+```bash
+curl -s -H "Authorization: Bearer $INTERNAL_API_TOKEN" \
+  http://localhost:3001/guilds/$GUILD_ID/roles
+```
+
+A comparação do token é em tempo constante (SHA-256 + `timingSafeEqual`), e a
+resposta a token ausente e token errado é **a mesma** — nada diz a um scanner o
+que ele acertou.
+
+Passar de 50 respostas 401 numa hora dispara alerta operacional: isso já é
+sondagem, não dedo gordo.
+
+## 2. `actorId`: quem pediu
+
+O Bearer prova que a chamada veio de um cliente autorizado. Ele **não** diz
+quem clicou. Por isso toda escrita carrega `actorId` no corpo — o ID Discord da
+pessoa responsável.
+
+```bash
+curl -X POST http://localhost:3001/guilds/$GUILD_ID/roles \
+  -H "Authorization: Bearer $INTERNAL_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{
+    "actorId": "123456789012345678",
+    "name": "Moderador",
+    "color": 3447003,
+    "hoist": true,
+    "mentionable": false,
+    "permissions": ["KickMembers", "BanMembers"],
+    "reason": "criado pelo curl"
+  }'
+```
+
+Com esse ID o bot resolve três coisas:
+
+1. **Nível** — `requireActor(deps, guild, id, 'admin')`. Sem o nível, 403.
+2. **Hierarquia** — `assertRoleManageable`. Ninguém edita cargo acima do seu,
+   nem acima do cargo do bot.
+3. **Concessão** — `assertMayGrant`. Ninguém concede permissão que ele próprio
+   não tem. O dono da guild é a única exceção, porque já tem tudo.
+
+O `reason` vai para o registro de auditoria do Discord.
+
+## 3. Use o cliente tipado, não `fetch`
+
+Já existe um cliente com ~45 métodos, cada um validando a resposta com o schema
+Zod correspondente:
+
+```ts
+import { createInternalClient } from '@goodbot/shared';
+
+const api = createInternalClient({
+  baseUrl: 'http://localhost:3001',
+  token: process.env.INTERNAL_API_TOKEN!,
+  timeoutMs: 30_000, // o padrão é 10s
+});
+
+const roles = await api.roles(guildId);
+const canal = await api.createChannel(guildId, {
+  actorId,
+  name: 'geral',
+  type: 0,
+  parentId: null,
+  topic: null,
+  nsfw: false,
+  slowmodeSeconds: 0,
+});
+```
+
+Erros vêm como `InternalApiError`, com `status`, `code`, `issues` (as falhas de
+validação Zod) e `retryAfter` quando o 503 veio de rate limit.
+
+## 4. Rotas
+
+| Grupo         | O que dá                                                        |
+| ------------- | --------------------------------------------------------------- |
+| `guild`       | perfil, settings, ícone, banner, audit log                      |
+| `channels`    | listar, criar, editar, apagar, lock/unlock, slowmode, overrides |
+| `roles`       | listar, criar, editar, apagar, mover uma casa                   |
+| `members`     | listar, detalhe, cargos de um membro                            |
+| `messages`    | enviar, histórico, apagar, publicar/despublicar painel          |
+| `moderation`  | ban, unban, listar bans, ações de moderação                     |
+| `cases`       | listar, editar e apagar caso                                    |
+| `invites`     | listar, criar, revogar                                          |
+| `events`      | eventos agendados: listar, criar, editar, apagar                |
+| `expressions` | emojis e stickers: criar, editar, apagar                        |
+| `automod`     | estado e ativação do modo anti-raid                             |
+| `config`      | invalidar o cache de config de um módulo                        |
+| `commands`    | listar os comandos registrados                                  |
+| `social`      | contas de rede social e teste de anúncio                        |
+| `metrics`     | contadores em formato Prometheus                                |
+| `health`      | **sem auth** — estado do gateway, banco e último backup         |
+
+Os schemas de request e response de cada uma estão em
+`packages/shared/src/api/`.
+
+## 5. Rate limit
+
+| Quem                     | Por IP  | Por rota |
+| ------------------------ | ------- | -------- |
+| com `INTERNAL_API_TOKEN` | 600/min | 600/min  |
+| sem token                | 60/min  | 100/min  |
+
+Mandar mensagem tem teto próprio: **10/min por guild**. É o endpoint mais fácil
+de abusar, e ninguém escreve dez mensagens à mão por minuto.
+
+Estourar devolve 503 com `retryAfter` em segundos.
+
+O teto alto para quem tem o token é deliberado: quem tem o token já pode fazer
+tudo que a API oferece, e racioná-lo não protege de nada — a defesa contra
+vazamento é rotacionar, não racionar. O balde apertado existe contra scanner
+anônimo.
+
+## 6. Limites de corpo
+
+256 KB por padrão. As rotas que carregam imagem (ícone e banner da guild, capa
+de evento, emoji, sticker) aceitam 12 MB, porque uma imagem de 8 MB — o limite
+do Discord — vira ~11 MB depois da base64.
+
+## 7. Adicionar uma rota
+
+Três coisas são obrigatórias, sem exceção:
+
+1. **Schema Zod em `packages/shared/src/api/`** para o corpo e para a resposta,
+   exportado pelo barrel `api/index.ts`.
+2. **A rota em `apps/bot/src/api/routes/`**, montada no `server.ts`, usando
+   `validate('json', SeuSchema)` e `requireActor(...)` se escreve.
+3. **O método no cliente** (`packages/shared/src/api/client.ts`), para o painel
+   e o CLI não montarem `fetch` na mão.
+
+Checklist antes de considerar pronta:
+
+- [ ] passa por `bearerAuth` (só `/health` não passa)
+- [ ] valida o corpo com Zod
+- [ ] se escreve, exige `actorId` e checa nível + hierarquia
+- [ ] entra no rate limit
+- [ ] tem método no cliente tipado
+- [ ] tem teste
+
+## 8. Health
+
+```bash
+curl -s http://localhost:3001/health
+```
+
+Responde sem autenticação — é o que o Caddy, o Docker e o monitor externo usam.
+Traz o estado do gateway, do Postgres e a data do último backup. Não traz nada
+que sirva a um atacante.
