@@ -1,0 +1,121 @@
+# Exemplo de guild como código.
+#
+# Copie esta pasta para infra/discord/<slug-do-seu-servidor>/, edite este
+# arquivo e rode:
+#
+#   pnpm guild plan  --server <slug>     # mostra o que mudaria, não escreve
+#   pnpm guild apply --server <slug>     # executa depois de confirmar
+#
+# Regras que valem para o arquivo inteiro:
+#
+#   * Nada de ID aqui. Tudo é por nome, e o apply resolve os IDs na hora.
+#     É o que deixa este arquivo seguro num repositório público e reaproveitável
+#     entre servidores diferentes. Os IDs e o token ficam no .env ao lado.
+#   * A ordem importa: cargos são listados de cima para baixo na hierarquia, e
+#     canais na ordem em que devem aparecer dentro da categoria.
+#   * O apply nunca apaga nada sem --allow-delete. O que existe no servidor e
+#     não está aqui simplesmente é ignorado.
+
+name: Servidor de exemplo
+
+# ---------------------------------------------------------------------------
+# Cargos, do mais alto para o mais baixo.
+#
+# `@everyone` não entra nesta lista — ele não é criado nem editado aqui, só
+# usado como alvo em `overrides`. Cargos de bot (managed) também são ignorados.
+#
+# Os nomes de permissão são os do Discord. A lista válida está em
+# packages/shared/src/api/permissions.ts.
+# ---------------------------------------------------------------------------
+roles:
+  - name: Admin
+    color: '#e74c3c'
+    hoist: true # aparece destacado na lista de membros
+    mentionable: false
+    permissions: [Administrator]
+
+  - name: Moderador
+    color: '#3498db'
+    hoist: true
+    permissions:
+      - KickMembers
+      - BanMembers
+      - ModerateMembers
+      - ManageMessages
+      - ViewAuditLog
+      - ManageNicknames
+
+  - name: Membro
+    color: '#95a5a6'
+    permissions:
+      - ViewChannel
+      - SendMessages
+      - ReadMessageHistory
+      - AddReactions
+      - EmbedLinks
+      - AttachFiles
+      - Connect
+      - Speak
+
+# ---------------------------------------------------------------------------
+# Canais fora de qualquer categoria. Ficam no topo do servidor.
+# ---------------------------------------------------------------------------
+channels:
+  - name: regras
+    type: text
+    topic: Leia antes de participar.
+    overrides:
+      - role: '@everyone'
+        view: allow
+        send: deny # todo mundo lê, ninguém escreve
+
+# ---------------------------------------------------------------------------
+# Categorias e seus canais.
+#
+# `overrides` numa categoria vale para ela; canais criados dentro herdam do
+# Discord. Um override no canal sobrescreve o da categoria.
+#
+# Cada override aceita `view` e `send`, com allow / deny / inherit. São as duas
+# permissões que a API do bot expõe por override (PRD §6.3) — prometer mais
+# aqui seria mentir sobre o que o apply consegue escrever.
+# ---------------------------------------------------------------------------
+categories:
+  - name: Comunidade
+    overrides:
+      - role: '@everyone'
+        view: allow
+        send: allow
+    channels:
+      - name: geral
+        type: text
+        topic: Papo livre.
+
+      - name: memes
+        type: text
+        slowmode: 5 # segundos entre mensagens
+
+      - name: Sala 1
+        type: voice
+
+  - name: Staff
+    # Categoria fechada: só quem tem cargo enxerga.
+    overrides:
+      - role: '@everyone'
+        view: deny
+      - role: Moderador
+        view: allow
+        send: allow
+      - role: Admin
+        view: allow
+        send: allow
+    channels:
+      - name: chat-staff
+        type: text
+
+      - name: logs
+        type: text
+        topic: Saída automática do bot.
+        overrides:
+          - role: Moderador
+            view: allow
+            send: deny # moderador lê o log, mas não escreve nele

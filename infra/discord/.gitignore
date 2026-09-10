@@ -1,0 +1,3 @@
+# Segredo de cada servidor: GUILD_ID, ACTOR_ID e o token da API do bot.
+# O guild.yaml é versionado; isto aqui nunca é.
+*/.env

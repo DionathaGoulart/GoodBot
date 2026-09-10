@@ -18,6 +18,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "audit": "pnpm audit --audit-level high",
+    "guild": "pnpm --filter @cobot/guild-config guild",
     "db:generate": "pnpm --filter @cobot/db db:generate",
     "db:migrate": "pnpm --filter @cobot/db db:migrate",
     "docker:build": "docker build --platform linux/amd64 -f infra/docker/bot.Dockerfile -t cobot-bot:local .",

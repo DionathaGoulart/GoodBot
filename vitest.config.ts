@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 // próprio `vitest.config.ts` para sobrescrever opções (ambiente, setup etc.).
 export default defineConfig({
   test: {
-    projects: ['packages/shared', 'packages/db', 'apps/bot', 'apps/web'],
+    projects: ['packages/shared', 'packages/db', 'packages/guild-config', 'apps/bot', 'apps/web'],
     passWithNoTests: true,
   },
 });
