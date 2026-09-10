@@ -157,12 +157,21 @@ derrubar o container antigo.
 
 ---
 
-## 7. Monitoramento
+## 7. Monitoramento — nada a fazer
 
 Toda métrica trocou de prefixo: `cobot_events_total` virou
-`goodbot_events_total`, e assim por diante. Qualquer dashboard, alerta ou
-consulta salva que cite `cobot_` precisa ser reescrito. Não há período de
-convivência — o nome antigo simplesmente deixa de ser publicado.
+`goodbot_events_total`. Isso **não quebra nada hoje**, porque não há Prometheus
+raspando o endpoint (ver o comentário em `apps/bot/src/api/routes/metrics.ts`).
+
+Os dois únicos consumidores das métricas estão dentro do repositório e já foram
+renomeados junto:
+
+- o `curl` do runbook, que despeja o `/metrics` inteiro sem filtrar por nome;
+- o card **Saúde** do painel, que na verdade lê o `/health`, não o `/metrics`.
+
+Se um dia entrar um Prometheus ou Grafana, ele já nasce com os nomes novos. Se
+você tiver algum dashboard fora do repositório que eu não conheço, aí sim é
+`cobot_` para `goodbot_` nas consultas.
 
 ---
 
@@ -172,5 +181,4 @@ convivência — o nome antigo simplesmente deixa de ser publicado.
 - [ ] `/health` responde e `docker compose ps` mostra bot e caddy de pé
 - [ ] repositório renomeado no GitHub e `git remote set-url` feito
 - [ ] pacote `goodbot-bot` acessível no GHCR
-- [ ] dashboards e alertas apontando para `goodbot_*`
 - [ ] volumes e imagem antigos apagados (§2, limpeza)

@@ -30,13 +30,55 @@ O `.env` precisa de quatro coisas:
 Para copiar IDs, ligue **Configurações > Avançado > Modo desenvolvedor** no
 Discord.
 
-Depois:
+Depois, se o servidor **já existe** (o caso comum), capture o estado dele em
+vez de escrever o arquivo à mão:
+
+```bash
+pnpm guild import --server meu-servidor     # escreve o guild.yaml
+pnpm guild plan   --server meu-servidor     # tem de sair vazio
+```
+
+Se for um servidor novo, pule o import e escreva o `guild.yaml` do zero
+partindo do exemplo. O ciclo dali em diante é sempre o mesmo:
 
 ```bash
 pnpm guild list                             # servidores configurados
 pnpm guild plan  --server meu-servidor      # não escreve nada
 pnpm guild apply --server meu-servidor      # executa após confirmar
 ```
+
+## 1.1 Trazendo um servidor que já existe
+
+`pnpm guild import --server <slug>` lê o servidor pela API e escreve o
+`guild.yaml` que o descreve: cargos na ordem da hierarquia, categorias e canais
+na ordem em que aparecem, e as permissões de canal.
+
+Ele se recusa a sobrescrever um `guild.yaml` que já exista — para isso, use
+`--force`.
+
+**A verificação vem junto.** Depois de escrever, o import relê o arquivo e monta
+o plano contra o servidor. Se a captura ficou fiel, o plano sai vazio, e ele diz:
+
+```
+Escrito: infra/discord/meu-servidor/guild.yaml
+
+Conferido: o plano contra este arquivo sai vazio.
+```
+
+Se sobrar qualquer diferença, ele mostra qual e **sai com erro** — é sinal de
+que o import deixou algo passar, e você não deve confiar no arquivo antes de
+entender o que foi.
+
+### O que o import não traz
+
+Ele avisa em cada caso, mas vale saber de antemão:
+
+- **Canais de tipo que o spec não representa** — fórum, palco, tópico. Ficam de
+  fora do arquivo e o apply simplesmente não mexe neles.
+- **Emojis, stickers, eventos e webhooks.** Idem.
+- **Cargos de bot** (`managed`) não entram em `roles:`, porque o Discord não
+  deixa editá-los. Mas os **overrides** deles entram normalmente, porque o
+  apply resolve o nome contra a guild.
 
 ## 2. O arquivo
 
@@ -168,7 +210,30 @@ Vale saber antes de tentar:
   arquivo.
 - **Não gerencia**: emojis, stickers, eventos, webhooks, fóruns, palcos e
   tópicos. Alguns têm rota na API e podem entrar depois.
-- **Não gera o arquivo a partir de um servidor existente.** Não há `import`.
+
+## 7.1 Como os overrides se comportam
+
+Vale entender, porque não é o comportamento óbvio.
+
+O apply enxerga **apenas os cargos que o arquivo cita** em `overrides`. Um
+override que existe no canal mas não aparece no yaml é deixado em paz — não é
+removido. É o que a API permite: ela edita um cargo por vez e não apaga quem
+ficou de fora.
+
+Isso é o que faz o `plan` convergir num servidor real. Quase todo canal fechado
+tem um override para o cargo do próprio bot, e se ele contasse como diferença a
+operação voltaria em toda execução, sem nunca ser resolvida.
+
+Para **remover** um override, declare-o com os dois lados herdando:
+
+```yaml
+overrides:
+  - role: Moderador
+    view: inherit
+    send: inherit
+```
+
+Aí ele é enviado, e a API entende que é para apagar.
 
 ## 8. Vários servidores
 
@@ -244,8 +309,9 @@ rodar de novo aplica exatamente o que faltou — nada é feito duas vezes.
 
 ```
 pnpm guild list
-pnpm guild plan  --server <slug> [--allow-delete] [--reorder]
-pnpm guild apply --server <slug> [--allow-delete] [--reorder] [--yes] [--interval <ms>]
+pnpm guild import --server <slug> [--force]
+pnpm guild plan   --server <slug> [--allow-delete] [--reorder]
+pnpm guild apply  --server <slug> [--allow-delete] [--reorder] [--yes] [--interval <ms>]
 ```
 
 | Flag             | Efeito                                                         |

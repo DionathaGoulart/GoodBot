@@ -91,9 +91,14 @@ cp -r infra/discord/exemplo infra/discord/meu-servidor
 $EDITOR infra/discord/meu-servidor/guild.yaml   # a estrutura desejada
 $EDITOR infra/discord/meu-servidor/.env         # GUILD_ID, ACTOR_ID, token
 
-pnpm guild plan  --server meu-servidor          # mostra o que mudaria
-pnpm guild apply --server meu-servidor          # executa após confirmar
+pnpm guild import --server meu-servidor         # captura o servidor atual
+pnpm guild plan   --server meu-servidor         # mostra o que mudaria
+pnpm guild apply  --server meu-servidor         # executa após confirmar
 ```
+
+Num servidor que já existe, comece pelo `import`: ele lê o servidor, escreve o
+`guild.yaml` correspondente e confere a si mesmo — se a captura ficou fiel, o
+`plan` seguinte sai vazio.
 
 O `guild.yaml` não contém ID nenhum — tudo é por nome, e os IDs são resolvidos
 contra o servidor na hora. Por isso ele pode ser versionado num repositório

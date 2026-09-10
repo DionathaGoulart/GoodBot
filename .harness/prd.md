@@ -354,9 +354,15 @@ Requisitos que o desenho tem de cumprir:
 - **Respeitar o rate limit.** Pausa configurável entre chamadas (padrão 120 ms)
   e uma repescagem quando a API devolve 503 com `retryAfter`.
 
+`pnpm guild import` faz o caminho inverso — lê o servidor e escreve o
+`guild.yaml` que o descreve —, e verifica a si mesmo: depois de escrever, relê o
+arquivo e monta o plano, que tem de sair vazio. Sem isso, adotar um servidor que
+já existe significaria transcrever tudo à mão, e qualquer esquecimento viraria
+diferença falsa na primeira execução.
+
 Fora de escopo na v1: emojis, stickers, eventos agendados, webhooks, fóruns,
-palcos e tópicos; posição de canal (a API não expõe, então a ordem é a de
-criação); e geração do `guild.yaml` a partir de um servidor existente.
+palcos e tópicos; e posição de canal (a API não expõe, então a ordem é a de
+criação).
 
 ## 6. Requisitos funcionais — Painel
 

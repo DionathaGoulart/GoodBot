@@ -58,11 +58,18 @@ export function parseEnvFile(content: string): Record<string, string> {
   return out;
 }
 
+/**
+ * Uma pasta com `.env` mas ainda sem `guild.yaml` conta: é exatamente o estado
+ * de quem acabou de criar o servidor e vai rodar `import`.
+ */
 export function listServers(): string[] {
   if (!existsSync(SERVERS_DIR)) return [];
   return readdirSync(SERVERS_DIR, { withFileTypes: true })
     .filter(
-      (entry) => entry.isDirectory() && existsSync(join(SERVERS_DIR, entry.name, 'guild.yaml')),
+      (entry) =>
+        entry.isDirectory() &&
+        (existsSync(join(SERVERS_DIR, entry.name, 'guild.yaml')) ||
+          existsSync(join(SERVERS_DIR, entry.name, '.env'))),
     )
     .map((entry) => entry.name)
     .sort();
@@ -94,15 +101,17 @@ export function loadSpec(path: string): GuildSpec {
  * com dois servidores configurados não quer que uma variável exportada no
  * shell vaze de um para o outro.
  */
-export function loadServer(slug: string): LoadedServer {
+/**
+ * Só os segredos do servidor, sem exigir o `guild.yaml` — é o que o `import`
+ * precisa, já que ele existe justamente para escrever esse arquivo.
+ */
+export function loadServerEnv(slug: string): { dir: string; env: ServerEnv } {
   const dir = join(SERVERS_DIR, slug);
   if (!existsSync(dir)) {
     const disponiveis = listServers();
     const dica = disponiveis.length > 0 ? ` Disponíveis: ${disponiveis.join(', ')}.` : '';
     throw new ConfigError(`Servidor "${slug}" não existe em infra/discord.${dica}`);
   }
-
-  const spec = loadSpec(join(dir, 'guild.yaml'));
 
   const envPath = join(dir, '.env');
   const fromFile = existsSync(envPath) ? parseEnvFile(readFileSync(envPath, 'utf8')) : {};
@@ -115,5 +124,10 @@ export function loadServer(slug: string): LoadedServer {
     );
   }
 
-  return { slug, dir, spec, env: env.data };
+  return { dir, env: env.data };
+}
+
+export function loadServer(slug: string): LoadedServer {
+  const { dir, env } = loadServerEnv(slug);
+  return { slug, dir, spec: loadSpec(join(dir, 'guild.yaml')), env };
 }

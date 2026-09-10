@@ -288,6 +288,7 @@ packages/guild-config/src/
   schema.ts   Zod do guild.yaml
   load.ts     lê o yaml e o .env do servidor
   state.ts    lê o estado atual pela API (roles, channels, detalhe de cada um)
+  import.ts   o caminho inverso: estado atual -> guild.yaml
   plan.ts     o diff: estado atual x spec = lista de operações
   apply.ts    executa o plano com throttle e resolução nome para ID
   format.ts   imprime o plano; separa as remoções num bloco próprio
@@ -296,8 +297,9 @@ packages/guild-config/src/
 
 ```bash
 pnpm guild list
-pnpm guild plan  --server <slug>    # não escreve nada
-pnpm guild apply --server <slug>
+pnpm guild import --server <slug>   # captura um servidor existente
+pnpm guild plan   --server <slug>   # não escreve nada
+pnpm guild apply  --server <slug>
 ```
 
 Decisões que explicam o código:
@@ -313,10 +315,19 @@ Decisões que explicam o código:
   chamada, então a operação é O(n²) em chamadas.
 - **Ordem de criação é a ordem do arquivo.** Cargo criado entra por baixo, o
   que reproduz naturalmente a ordem do yaml numa guild nova.
+- **Override é comparado só nos cargos que o spec cita.** A rota de overrides
+  edita um cargo por vez e não apaga quem ficou de fora, então comparar o
+  conjunto inteiro faria o plano nunca convergir: o override do cargo do
+  próprio bot voltaria como diferença em toda execução. Declarar `view` e
+  `send` como `inherit` é como o yaml remove um override.
+- **O import verifica a si mesmo.** Depois de escrever, ele relê o arquivo e
+  monta o plano; se não sair vazio, a captura falhou e ele sai com erro.
 
 Limitações honestas: override só expõe `view` e `send` (é o que a API oferece);
-canal não tem campo de posição, então a ordem é a de criação; e o casamento é
-por nome — renomear no yaml é lido como "sumiu um, apareceu outro".
+canal não tem campo de posição, então a ordem é a de criação; o casamento é por
+nome — renomear no yaml é lido como "sumiu um, apareceu outro"; e fórum, palco,
+tópico, emoji, sticker e evento ficam fora do spec (o import avisa e o apply não
+os toca).
 
 ---
 
