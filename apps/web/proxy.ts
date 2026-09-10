@@ -75,7 +75,10 @@ export default function proxy(request: NextRequest) {
     }
   }
 
-  if (pathname.startsWith('/g/') && !hasSessionCookie(request)) {
+  // `/`, `/servidores` e `/g/*` são o painel: sem cookie nem adianta renderizar
+  // (a autorização de verdade é do `requireGuildAccess`, no servidor).
+  const painel = pathname === '/' || pathname.startsWith('/servidores') || pathname.startsWith('/g/');
+  if (painel && site === 'app' && !hasSessionCookie(request)) {
     const login = new URL('/login', request.url);
     login.searchParams.set('reason', 'expired');
     return NextResponse.redirect(login);

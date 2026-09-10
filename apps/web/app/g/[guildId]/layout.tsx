@@ -4,7 +4,7 @@ import { BotStatusBanner, readBotStatus } from '@/components/layout/bot-status';
 import { Topbar } from '@/components/layout/topbar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { requireGuildAccess } from '@/lib/auth/require';
-import { listManagedGuilds } from '@/lib/guilds';
+import { listAccessibleGuilds } from '@/lib/guilds';
 
 export default async function GuildLayout({ children, params }: LayoutProps<'/g/[guildId]'>) {
   const { guildId } = await params;
@@ -14,9 +14,11 @@ export default async function GuildLayout({ children, params }: LayoutProps<'/g/
   const status = await readBotStatus();
 
   // Com mais de um servidor o nome deixa de ser enfeite: sem ele as duas
-  // telas ficam idênticas e não dá para saber onde se está clicando.
-  const guilds = await listManagedGuilds();
-  const guildName = guilds.find((g) => g.id === guildId)?.name ?? 'SERVIDOR';
+  // telas ficam idênticas e não dá para saber onde se está clicando. A lista é
+  // só a que este usuário pode abrir (plano, Etapa 5).
+  const guilds = await listAccessibleGuilds();
+  const atual = guilds.find((g) => g.id === guildId);
+  const guildName = atual?.name ?? 'SERVIDOR';
 
   return (
     <AutoRefreshProvider>
@@ -26,6 +28,8 @@ export default async function GuildLayout({ children, params }: LayoutProps<'/g/
           <Topbar
             guildId={guildId}
             guildName={guildName}
+            guildIconUrl={atual?.iconUrl ?? null}
+            canSwitch={guilds.length > 1}
             status={status}
             user={{ name: session.user.name, image: session.user.image }}
             level={session.level}

@@ -18,6 +18,8 @@ import {
 
 import { groupLabelForPath, navGroupsFor } from './nav';
 
+import { AvatarSq } from '@/components/retro/avatar-sq';
+
 import type { AccessLevel } from '@/lib/auth/access';
 import type { ManagedGuild } from '@/lib/guilds';
 
@@ -120,9 +122,10 @@ export function AppSidebar({
               <Link
                 key={guild.id}
                 href={`/g/${guild.id}`}
-                className="screen-kicker truncate border-2 border-base-300 px-2 py-1 text-left hover:bg-base-200"
+                className="flex items-center gap-2 border-2 border-base-300 px-2 py-1 text-left hover:bg-base-200"
               >
-                {guild.name}
+                <AvatarSq src={guild.iconUrl} name={guild.name} size={20} />
+                <span className="screen-kicker truncate">{guild.name}</span>
               </Link>
             ))}
           </nav>

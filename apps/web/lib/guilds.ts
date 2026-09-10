@@ -1,33 +1,59 @@
 import 'server-only';
 
-import { configuredGuildIds } from './auth/require';
+import { cache } from 'react';
+
+import { auth } from '@/auth';
+
 import { cachedInternalApi } from './internal-api';
+import { servedGuildIds } from './registry';
+
+import type { AccessLevel } from './auth/access';
 
 export interface ManagedGuild {
   id: string;
   name: string;
+  iconUrl: string | null;
+  level: AccessLevel;
 }
 
 /**
- * Nome de cada guild que o painel gerencia, para o seletor da barra lateral.
+ * Os servidores que **este usuário** pode abrir (plano, Etapa 5).
  *
- * O cache de 60 s do `cachedInternalApi` é o que torna isto barato: o layout
- * roda em toda navegação, e sem ele cada troca de página custaria uma chamada
- * por servidor configurado.
+ * Até aqui a lista era "tudo o que o bot atende", o que bastava enquanto os
+ * servidores eram todos do dono do bot. Com servidores de terceiros isso virou
+ * vazamento: quem entra num servidor não tem por que ler o nome dos outros.
+ * O filtro é o nível **por guild** que já está na sessão — a mesma conta que
+ * `requireGuildAccess` usa, e que o `jwt` recarrega a cada 15 minutos —, então
+ * a lista não custa nenhuma chamada nova de permissão.
  *
- * Guild que o bot ainda não entrou responde 404. Isso não é erro — é o estado
- * normal entre a linha aparecer no registro e o bot ser convidado —, então ela
- * aparece no seletor com o próprio ID de rótulo em vez de sumir.
+ * Esconder não é a barreira: quem digitar `/g/<id>` de um servidor alheio bate
+ * no `requireGuildAccess` da própria página (PRD §7.3).
+ *
+ * O `cache` do React memoiza por requisição (o layout e a topbar pedem a mesma
+ * lista) e o `cachedInternalApi` de 60 s evita uma chamada por servidor a cada
+ * navegação. Guild que o bot ainda não entrou responde 404 — não é erro, é o
+ * estado normal entre a linha aparecer no registro e o bot ser convidado —,
+ * então ela aparece com o próprio ID de rótulo em vez de sumir.
  */
-export async function listManagedGuilds(): Promise<ManagedGuild[]> {
+export const listAccessibleGuilds = cache(async (): Promise<ManagedGuild[]> => {
+  const session = await auth();
+  const grants = session?.guilds ?? {};
   const api = cachedInternalApi(60);
-  return await Promise.all(
-    (await configuredGuildIds()).map(async (id) => {
+
+  const acessiveis = (await servedGuildIds())
+    .map((id) => ({ id, level: grants[id]?.level ?? ('none' as AccessLevel) }))
+    .filter((guild) => guild.level !== 'none');
+
+  const guilds = await Promise.all(
+    acessiveis.map(async ({ id, level }) => {
       try {
-        return { id, name: (await api.guildProfile(id)).name };
+        const profile = await api.guildProfile(id);
+        return { id, name: profile.name, iconUrl: profile.iconUrl, level };
       } catch {
-        return { id, name: id };
+        return { id, name: id, iconUrl: null, level };
       }
     }),
   );
-}
+
+  return guilds.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+});

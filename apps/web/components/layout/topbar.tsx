@@ -1,3 +1,6 @@
+import Link from 'next/link';
+
+import { AvatarSq } from '@/components/retro/avatar-sq';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { signOutAction } from '@/app/actions/auth';
@@ -14,12 +17,17 @@ import type { AccessLevel } from '@/lib/auth/access';
 export function Topbar({
   guildId,
   guildName,
+  guildIconUrl,
+  canSwitch,
   status,
   user,
   level,
 }: {
   guildId: string;
   guildName: string;
+  guildIconUrl?: string | null;
+  /** Só há o que trocar com mais de um servidor acessível (plano, Etapa 5). */
+  canSwitch?: boolean;
   status: BotStatus;
   user: { name: string; image: string | null };
   level: AccessLevel;
@@ -33,6 +41,16 @@ export function Topbar({
         <Breadcrumbs guildId={guildId} guildName={guildName} />
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        {canSwitch ? (
+          <Link
+            href="/servidores"
+            title={`${guildName} — trocar de servidor`}
+            aria-label="Trocar de servidor"
+            className="shrink-0 border-2 border-base-300 p-0.5 hover:bg-base-200"
+          >
+            <AvatarSq src={guildIconUrl} name={guildName} size={24} />
+          </Link>
+        ) : null}
         <CommandPalette guildId={guildId} level={level} />
         <AutoRefreshIndicator />
         <BotStatusIndicator status={status} />

@@ -158,9 +158,12 @@ depois**, senão ele fica online e calado lá.
 >
 > O bot relê o registro a cada minuto; não precisa reiniciar.
 
-O que muda no painel: a barra lateral passa a mostrar o nome real de cada
-servidor e a oferecer a troca. Seu nível de permissão é resolvido **por
-servidor** — ser dono de um não dá nada no outro.
+O que muda no painel: entrar leva ao seletor (`/servidores`) quando você tem
+acesso a mais de um; com um só, direto para ele. A barra lateral mostra o nome
+e o ícone de cada servidor, e o ícone do servidor atual, no alto à direita,
+reabre o seletor. Seu nível de permissão é resolvido **por servidor** — ser
+dono de um não dá nada no outro —, e a lista só mostra onde você tem nível:
+quem administra um servidor não lê o nome dos outros.
 
 ### O que conferir depois
 

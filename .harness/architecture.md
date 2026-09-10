@@ -197,9 +197,10 @@ App Router. **Server Components por padrão**; `"use client"` só onde há estad
 de formulário ou interação.
 
 ```
-proxy.ts        CSP com nonce, porta de `/g/*`, rate limit e o roteamento
-                por hostname (ver 5.1)
+proxy.ts        CSP com nonce, porta do painel (`/`, `/servidores`, `/g/*`),
+                rate limit e o roteamento por hostname (ver 5.1)
 app/
+  servidores/   o seletor: os servidores que ESTE usuário pode abrir
   g/[guildId]/
     servidor, canais, cargos, membros, casos, banidos, convites,
     eventos, emojis, mensagens, auditoria, system
@@ -215,6 +216,7 @@ lib/
   site-url.ts       a URL absoluta de cada um, derivada do `AUTH_URL`
   invite/           state assinado, OAuth de convite e escrita no registro
   registry.ts       os servidores atendidos, lidos de `guild_registry`
+  guilds.ts         os que este usuário pode abrir (registro ∩ nível na sessão)
   internal-api.ts   o cliente da API do bot, com o token do servidor
   module-config.ts  ponte entre o form do painel e o schema Zod do módulo
   auth/             Auth.js com provider Discord + checagem de nível
