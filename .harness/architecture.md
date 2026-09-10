@@ -122,9 +122,10 @@ src/
 
   automod/        o motor: engine.ts + rules/{spam,links,caps,words,mentions}
   services/       a lógica de verdade; ver abaixo
-  jobs/           tarefas periódicas: retention, social, stats-rollup
+  jobs/           tarefas periódicas: retention, social, stats-rollup,
+                  demo-expiry (avisa, se despede e sai quando a demo vence)
   lib/            utilitários sem estado: embeds, template, cooldown, purge,
-                  guild-setup (preparar uma guild atendida)...
+                  channels (onde o bot pode falar), guild-setup...
   api/            a API HTTP (Hono) — ver 4.4
 ```
 

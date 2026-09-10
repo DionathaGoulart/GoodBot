@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, lte, or, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 
 import { guildRegistry } from '../schema/guilds';
 
@@ -159,7 +159,14 @@ export async function markGuildLeft(db: DbExecutor, guildId: string): Promise<vo
     .where(eq(guildRegistry.guildId, guildId));
 }
 
-/** Demos vencidas que o job de expiração ainda não tratou. */
+/**
+ * Demos vencidas que o job de expiração ainda não tratou (plano, Etapa 3).
+ *
+ * O `demo_ended_at` é o que fecha a varredura: o `status` continua `demo` para
+ * sempre (é ele que diz "este servidor já usou a sua demo" na tela do convite
+ * e na fila do painel admin), então sem esta coluna a mesma linha voltaria em
+ * toda passada, para todo o sempre.
+ */
 export async function listExpiredDemoGuilds(
   db: DbExecutor,
   now: Date = new Date(),
@@ -172,6 +179,56 @@ export async function listExpiredDemoGuilds(
         eq(guildRegistry.status, 'demo'),
         isNotNull(guildRegistry.expiresAt),
         lte(guildRegistry.expiresAt, now),
+        isNull(guildRegistry.demoEndedAt),
       ),
     );
+}
+
+/**
+ * Demos que vencem dentro de `withinMs` e ainda não receberam o aviso. Quem já
+ * venceu fica de fora: para essa a passada seguinte manda a despedida, e um
+ * "faltam 10 minutos" depois da hora seria mentira.
+ */
+export async function listDemoGuildsToWarn(
+  db: DbExecutor,
+  withinMs: number,
+  now: Date = new Date(),
+): Promise<GuildRegistryEntry[]> {
+  return db
+    .select()
+    .from(guildRegistry)
+    .where(
+      and(
+        eq(guildRegistry.status, 'demo'),
+        isNotNull(guildRegistry.expiresAt),
+        gt(guildRegistry.expiresAt, now),
+        lte(guildRegistry.expiresAt, new Date(now.getTime() + withinMs)),
+        isNull(guildRegistry.demoWarnedAt),
+        isNull(guildRegistry.demoEndedAt),
+      ),
+    );
+}
+
+/** O aviso de fim de demo saiu. Marcado antes do envio (ver o job). */
+export async function markDemoWarned(
+  db: DbExecutor,
+  guildId: string,
+  at: Date = new Date(),
+): Promise<void> {
+  await db
+    .update(guildRegistry)
+    .set({ demoWarnedAt: at, updatedAt: sql`now()` })
+    .where(eq(guildRegistry.guildId, guildId));
+}
+
+/** A demo foi encerrada pelo job: despedida enviada e saída feita. */
+export async function markDemoEnded(
+  db: DbExecutor,
+  guildId: string,
+  at: Date = new Date(),
+): Promise<void> {
+  await db
+    .update(guildRegistry)
+    .set({ demoEndedAt: at, updatedAt: sql`now()` })
+    .where(eq(guildRegistry.guildId, guildId));
 }

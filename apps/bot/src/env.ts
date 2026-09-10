@@ -39,6 +39,13 @@ const EnvSchema = z
     BACKUP_DIR: z.preprocess(blankToUndefined, z.string().optional()),
     // As notificações de rede social não têm variável nenhuma: desde a v2 o
     // módulo só lê páginas públicas do YouTube, sem chave e sem cota (PRD §5.8).
+    /**
+     * URL pública do painel — a mesma variável que o Auth.js usa lá. O bot lê
+     * daqui um endereço só: o do convite normal (`invite.<host>`), que entra
+     * nos avisos de fim da demo. Sem ela o aviso sai sem link, então é
+     * opcional: o bot não pode deixar de subir por causa de um texto.
+     */
+    AUTH_URL: z.preprocess(blankToUndefined, z.url().optional()),
     /** Sha do commit da imagem, injetado pela CI no build (`GIT_SHA`). */
     GIT_SHA: z.preprocess(blankToUndefined, z.string().optional()),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),

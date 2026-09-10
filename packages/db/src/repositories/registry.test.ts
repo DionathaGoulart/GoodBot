@@ -12,6 +12,8 @@ function entry(overrides: Partial<GuildRegistryEntry>): GuildRegistryEntry {
     invitedAt: AGORA,
     approvedAt: null,
     expiresAt: null,
+    demoWarnedAt: null,
+    demoEndedAt: null,
     leftAt: null,
     note: null,
     createdAt: AGORA,

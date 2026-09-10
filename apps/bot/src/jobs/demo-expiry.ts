@@ -1,0 +1,197 @@
+import {
+  listDemoGuildsToWarn,
+  listExpiredDemoGuilds,
+  markDemoEnded,
+  markDemoWarned,
+} from '@goodbot/db';
+import { DEMO_WARNING_BEFORE_MS, MINUTE_MS } from '@goodbot/shared';
+import { time, TimestampStyles } from 'discord.js';
+
+import { noticeChannel } from '../lib/channels';
+import { infoEmbed, warningEmbed } from '../lib/embeds';
+import { childLogger } from '../logger';
+
+import type { AlertService } from '../services/alerts';
+import type { Db, GuildRegistryEntry } from '@goodbot/db';
+import type { Client, EmbedBuilder, Guild } from 'discord.js';
+
+const log = childLogger('demo-expiry');
+
+/**
+ * De minuto em minuto. O intervalo não é uma folga: ele é o erro máximo do
+ * aviso de 10 minutos e da hora da saída, e uma demo dura uma hora.
+ */
+export const DEMO_EXPIRY_INTERVAL_MS = MINUTE_MS;
+
+export interface DemoExpiryJobDeps {
+  db: Db;
+  client: Client;
+  /** Link do convite normal. Ausente (dev sem `AUTH_URL`) = aviso sem link. */
+  inviteUrl?: string | null;
+  alerts?: Pick<AlertService, 'emit'>;
+  intervalMs?: number;
+  warnBeforeMs?: number;
+  /** Relógio injetável: o teste não pode esperar uma hora (plano, Etapa 3). */
+  now?: () => number;
+}
+
+/**
+ * O fim da demonstração (plano, Etapa 3): avisa faltando 10 minutos, se
+ * despede e sai quando o prazo acaba.
+ *
+ * O job **não** é quem decide se o bot atende — isso é o `isGuildServed`, que
+ * conta o prazo na hora. Aqui é só a parte visível: sem esta passada uma demo
+ * vencida viraria um bot mudo parado no servidor, que é a pior versão de todas
+ * (ninguém entende se quebrou, se foi banido ou se acabou).
+ *
+ * Duas marcas no registro guardam o que já foi feito, e as duas estão no banco
+ * de propósito: um deploy no meio da hora não pode repetir o aviso nem a
+ * despedida. O `status` continua `demo` depois do fim — é ele que diz "este
+ * servidor já usou a sua" na tela do convite e na fila do painel admin.
+ */
+export class DemoExpiryJob {
+  private readonly deps: DemoExpiryJobDeps;
+  private readonly now: () => number;
+  private timer: NodeJS.Timeout | null = null;
+  private running = false;
+
+  constructor(deps: DemoExpiryJobDeps) {
+    this.deps = deps;
+    this.now = deps.now ?? Date.now;
+  }
+
+  start(): void {
+    if (this.timer) return;
+    this.timer = setInterval(
+      () => void this.tick(),
+      this.deps.intervalMs ?? DEMO_EXPIRY_INTERVAL_MS,
+    );
+    this.timer.unref();
+  }
+
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  }
+
+  /** Uma passada: primeiro os avisos, depois as saídas. Nunca lança. */
+  async tick(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      const at = new Date(this.now());
+      const within = this.deps.warnBeforeMs ?? DEMO_WARNING_BEFORE_MS;
+      for (const entry of await listDemoGuildsToWarn(this.deps.db, within, at)) {
+        await this.warn(entry, at);
+      }
+      for (const entry of await listExpiredDemoGuilds(this.deps.db, at)) {
+        await this.end(entry, at);
+      }
+    } catch (error) {
+      // O laço não pode morrer por um banco instável: a passada seguinte
+      // reencontra as mesmas linhas, porque as marcas só saem no sucesso.
+      log.error({ err: error }, 'falha na passada do job de expiração da demo');
+    } finally {
+      this.running = false;
+    }
+  }
+
+  /**
+   * O aviso de que o prazo está acabando.
+   *
+   * A marca vem **antes** do envio de propósito: falhar depois de marcar custa
+   * um aviso; falhar antes custaria um aviso por minuto até o fim da demo, num
+   * servidor que não é nosso.
+   */
+  private async warn(entry: GuildRegistryEntry, at: Date): Promise<void> {
+    const expiresAt = entry.expiresAt;
+    if (!expiresAt) return;
+    await markDemoWarned(this.deps.db, entry.guildId, at);
+
+    const enviado = await this.announce(entry.guildId, () =>
+      warningEmbed({
+        title: 'A demonstração está acabando',
+        description: [
+          `A demonstração do Goodbot neste servidor acaba ${time(expiresAt, TimestampStyles.RelativeTime)},` +
+            ` às ${time(expiresAt, TimestampStyles.ShortTime)}.`,
+          'Quando o prazo acabar o bot sai sozinho. **A configuração fica guardada**:' +
+            ' se ele voltar aprovado, tudo volta como estava.',
+          this.deps.inviteUrl
+            ? `Para ficar de vez, peça a aprovação: ${this.deps.inviteUrl}`
+            : 'Para ficar de vez, peça a aprovação pelo convite normal.',
+        ].join('\n\n'),
+      }),
+    );
+    if (enviado) log.info({ guildId: entry.guildId }, 'aviso de fim de demo enviado');
+  }
+
+  /**
+   * A despedida e a saída.
+   *
+   * A ordem é mensagem → sair → marcar. Marcar por último é o que faz a queda
+   * do processo no meio se resolver sozinha: a passada seguinte reencontra a
+   * linha, não acha mais a guild no cache e só fecha a marca.
+   */
+  private async end(entry: GuildRegistryEntry, at: Date): Promise<void> {
+    const guild = this.deps.client.guilds.cache.get(entry.guildId);
+    if (guild) {
+      await this.announce(entry.guildId, () =>
+        infoEmbed({
+          title: 'Fim da demonstração',
+          description: [
+            'O prazo da demonstração do Goodbot acabou e ele está saindo deste servidor.' +
+              ' **Nada foi apagado**: casos, tags, tickets e a configuração continuam guardados' +
+              ' e voltam como estavam se o bot for aprovado.',
+            this.deps.inviteUrl
+              ? `Quer o Goodbot de vez? Peça a aprovação: ${this.deps.inviteUrl}`
+              : 'Quer o Goodbot de vez? Peça a aprovação pelo convite normal.',
+          ].join('\n\n'),
+        }),
+      );
+      await this.leave(guild);
+    }
+
+    await markDemoEnded(this.deps.db, entry.guildId, at);
+    log.info({ guildId: entry.guildId, name: guild?.name }, 'demonstração encerrada');
+    this.deps.alerts?.emit({
+      kind: `demo-expired:${entry.guildId}`,
+      title: 'Demonstração encerrada',
+      description: `A demo de \`${guild?.name ?? entry.guildId}\` venceu e o bot saiu.`,
+      level: 'info',
+      fields: [
+        { name: 'Servidor', value: guild?.name ?? '(fora do cache)' },
+        { name: 'ID', value: entry.guildId },
+        ...(entry.invitedBy ? [{ name: 'Convidou', value: `<@${entry.invitedBy}>` }] : []),
+      ],
+    });
+  }
+
+  /** Manda o embed no canal de aviso. Falhar aqui nunca trava a saída. */
+  private async announce(guildId: string, build: () => EmbedBuilder): Promise<boolean> {
+    const guild = this.deps.client.guilds.cache.get(guildId);
+    if (!guild) return false;
+    try {
+      const channel = noticeChannel(guild);
+      if (!channel) {
+        log.warn({ guildId }, 'sem canal onde avisar sobre a demo');
+        return false;
+      }
+      await channel.send({ embeds: [build()] });
+      return true;
+    } catch (error) {
+      log.warn({ err: error, guildId }, 'não consegui avisar sobre a demo');
+      return false;
+    }
+  }
+
+  private async leave(guild: Guild): Promise<void> {
+    try {
+      await guild.leave();
+    } catch (error) {
+      // O `markDemoEnded` acontece mesmo assim: insistir todo minuto numa
+      // guild que não deixa sair só gera ruído. O bot já não atende ninguém
+      // lá, porque o prazo é contado pelo `isGuildServed`.
+      log.error({ err: error, guildId: guild.id }, 'não consegui sair da guild da demo');
+    }
+  }
+}

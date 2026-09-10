@@ -226,6 +226,31 @@ precisam estar em **OAuth2 > Redirects** (§2).
 O `http://localhost:3000/convite` mostra os dois links, o que é útil para
 conferir de onde eles apontam sem decorar os subdomínios.
 
+## 7.3 O fim da demonstração
+
+A demo dura **uma hora** e termina sozinha. Quem toca isso é o job
+`apps/bot/src/jobs/demo-expiry.ts`, que passa de minuto em minuto:
+
+1. **faltando 10 minutos**, avisa no canal de sistema do servidor (ou, sem ele,
+   no primeiro canal de texto em que o bot consegue falar), com o link do
+   convite normal;
+2. **no fim do prazo**, manda a despedida e sai (`guild.leave()`).
+
+Nada é apagado: casos, tags, tickets e config continuam no banco e voltam como
+estavam se o servidor for aprovado depois.
+
+O link do aviso sai do `AUTH_URL` — a mesma variável do painel, que em produção
+também precisa estar no `.env` da VM. Sem ela o bot sobe igual e o aviso sai
+sem link.
+
+Duas colunas em `guild_registry` guardam o que já foi feito (`demo_warned_at` e
+`demo_ended_at`), no banco e não na memória do processo: um deploy no meio da
+hora não repete o aviso nem a despedida. O `status` continua `demo` depois do
+fim — é ele que diz "este servidor já usou a sua" na tela do convite.
+
+O bot deixa de atender **no instante** do vencimento, mesmo que o job esteja
+atrasado: a conta é do `isGuildServed`, não do job.
+
 ## 8. Depois daqui
 
 - [`.harness/architecture.md`](../.harness/architecture.md) — como o código é

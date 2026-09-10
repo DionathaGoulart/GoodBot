@@ -35,6 +35,18 @@ export const guildRegistry = pgTable(
     approvedAt: timestamptz('approved_at'),
     /** Só a demo tem prazo; nas outras é nulo. */
     expiresAt: timestamptz('expires_at'),
+    /**
+     * Quando o bot avisou no servidor que a demo estava para acabar. Fica no
+     * banco (e não numa memória do processo) porque um deploy no meio da hora
+     * faria o aviso sair de novo a cada passada do job.
+     */
+    demoWarnedAt: timestamptz('demo_warned_at'),
+    /**
+     * Quando o job de expiração já se despediu e saiu. É o que impede a demo
+     * vencida de voltar na varredura para sempre: o `status` continua `demo`,
+     * porque é ele que conta a história ("já usou a sua") na tela do convite.
+     */
+    demoEndedAt: timestamptz('demo_ended_at'),
     /** Quando o bot saiu (ou foi removido). Voltar limpa o campo. */
     leftAt: timestamptz('left_at'),
     /** Motivo do bloqueio ou da recusa, para a fila do painel admin. */

@@ -228,6 +228,14 @@ export const WEEK_MS = 7 * DAY_MS;
 export const DEMO_DURATION_MS = HOUR_MS;
 
 /**
+ * Quanto antes do fim da demo o bot avisa no servidor (plano, Etapa 3). Dez
+ * minutos é o que dá para alguém ler o aviso e ainda clicar no convite normal
+ * antes de o bot sair — mais cedo o recado se perde na conversa, mais tarde
+ * vira surpresa.
+ */
+export const DEMO_WARNING_BEFORE_MS = 10 * MINUTE_MS;
+
+/**
  * Validade do `state` assinado do convite. Curta porque ele só precisa
  * sobreviver ao tempo de escolher o servidor na tela do Discord; um `state`
  * antigo que vaze não serve para nada depois disso.

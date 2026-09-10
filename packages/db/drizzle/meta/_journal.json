@@ -50,6 +50,13 @@
       "when": 1789055466982,
       "tag": "0006_guild_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789059537428,
+      "tag": "0007_demo_expiry",
+      "breakpoints": true
     }
   ]
 }

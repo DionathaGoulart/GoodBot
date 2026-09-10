@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { subdomainUrl } from '@goodbot/shared';
+
 import { env } from './env';
 
 import type { SiteHost } from './hosts';
@@ -13,9 +15,10 @@ import type { SiteHost } from './hosts';
  * Discord **não pode** sair do header `Host` da requisição — quem manda o
  * header é o cliente, e a URL de callback é exatamente o que precisa ser
  * estável. Trocar de domínio continua sendo trocar uma variável só.
+ *
+ * A montagem em si está em `shared` porque o bot faz a mesma conta para o link
+ * do convite que ele manda quando a demo acaba (Etapa 3).
  */
 export function siteUrl(site: SiteHost, path = '/'): string {
-  const url = new URL(env().AUTH_URL);
-  if (site !== 'app') url.hostname = `${site}.${url.hostname}`;
-  return new URL(path, url.origin).toString();
+  return subdomainUrl(env().AUTH_URL, site === 'app' ? null : site, path);
 }

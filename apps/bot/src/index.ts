@@ -1,5 +1,5 @@
 import { createDb } from '@goodbot/db';
-import { VERSION } from '@goodbot/shared';
+import { subdomainUrl, VERSION } from '@goodbot/shared';
 import { sql } from 'drizzle-orm';
 
 import { createApiServer } from './api/server';
@@ -8,6 +8,7 @@ import { createClient } from './client';
 import { commands as commandList } from './commands/index';
 import { env } from './env';
 import { events } from './events/index';
+import { DemoExpiryJob } from './jobs/demo-expiry';
 import { RetentionJob } from './jobs/retention';
 import { SocialJob } from './jobs/social';
 import { StatsRollupJob } from './jobs/stats-rollup';
@@ -147,6 +148,14 @@ async function main(): Promise<void> {
   const social = new YouTubeProvider();
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
+  // O fim da demo (plano, Etapa 3): avisa, se despede e sai. O link do convite
+  // sai do `AUTH_URL` pela mesma conta que o painel faz para os subdomínios.
+  const demoExpiry = new DemoExpiryJob({
+    db,
+    client,
+    alerts,
+    inviteUrl: env.AUTH_URL ? subdomainUrl(env.AUTH_URL, 'invite') : null,
+  });
   const statsRollup = new StatsRollupJob({ db, client, config });
   // As retenções do PRD §8 num job só, porque é ele que alerta na falha.
   const retention = new RetentionJob({
@@ -219,6 +228,7 @@ async function main(): Promise<void> {
     stats.start();
     statsRollup.start();
     socialJob.start();
+    demoExpiry.start();
     retention.start();
     databaseProbe.start();
     alerts.emit({
@@ -254,6 +264,7 @@ async function main(): Promise<void> {
       stats.stop();
       statsRollup.stop();
       socialJob.stop();
+      demoExpiry.stop();
       retention.stop();
       databaseProbe.stop();
       autorole.stop();
