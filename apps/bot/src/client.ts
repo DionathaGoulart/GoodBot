@@ -36,9 +36,25 @@ export const PARTIALS = [
 ] as const;
 
 /**
- * Limites de cache pensados para a ARM free tier (PRD §7.2): guardamos o que
- * os módulos realmente consultam (membros, cargos, canais) e cortamos o resto.
+ * Teto do cache de membros **por guild** (plano, Etapa 6).
+ *
+ * Cada guild tem o seu `GuildMemberManager`, então a conta de RAM é
+ * `guilds × MEMBER_CACHE_MAX`, e não um teto global. Sem teto ela era
+ * `guilds × membros do servidor` — a soma dos membros de todo mundo —, o que
+ * com servidores de terceiros estoura os 384 MB do container antes de qualquer
+ * outra coisa dar sinal.
+ *
+ * Duzentos não é um palpite sobre "quantos membros o servidor tem": é quantos
+ * o bot precisa ter à mão ao mesmo tempo. O LRU guarda quem apareceu por
+ * último, que é exatamente quem a moderação está tratando; qualquer outro sai
+ * por `fetchMember`, uma chamada. Quem lista o servidor inteiro (a busca do
+ * painel) pergunta ao gateway em vez de varrer o cache.
  */
+export const MEMBER_CACHE_MAX = 200;
+
+/** De quanto em quanto tempo o cache de membros e de usuários é esvaziado. */
+export const MEMBER_SWEEP_INTERVAL_SECONDS = 3_600;
+
 /**
  * Teto de uma chamada REST ao Discord. Explícito e não herdado do default do
  * discord.js: uma requisição pendurada segura o handler que a chamou, e desde
@@ -47,6 +63,11 @@ export const PARTIALS = [
  */
 export const REST_TIMEOUT_MS = 15_000;
 
+/**
+ * Limites de cache pensados para a VM free tier (PRD §7.2): guardamos o que os
+ * módulos realmente consultam (membros recentes, cargos, canais) e cortamos o
+ * resto.
+ */
 export const clientOptions: ClientOptions = {
   intents: [...INTENTS],
   partials: [...PARTIALS],
@@ -62,11 +83,32 @@ export const clientOptions: ClientOptions = {
     ThreadManager: 100,
     ReactionUserManager: 0,
     VoiceStateManager: 100,
+    GuildMemberManager: {
+      maxSize: MEMBER_CACHE_MAX,
+      // O membro do próprio bot nunca pode ser despejado: `guild.members.me` é
+      // quem responde "posso falar neste canal?" e "meu cargo está acima
+      // deste?" — sem ele o bot perde a checagem de hierarquia inteira.
+      keepOverLimit: (member) => member.id === member.client.user.id,
+    },
   }),
   sweepers: {
     ...Options.DefaultSweeperSettings,
     messages: { interval: 600, lifetime: 3600 },
     threads: { interval: 3600, lifetime: 14_400 },
+    // O teto acima já segura o pico; o sweeper é quem devolve a memória de um
+    // servidor que ficou quieto. Membro varrido volta num `fetch` — o preço
+    // de errar aqui é uma chamada, não um bug.
+    guildMembers: {
+      interval: MEMBER_SWEEP_INTERVAL_SECONDS,
+      filter: () => (member) => member.id !== member.client.user.id,
+    },
+    // `client.users` cresce junto com os membros (todo `GuildMember` aponta
+    // para um `User`) e não aceita teto: limitar o `UserManager` arrisca
+    // despejar o próprio `client.user`. Aqui a poda é por varredura.
+    users: {
+      interval: MEMBER_SWEEP_INTERVAL_SECONDS,
+      filter: () => (user) => user.id !== user.client.user.id,
+    },
   },
 };
 

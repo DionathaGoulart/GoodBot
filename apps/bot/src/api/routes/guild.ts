@@ -11,6 +11,7 @@ import {
 import { AuditLogEvent, DiscordAPIError, RESTJSONErrorCodes } from 'discord.js';
 import { Hono } from 'hono';
 
+import { roleMemberCounts } from '../../lib/members';
 import { fetchMember } from '../../services/moderation';
 import { requireActor, requireBotMember } from '../actor';
 import { ApiHttpError, forbidden, notFound } from '../errors';
@@ -29,35 +30,40 @@ import type { BanListQuery, GuildBanSummary, GuildProfile } from '@goodbot/share
 import type { Guild, GuildBan, GuildMember, GuildVerificationLevel } from 'discord.js';
 
 /**
- * Busca de membros. Com a intent `GuildMembers` o cache já tem o servidor
- * inteiro, então filtramos nele; só um ID solto que não está no cache vira um
- * fetch (PRD §7.4: nada de fetch em loop).
+ * Busca de membros.
+ *
+ * Até a Etapa 6 do plano isto filtrava `guild.members.cache`, porque o boot
+ * puxava o servidor inteiro para a memória. Com o teto por guild o cache virou
+ * uma amostra — quem apareceu por último —, e filtrar nele devolveria "2 de 13"
+ * de novo. Agora quem responde é o Discord:
+ *
+ * · ID → `fetchMember` (cache, e só então uma chamada);
+ * · busca vazia (a primeira abertura da tela) → uma página de membros;
+ * · texto → o endpoint de busca por prefixo, o mesmo da caixa de membros do
+ *   cliente do Discord.
+ *
+ * Nos dois últimos o resultado **não** entra no cache: uma busca por "a" com
+ * limite 100 despejaria justamente os membros que a moderação está tratando.
  */
 export async function searchMembers(
   guild: Guild,
   query: string,
   limit: number,
 ): Promise<GuildMember[]> {
-  // `needle` sai antes do `if`: `isSnowflake` é type guard e estreita `query`
-  // a `never` no ramo de baixo.
-  const needle = query.toLowerCase();
-
   if (isSnowflake(query)) {
     const member = await fetchMember(guild, query);
     return member ? [member] : [];
   }
 
-  const matches = [...guild.members.cache.values()].filter((member) => {
-    if (!needle) return true;
-    return (
-      member.user.username.toLowerCase().includes(needle) ||
-      member.displayName.toLowerCase().includes(needle) ||
-      member.user.tag.toLowerCase().includes(needle)
-    );
-  });
+  // O endpoint de busca recusa `query` vazia; a lista simples é o que a tela
+  // precisa antes de alguém digitar qualquer coisa.
+  const found = await (query
+    ? guild.members.search({ query, limit, cache: false })
+    : guild.members.list({ limit, cache: false })
+  ).catch(() => null);
+  if (!found) return [];
 
-  matches.sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'));
-  return matches.slice(0, limit);
+  return [...found.values()].sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'));
 }
 
 /** O estado atual do servidor + o que o bot consegue mexer nele (PRD §6.3). */
@@ -294,10 +300,13 @@ export function createGuildRoutes(deps: ApiDeps): Hono<ApiEnv> {
         return c.json(channels);
       })
 
-      .get('/roles', (c) => {
+      .get('/roles', async (c) => {
         const guild = c.get('guild');
+        // `null` = servidor grande demais para contar sem varrer tudo; aí o
+        // campo não vai e a tabela mostra "—" em vez de um zero mentiroso.
+        const counts = await roleMemberCounts(guild);
         const roles = [...guild.roles.cache.values()]
-          .map(toRoleSummary)
+          .map((role) => toRoleSummary(role, counts ? (counts.get(role.id) ?? 0) : undefined))
           .sort((a, b) => b.position - a.position);
         return c.json(roles);
       })

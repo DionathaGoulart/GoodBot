@@ -46,10 +46,16 @@ interface Fakes {
   warn: ReturnType<typeof vi.fn>;
   invalidate: ReturnType<typeof vi.fn>;
   members: Map<string, ReturnType<typeof fakeMember>>;
+  list: ReturnType<typeof vi.fn>;
+  search: ReturnType<typeof vi.fn>;
 }
 
 function makeDeps(overrides: { warn?: () => unknown } = {}): Fakes {
   const members = new Map<string, ReturnType<typeof fakeMember>>();
+  // Desde a Etapa 6 a busca do painel pergunta ao Discord em vez de varrer o
+  // cache: sem busca é `list`, com texto é `search`.
+  const list = vi.fn(() => Promise.resolve(members));
+  const search = vi.fn(() => Promise.resolve(members));
   const guild = {
     id: GUILD_ID,
     ownerId: '900000000000000009',
@@ -57,6 +63,8 @@ function makeDeps(overrides: { warn?: () => unknown } = {}): Fakes {
       cache: members,
       me: undefined as unknown,
       fetch: () => Promise.reject(new Error('não está no servidor')),
+      list,
+      search,
     },
   };
   members.set(ACTOR_ID, fakeMember(ACTOR_ID, { mod: true, guild }));
@@ -97,13 +105,45 @@ function makeDeps(overrides: { warn?: () => unknown } = {}): Fakes {
     tickets: {},
   } as unknown as ApiDeps;
 
-  return { deps, warn, invalidate, members };
+  return { deps, warn, invalidate, members, list, search };
 }
 
 function makeApp(overrides?: { warn?: () => unknown }) {
   const fakes = makeDeps(overrides);
   return { ...fakes, app: createApiApp({ deps: fakes.deps, token: TOKEN, port: 0 }) };
 }
+
+describe('busca de membros', () => {
+  it('sem texto lista uma página no Discord, não o cache', async () => {
+    const { app, list, search } = makeApp();
+    const res = await app.request(`/guilds/${GUILD_ID}/members?limit=5`, { headers: auth });
+
+    expect(res.status).toBe(200);
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ limit: 5, cache: false }));
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it('com texto usa a busca do Discord: o cache é só uma amostra', async () => {
+    const { app, list, search } = makeApp();
+    const res = await app.request(`/guilds/${GUILD_ID}/members?q=ana&limit=5`, { headers: auth });
+
+    expect(res.status).toBe(200);
+    expect(search).toHaveBeenCalledWith(
+      expect.objectContaining({ query: 'ana', limit: 5, cache: false }),
+    );
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('ID vai direto ao membro, sem busca', async () => {
+    const { app, list, search } = makeApp();
+    const res = await app.request(`/guilds/${GUILD_ID}/members?q=${ACTOR_ID}`, { headers: auth });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toHaveLength(1);
+    expect(list).not.toHaveBeenCalled();
+    expect(search).not.toHaveBeenCalled();
+  });
+});
 
 describe('auth', () => {
   it('sem token responde 401', async () => {

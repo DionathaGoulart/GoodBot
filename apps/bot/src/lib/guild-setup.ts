@@ -80,29 +80,22 @@ export class ProcessTuner {
 export const processTuner = new ProcessTuner();
 
 /**
- * Deixa uma guild pronta para ser atendida: linha em `guilds`, cache de
- * membros, config aquecida e slash commands registrados. Roda no `ready` para
- * cada guild atendida e no `guildCreate` de quem já entra atendido (demo).
+ * Deixa uma guild pronta para ser atendida: linha em `guilds`, config aquecida
+ * e slash commands registrados. Roda no `ready` para cada guild atendida e no
+ * `guildCreate` de quem já entra atendido (demo).
  */
 export async function prepareGuild(ctx: BotContext, guild: Guild): Promise<ProcessTuning> {
   await upsertGuild(ctx, guild);
 
-  // O GUILD_CREATE não garante a lista completa de membros, então o cache
-  // nascia com o bot e quem apareceu num evento — era isso que fazia o
-  // painel listar 2 de 13. Um GUILD_REQUEST_MEMBERS no boot enche o cache;
-  // depois os eventos de entrada/saída o mantêm (PRD §7.4: nada em loop).
-  try {
-    const members = await guild.members.fetch();
-    ctx.logger.info(
-      { guildId: guild.id, cached: members.size, total: guild.memberCount },
-      'cache de membros',
-    );
-  } catch (error) {
-    ctx.logger.error(
-      { err: error, guildId: guild.id },
-      'não consegui carregar os membros; confira a intent GuildMembers no portal',
-    );
-  }
+  // Aqui havia um `guild.members.fetch()` — o servidor inteiro para o cache, a
+  // cada boot. Ele saiu na Etapa 6 do plano: a RAM crescia com a **soma** dos
+  // membros de todos os servidores, e com servidores de terceiros isso estoura
+  // os 384 MB do container antes de qualquer outra coisa dar sinal.
+  //
+  // O cache agora se enche sozinho pelos eventos (quem fala, quem entra, quem
+  // é punido) e tem teto por guild (`MEMBER_CACHE_MAX`). Quem precisa de um
+  // membro específico usa `fetchMember`; quem precisa da lista pergunta ao
+  // gateway (`searchMembers`), que é o que o próprio cliente do Discord faz.
 
   // Aquece o cache de config antes de aceitar interações.
   await ctx.config.warm(guild.id);

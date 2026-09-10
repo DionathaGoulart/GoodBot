@@ -64,7 +64,11 @@ export function RolesTable({ roles, readOnly }: { roles: GuildRoleSummary[]; rea
       {
         accessorKey: 'memberCount',
         header: 'MEMBROS',
-        cell: ({ row }) => <span className="tabular-nums">{row.original.memberCount ?? 0}</span>,
+        // Sem contagem confiável o bot omite o campo (servidor grande demais
+        // para varrer): "—" é honesto, um zero seria mentira.
+        cell: ({ row }) => (
+          <span className="tabular-nums">{row.original.memberCount ?? '—'}</span>
+        ),
       },
       {
         accessorKey: 'position',

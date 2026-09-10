@@ -86,8 +86,9 @@ há container de injeção de dependência. A ordem importa:
 Antes do `login`, o `GUILD_IDS` é semeado no registro (`RegistryService.seed`)
 e o espelho em memória é carregado: quando o primeiro evento chegar, o bot já
 sabe quem atende. No `ready`, cada guild **atendida pelo registro** é preparada
-por vez (`lib/guild-setup.ts`: upsert, cache de membros, config, guild
-commands). Guild ausente vira log de erro e não impede as outras. Guild em que
+por vez (`lib/guild-setup.ts`: upsert, config, guild commands — o cache de
+membros **não** é preenchido no boot desde a Etapa 6 do plano; ele tem teto por
+guild e se enche pelos eventos). Guild ausente vira log de erro e não impede as outras. Guild em que
 o bot está mas não atende ganha linha `pending` e fica calada; bloqueada, ele
 sai. Os dois recursos do processo (LRU de mensagens, intervalo de flush das
 stats) recebem o maior cache e o menor intervalo entre as guilds — quem resolve

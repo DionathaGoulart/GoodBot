@@ -74,7 +74,13 @@ export function toChannelDetail(channel: NonThreadGuildBasedChannel): GuildChann
   };
 }
 
-export function toRoleSummary(role: Role): GuildRoleSummary {
+/**
+ * `memberCount` vem de fora (`roleMemberCounts`) e é **opcional** desde a Etapa
+ * 6: com o cache de membros limitado, `role.members.size` contaria a amostra e
+ * devolveria um número errado com cara de certo. Sem contagem confiável o campo
+ * não vai, e o painel escreve "—".
+ */
+export function toRoleSummary(role: Role, memberCount?: number): GuildRoleSummary {
   return {
     id: role.id,
     name: role.name,
@@ -84,7 +90,7 @@ export function toRoleSummary(role: Role): GuildRoleSummary {
     hoist: role.hoist,
     mentionable: role.mentionable,
     permissions: role.permissions.bitfield.toString(),
-    memberCount: role.members.size,
+    ...(memberCount === undefined ? {} : { memberCount }),
   };
 }
 

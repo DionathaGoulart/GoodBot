@@ -14,6 +14,7 @@ import { requireUtilities } from './shared';
 import { defineCommand } from '../../lib/command';
 import { botFooter, code, infoEmbed } from '../../lib/embeds';
 import { roleMentions } from '../../lib/log-embeds';
+import { roleMemberCounts } from '../../lib/members';
 import { fetchMember } from '../../services/moderation';
 import { levelAtLeast } from '../../services/permissions';
 
@@ -246,13 +247,18 @@ export const roleinfo = defineCommand({
       ? 'Administrador (todas)'
       : role.permissions.toArray().slice(0, 20).map(code).join(' ') || '—';
 
+    // Desde a Etapa 6 o cache de membros tem teto, então contar nele daria um
+    // número errado com cara de certo. Num servidor grande a resposta é "—".
+    const counts = await roleMemberCounts(role.guild);
+    const membros = counts ? String(counts.get(role.id) ?? 0) : '—';
+
     const embed = infoEmbed(
       {
         title: 'Cargo',
         fields: [
           { name: 'Cargo', value: `<@&${role.id}> ${role.name}`, inline: true },
           { name: 'ID', value: code(role.id), inline: true },
-          { name: 'Membros', value: `${role.members.size}`, inline: true },
+          { name: 'Membros', value: membros, inline: true },
           { name: 'Cor', value: role.hexColor, inline: true },
           { name: 'Posição', value: `${role.position}`, inline: true },
           { name: 'Mencionável', value: role.mentionable ? 'sim' : 'não', inline: true },

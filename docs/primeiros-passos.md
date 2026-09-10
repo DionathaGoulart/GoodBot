@@ -174,13 +174,26 @@ menor, o bot não está em algum servidor da lista — o log do boot diz qual.
 
 ### Quanto a VM aguenta
 
-O gargalo é o cache de membros: o boot carrega a lista completa de cada guild e
-a RAM cresce com a **soma** dos membros. O container tem `mem_limit: 384m`, o
-que dá ordem de 10⁵ membros somados. O consumo real está no `rssBytes` do
-`/health` — vale olhar depois de acrescentar um servidor grande.
+O gargalo era o cache de membros: o boot carregava a lista completa de cada
+guild e a RAM crescia com a **soma** dos membros de todos os servidores. Isso
+acabou: o cache tem teto **por guild** (`MEMBER_CACHE_MAX`, hoje 200, em
+`apps/bot/src/client.ts`), é varrido de hora em hora e não é mais preenchido no
+boot. A conta virou `servidores × 200`, e não `servidores × tamanho do
+servidor`.
 
-Se um dia apertar, a saída não é VM maior: é pôr teto no `GuildMemberManager`
-(`apps/bot/src/client.ts`) e buscar membro sob demanda.
+O que mudou em troca:
+
+- a busca de membros do painel pergunta ao Discord (lista ou busca por
+  prefixo), em vez de filtrar o cache;
+- a contagem de membros por cargo é exata até 5.000 membros (varredura por
+  REST, sem cachear); acima disso a coluna mostra "—", porque um número tirado
+  do cache seria errado com cara de certo;
+- quem precisa de um membro específico usa `fetchMember`: cache primeiro, uma
+  chamada quando não está lá.
+
+O consumo real continua no `rssBytes` do `/health`. O sinal de saúde agora é
+ele **parar** de crescer com o número de servidores; se voltar a crescer em
+linha reta, algo voltou a encher o cache.
 
 ## 7.2 Os dois links de convite
 

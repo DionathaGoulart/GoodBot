@@ -465,11 +465,14 @@ ator, ação, período, e diff antes/depois em JSON. Imutável (sem delete).
 - A barra lateral mostra o nome real de cada servidor e oferece a troca quando
   há mais de um.
 
-**Limite prático.** O `ready` carrega a lista completa de membros de cada guild
-e o cache de membros do discord.js não tem teto configurado, então a RAM cresce
-com a soma dos membros. Com `mem_limit: 384m` isso dá ordem de 10⁵ membros
-somados; o consumo real está no `rssBytes` do `/health`. Passar disso pede um
-teto no `GuildMemberManager` e busca sob demanda — não uma VM maior.
+**Limite prático.** O cache de membros tem teto **por guild**
+(`MEMBER_CACHE_MAX`, 200) e sweeper de hora em hora, e o `ready` não carrega
+mais a lista completa de ninguém: a RAM cresce com o número de servidores, não
+com a soma dos membros deles. Em troca, quem lista membros pergunta ao Discord
+(lista, busca por prefixo ou `fetchMember`) e a contagem de membros por cargo é
+exata só até 5.000 membros — acima disso o campo não vai, e o painel escreve
+"—". O consumo real está no `rssBytes` do `/health`; o sinal de alarme é ele
+voltar a crescer em linha reta com o número de servidores.
 
 ### 7.2 Performance no free tier
 

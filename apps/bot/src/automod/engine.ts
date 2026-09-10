@@ -12,6 +12,7 @@ import { botFooter, warningEmbed } from '../lib/embeds';
 import { childLogger } from '../logger';
 import { runActions } from './actions';
 import { RaidService } from './raid';
+import { fetchMember } from '../services/moderation';
 import { MESSAGE_RULES, SpamTracker, WordMatcherCache } from './rules/index';
 
 import type { AutomodRuntime, LoadedRule, MessageContext, Violation } from './types';
@@ -159,7 +160,12 @@ export class AutomodService {
     );
     if (rules.length === 0) return null;
 
-    const member = message.member ?? guild.members.cache.get(author.id) ?? null;
+    // Com o teto do cache de membros (Etapa 6) o `guild.members.cache` deixou
+    // de ter o servidor inteiro. O `message.member` cobre a mensagem normal; o
+    // `fetchMember` é a rede de segurança da edição de mensagem antiga, e só
+    // dispara chamada quando o membro não está em cache. Sem ele, um moderador
+    // fora do cache perderia a isenção por cargo — falso positivo com punição.
+    const member = message.member ?? (await fetchMember(guild, author.id));
     const roleIds = member ? [...member.roles.cache.keys()] : [];
     const skip = globalExemption(config, {
       channelId: message.channelId,
