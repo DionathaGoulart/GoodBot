@@ -101,11 +101,42 @@ validação Zod) e `retryAfter` quando o 503 veio de rate limit.
 | `config`      | invalidar o cache de config de um módulo                        |
 | `commands`    | listar os comandos registrados                                  |
 | `social`      | contas de rede social e teste de anúncio                        |
+| `admin`       | painel do dono: guilds, expulsar, broadcast, manutenção, resync  |
 | `metrics`     | contadores em formato Prometheus                                |
 | `health`      | **sem auth** — estado do gateway, banco e último backup         |
 
 Os schemas de request e response de cada uma estão em
 `packages/shared/src/api/`.
+
+### 4.1 `/admin` é a exceção que confirma a regra
+
+Todo o resto da API vive sob `/guilds/:guildId` e é autorizado pelo **nível do
+`actorId` naquele servidor**. As rotas `/admin` não podem ser: a lista de
+servidores existe justamente para mostrar as guilds que o bot **não** atende (a
+fila de aprovação), e um middleware que exigisse guild atendida esconderia
+exatamente o que a tela precisa ver.
+
+O que muda é só contra o que o `actorId` é conferido — `OWNER_DISCORD_ID`, a
+variável, em vez da hierarquia de cargos de uma guild:
+
+```bash
+curl -X POST http://localhost:3001/admin/maintenance \
+  -H "Authorization: Bearer $INTERNAL_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"actorId": "'"$OWNER_DISCORD_ID"'", "enabled": true, "message": "volto já"}'
+```
+
+Sem `OWNER_DISCORD_ID` no ambiente do bot **toda escrita em `/admin` responde
+403** (`OWNER_NOT_CONFIGURED`). Fechado por ausência é a única leitura possível
+de uma variável faltando: o contrário transformaria um `.env` incompleto em
+painel admin aberto para qualquer `actorId` que chegasse com o Bearer certo.
+
+O `POST /admin/broadcast` pede ainda um `confirm: "ENVIAR"` no corpo. A palavra
+é digitada na tela, mas a conferência é aqui: uma trava que só existe no
+navegador protege contra o clique errado, não contra a chamada solta — e é o
+único endpoint do projeto que escreve em servidores de terceiros. Antes de
+enviar, `dryRun: true` devolve em que canal a mensagem cairia em cada servidor,
+sem mandar nada.
 
 ## 5. Rate limit
 

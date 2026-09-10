@@ -110,7 +110,15 @@ function makeDeps(overrides: { warn?: () => unknown } = {}): Fakes {
 
 function makeApp(overrides?: { warn?: () => unknown }) {
   const fakes = makeDeps(overrides);
-  return { ...fakes, app: createApiApp({ deps: fakes.deps, token: TOKEN, port: 0 }) };
+  return {
+    ...fakes,
+    app: createApiApp({
+      deps: fakes.deps,
+      token: TOKEN,
+      port: 0,
+      admin: { discordToken: 'token-do-bot', clientId: '111111111111111111' },
+    }),
+  };
 }
 
 describe('busca de membros', () => {

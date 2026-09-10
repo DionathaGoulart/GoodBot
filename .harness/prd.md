@@ -666,6 +666,22 @@ Checagem no servidor em cada action/route via `requireGuildAccess`. Ações de
 punição pelo painel respeitam a mesma hierarquia de cargos do Discord (o bot
 verifica na API interna usando `actorId`).
 
+### 9.3 O dono do bot
+
+Fora desta tabela, e de propósito. Quem opera o Goodbot como produto — aprovar
+servidores, expulsar, avisar todos, entrar em manutenção — é uma pessoa só, e
+ela é identificada por `OWNER_DISCORD_ID` no ambiente, **nunca** por cargo em
+servidor nenhum: se fosse por cargo, quem administra um servidor qualquer
+viraria administrador do bot inteiro.
+
+O painel do dono vive num hostname próprio (`admin.<domínio>`) e usa a mesma
+sessão do Discord; o que muda é contra o que a identidade é comparada. A API do
+bot confere de novo o `actorId` de toda escrita em `/admin` contra a mesma
+variável — o Bearer prova de onde veio a chamada, não quem pediu (§7.3).
+
+Ausência da variável fecha os dois lados. Um `.env` incompleto não pode virar
+painel admin aberto.
+
 ## 10. Permissões do bot no Discord (convite)
 
 `ViewChannel, SendMessages, SendMessagesInThreads, EmbedLinks, AttachFiles,

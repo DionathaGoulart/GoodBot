@@ -174,7 +174,7 @@ api/
 
 Rotas: `guild`, `channels`, `roles`, `members`, `messages`, `moderation`,
 `cases`, `invites`, `events`, `expressions`, `automod`, `config`, `commands`,
-`social`, `metrics`, `health`.
+`social`, `metrics`, `health`, `admin`.
 
 Três invariantes que valem para **toda** rota nova:
 
@@ -189,6 +189,14 @@ Três invariantes que valem para **toda** rota nova:
 Há ainda `assertMayGrant`: ninguém concede uma permissão que ele próprio não
 tem. O dono da guild é a única exceção, porque já tem tudo por definição.
 
+O `/admin` é a única rota fora de `/guilds/:guildId`, e a única onde o
+`actorId` não é conferido contra uma guild: ele é comparado ao
+`OWNER_DISCORD_ID` do ambiente. A razão de não ser guild-scoped é que a tela
+existe para mostrar os servidores que o bot **não** atende — a fila de
+aprovação —, e o `withGuild` esconderia justamente esses. Sem a variável no
+ambiente, toda escrita ali responde 403: um `.env` incompleto não pode virar
+painel admin aberto.
+
 ---
 
 ## 5. `apps/web`
@@ -197,17 +205,19 @@ App Router. **Server Components por padrão**; `"use client"` só onde há estad
 de formulário ou interação.
 
 ```
-proxy.ts        CSP com nonce, porta do painel (`/`, `/servidores`, `/g/*`),
-                rate limit e o roteamento por hostname (ver 5.1)
+proxy.ts        CSP com nonce, porta do painel (`/`, `/servidores`, `/g/*`,
+                `/admin`), rate limit e o roteamento por hostname (ver 5.1)
 app/
   servidores/   o seletor: os servidores que ESTE usuário pode abrir
+  admin/        o painel do dono do bot: saúde e uso, servidores, fila de
+                aprovação e blocklist, broadcast e manutenção
   g/[guildId]/
     servidor, canais, cargos, membros, casos, banidos, convites,
     eventos, emojis, mensagens, auditoria, system
     config/     general, moderation, automod, logs, welcome, autorole,
                 reaction-roles, tickets, tags, social, commands
   convite/      as telas dos links de convite (`invite.` e `demo.`)
-  actions/      Server Actions: auth, cases, config, guild, messages,
+  actions/      Server Actions: admin, auth, cases, config, guild, messages,
                 modules, social
   api/          auth (Auth.js), invite/{start,callback}, health,
                 cases/export, discord/*
@@ -217,6 +227,8 @@ lib/
   invite/           state assinado, OAuth de convite e escrita no registro
   registry.ts       os servidores atendidos, lidos de `guild_registry`
   guilds.ts         os que este usuário pode abrir (registro ∩ nível na sessão)
+  admin.ts          os dados e as escritas do painel do dono
+  auth/owner.ts     a porta do `/admin`: `OWNER_DISCORD_ID`, e só ela
   internal-api.ts   o cliente da API do bot, com o token do servidor
   module-config.ts  ponte entre o form do painel e o schema Zod do módulo
   auth/             Auth.js com provider Discord + checagem de nível
@@ -236,7 +248,7 @@ O painel na Vercel serve quatro domínios, e quem os separa é o `proxy.ts`:
 | `goodbot.<domínio>`    | o painel                                   |
 | `invite.<goodbot>`     | `/convite` no fluxo que entra como `pending` |
 | `demo.<goodbot>`       | `/convite` no fluxo que entra como `demo`  |
-| `admin.<goodbot>`      | `/admin`, o painel do dono (Etapa 4 do plano) |
+| `admin.<goodbot>`      | `/admin`, o painel do dono do bot          |
 
 A classificação é pelo **primeiro rótulo** do host (`lib/hosts.ts`), não por
 uma lista de domínios em variável: trocar de domínio não mexe em código, e
@@ -247,7 +259,25 @@ partir do header `Host` seria deixar o cliente escolher.
 
 `invite.` e `demo.` servem **só** `/convite*` e `/api/*`; qualquer outro
 caminho volta para a raiz do próprio host. Sem isso o painel inteiro
-responderia num hostname que não deveria ter sessão.
+responderia num hostname que não deveria ter sessão. `admin.` serve só
+`/admin*` e `/api/*`, e o host do painel comum redireciona `/admin` para lá: o
+painel do dono tem um endereço só, e servir a mesma tela em dois é convite a
+esquecer de trancar um deles.
+
+**Entrar acontece num lugar só.** O `redirect_uri` do Auth.js aponta para o
+host do painel, e é o único registrado no Discord; `admin.` não tem `/login`
+próprio. Quem chega lá sem sessão é mandado para o `/login` do painel — no
+`proxy.ts` e de novo no `requireBotOwner`, que redireciona para URL **absoluta**
+justamente por isso: um `/login` relativo cairia na raiz de `admin.`, que
+reescreve para `/admin`, que redireciona de novo. A troca de rótulo entre hosts
+irmãos é o `hostForSite` de `lib/hosts.ts`.
+
+**Por isso o cookie de sessão sai com `domain` explícito** (`auth.ts`). Sem ele
+o cookie é *host-only* e o navegador não o manda para `admin.<host>`: quem
+entrasse no painel chegaria no admin sem sessão, e o admin ficaria inalcançável
+por construção. Com o `domain` do host do painel, ele vale também para
+`invite.` e `demo.` — deliberado e pouco, porque esses dois servem só a tela de
+convite, o cookie é `httpOnly` e o CSRF continua sendo o do Auth.js.
 
 O caminho de uma edição no painel:
 
@@ -426,7 +456,10 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 
 1. **ID do Discord é `string`.** Nunca `Number(snowflake)` — snowflake estoura
    o `Number` com precisão silenciosa.
-2. **Todo query filtra por `guildId`,** e nada assume "a" guild. Quem o bot
+2. **Todo query filtra por `guildId`,** e nada assume "a" guild. A única
+   exceção é o painel do dono do bot (`apps/web/lib/admin.ts`), que existe
+   justamente para olhar o conjunto — e ela é fechada por
+   `OWNER_DISCORD_ID`. Quem o bot
    atende vem do registro (`guild_registry`, via `RegistryService`), não de uma
    variável; no painel, quem decide acesso é a guild da URL e o nível de
    permissão é por guild na sessão. O registro vale nos **dois** caminhos de
@@ -455,6 +488,7 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | mudar regra de automod            | `apps/bot/src/automod/rules/` + o schema em `shared/config/automod*.ts`  |
 | expor algo novo para o painel     | rota em `apps/bot/src/api/routes/` + schema e método em `shared/api/`    |
 | criar uma tela                    | `apps/web/app/g/[guildId]/` + Server Action em `app/actions/`            |
+| mexer no painel do dono do bot    | `apps/web/app/admin/` + `lib/admin.ts` + rota em `api/routes/admin.ts`   |
 | adicionar campo de config         | `shared/config/<módulo>.ts` → form em `apps/web/components/config/`      |
 | mexer no banco                    | `packages/db/src/schema/` → `db:generate` → revisar SQL → `db:migrate`   |
 | tarefa periódica                  | `apps/bot/src/jobs/` + registrar no `Scheduler`                          |
@@ -470,6 +504,10 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 - **Migrations não rodam no boot do bot** — são um passo da CI.
 - **`INTERNAL_API_TOKEN` vive em três cofres**: `.env` da VM, GitHub Secrets e
   variáveis do projeto na Vercel. Rotacionar é trocar nos três de uma vez.
+- **`OWNER_DISCORD_ID` vale nos dois lados**: o painel confere antes de
+  renderizar `/admin`, e o bot confere de novo o `actorId` de toda escrita ali.
+  Faltando em qualquer um dos dois, aquele lado fecha — o que dá o sintoma
+  "a tela abre e o botão responde 403".
 - **Ambiente de desenvolvimento**: Windows + WSL2, repositório em `/mnt/c/...`
   sincronizado pelo OneDrive. `node_modules` fica fora do OneDrive.
 

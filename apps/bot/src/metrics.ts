@@ -74,6 +74,11 @@ class Counter {
     return sum;
   }
 
+  /** As séries como estão, para quem precisa do detalhe por label. */
+  entries(): { labels: Labels; value: number }[] {
+    return [...this.series.values()].map((series) => ({ ...series }));
+  }
+
   render(): string[] {
     const lines = [`# HELP ${this.name} ${this.help}`, `# TYPE ${this.name} counter`];
     if (this.series.size === 0) return [...lines, `${this.name} 0`];

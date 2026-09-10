@@ -17,6 +17,7 @@ import {
   createRateLimiter,
   rateLimit,
 } from './middleware/rate-limit';
+import { createAdminRoutes } from './routes/admin';
 import { createAutomodRoutes } from './routes/automod';
 import { createCaseRoutes } from './routes/cases';
 import { createChannelRoutes } from './routes/channels';
@@ -83,6 +84,12 @@ export interface ApiServerOptions {
   /** Volume de backups montado read-only (`/backups`); ausente em dev. */
   backupDir?: string;
   alerts?: Pick<AlertService, 'emit'>;
+  /**
+   * O painel do dono (plano, Etapa 4). Sem `ownerId` as rotas continuam
+   * montadas e recusam tudo com um motivo legível — melhor do que um 404, que
+   * faria parecer bug de deploy quando o que falta é uma variável.
+   */
+  admin: { ownerId?: string; discordToken: string; clientId: string };
 }
 
 /**
@@ -157,6 +164,15 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
   metricsApp.use('*', bearerAuth(token));
   metricsApp.route('/', createMetricsRoutes());
   app.route('/metrics', metricsApp);
+
+  // O painel do dono. Fora de `/guilds` de propósito: a lista precisa mostrar
+  // servidores que o bot **não** atende (a fila de aprovação), e o `withGuild`
+  // esconderia justamente esses. O Bearer vale igual; nas escritas, o
+  // `actorId` ainda é conferido contra o `OWNER_DISCORD_ID` (PRD §7.3).
+  const admin = new Hono<ApiEnv>();
+  admin.use('*', bearerAuth(token));
+  admin.route('/', createAdminRoutes(deps, options.admin));
+  app.route('/admin', admin);
 
   // Tudo abaixo de /guilds exige o Bearer e uma guild que o bot conheça.
   const guilds = new Hono<ApiEnv>();

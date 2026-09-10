@@ -1,3 +1,15 @@
+import {
+  AdminDiagnosticsSchema,
+  AdminGuildListSchema,
+  BroadcastInputSchema,
+  BroadcastResultSchema,
+  LeaveGuildInputSchema,
+  LeaveGuildResultSchema,
+  MaintenanceInputSchema,
+  MaintenanceStateSchema,
+  ResyncCommandsInputSchema,
+  ResyncCommandsResultSchema,
+} from './admin';
 import { RaidModeInputSchema, RaidModeStateSchema } from './automod';
 import { CaseDeleteInputSchema, CaseEditInputSchema, CaseSummarySchema } from './cases';
 import {
@@ -70,6 +82,18 @@ import {
 import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
 import { SocialAccountInputSchema } from '../config/social';
 
+import type {
+  AdminDiagnostics,
+  AdminGuildList,
+  BroadcastInput,
+  BroadcastResult,
+  LeaveGuildInput,
+  LeaveGuildResult,
+  MaintenanceInput,
+  MaintenanceState,
+  ResyncCommandsInput,
+  ResyncCommandsResult,
+} from './admin';
 import type { RaidModeInput, RaidModeState } from './automod';
 import type { CaseDeleteInput, CaseEditInput, CaseSummary } from './cases';
 import type {
@@ -131,6 +155,22 @@ import type { z } from 'zod';
 /** Timeout padrão de uma chamada; a API do bot é local a um datacenter. */
 export const DEFAULT_TIMEOUT_MS = 10_000;
 
+/**
+ * Timeout das rotas que varrem **todos** os servidores um a um (o broadcast e
+ * o re-registro de comandos do painel admin).
+ *
+ * O padrão de 10 s vale para uma chamada ao Discord; estas fazem uma por
+ * servidor, em série de propósito — disparar cem juntas passaria do limite
+ * global do Discord, e a fila do discord.js resolveria isso enfileirando sem
+ * ninguém saber onde parou. Com o teto de 100 servidores do produto, dois
+ * minutos é folga confortável.
+ *
+ * Deixar em 10 s seria pior do que lento: o painel desistiria enquanto o bot
+ * continuasse mandando, e o dono veria "não respondeu a tempo" numa ação que
+ * está dando certo — e provavelmente clicaria de novo.
+ */
+export const SWEEP_TIMEOUT_MS = 120_000;
+
 export interface InternalClientOptions {
   /** Sem barra no fim. Dev: `http://localhost:3001`. */
   baseUrl: string;
@@ -173,6 +213,8 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   query?: Query;
   body?: unknown;
+  /** Sobrepõe o timeout do cliente numa chamada só. */
+  timeoutMs?: number;
 }
 
 function buildUrl(baseUrl: string, path: string, query?: Query): string {
@@ -221,9 +263,9 @@ export function createInternalClient(options: InternalClientOptions) {
   async function request<S extends z.ZodType>(
     schema: S,
     path: string,
-    { method = 'GET', query, body }: RequestOptions = {},
+    { method = 'GET', query, body, timeoutMs: override }: RequestOptions = {},
   ): Promise<z.infer<S>> {
-    const signal = AbortSignal.timeout(timeoutMs);
+    const signal = AbortSignal.timeout(override ?? timeoutMs);
     let response: Response;
     try {
       response = await doFetch(buildUrl(baseUrl, path, query), {
@@ -260,6 +302,47 @@ export function createInternalClient(options: InternalClientOptions) {
 
   return {
     health: (): Promise<HealthResponse> => request(HealthResponseSchema, '/health'),
+
+    /**
+     * O painel do dono (`admin.<domínio>`). São as únicas rotas fora de
+     * `/guilds`: o que as libera é o `actorId` ser o `OWNER_DISCORD_ID` do bot,
+     * não o nível de alguém num servidor.
+     */
+    admin: {
+      guilds: (): Promise<AdminGuildList> => request(AdminGuildListSchema, '/admin/guilds'),
+
+      leaveGuild: (guildId: string, input: LeaveGuildInput): Promise<LeaveGuildResult> =>
+        request(LeaveGuildResultSchema, `/admin/guilds/${encodeURIComponent(guildId)}/leave`, {
+          method: 'POST',
+          body: LeaveGuildInputSchema.parse(input),
+        }),
+
+      broadcast: (input: BroadcastInput): Promise<BroadcastResult> =>
+        request(BroadcastResultSchema, '/admin/broadcast', {
+          method: 'POST',
+          body: BroadcastInputSchema.parse(input),
+          timeoutMs: SWEEP_TIMEOUT_MS,
+        }),
+
+      maintenance: (): Promise<MaintenanceState> =>
+        request(MaintenanceStateSchema, '/admin/maintenance'),
+
+      setMaintenance: (input: MaintenanceInput): Promise<MaintenanceState> =>
+        request(MaintenanceStateSchema, '/admin/maintenance', {
+          method: 'POST',
+          body: MaintenanceInputSchema.parse(input),
+        }),
+
+      resyncCommands: (input: ResyncCommandsInput): Promise<ResyncCommandsResult> =>
+        request(ResyncCommandsResultSchema, '/admin/commands/resync', {
+          method: 'POST',
+          body: ResyncCommandsInputSchema.parse(input),
+          timeoutMs: SWEEP_TIMEOUT_MS,
+        }),
+
+      diagnostics: (): Promise<AdminDiagnostics> =>
+        request(AdminDiagnosticsSchema, '/admin/diagnostics'),
+    },
 
     /** Dados do servidor + o que o bot pode editar nele (PRD §6.3). */
     guildProfile: (guildId: string): Promise<GuildProfile> =>

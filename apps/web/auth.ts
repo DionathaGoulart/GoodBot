@@ -36,6 +36,7 @@ interface GoodbotToken {
  */
 export const { handlers, auth, signIn, signOut } = NextAuth(() => {
   const config = env();
+  const secure = config.AUTH_URL.startsWith('https://');
 
   return {
     secret: config.AUTH_SECRET,
@@ -45,7 +46,37 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
     // Explícito em vez de inferido: em produção o cookie **tem** que sair com
     // prefixo `__Secure-` e `Secure`, e a inferência do Auth.js depende de o
     // host chegar como https até ele.
-    useSecureCookies: config.AUTH_URL.startsWith('https://'),
+    useSecureCookies: secure,
+    cookies: {
+      /**
+       * O cookie de sessão precisa valer no host do painel **e** nos rótulos
+       * dele, porque o painel do dono mora em `admin.<host>` (plano, Etapa 4).
+       *
+       * Sem `domain` o cookie é *host-only*: o navegador o manda de volta só
+       * para o host exato que o criou. Quem entra em `goodbot.<domínio>`
+       * chegaria em `admin.goodbot.<domínio>` sem sessão nenhuma — e como o
+       * login acontece sempre no host do painel (é o único `redirect_uri`
+       * registrado no Discord para o Auth.js), o admin ficaria inalcançável.
+       *
+       * Com o `domain` explícito o cookie desce também para `invite.` e
+       * `demo.`. É deliberado e é pouco: os dois servem só `/convite*` e
+       * `/api/*` (`proxy.ts`), o cookie é `httpOnly` — logo invisível para
+       * script — e o CSRF continua sendo do Auth.js, que tem token próprio.
+       *
+       * Em dev isto vira `Domain=localhost`, que é o que faz
+       * `admin.localhost:3000` enxergar a sessão de `localhost:3000`.
+       */
+      sessionToken: {
+        name: `${secure ? '__Secure-' : ''}authjs.session-token`,
+        options: {
+          httpOnly: true,
+          sameSite: 'lax',
+          path: '/',
+          secure,
+          domain: new URL(config.AUTH_URL).hostname,
+        },
+      },
+    },
     session: { strategy: 'jwt', maxAge: 7 * 24 * 60 * 60 },
     pages: { signIn: '/login', error: '/login' },
     providers: [

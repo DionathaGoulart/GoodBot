@@ -13,6 +13,10 @@ export type ApiDeps = Pick<
   | 'tickets'
   | 'social'
   | 'commands'
+  // As duas últimas só são usadas pelas rotas `/admin` (plano, Etapa 4): quem
+  // o bot atende e se ele está em manutenção não são assunto de guild.
+  | 'registry'
+  | 'maintenance'
 >;
 
 /** Variáveis que os middlewares põem no contexto do Hono. */

@@ -1,6 +1,7 @@
 import { Collection } from 'discord.js';
 
 import { childLogger } from '../logger';
+import { recordError } from './error-log';
 import { metrics } from '../metrics';
 
 import type { AnyCommand, BotContext, CommandCollection } from './command';
@@ -88,7 +89,7 @@ export function loadEvents(client: Client, events: readonly EventHandler[], ctx:
         .then(() => event.execute(ctx, ...(args as never)))
         .catch((error: unknown) => {
           // Um evento que explode nunca pode derrubar o processo (PRD §7.5).
-          metrics.errors.inc({ scope: 'event' });
+          recordError('event', error, { where: String(event.name) });
           log.error({ err: error, event: event.name }, 'erro no handler de evento');
         });
     });

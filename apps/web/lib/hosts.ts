@@ -6,7 +6,8 @@ import type { InviteFlow } from '@goodbot/shared';
  *
  * · `app` — `goodbot.<domínio>`, o painel de sempre;
  * · `invite` / `demo` — os dois fluxos de convite (Etapa 2);
- * · `admin` — o painel do dono do bot (Etapa 4).
+ * · `admin` — o painel do dono do bot: fila de aprovação, blocklist, saúde,
+ *   broadcast e manutenção (Etapa 4).
  *
  * Este módulo é **puro de propósito**: ele roda no `proxy.ts`, que não pode
  * importar nada marcado como `server-only`. Quem precisa montar uma URL
@@ -65,4 +66,29 @@ export function inviteFlowOf(site: SiteHost): InviteFlow | null {
 /** O host que atende cada fluxo — o inverso de `inviteFlowOf`. */
 export function hostOfInviteFlow(flow: InviteFlow): SiteHost {
   return flow === 'demo' ? 'demo' : 'invite';
+}
+
+/**
+ * O mesmo host, servindo outro dos quatro papéis: troca o rótulo da frente.
+ *
+ * É o inverso de `classifyHost`, e existe porque duas telas precisam mandar o
+ * visitante para um irmão do host atual sem saber qual é o domínio: o `/admin`
+ * pedido no host do painel vai para `admin.` (o painel do dono tem um endereço
+ * só), e quem chega sem sessão em `admin.` volta para o `/login` do painel —
+ * onde o OAuth de fato acontece, porque é o `redirect_uri` que o Discord
+ * conhece.
+ *
+ * Puro e pelo header `Host` como o resto deste módulo. É seguro justamente
+ * porque só alimenta redirect: o pior caso é o cliente se mandar para um
+ * endereço que ele mesmo escolheu. Onde isso **não** valeria — o `redirect_uri`
+ * do OAuth — a URL vem do `AUTH_URL`, em `lib/site-url.ts`.
+ */
+export function hostForSite(host: string, target: SiteHost): string {
+  const [hostname = '', porta] = host.split(':');
+  const labels = hostname.split('.');
+  // Só tira o primeiro rótulo se ele for um dos nossos: `goodbot.exemplo.com`
+  // não pode virar `exemplo.com` por engano.
+  if (labels.length > 1 && (labels[0] ?? '') in PREFIXES) labels.shift();
+  const base = target === 'app' ? labels.join('.') : `${target}.${labels.join('.')}`;
+  return porta === undefined ? base : `${base}:${porta}`;
 }

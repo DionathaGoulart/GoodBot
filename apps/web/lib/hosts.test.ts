@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   classifyHost,
+  hostForSite,
   hostOfInviteFlow,
   inviteFlowOf,
   siteFromHeaders,
@@ -69,5 +70,37 @@ describe('fluxo ↔ host', () => {
     expect(inviteFlowOf('admin')).toBeNull();
     expect(hostOfInviteFlow('invite')).toBe('invite');
     expect(hostOfInviteFlow('demo')).toBe('demo');
+  });
+});
+
+describe('hostForSite', () => {
+  it('põe o rótulo do destino na frente do host do painel', () => {
+    expect(hostForSite('goodbot.dionatha.com.br', 'admin')).toBe(
+      'admin.goodbot.dionatha.com.br',
+    );
+    expect(hostForSite('goodbot.dionatha.com.br', 'invite')).toBe(
+      'invite.goodbot.dionatha.com.br',
+    );
+  });
+
+  it('volta ao painel tirando o rótulo — é assim que o `admin.` manda ao login', () => {
+    expect(hostForSite('admin.goodbot.dionatha.com.br', 'app')).toBe('goodbot.dionatha.com.br');
+    expect(hostForSite('demo.goodbot.dionatha.com.br', 'app')).toBe('goodbot.dionatha.com.br');
+  });
+
+  it('troca um rótulo pelo outro sem empilhar', () => {
+    expect(hostForSite('demo.goodbot.dionatha.com.br', 'admin')).toBe(
+      'admin.goodbot.dionatha.com.br',
+    );
+  });
+
+  it('preserva a porta, que é o que faz o dev funcionar', () => {
+    expect(hostForSite('localhost:3000', 'admin')).toBe('admin.localhost:3000');
+    expect(hostForSite('admin.localhost:3000', 'app')).toBe('localhost:3000');
+  });
+
+  it('não come um rótulo que não é nosso', () => {
+    // `goodbot` não está em PREFIXES: tirá-lo mandaria para outro domínio.
+    expect(hostForSite('goodbot.dionatha.com.br', 'app')).toBe('goodbot.dionatha.com.br');
   });
 });

@@ -6,6 +6,7 @@ import type { AutoroleService } from '../services/autorole';
 import type { ConfigService, ResolvedSettings } from '../services/config';
 import type { LockService } from '../services/locks';
 import type { LogService } from '../services/logs';
+import type { MaintenanceService } from '../services/maintenance';
 import type { MessageCacheService } from '../services/message-cache';
 import type { ModerationService } from '../services/moderation';
 import type { ModlogService } from '../services/modlog';
@@ -41,6 +42,8 @@ export interface BotContext {
   config: ConfigService;
   /** Quem o bot atende (plano, Etapa 1); espelho em memória do registro. */
   registry: RegistryService;
+  /** Modo manutenção (plano, Etapa 4); espelho em memória, leitura síncrona. */
+  maintenance: MaintenanceService;
   moderation: ModerationService;
   /** Motor de automod (§5.2); nunca lança. */
   automod: AutomodService;

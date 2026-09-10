@@ -252,6 +252,15 @@ export const BULK_DELETE_MAX_AGE_MS = 14 * DAY_MS;
 export const MAX_SLOWMODE_SECONDS = 21_600;
 /** Dias de mensagens apagáveis no ban (limite do Discord). */
 export const MAX_BAN_DELETE_DAYS = 7;
+/**
+ * A palavra que o dono digita para liberar o broadcast do painel admin.
+ *
+ * Ela viaja até a API de propósito: uma confirmação que só existe no navegador
+ * protege contra o clique errado, não contra a chamada solta com o token — e
+ * este é o único endpoint que escreve em servidores que não são nossos.
+ */
+export const BROADCAST_CONFIRMATION = 'ENVIAR';
+
 /** Motivo no audit log do Discord: 512 caracteres. */
 export const MAX_REASON_LENGTH = 512;
 export const DEFAULT_REASON = '[sem motivo]';

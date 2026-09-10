@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { classifyHost, SITE_HOST_HEADER, type SiteHost } from '@/lib/hosts';
+import { classifyHost, hostForSite, SITE_HOST_HEADER, type SiteHost } from '@/lib/hosts';
 import { authLimiter, clientIp } from '@/lib/rate-limit';
 
 /**
@@ -75,13 +75,24 @@ export default function proxy(request: NextRequest) {
     }
   }
 
-  // `/`, `/servidores` e `/g/*` são o painel: sem cookie nem adianta renderizar
-  // (a autorização de verdade é do `requireGuildAccess`, no servidor).
-  const painel = pathname === '/' || pathname.startsWith('/servidores') || pathname.startsWith('/g/');
-  if (painel && site === 'app' && !hasSessionCookie(request)) {
-    const login = new URL('/login', request.url);
-    login.searchParams.set('reason', 'expired');
-    return NextResponse.redirect(login);
+  // O painel do dono tem um endereço só. Chegar em `/admin` pelo host do painel
+  // comum é bookmark antigo ou link errado, não um segundo caminho — manda para
+  // o lugar certo em vez de servir a mesma tela em dois endereços.
+  if (site === 'app' && pathname.startsWith('/admin')) {
+    return withCsp(NextResponse.redirect(adminUrl(request)));
+  }
+
+  // Sem cookie nem adianta renderizar (a autorização de verdade é do
+  // `requireGuildAccess` e do `requireBotOwner`, no servidor). O `/admin` entra
+  // na conta pelo host `admin`, que é o único onde ele existe: sem esta linha o
+  // painel do dono seria a única tela logada que renderiza o casco antes de
+  // saber se há sessão.
+  const painel =
+    site === 'app' &&
+    (pathname === '/' || pathname.startsWith('/servidores') || pathname.startsWith('/g/'));
+  const admin = site === 'admin' && pathname.startsWith('/admin');
+  if (painel || admin) {
+    if (!hasSessionCookie(request)) return withCsp(NextResponse.redirect(loginUrl(request, site)));
   }
 
   return withCsp(NextResponse.next({ request: { headers } }));
@@ -93,8 +104,9 @@ export default function proxy(request: NextRequest) {
  *
  * A regra é fechada de propósito: `invite.` e `demo.` existem para uma coisa
  * só, e um `/g/<id>` respondendo neles seria o painel inteiro exposto num
- * hostname que não deveria ter sessão. `admin.` fica reservado para a Etapa 4
- * — até lá, ele responde 404, que é o correto para uma rota que não existe.
+ * hostname que não deveria ter sessão. `admin.` serve só `/admin`, e o painel
+ * comum não serve `/admin` nenhum: separar o dono do bot dos donos de servidor
+ * é o ponto inteiro da tela, e um hostname a menos para confundir ajuda.
  */
 function rotaDoHost(site: Exclude<SiteHost, 'app'>, pathname: string): string | null {
   // A autenticação e o próprio fluxo de convite valem em todos os hosts.
@@ -106,6 +118,30 @@ function rotaDoHost(site: Exclude<SiteHost, 'app'>, pathname: string): string | 
 
   if (pathname === '/') return '/convite';
   return pathname.startsWith('/convite') ? pathname : null;
+}
+
+/**
+ * Para onde mandar quem chegou sem sessão.
+ *
+ * Do host `admin.` a resposta **não** é o `/login` de lá: aquele host serve só
+ * `/admin*`, então `/login` voltaria para a raiz, que reescreve para `/admin`,
+ * que redireciona para `/login` — um laço. E não é só a rota: o login é OAuth,
+ * e o `redirect_uri` registrado no Discord aponta para o host do painel. Existe
+ * um lugar de entrar, e é lá; o cookie de sessão vale nos dois porque sai com
+ * `domain` do host do painel (ver `auth.ts`).
+ */
+function loginUrl(request: NextRequest, site: SiteHost): URL {
+  const url = new URL('/login', request.url);
+  if (site !== 'app') url.host = hostForSite(url.host, 'app');
+  url.searchParams.set('reason', 'expired');
+  return url;
+}
+
+/** O mesmo endereço no host do painel do dono (ver `hostForSite`). */
+function adminUrl(request: NextRequest): URL {
+  const url = new URL(request.url);
+  url.host = hostForSite(url.host, 'admin');
+  return url;
 }
 
 /** Auth.js prefixa o cookie com `__Secure-` quando serve por HTTPS. */

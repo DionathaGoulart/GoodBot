@@ -21,6 +21,18 @@ const EnvSchema = z.object({
   INTERNAL_API_TOKEN: z.string().min(32, 'gere com: openssl rand -hex 32 (≥ 32 caracteres)'),
   AUTH_SECRET: z.string().min(32, 'gere com: openssl rand -base64 32'),
   AUTH_URL: z.url(),
+  /**
+   * O dono do bot — quem abre `admin.<domínio>` (plano, Etapa 4).
+   *
+   * **Não** é cargo em servidor nenhum, de propósito: quem administra um
+   * servidor qualquer viraria administrador do bot inteiro. E é opcional para
+   * o painel comum não deixar de subir por causa dela; sem a variável o painel
+   * admin simplesmente não abre para ninguém, que é o padrão seguro.
+   */
+  OWNER_DISCORD_ID: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    snowflake.optional(),
+  ),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
 

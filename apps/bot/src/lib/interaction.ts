@@ -6,7 +6,8 @@ import { metrics } from '../metrics';
 import { isUserContextCommand } from './command';
 import { assertCommandAllowed } from './command-overrides';
 import { CooldownStore } from './cooldown';
-import { botFooter, errorEmbed } from './embeds';
+import { botFooter, errorEmbed, warningEmbed } from './embeds';
+import { recordError } from './error-log';
 import { handleComponent, handleModal } from '../interactions/index';
 import { levelAtLeast, resolveLevel, toMemberLike } from '../services/permissions';
 
@@ -56,6 +57,31 @@ async function replyError(interaction: RepliableInteraction, message: string): P
 }
 
 /**
+ * O aviso de manutenção. Sempre efêmero e sempre uma resposta: uma interação
+ * sem resposta vira "falha na interação" na tela de quem tentou, que é pior do
+ * que a manutenção em si.
+ */
+async function replyMaintenance(
+  interaction: Interaction,
+  message: string,
+): Promise<void> {
+  if (!interaction.isRepliable()) return;
+  const embed = warningEmbed({
+    title: 'Em manutenção',
+    description: message,
+    footer: botFooter(),
+  });
+  try {
+    if (interaction.deferred) await interaction.editReply({ embeds: [embed] });
+    else if (interaction.replied) {
+      await interaction.followUp({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    } else await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+  } catch (error) {
+    log.warn({ err: error }, 'não foi possível avisar sobre a manutenção');
+  }
+}
+
+/**
  * Botões, selects e modais compartilham o mesmo contrato: `false` = ninguém
  * reconheceu o `custom_id`, e toda falha vira resposta efêmera — a interação
  * nunca pode ficar sem resposta.
@@ -76,7 +102,10 @@ async function runComponent(
       await replyError(interaction, error.message);
       return;
     }
-    metrics.errors.inc({ scope: 'component' });
+    recordError('component', error, {
+      where: interaction.customId,
+      guildId: interaction.guildId,
+    });
     log.error({ err: error, customId: interaction.customId }, 'erro no componente');
     await replyError(interaction, 'Não consegui registrar essa ação. Tente de novo.');
   }
@@ -102,6 +131,16 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
     // estar em servidores à espera de aprovação, bloqueados ou com a demo
     // vencida, e ali fica calado em vez de responder com config que não existe.
     if (!interaction.inGuild() || !ctx.registry.serves(interaction.guildId)) return;
+
+    // Manutenção (plano, Etapa 4): o bot continua no ar e continua vendo os
+    // eventos, mas não executa nada que escreva. O aviso é efêmero e vem antes
+    // de qualquer leitura de config — a manutenção existe justamente para as
+    // horas em que o banco não é confiável.
+    if (ctx.maintenance.active()) {
+      if (interaction.isAutocomplete()) return;
+      await replyMaintenance(interaction, ctx.maintenance.message());
+      return;
+    }
 
     if (interaction.isAutocomplete()) {
       const command = ctx.commands.get(interaction.commandName);
@@ -151,7 +190,10 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
         await replyError(interaction, error.message);
         return;
       }
-      metrics.errors.inc({ scope: 'command' });
+      recordError('command', error, {
+        where: command.data.name,
+        guildId: interaction.guildId,
+      });
       log.error(
         { err: error, command: command.data.name, userId: interaction.user.id },
         'erro ao executar comando',

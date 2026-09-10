@@ -46,6 +46,18 @@ const EnvSchema = z
      * opcional: o bot não pode deixar de subir por causa de um texto.
      */
     AUTH_URL: z.preprocess(blankToUndefined, z.url().optional()),
+    /**
+     * O dono do bot — quem pode usar o painel admin (plano, Etapa 4).
+     *
+     * Opcional para o bot **subir** sem ela, mas as rotas `/admin` recusam
+     * tudo enquanto ela não existir. Fechado por ausência é a única escolha
+     * segura: um `.env` incompleto não pode abrir broadcast e expulsão para
+     * qualquer `actorId` que chegue com o Bearer certo.
+     *
+     * O painel confere o mesmo ID antes de renderizar a tela; aqui é a segunda
+     * tranca, para o caso de a primeira ter um furo.
+     */
+    OWNER_DISCORD_ID: z.preprocess(blankToUndefined, snowflake.optional()),
     /** Sha do commit da imagem, injetado pela CI no build (`GIT_SHA`). */
     GIT_SHA: z.preprocess(blankToUndefined, z.string().optional()),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),

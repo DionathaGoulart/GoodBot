@@ -12,6 +12,7 @@ import { DemoExpiryJob } from './jobs/demo-expiry';
 import { RetentionJob } from './jobs/retention';
 import { SocialJob } from './jobs/social';
 import { StatsRollupJob } from './jobs/stats-rollup';
+import { recordError } from './lib/error-log';
 import { loadCommands, loadEvents } from './lib/loader';
 import { logger } from './logger';
 import { metrics } from './metrics';
@@ -22,6 +23,7 @@ import { ConfigService } from './services/config';
 import { LockService } from './services/locks';
 import { LogQueue } from './services/log-queue';
 import { LogService } from './services/logs';
+import { MaintenanceService } from './services/maintenance';
 import { MessageCacheService } from './services/message-cache';
 import { ModerationService } from './services/moderation';
 import { createModlogService } from './services/modlog';
@@ -60,6 +62,9 @@ async function main(): Promise<void> {
   // Quem o bot atende (plano, Etapa 1). Espelho em memória: o handler de
   // interação consulta a cada evento e não pode pagar uma query por isso.
   const registry = new RegistryService({ db });
+  // Modo manutenção (plano, Etapa 4). Mesmo desenho do registro, e pelo mesmo
+  // motivo: é lido em toda interação e não pode custar uma query por evento.
+  const maintenance = new MaintenanceService({ db });
   // A trilha do que o bot faz sozinho (§6.5); o painel escreve na mesma tabela.
   const audit = new AuditService({ db, client });
   const queue = new LogQueue({ client });
@@ -176,7 +181,19 @@ async function main(): Promise<void> {
     stats: stats.pendingSize,
   });
   const api = createApiServer({
-    deps: { client, db, config, moderation, automod, reactionRoles, tickets, social, commands },
+    deps: {
+      client,
+      db,
+      config,
+      moderation,
+      automod,
+      reactionRoles,
+      tickets,
+      social,
+      commands,
+      registry,
+      maintenance,
+    },
     token: env.INTERNAL_API_TOKEN,
     port: env.INTERNAL_API_PORT,
     // Sem isto o /health continuaria esperando uma guild só e acusaria
@@ -185,6 +202,11 @@ async function main(): Promise<void> {
     queues: readQueues,
     backupDir: env.BACKUP_DIR,
     alerts,
+    admin: {
+      ...(env.OWNER_DISCORD_ID ? { ownerId: env.OWNER_DISCORD_ID } : {}),
+      discordToken: env.DISCORD_TOKEN,
+      clientId: env.DISCORD_CLIENT_ID,
+    },
   });
 
   registerGauges({ client, readQueues, startedAt: Date.now() });
@@ -195,6 +217,7 @@ async function main(): Promise<void> {
     db,
     config,
     registry,
+    maintenance,
     moderation,
     automod,
     logs,
@@ -221,6 +244,7 @@ async function main(): Promise<void> {
   // Só começa a desfazer punições e a publicar logs depois do gateway abrir.
   client.once('clientReady', () => {
     registry.start();
+    maintenance.start();
     scheduler.start();
     queue.start();
     messageCache.start();
@@ -257,6 +281,7 @@ async function main(): Promise<void> {
 
     try {
       registry.stop();
+      maintenance.stop();
       scheduler.stop();
       queue.stop();
       messageCache.stop();
@@ -297,7 +322,7 @@ async function main(): Promise<void> {
   // Uma promise rejeitada solta nunca derruba o bot (PRD §7.5). O alerta usa a
   // janela de dedupe de 5 min: um erro em loop não vira 300 mensagens no canal.
   process.on('unhandledRejection', (reason) => {
-    metrics.errors.inc({ scope: 'unhandledRejection' });
+    recordError('unhandledRejection', reason);
     logger.error({ err: reason }, 'unhandledRejection');
     alerts.emit({
       kind: 'unhandledRejection',
@@ -307,7 +332,7 @@ async function main(): Promise<void> {
     });
   });
   process.on('uncaughtException', (error) => {
-    metrics.errors.inc({ scope: 'uncaughtException' });
+    recordError('uncaughtException', error);
     logger.fatal({ err: error }, 'uncaughtException');
     alerts.emit({
       kind: 'uncaughtException',
@@ -321,6 +346,8 @@ async function main(): Promise<void> {
   // espelho do registro já precisa estar quente. `GUILD_IDS` só entra aqui, e
   // só para quem ainda não tem linha (ver `seedApprovedGuilds`).
   await registry.seed(env.guildIds);
+  // Antes do login: a primeira interação já precisa saber se há manutenção.
+  await maintenance.refresh();
 
   await client.login(env.DISCORD_TOKEN);
 }

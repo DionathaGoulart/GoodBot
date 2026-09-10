@@ -132,29 +132,37 @@ jobs:
           # manda quando a demo acaba. Vazia = o passo abaixo não faz nada e o
           # `.env` da VM continua mandando.
           AUTH_URL: ${{ vars.AUTH_URL }}
+          # Quem abre o painel admin. Também não é segredo — é um ID público do
+          # Discord —, e o bot o usa para conferir o `actorId` de toda escrita
+          # em `/admin`. Vazia = as rotas admin recusam tudo.
+          OWNER_DISCORD_ID: ${{ vars.OWNER_DISCORD_ID }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          envs: GHCR_USER,GHCR_TOKEN,AUTH_URL
+          envs: GHCR_USER,GHCR_TOKEN,AUTH_URL,OWNER_DISCORD_ID
           script_stop: true
           script: |
             bash /tmp/goodbot-infra/scripts/migrate-rename.sh
             cd /opt/goodbot
-            # `AUTH_URL` no `.env` da VM, sem ninguém precisar de SSH. Só
-            # escreve quando a variável existe no repositório: um valor vazio
-            # apagaria silenciosamente o que já está lá, e o `.env` é o cofre
-            # da máquina — o CI só encosta nesta linha.
-            if [ -n "${AUTH_URL:-}" ]; then
-              # Cria com 600 quando não existe; arquivo que já existe não tem
-              # a permissão mexida.
-              [ -f .env ] || install -m 600 /dev/null .env
-              if grep -q '^AUTH_URL=' .env; then
-                sed -i "s|^AUTH_URL=.*|AUTH_URL=$AUTH_URL|" .env
+            # As variáveis não-secretas no `.env` da VM, sem ninguém precisar
+            # de SSH. Só escreve as que existem no repositório: um valor vazio
+            # apagaria silenciosamente o que já está lá, e o `.env` é o cofre da
+            # máquina — o CI só encosta nestas linhas.
+            #
+            # Cria com 600 quando não existe; arquivo que já existe não tem a
+            # permissão mexida.
+            [ -f .env ] || install -m 600 /dev/null .env
+            set_env() {
+              [ -n "$2" ] || return 0
+              if grep -q "^$1=" .env; then
+                sed -i "s|^$1=.*|$1=$2|" .env
               else
-                echo "AUTH_URL=$AUTH_URL" >> .env
+                echo "$1=$2" >> .env
               fi
-            fi
+            }
+            set_env AUTH_URL "${AUTH_URL:-}"
+            set_env OWNER_DISCORD_ID "${OWNER_DISCORD_ID:-}"
             install -m 640 /tmp/goodbot-infra/docker-compose.yml ./docker-compose.yml
             # 644, e não 640 como o compose: o Caddyfile é montado DENTRO do
             # container, que roda com `cap_drop: ALL`. Sem CAP_DAC_OVERRIDE o

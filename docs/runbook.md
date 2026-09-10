@@ -105,6 +105,13 @@ NOVO=$(openssl rand -hex 32)
    `INTERNAL_API_TOKEN` (o deploy usa o valor só se um dia passar a injetá-lo;
    manter os três iguais evita surpresa).
 
+O `OWNER_DISCORD_ID` mora nos mesmos três lugares, mas não é segredo e não se
+rotaciona: é um ID público do Discord. O que ele exige é estar nos três — o
+painel confere antes de renderizar `/admin`, e o bot confere de novo o
+`actorId` de toda escrita ali. Faltando em um lado, aquele lado fecha, e o
+sintoma é "a tela abre e o botão responde 403". No GitHub ele é *variable*, não
+*secret*, e o `deploy.yml` escreve a linha no `.env` da VM a cada deploy.
+
 **Como confirmar:** abra `/g/<guildId>/system` no painel. Se o card carrega, o
 painel está falando com o bot. No log do Caddy não deve sobrar 401.
 
@@ -138,6 +145,80 @@ O painel não tem lista de usuários: o acesso vem dos cargos do Discord
    reconfere a permissão a cada 15 min, ou na hora se ela sair e entrar de novo.
 
 Quem é dono do servidor é sempre `owner` e não depende de cargo nenhum.
+
+Isso é acesso ao painel de **um servidor**. O painel do dono do bot (`admin.`)
+é outra coisa e não se ganha por cargo: quem entra é o snowflake em
+`OWNER_DISCORD_ID`, e mais ninguém.
+
+---
+
+## Entrar em manutenção
+
+Quando for mexer no banco, migrar schema ou qualquer coisa em que uma escrita
+pela metade seja pior do que o bot mudo:
+
+1. `admin.<dominio>` → **Manutenção** → escreva o aviso → **ENTRAR EM
+   MANUTENÇÃO**.
+2. Faça o que tem de fazer.
+3. **VOLTAR A ATENDER**.
+
+O bot **continua online** e continua registrando eventos; ele só recusa
+interação, com um embed efêmero. Derrubar o container faria o Discord marcar o
+bot como offline, e aí ninguém saberia se caiu ou se é manutenção.
+
+O estado fica na tabela `meta` (chave `maintenance`), não numa variável do
+processo: um deploy no meio da janela desligaria a manutenção sem ninguém
+pedir. O espelho em memória do bot relê a cada minuto, então mexer na chave na
+mão também funciona — e leva até um minuto para valer:
+
+```sql
+-- Emergência, com o painel fora. Desliga a manutenção.
+update meta set value = '{"enabled":false,"message":null,"since":null,"by":null}'::jsonb
+  where key = 'maintenance';
+```
+
+---
+
+## Um servidor pediu para entrar
+
+`admin.<dominio>` → **Fila**. Quem entrou pelo convite normal aparece como
+`pending`; quem usou a demonstração até o fim aparece como demo gasta. Os dois
+esperam a mesma decisão.
+
+- **APROVAR** — escreve `approved` no registro e apaga o prazo. O bot passa a
+  atender em até um minuto, sem redeploy e sem reinício.
+- **RECUSAR** — escreve `blocked` e pede ao bot para sair. Se o bot estiver
+  fora, o bloqueio vale do mesmo jeito: ele abandona servidores bloqueados
+  sozinho no próximo boot.
+
+**Aprovar funciona com o bot caído.** É uma escrita em `guild_registry`, e o
+`RegistryService` relê no boot. A tela mostra "BOT FORA" e perde o nome e o
+ícone dos servidores, mas os botões continuam valendo.
+
+---
+
+## Mandar um aviso para todos os servidores
+
+`admin.<dominio>` → **Manutenção** → **BROADCAST**. Sempre **ENSAIAR** antes: o
+ensaio devolve em que canal a mensagem cairia em cada servidor sem enviar nada,
+e é o único jeito de descobrir de antemão que num deles o bot não tem canal
+onde falar.
+
+O envio pede a palavra `ENVIAR` digitada, e ela é conferida pela API do bot —
+não só pela tela. **Não há como desfazer:** o bot não apaga o que publicou, e a
+mensagem vai para gente que não é você.
+
+---
+
+## Um comando sumiu do cliente do Discord
+
+No boot os slash commands só vão ao Discord quando o hash do manifesto muda —
+o que está certo quase sempre, e é inútil justamente quando o hash está certo e
+o Discord não.
+
+`admin.<dominio>` → **Manutenção** → **FORÇAR RE-REGISTRO**. Ele faz o `PUT` do
+manifesto em cada servidor atendido e devolve o resultado por servidor. O
+equivalente pela VM é subir o bot com `--force`.
 
 ---
 
@@ -189,6 +270,12 @@ Se os IPs variam muito (botnet), rotacione o `INTERNAL_API_TOKEN` — ele é a
 
 ## Checklist mensal
 
+- [ ] **Painel do dono:** `admin.<dominio>` — a tela de **Saúde** junta RAM
+      contra os 384 MB do container, guilds em cache vs registro, uso por
+      servidor e os erros recentes do processo. Comece por ela; os itens abaixo
+      são o que ela não vê.
+- [ ] **Fila:** `admin.<dominio>/fila` vazia. Servidor esperando aprovação é
+      alguém com o bot mudo e sem entender por quê.
 - [ ] **Espaço em disco:** `ssh goodbot 'df -h /'` — abaixo de 80%.
 - [ ] **Memória:** `ssh goodbot 'cd /opt/goodbot && docker stats --no-stream'` —
       bot < 300 MB, total < 500 MB (a máquina tem 1 GB).

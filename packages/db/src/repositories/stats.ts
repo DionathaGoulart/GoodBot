@@ -474,3 +474,32 @@ export async function ensureGuildRow(db: DbExecutor, guildId: string): Promise<v
     .values({ id: guildId, name: '', ownerId: '' })
     .onConflictDoNothing({ target: guilds.id });
 }
+
+/** Uso do bot num servidor, para a tela "Saúde e uso" do painel admin. */
+export interface GuildUsageRow {
+  guildId: string;
+  /** Comandos executados na janela. */
+  commands: number;
+  /** Mensagens vistas na janela — o tamanho real do tráfego que o bot lê. */
+  messages: number;
+}
+
+/**
+ * Uso por servidor desde `since`, para o painel admin (plano, Etapa 4).
+ *
+ * Sem `guildId` no `where` de propósito: é a **única** leitura do projeto que
+ * cruza servidores, e é o que a tela do dono do bot existe para mostrar. Todo o
+ * resto continua filtrando por guild — quem chamar isto de dentro do painel
+ * comum está no lugar errado.
+ */
+export async function usageByGuild(db: DbExecutor, since: Date): Promise<GuildUsageRow[]> {
+  return db
+    .select({
+      guildId: statBuckets.guildId,
+      commands: sql<number>`coalesce(sum(${statBuckets.count}) filter (where ${statBuckets.kind} = 'commands'), 0)::int`,
+      messages: sql<number>`coalesce(sum(${statBuckets.count}) filter (where ${statBuckets.kind} = 'messages_channel'), 0)::int`,
+    })
+    .from(statBuckets)
+    .where(gte(statBuckets.bucketStart, since))
+    .groupBy(statBuckets.guildId);
+}

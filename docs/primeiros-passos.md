@@ -68,7 +68,14 @@ GUILD_IDS=...
 DATABASE_URL=postgres://goodbot:goodbot@localhost:5432/goodbot
 INTERNAL_API_TOKEN=$(openssl rand -hex 32)
 AUTH_SECRET=$(openssl rand -base64 32)
+OWNER_DISCORD_ID=...
 ```
+
+O `OWNER_DISCORD_ID` é o snowflake da **sua** conta do Discord, e é o que abre
+`admin.` (§7.4). Para pegá-lo: Configurações do Usuário → Avançado → **Modo
+desenvolvedor**, depois clique com o botão direito no seu nome → **Copiar ID do
+usuário**. Sem ele o painel admin não abre para ninguém, que é o padrão seguro;
+o resto do bot e do painel sobe igual.
 
 O resto do `.env.example` só entra em produção e está comentado lá.
 
@@ -268,6 +275,47 @@ fim — é ele que diz "este servidor já usou a sua" na tela do convite.
 
 O bot deixa de atender **no instante** do vencimento, mesmo que o job esteja
 atrasado: a conta é do `isGuildServed`, não do job.
+
+## 7.4 O painel do dono (`admin.`)
+
+`http://admin.localhost:3000` em dev. Entra quem tem o snowflake em
+`OWNER_DISCORD_ID` — **não** é cargo em servidor nenhum: quem administra um
+servidor qualquer viraria administrador do bot inteiro.
+
+Quatro telas:
+
+| Tela          | Serve                                                              |
+| ------------- | ------------------------------------------------------------------ |
+| Saúde         | RAM contra os 384 MB do container, guilds em cache vs registro, uso por servidor e os erros recentes do processo |
+| Servidores    | tudo o que está no registro, com o botão de sair                   |
+| Fila          | quem espera aprovação (`pending`) e quem já gastou a demo, mais a blocklist |
+| Manutenção    | broadcast para todos os atendidos, modo manutenção, re-registro de comandos |
+
+Entrar é sempre pelo `/login` do painel, nunca por `admin.`: o `redirect_uri`
+do Discord aponta para o host do painel, e é o único registrado. Quem abre
+`admin.` sem sessão é mandado para lá e volta sozinho. O cookie de sessão sai
+com `domain` do host do painel para valer nos dois — sem isso o navegador não o
+mandaria para `admin.` e a tela seria inalcançável.
+
+Duas coisas que valem saber antes de precisar delas:
+
+- **Aprovar funciona com o bot fora do ar.** É uma escrita em `guild_registry`,
+  e o `RegistryService` relê o registro a cada minuto — e no boot. Bloquear
+  também: a saída do servidor é a metade que precisa do bot, e ela é tolerante
+  a falha (o bot abandona bloqueados sozinho no `ready` e no `guildCreate`).
+- **Manutenção não derruba o bot.** Ele fica online e continua registrando
+  eventos; só recusa interação, com um aviso efêmero. Derrubar o container
+  marcaria o bot como offline no Discord e ninguém saberia por quê.
+
+O broadcast pede a palavra `ENVIAR` digitada, e ela é conferida pela API do bot
+— não só pela tela. Ensaie antes: o botão de ensaio mostra em que canal a
+mensagem cairia em cada servidor, sem mandar nada. Não há como desfazer.
+
+Em produção, `OWNER_DISCORD_ID` precisa estar em **três** lugares, como o
+`INTERNAL_API_TOKEN`: variáveis do projeto na Vercel (o painel), `.env` da VM (o
+bot) e *variable* do repositório no GitHub, de onde o `deploy.yml` mantém a
+linha do `.env` da VM em dia. Faltando em um deles, aquele lado fecha — o
+sintoma é "a tela abre e o botão responde 403".
 
 ## 8. Depois daqui
 

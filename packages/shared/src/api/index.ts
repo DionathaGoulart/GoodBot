@@ -1,3 +1,4 @@
+export * from './admin';
 export * from './automod';
 export * from './cases';
 export * from './channels';
