@@ -429,7 +429,11 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 2. **Todo query filtra por `guildId`,** e nada assume "a" guild. Quem o bot
    atende vem do registro (`guild_registry`, via `RegistryService`), não de uma
    variável; no painel, quem decide acesso é a guild da URL e o nível de
-   permissão é por guild na sessão.
+   permissão é por guild na sessão. O registro vale nos **dois** caminhos de
+   entrada: interação (`lib/interaction.ts`) e evento do gateway
+   (`lib/loader.ts`). Handler novo não precisa lembrar de checar — o
+   `loadEvents` descarta antes; a exceção é `always: true`, hoje só
+   `guildCreate`/`guildDelete`.
 3. **Todo input externo passa por Zod de `shared`** — opção de comando, body da
    API, formulário do painel, jsonb de config. Bot e painel importam o mesmo
    schema.

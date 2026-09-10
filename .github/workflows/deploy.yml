@@ -127,15 +127,34 @@ jobs:
           # autentica, puxa e desloga, sem PAT parado no disco de lá.
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # URL pública do painel — não é segredo, por isso `vars` e não
+          # `secrets`. O bot lê dela um endereço só: o link do convite que ele
+          # manda quando a demo acaba. Vazia = o passo abaixo não faz nada e o
+          # `.env` da VM continua mandando.
+          AUTH_URL: ${{ vars.AUTH_URL }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          envs: GHCR_USER,GHCR_TOKEN
+          envs: GHCR_USER,GHCR_TOKEN,AUTH_URL
           script_stop: true
           script: |
             bash /tmp/goodbot-infra/scripts/migrate-rename.sh
             cd /opt/goodbot
+            # `AUTH_URL` no `.env` da VM, sem ninguém precisar de SSH. Só
+            # escreve quando a variável existe no repositório: um valor vazio
+            # apagaria silenciosamente o que já está lá, e o `.env` é o cofre
+            # da máquina — o CI só encosta nesta linha.
+            if [ -n "${AUTH_URL:-}" ]; then
+              # Cria com 600 quando não existe; arquivo que já existe não tem
+              # a permissão mexida.
+              [ -f .env ] || install -m 600 /dev/null .env
+              if grep -q '^AUTH_URL=' .env; then
+                sed -i "s|^AUTH_URL=.*|AUTH_URL=$AUTH_URL|" .env
+              else
+                echo "AUTH_URL=$AUTH_URL" >> .env
+              fi
+            fi
             install -m 640 /tmp/goodbot-infra/docker-compose.yml ./docker-compose.yml
             install -m 640 /tmp/goodbot-infra/Caddyfile ./Caddyfile
             install -d -m 750 ./scripts

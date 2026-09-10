@@ -39,6 +39,28 @@ export function groupByModule(commands: CommandCollection): Map<string, AnyComma
   return groups;
 }
 
+/**
+ * De qual guild é este evento, se é que é de alguma.
+ *
+ * O gateway entrega formas diferentes por evento (mensagem, membro, canal,
+ * reação...), e todas as que interessam carregam `guildId` ou um `guild`. O
+ * que **não** casa aqui é de propósito: `guildCreate`/`guildDelete` recebem a
+ * própria `Guild` (sem `guildId`), e evento de shard ou de erro não tem guild
+ * nenhuma — os dois casos devem rodar sempre.
+ */
+export function guildIdOfEvent(args: readonly unknown[]): string | null {
+  for (const arg of args) {
+    if (!arg || typeof arg !== 'object') continue;
+    const value = arg as { guildId?: unknown; guild?: unknown };
+    if (typeof value.guildId === 'string') return value.guildId;
+    const guild = value.guild;
+    if (guild && typeof guild === 'object' && typeof (guild as { id?: unknown }).id === 'string') {
+      return (guild as { id: string }).id;
+    }
+  }
+  return null;
+}
+
 /** Registra os handlers no client, isolando exceções de cada evento. */
 export function loadEvents(client: Client, events: readonly EventHandler[], ctx: BotContext): void {
   for (const event of events) {
@@ -47,7 +69,21 @@ export function loadEvents(client: Client, events: readonly EventHandler[], ctx:
       listener: (...args: unknown[]) => void,
     ) => unknown;
     bind(event.name, (...args: unknown[]) => {
+      // O contador conta o que **chegou**, inclusive o que foi descartado
+      // logo abaixo: é assim que um servidor não atendido e falante aparece
+      // no `/metrics` em vez de sumir.
       metrics.events.inc({ event: event.name });
+
+      // O registro tem de valer aqui, e não só nas interações (plano, Etapa
+      // 8). O gateway não filtra por servidor: sem este guarda, um servidor
+      // que só apertou "adicionar" e ainda espera aprovação já alimentaria o
+      // `message_cache` — com conteúdo de mensagem — e as estatísticas. Nunca
+      // guardamos dado de quem não autorizou.
+      if (!event.always) {
+        const guildId = guildIdOfEvent(args);
+        if (guildId !== null && !ctx.registry.serves(guildId)) return;
+      }
+
       void Promise.resolve()
         .then(() => event.execute(ctx, ...(args as never)))
         .catch((error: unknown) => {
