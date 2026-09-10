@@ -59,7 +59,14 @@ export async function listServedGuildIds(
         and(
           eq(guildRegistry.status, 'demo'),
           isNotNull(guildRegistry.expiresAt),
-          sql`${guildRegistry.expiresAt} > ${now}`,
+          // `gt` e não um `sql` cru: o template não conhece a coluna, então o
+          // `Date` chega ao postgres-js como objeto. Em Node puro ele infere
+          // timestamptz e serializa; no bundle do painel (Vercel/Turbopack) a
+          // inferência falha e o driver tenta escrever o `Date` no protocolo:
+          // `ERR_INVALID_ARG_TYPE`, 500 em toda tela logada. Pelo operador do
+          // Drizzle o valor passa pelo `mapToDriverValue` da coluna e viaja
+          // como texto ISO, que é o que o resto do repositório já faz.
+          gt(guildRegistry.expiresAt, now),
         ),
       ),
     );
