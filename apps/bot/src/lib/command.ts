@@ -11,6 +11,7 @@ import type { ModerationService } from '../services/moderation';
 import type { ModlogService } from '../services/modlog';
 import type { PollService } from '../services/polls';
 import type { ReactionRoleService } from '../services/reaction-roles';
+import type { RegistryService } from '../services/registry';
 import type { YouTubeProvider } from '../services/social/index';
 import type { StatsService } from '../services/stats';
 import type { TicketService } from '../services/tickets';
@@ -38,6 +39,8 @@ export interface BotContext {
   client: Client;
   db: Db;
   config: ConfigService;
+  /** Quem o bot atende (plano, Etapa 1); espelho em memória do registro. */
+  registry: RegistryService;
   moderation: ModerationService;
   /** Motor de automod (§5.2); nunca lança. */
   automod: AutomodService;

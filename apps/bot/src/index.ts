@@ -26,6 +26,7 @@ import { ModerationService } from './services/moderation';
 import { createModlogService } from './services/modlog';
 import { PollService } from './services/polls';
 import { ReactionRoleService } from './services/reaction-roles';
+import { RegistryService } from './services/registry';
 import { Scheduler } from './services/scheduler';
 import { YouTubeProvider } from './services/social/index';
 import { StatsService } from './services/stats';
@@ -55,6 +56,9 @@ async function main(): Promise<void> {
   const client = createClient();
   const alerts = new AlertService({ webhookUrl: env.ALERT_WEBHOOK_URL });
   const config = new ConfigService(db);
+  // Quem o bot atende (plano, Etapa 1). Espelho em memória: o handler de
+  // interação consulta a cada evento e não pode pagar uma query por isso.
+  const registry = new RegistryService({ db });
   // A trilha do que o bot faz sozinho (§6.5); o painel escreve na mesma tabela.
   const audit = new AuditService({ db, client });
   const queue = new LogQueue({ client });
@@ -168,7 +172,7 @@ async function main(): Promise<void> {
     port: env.INTERNAL_API_PORT,
     // Sem isto o /health continuaria esperando uma guild só e acusaria
     // degradação assim que o segundo servidor entrasse.
-    expectedGuilds: env.guildIds.length,
+    expectedGuilds: () => registry.servedCount(),
     queues: readQueues,
     backupDir: env.BACKUP_DIR,
     alerts,
@@ -181,6 +185,7 @@ async function main(): Promise<void> {
     client,
     db,
     config,
+    registry,
     moderation,
     automod,
     logs,
@@ -206,6 +211,7 @@ async function main(): Promise<void> {
   api.start();
   // Só começa a desfazer punições e a publicar logs depois do gateway abrir.
   client.once('clientReady', () => {
+    registry.start();
     scheduler.start();
     queue.start();
     messageCache.start();
@@ -240,6 +246,7 @@ async function main(): Promise<void> {
     timer.unref();
 
     try {
+      registry.stop();
       scheduler.stop();
       queue.stop();
       messageCache.stop();
@@ -298,6 +305,11 @@ async function main(): Promise<void> {
       level: 'danger',
     });
   });
+
+  // A semeadura roda antes do login: quando o primeiro evento chegar, o
+  // espelho do registro já precisa estar quente. `GUILD_IDS` só entra aqui, e
+  // só para quem ainda não tem linha (ver `seedApprovedGuilds`).
+  await registry.seed(env.guildIds);
 
   await client.login(env.DISCORD_TOKEN);
 }

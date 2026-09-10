@@ -54,7 +54,7 @@ function auditable(event: GuildScheduledEventSummary) {
 
 /** Cria (sem `eventId`) ou edita (com) um evento agendado (§6.3). */
 export async function saveScheduledEvent(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const eventIdValue = formData.get('eventId');
@@ -98,7 +98,7 @@ export async function saveScheduledEvent(formData: FormData): Promise<ActionResu
 }
 
 export async function deleteScheduledEvent(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const eventId = formData.get('eventId');

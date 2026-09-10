@@ -17,7 +17,7 @@ import { exportCasesCsv } from '@/lib/cases';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request): Promise<NextResponse> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const access = await resolveGuildSession(guildId);
   if ('verdict' in access) {
     return NextResponse.json(

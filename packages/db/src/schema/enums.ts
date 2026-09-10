@@ -3,6 +3,7 @@ import {
   AUTOMOD_RULE_TYPES,
   CASE_SOURCES,
   CASE_TYPES,
+  GUILD_STATUSES,
   LOG_KINDS,
   MODULES,
   REACTION_ROLE_MODES,
@@ -18,6 +19,7 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 
 /** Enums do Postgres gerados a partir das listas de `@goodbot/shared`. */
 export const moduleEnum = pgEnum('module', MODULES);
+export const guildStatusEnum = pgEnum('guild_status', GUILD_STATUSES);
 export const caseTypeEnum = pgEnum('case_type', CASE_TYPES);
 export const caseSourceEnum = pgEnum('case_source', CASE_SOURCES);
 export const auditSourceEnum = pgEnum('audit_source', AUDIT_SOURCES);

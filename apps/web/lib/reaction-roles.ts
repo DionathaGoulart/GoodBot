@@ -67,7 +67,7 @@ function panelId(formData: FormData): string | null {
  * ar decide quando atualizar, no botão `ATUALIZAR`.
  */
 export async function savePanel(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = ReactionRolePanelInputSchema.safeParse(parseBody(formData.get('panel')));
@@ -122,7 +122,7 @@ export async function savePanel(formData: FormData): Promise<ActionResult> {
 
 /** `PUBLICAR` / `ATUALIZAR`: o bot é quem monta e envia a mensagem. */
 export async function publishPanel(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = panelId(formData);
@@ -152,7 +152,7 @@ export async function publishPanel(formData: FormData): Promise<ActionResult> {
  * conseguiria alcançar pelo dashboard.
  */
 export async function removePanel(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = panelId(formData);

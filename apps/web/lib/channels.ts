@@ -75,7 +75,7 @@ export async function loadChannels(
 export async function loadChannelDetail(
   channelId: string,
 ): Promise<{ ok: true; detail: GuildChannelDetail } | { ok: false; message: string }> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   await requireGuildAccess(guildId, 'admin');
 
   try {
@@ -101,7 +101,7 @@ function channelId(formData: FormData): string | null {
 
 /** Cria (sem `channelId`) ou edita (com) um canal ou categoria. */
 export async function saveChannel(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = channelId(formData);
@@ -142,7 +142,7 @@ export async function saveChannel(formData: FormData): Promise<ActionResult> {
 }
 
 export async function removeChannel(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = channelId(formData);
@@ -167,7 +167,7 @@ export async function removeChannel(formData: FormData): Promise<ActionResult> {
 }
 
 export async function setSlowmode(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = channelId(formData);
@@ -201,7 +201,7 @@ export async function setSlowmode(formData: FormData): Promise<ActionResult> {
  * jeito que o `/lock` dentro do Discord — então um desfaz o outro.
  */
 export async function toggleChannelLock(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = channelId(formData);
@@ -230,7 +230,7 @@ export async function toggleChannelLock(formData: FormData): Promise<ActionResul
 }
 
 export async function setChannelOverrides(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = channelId(formData);

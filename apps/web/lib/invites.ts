@@ -37,7 +37,7 @@ function parseBody(raw: FormDataEntryValue | null): unknown {
 }
 
 export async function createInvite(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('invite'));
@@ -80,7 +80,7 @@ export async function createInvite(formData: FormData): Promise<ActionResult> {
 
 /** Revogar um convite. O `before` é o que a auditoria guarda: depois some. */
 export async function deleteInvite(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const code = formData.get('code');

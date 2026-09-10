@@ -14,7 +14,7 @@ import { cachedInternalApi } from '@/lib/internal-api';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request): Promise<NextResponse> {
-  const guildId = guildFromQuery(request.url);
+  const guildId = await guildFromQuery(request.url);
   if (guildId === null) {
     return NextResponse.json({ error: 'Servidor não configurado.' }, { status: 404 });
   }

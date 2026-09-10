@@ -34,7 +34,7 @@ pelo próprio bot, que é o único processo com uma sessão de gateway aberta.
                            │ Drizzle
                    ┌───────▼────────┐
                    │ Postgres       │  (Supabase em produção,
-                   │ 25 tabelas     │   Docker local em dev)
+                   │ 26 tabelas     │   Docker local em dev)
                    └────────────────┘
 ```
 
@@ -83,11 +83,16 @@ há container de injeção de dependência. A ordem importa:
 5. Os **jobs** entram no `Scheduler`
 6. `client.login()`
 
-No `ready`, cada guild de `GUILD_IDS` é preparada por vez (upsert, cache de
-membros, config, guild commands). Guild ausente vira log de erro e não impede
-as outras — convidar o bot é ação manual e pode estar pendente só para a mais
-nova. Os dois recursos do processo (LRU de mensagens, intervalo de flush das
-stats) recebem o maior cache e o menor intervalo entre as guilds.
+Antes do `login`, o `GUILD_IDS` é semeado no registro (`RegistryService.seed`)
+e o espelho em memória é carregado: quando o primeiro evento chegar, o bot já
+sabe quem atende. No `ready`, cada guild **atendida pelo registro** é preparada
+por vez (`lib/guild-setup.ts`: upsert, cache de membros, config, guild
+commands). Guild ausente vira log de erro e não impede as outras. Guild em que
+o bot está mas não atende ganha linha `pending` e fica calada; bloqueada, ele
+sai. Os dois recursos do processo (LRU de mensagens, intervalo de flush das
+stats) recebem o maior cache e o menor intervalo entre as guilds — quem resolve
+esse conflito é o `ProcessTuner`, porque desde o registro uma guild pode entrar
+depois do boot.
 
 O `BotContext` (`src/lib/command.ts`) é o objeto que carrega os services e é
 entregue a todo comando e evento. Quem precisa de uma capacidade nova a recebe
@@ -118,7 +123,8 @@ src/
   automod/        o motor: engine.ts + rules/{spam,links,caps,words,mentions}
   services/       a lógica de verdade; ver abaixo
   jobs/           tarefas periódicas: retention, social, stats-rollup
-  lib/            utilitários sem estado: embeds, template, cooldown, purge...
+  lib/            utilitários sem estado: embeds, template, cooldown, purge,
+                  guild-setup (preparar uma guild atendida)...
   api/            a API HTTP (Hono) — ver 4.4
 ```
 
@@ -130,6 +136,7 @@ fino: valida entrada, chama um service, responde. Os principais:
 | Service                   | Responsabilidade                                          |
 | ------------------------- | --------------------------------------------------------- |
 | `ConfigService`           | config de módulo por guild, **com cache e invalidate**     |
+| `RegistryService`         | quem o bot atende; espelho em memória de `guild_registry`  |
 | `ModerationService`       | ban/kick/timeout/warn, criação de caso, escalonamento      |
 | `LogService` + `LogQueue` | roteia evento para o canal de log certo, com fila          |
 | `AutomodService`          | avalia mensagem contra as regras ligadas                   |
@@ -198,6 +205,7 @@ app/
                 modules, social
   api/          auth (Auth.js), health, cases/export, discord/*
 lib/
+  registry.ts       os servidores atendidos, lidos de `guild_registry`
   internal-api.ts   o cliente da API do bot, com o token do servidor
   module-config.ts  ponte entre o form do painel e o schema Zod do módulo
   auth/             Auth.js com provider Discord + checagem de nível
@@ -229,13 +237,15 @@ Drizzle, e só aqui.
 src/
   client.ts        createDb(url)
   migrate.ts       roda as migrations (é um passo da CI, não do boot do bot)
-  schema/          14 arquivos: guilds, configs, cases, automod, community,
+  schema/          14 arquivos: guilds (+ guild_registry), configs, cases,
+                   automod, community,
                    logs, messages, misc, social, stats, audit, enums, relations
-  repositories/    16 arquivos: uma função por consulta, nunca SQL solto fora
-drizzle/           6 migrations SQL versionadas
+  repositories/    17 arquivos: uma função por consulta, nunca SQL solto fora
+drizzle/           7 migrations SQL versionadas
 ```
 
-25 tabelas. As centrais: `guilds`, `guild_settings`, `module_configs`, `cases`,
+26 tabelas. As centrais: `guilds`, `guild_registry`, `guild_settings`,
+`module_configs`, `cases`,
 `audit_logs`, `automod_rules`, `automod_hits`, `scheduled_actions`,
 `stat_buckets`, `tickets`, `reaction_role_panels`, `social_accounts`.
 
@@ -383,9 +393,10 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 
 1. **ID do Discord é `string`.** Nunca `Number(snowflake)` — snowflake estoura
    o `Number` com precisão silenciosa.
-2. **Todo query filtra por `guildId`,** e nada assume "a" guild. O bot atende
-   a lista de `GUILD_IDS`; no painel, quem decide acesso é a guild da URL e o
-   nível de permissão é por guild na sessão.
+2. **Todo query filtra por `guildId`,** e nada assume "a" guild. Quem o bot
+   atende vem do registro (`guild_registry`, via `RegistryService`), não de uma
+   variável; no painel, quem decide acesso é a guild da URL e o nível de
+   permissão é por guild na sessão.
 3. **Todo input externo passa por Zod de `shared`** — opção de comando, body da
    API, formulário do painel, jsonb de config. Bot e painel importam o mesmo
    schema.

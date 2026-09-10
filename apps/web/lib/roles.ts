@@ -43,7 +43,7 @@ function roleId(formData: FormData): string | null {
  * hierarquia e chama o Discord é o bot, com o `actorId` da sessão.
  */
 export async function saveRole(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('role'));
@@ -80,7 +80,7 @@ export async function saveRole(formData: FormData): Promise<ActionResult> {
 }
 
 export async function removeRole(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = roleId(formData);
@@ -106,7 +106,7 @@ export async function removeRole(formData: FormData): Promise<ActionResult> {
 
 /** `▲`/`▼` da tabela: uma casa por clique. */
 export async function moveRole(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = roleId(formData);

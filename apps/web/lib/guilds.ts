@@ -16,13 +16,13 @@ export interface ManagedGuild {
  * por servidor configurado.
  *
  * Guild que o bot ainda não entrou responde 404. Isso não é erro — é o estado
- * normal entre acrescentar o ID na configuração e clicar no convite —, então
- * ela aparece no seletor com o próprio ID de rótulo em vez de sumir.
+ * normal entre a linha aparecer no registro e o bot ser convidado —, então ela
+ * aparece no seletor com o próprio ID de rótulo em vez de sumir.
  */
 export async function listManagedGuilds(): Promise<ManagedGuild[]> {
   const api = cachedInternalApi(60);
   return await Promise.all(
-    configuredGuildIds().map(async (id) => {
+    (await configuredGuildIds()).map(async (id) => {
       try {
         return { id, name: (await api.guildProfile(id)).name };
       } catch {

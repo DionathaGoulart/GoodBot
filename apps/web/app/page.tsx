@@ -2,7 +2,13 @@ import { redirect } from 'next/navigation';
 
 import { defaultGuildId } from '@/lib/auth/require';
 
-/** Single-server hoje (PRD §7.1): a raiz só empurra para a guild configurada. */
-export default function Home() {
-  redirect(`/g/${defaultGuildId()}`);
+/**
+ * `force-dynamic` é obrigatório: o destino sai do registro no banco, e
+ * prerenderizar esta rota no build faria o `next build` exigir um Postgres.
+ */
+export const dynamic = 'force-dynamic';
+
+/** A raiz empurra para o primeiro servidor atendido (plano, Etapa 1). */
+export default async function Home() {
+  redirect(`/g/${await defaultGuildId()}`);
 }

@@ -14,12 +14,16 @@ const snowflake = z.string().refine(isSnowflake, 'não é um snowflake válido')
 const blankToUndefined = (value: unknown): unknown => (value === '' ? undefined : value);
 
 /**
- * Uma ou mais guilds, separadas por vírgula. Aceita tanto `GUILD_IDS` quanto o
- * `GUILD_ID` singular: o token e as variáveis vivem em três cofres diferentes
- * (VM, GitHub Secrets, Vercel), e obrigar a renomear em todos de uma vez só
- * para acrescentar um servidor seria um degrau desnecessário.
+ * Semente do registro de servidores. Aceita tanto `GUILD_IDS` quanto o
+ * `GUILD_ID` singular: as variáveis vivem em três cofres diferentes (VM,
+ * GitHub Secrets, Vercel), e obrigar a renomear em todos de uma vez só para
+ * acrescentar um servidor seria um degrau desnecessário.
+ *
+ * Desde a Etapa 1 do plano quem decide o que o bot atende é a tabela
+ * `guild_registry`. Estes IDs só entram nela **uma vez**, como `approved`, na
+ * primeira subida; depois disso a variável pode sair do ambiente.
  */
-const guildIds = z.preprocess(parseIdList, z.array(snowflake).min(1, 'informe ao menos uma guild'));
+const guildIds = z.preprocess(parseIdList, z.array(snowflake));
 
 const EnvSchema = z
   .object({
@@ -45,12 +49,9 @@ const EnvSchema = z
   })
   .transform(({ GUILD_IDS, GUILD_ID, ...rest }) => ({
     ...rest,
+    /** Lista de semeadura; vazia é válido (o registro já mandou). */
     guildIds: GUILD_IDS ?? GUILD_ID ?? [],
-  }))
-  .refine((env) => env.guildIds.length > 0, {
-    path: ['GUILD_IDS'],
-    message: 'obrigatório: um ou mais IDs de servidor, separados por vírgula',
-  });
+  }));
 
 export type Env = z.infer<typeof EnvSchema>;
 

@@ -111,7 +111,7 @@ function idFrom(formData: FormData, key: string): string | null {
 // ── tipos ───────────────────────────────────────────────────────────────────
 
 export async function saveTicketType(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = TicketTypeInputSchema.safeParse(parseBody(formData.get('type')));
@@ -151,7 +151,7 @@ export async function saveTicketType(formData: FormData): Promise<ActionResult> 
 }
 
 export async function removeTicketType(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const typeId = idFrom(formData, 'typeId');
@@ -174,7 +174,7 @@ export async function removeTicketType(formData: FormData): Promise<ActionResult
 // ── painel ──────────────────────────────────────────────────────────────────
 
 export async function saveTicketPanel(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = TicketPanelInputSchema.safeParse(parseBody(formData.get('panel')));
@@ -208,7 +208,7 @@ export async function saveTicketPanel(formData: FormData): Promise<ActionResult>
 }
 
 export async function publishTicketPanel(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = idFrom(formData, 'panelId');
@@ -233,7 +233,7 @@ export async function publishTicketPanel(formData: FormData): Promise<ActionResu
 }
 
 export async function removeTicketPanel(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = idFrom(formData, 'panelId');
@@ -273,7 +273,7 @@ export async function removeTicketPanel(formData: FormData): Promise<ActionResul
  * do Discord: transcript, log e apagamento do canal saem idênticos.
  */
 export async function closeTicketAction(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'mod');
 
   const raw = formData.get('ticketId');

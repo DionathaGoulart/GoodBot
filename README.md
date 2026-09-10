@@ -195,8 +195,8 @@ deploy nunca é interrompido no meio.
 | Onde                          | Segredo                                                                                                                                    |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | GitHub Secrets                | `DATABASE_URL` (direta, para as migrations), `SSH_HOST`, `SSH_USER`, `SSH_KEY`; o GHCR usa o `GITHUB_TOKEN`                                |
-| `.env` em `/opt/goodbot` (VM) | `DISCORD_TOKEN`, `GUILD_ID`, `DATABASE_URL` (direta), `INTERNAL_API_TOKEN`, `BOT_DOMAIN`, `ACME_EMAIL`                                     |
-| Variáveis da Vercel           | `DATABASE_URL` (pooler :6543), `AUTH_SECRET`, `AUTH_URL`, `DISCORD_CLIENT_ID/SECRET`, `INTERNAL_API_URL`, `INTERNAL_API_TOKEN`, `GUILD_ID` |
+| `.env` em `/opt/goodbot` (VM) | `DISCORD_TOKEN`, `GUILD_IDS` (semente do registro), `DATABASE_URL` (direta), `INTERNAL_API_TOKEN`, `BOT_DOMAIN`, `ACME_EMAIL`              |
+| Variáveis da Vercel           | `DATABASE_URL` (pooler :6543), `AUTH_SECRET`, `AUTH_URL`, `DISCORD_CLIENT_ID/SECRET`, `INTERNAL_API_URL`, `INTERNAL_API_TOKEN`             |
 
 O `INTERNAL_API_TOKEN` está na VM e na Vercel; rotacionar significa trocar nos
 dois de uma vez.

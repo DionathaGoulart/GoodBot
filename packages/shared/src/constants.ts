@@ -20,6 +20,18 @@ export const MODULES = [
 ] as const;
 export type Module = (typeof MODULES)[number];
 
+/**
+ * Estado de um servidor no registro (`guild_registry`). É ele, e não uma
+ * variável de ambiente, que decide se o bot atende a guild:
+ *
+ * · `pending` — entrou pelo convite normal e espera aprovação do dono do bot;
+ * · `approved` — aprovado, atendido sem prazo;
+ * · `demo` — entrou pelo link de demonstração; atendido até `expiresAt`;
+ * · `blocked` — recusado ou bloqueado; o bot sai e não volta a atender.
+ */
+export const GUILD_STATUSES = ['pending', 'approved', 'demo', 'blocked'] as const;
+export type GuildStatus = (typeof GUILD_STATUSES)[number];
+
 /** Tipos de caso de moderação (PRD §5.1). */
 export const CASE_TYPES = [
   'ban',

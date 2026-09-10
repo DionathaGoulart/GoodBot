@@ -229,7 +229,7 @@ function caseNumberFrom(formData: FormData): number | null {
  * mod-log tem de acompanhar a edição, e só ele fala com o Discord.
  */
 export async function editCaseReason(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'mod');
 
   const caseNumber = caseNumberFrom(formData);
@@ -267,7 +267,7 @@ export async function editCaseReason(formData: FormData): Promise<ActionResult> 
 
 /** Apagar (soft delete). Só `admin` (PRD §9.2); o caso fica no banco. */
 export async function deleteCase(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const caseNumber = caseNumberFrom(formData);
@@ -299,7 +299,7 @@ export async function deleteCase(formData: FormData): Promise<ActionResult> {
  * punição do painel: vira um caso novo, com mod-log e tudo (PRD §6.4).
  */
 export async function undoCase(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'mod');
 
   const caseNumber = caseNumberFrom(formData);

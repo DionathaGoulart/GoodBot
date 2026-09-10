@@ -85,10 +85,14 @@ docs/                   guias: primeiros passos, módulos, API, banco, runbook
 - **Três provedores, três cofres de segredo:** VM (`.env`), GitHub Secrets
   (CI) e variáveis do projeto na Vercel. `INTERNAL_API_TOKEN` vive nos três
   e é rotacionado nos três juntos.
-- **Multi-guild:** o bot atende as guilds de `GUILD_IDS` (lista separada por
-  vírgula; `GUILD_ID` singular ainda vale). Todo query filtra por `guildId`, e
-  nada pode assumir "a" guild: no painel, quem decide acesso é sempre a guild
-  da URL, e o nível de permissão é **por guild** na sessão.
+- **Multi-guild:** quem o bot atende é a tabela `guild_registry`, não uma
+  variável: `approved` sem prazo, `demo` até `expiresAt`, `pending` e `blocked`
+  nunca. `GUILD_IDS` sobrou como **semente** do registro no boot (só cria linha
+  que ainda não existe). No bot a leitura é o `RegistryService` (espelho em
+  memória, recarregado a cada minuto); no painel, `lib/registry.ts`. Todo query
+  filtra por `guildId`, e nada pode assumir "a" guild: no painel, quem decide
+  acesso é sempre a guild da URL, e o nível de permissão é **por guild** na
+  sessão.
 
 ## Como rodar localmente
 

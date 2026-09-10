@@ -68,8 +68,8 @@ export async function readBackupHealth(
 export interface HealthRoutesOptions {
   deps: ApiDeps;
   token: string;
-  /** Quantas guilds o bot deveria ter no cache (as de `GUILD_IDS`). */
-  expectedGuilds: number;
+  /** Quantas guilds o bot deveria ter no cache (as atendidas pelo registro). */
+  expectedGuilds: () => number;
   startedAt?: number;
   /** Leitor das filas; sem ele o campo `queues` some da resposta. */
   queues?: () => QueueHealth;
@@ -106,7 +106,7 @@ export function createHealthRoutes(options: HealthRoutesOptions): Hono<ApiEnv> {
             : null,
       },
       database,
-      guilds: { cached: deps.client.guilds.cache.size, expected: expectedGuilds },
+      guilds: { cached: deps.client.guilds.cache.size, expected: expectedGuilds() },
       process: {
         rssBytes: memory.rss,
         heapUsedBytes: memory.heapUsed,

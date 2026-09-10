@@ -71,7 +71,7 @@ function toActionResult(error: unknown): ActionResult {
 }
 
 export async function saveSocialAccount(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = SocialAccountInputSchema.safeParse(parseBody(formData.get('account')));
@@ -111,7 +111,7 @@ export async function saveSocialAccount(formData: FormData): Promise<ActionResul
 }
 
 export async function removeSocialAccount(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = accountId(formData);
@@ -144,7 +144,7 @@ export type ResolveChannelResult =
   { ok: true; channel: SocialResolveResult } | { ok: false; message: string };
 
 export async function resolveSocialChannel(input: string): Promise<ResolveChannelResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   await requireGuildAccess(guildId, 'admin');
 
   try {
@@ -157,7 +157,7 @@ export async function resolveSocialChannel(input: string): Promise<ResolveChanne
 
 /** Botão `TESTAR`: manda um anúncio de mentira no canal configurado da conta. */
 export async function testSocialAccount(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   await requireGuildAccess(guildId, 'admin');
 
   const id = accountId(formData);

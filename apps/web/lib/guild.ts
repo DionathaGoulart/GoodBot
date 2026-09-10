@@ -54,7 +54,7 @@ function parseBody(raw: FormDataEntryValue | null): unknown {
  * auditoria seria o pior tipo de poder que o painel pode ter (§6.5).
  */
 export async function saveGuildProfile(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('settings'));
@@ -113,7 +113,7 @@ function auditable(profile: GuildProfile) {
  * `source` muda para `dashboard`.
  */
 export async function unbanUser(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'mod');
 
   const userId = formData.get('userId');
@@ -149,7 +149,7 @@ export async function unbanUser(formData: FormData): Promise<ActionResult> {
 export async function loadMoreBans(
   query: Partial<BanListQuery>,
 ): Promise<{ ok: true; page: GuildBanPage } | { ok: false; message: string }> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   await requireGuildAccess(guildId, 'mod');
 
   const parsed = BanListQuerySchema.safeParse(query);

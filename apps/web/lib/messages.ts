@@ -68,7 +68,7 @@ export async function loadChannelHistory(
  * e hora.
  */
 export async function sendChannelMessage(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = ComposeInputSchema.safeParse(parseBody(formData.get('message')));
@@ -124,7 +124,7 @@ export async function sendChannelMessage(formData: FormData): Promise<ActionResu
 
 /** Apaga uma mensagem pelo painel; a auditoria guarda o que foi apagado. */
 export async function deleteChannelMessage(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const channelId = SnowflakeSchema.safeParse(formData.get('channelId'));

@@ -40,7 +40,7 @@ export async function sendWelcomeTestAction(formData: FormData): Promise<ActionR
   // A guild vem do formulário, não de um padrão: com mais de um servidor, um
   // padrão mandaria a mensagem de teste para o lugar errado.
   const informado = formData.get('guildId');
-  const guildId = typeof informado === 'string' && informado !== '' ? informado : defaultGuildId();
+  const guildId = typeof informado === 'string' && informado !== '' ? informado : await defaultGuildId();
   // `requireGuildAccess` recusa guild fora do GUILD_IDS, então um valor
   // forjado no formulário não passa daqui.
   await requireGuildAccess(guildId, 'admin');

@@ -34,6 +34,10 @@ conseguir copiar IDs. Botão direito no servidor > **Copiar ID do servidor** →
 `GUILD_IDS`. Mais de um servidor? Separe por vírgula:
 `GUILD_IDS=111...,222...`.
 
+`GUILD_IDS` é a **semente** do registro de servidores (`guild_registry`): no
+boot, todo ID que ainda não tem linha entra como `approved`. Daí em diante quem
+decide o que o bot atende é a tabela.
+
 ## 3. Variáveis
 
 ```bash
@@ -94,10 +98,12 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 
 **`ERR_PNPM_UNSUPPORTED_ENGINE`** — Node fora da faixa 22.x. `nvm use`.
 
-**Comandos não aparecem no Discord** — são registrados como _guild commands_
-do `GUILD_ID`. Confira se o bot está naquele servidor e se o `GUILD_ID` está
-certo. Guild commands propagam na hora; se não apareceram, o registro falhou —
-veja o log do boot.
+**Comandos não aparecem no Discord** — são registrados como _guild commands_,
+uma guild por vez, e só nas que o bot **atende**. Confira se o bot está naquele
+servidor e se a linha dele em `guild_registry` está `approved` (ou `demo` no
+prazo): o log do boot diz `guild não atendida; o bot fica calado nela` quando
+não está. Guild commands propagam na hora; se não apareceram e o status está
+certo, o registro falhou — veja o log do boot.
 
 **Automod não reage a nada** — falta o intent _Message Content_.
 
@@ -117,18 +123,28 @@ depois**, senão ele fica online e calado lá.
    `applications.commands`, permissões do PRD §10).
 2. **Ponha o cargo do bot no topo** da lista de cargos do servidor novo. Regra
    do Discord: cargo só mexe em cargo abaixo dele.
-3. **Acrescente o ID** à variável, separado por vírgula, nos dois lugares:
-
-   | Onde                               | Variável                |
-   | ---------------------------------- | ----------------------- |
-   | `.env` da VM (`/opt/goodbot/.env`) | `GUILD_IDS=<id1>,<id2>` |
-   | variáveis do projeto na Vercel     | `GUILD_IDS=<id1>,<id2>` |
+3. **Acrescente o ID** ao `GUILD_IDS` do `.env` da VM
+   (`/opt/goodbot/.env`), separado por vírgula. O painel não precisa da
+   variável: ele lê o registro no banco.
 
    Se hoje está como `GUILD_ID`, pode trocar o nome ou deixar: `GUILD_IDS`
    ganha quando os dois existem.
 
-4. **Reinicie o bot** e faça um redeploy do painel. O `ready` prepara a guild
-   nova: cache de membros, config e registro dos comandos.
+4. **Reinicie o bot.** No boot, o ID novo vira uma linha `approved` no
+   registro, e o `ready` prepara a guild: cache de membros, config e registro
+   dos comandos.
+
+> A semeadura só vale para servidor **sem linha** no registro. Se o bot já foi
+> convidado antes (a linha nasce `pending`), acrescentar o ID não aprova nada —
+> até o painel admin existir, aprovar é um `update` na tabela:
+>
+> ```sql
+> update guild_registry
+>    set status = 'approved', approved_at = now(), updated_at = now()
+>  where guild_id = '<id>';
+> ```
+>
+> O bot relê o registro a cada minuto; não precisa reiniciar.
 
 O que muda no painel: a barra lateral passa a mostrar o nome real de cada
 servidor e a oferecer a troca. Seu nível de permissão é resolvido **por

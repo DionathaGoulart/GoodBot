@@ -47,7 +47,7 @@ function parseBody(raw: FormDataEntryValue | null): unknown {
  * histórico de `uses` da linha.
  */
 export async function saveTag(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = TagInputSchema.safeParse(parseBody(formData.get('tag')));
@@ -94,7 +94,7 @@ export async function saveTag(formData: FormData): Promise<ActionResult> {
 }
 
 export async function removeTag(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const name = formData.get('name');

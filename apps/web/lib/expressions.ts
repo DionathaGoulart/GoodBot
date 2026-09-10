@@ -48,7 +48,7 @@ function invalid(error: Parameters<typeof toFieldErrors>[0]): ActionResult {
  * entrou no servidor.
  */
 export async function createEmoji(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('emoji'));
@@ -77,7 +77,7 @@ export async function createEmoji(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updateEmoji(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const emojiId = formData.get('emojiId');
@@ -113,7 +113,7 @@ export async function updateEmoji(formData: FormData): Promise<ActionResult> {
 }
 
 export async function deleteEmoji(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const emojiId = formData.get('emojiId');
@@ -145,7 +145,7 @@ export async function deleteEmoji(formData: FormData): Promise<ActionResult> {
 }
 
 export async function createSticker(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('sticker'));
@@ -174,7 +174,7 @@ export async function createSticker(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updateSticker(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const stickerId = formData.get('stickerId');
@@ -211,7 +211,7 @@ export async function updateSticker(formData: FormData): Promise<ActionResult> {
 }
 
 export async function deleteSticker(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const stickerId = formData.get('stickerId');

@@ -190,7 +190,7 @@ export async function saveModuleConfig(
   page: ConfigPage,
   formData: FormData,
 ): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = CONFIG_PAGES[page].schema.safeParse(parseBody(formData.get('config')));

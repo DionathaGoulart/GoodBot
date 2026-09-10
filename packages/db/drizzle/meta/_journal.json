@@ -43,6 +43,13 @@
       "when": 1788878724201,
       "tag": "0005_social_youtube",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789055466982,
+      "tag": "0006_guild_registry",
+      "breakpoints": true
     }
   ]
 }

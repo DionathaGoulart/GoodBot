@@ -89,7 +89,7 @@ function parseBody(raw: FormDataEntryValue | null): unknown {
  * `source` muda para `dashboard`. `mod` basta; a hierarquia é do bot.
  */
 export async function punishMember(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'mod');
 
   const raw = parseBody(formData.get('action'));
@@ -128,7 +128,7 @@ export async function punishMember(formData: FormData): Promise<ActionResult> {
 
 /** Adicionar/remover cargos de um membro. Só `admin` (PRD §9.2). */
 export async function setMemberRoles(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const userId = formData.get('userId');

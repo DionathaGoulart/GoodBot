@@ -3,6 +3,7 @@ import Discord from 'next-auth/providers/discord';
 
 import { env } from '@/lib/env';
 import { isStale, resolveGuildLevel, retryAt } from '@/lib/auth/resolve';
+import { servedGuildIds } from '@/lib/registry';
 
 import type { GuildGrant } from '@/lib/auth/access';
 
@@ -68,7 +69,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
         const anterior = goodbot.guilds ?? {};
         const guilds: Record<string, GuildGrant> = {};
 
-        for (const guildId of config.guildIds) {
+        // Quais servidores existem para o painel vem do registro (plano, Etapa
+        // 1). Se o banco não responder, o token anterior continua valendo: um
+        // `jwt` que lança derruba a sessão inteira no meio do uso.
+        let atendidas: string[];
+        try {
+          atendidas = await servedGuildIds();
+        } catch {
+          return token;
+        }
+
+        for (const guildId of atendidas) {
           const atual = anterior[guildId];
           if (atual && !isStale(atual.checkedAt)) {
             guilds[guildId] = atual;
@@ -92,8 +103,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
           }
         }
 
-        // Guild que saiu do `GUILD_IDS` sai do token junto: manter um nível
-        // órfão seria acesso a um servidor que o painel já não gerencia.
+        // Guild que saiu do registro (bloqueada, demo vencida) sai do token
+        // junto: manter um nível órfão seria acesso a um servidor que o painel
+        // já não gerencia.
         goodbot.guilds = guilds;
         return token;
       },

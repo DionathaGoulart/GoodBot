@@ -1,7 +1,6 @@
 import { DEFAULT_COMMAND_OVERRIDE, isUserFacingError, UserFacingError } from '@goodbot/shared';
 import { MessageFlags } from 'discord.js';
 
-import { env } from '../env';
 import { childLogger } from '../logger';
 import { metrics } from '../metrics';
 import { isUserContextCommand } from './command';
@@ -99,10 +98,10 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
     ctx: BotContext,
     interaction: Interaction,
   ): Promise<void> {
-    // Um único ponto ignora eventos de guild que não está configurada. O bot
-    // pode estar em servidores que não gerencia (convite antigo, teste), e ali
-    // ele fica calado em vez de responder com config que não existe.
-    if (!interaction.inGuild() || !env.guildIds.includes(interaction.guildId)) return;
+    // Um único ponto ignora eventos de guild que o bot não atende. Ele pode
+    // estar em servidores à espera de aprovação, bloqueados ou com a demo
+    // vencida, e ali fica calado em vez de responder com config que não existe.
+    if (!interaction.inGuild() || !ctx.registry.serves(interaction.guildId)) return;
 
     if (interaction.isAutocomplete()) {
       const command = ctx.commands.get(interaction.commandName);

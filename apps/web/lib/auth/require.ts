@@ -4,8 +4,8 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
-import { env } from '@/lib/env';
 import { actionLimiter, clientIp } from '@/lib/rate-limit';
+import { servedGuildIds } from '@/lib/registry';
 
 import { checkGuildAccess, type AccessLevel } from './access';
 import { isStale, resolveGuildLevel } from './resolve';
@@ -30,9 +30,9 @@ export async function resolveGuildSession(
 
   if (!(await withinWriteBudget(session.user.id))) return { verdict: 'rate-limited' };
 
-  // Guild fora do `GUILD_IDS` nem chega a consultar o bot: uma URL inventada
-  // não deve virar tráfego para a API nem revelar se aquele servidor existe.
-  if (!isConfiguredGuild(guildId)) return { verdict: 'denied' };
+  // Guild que o bot não atende nem chega a consultar a API: uma URL inventada
+  // não deve virar tráfego para o bot nem revelar se aquele servidor existe.
+  if (!(await isConfiguredGuild(guildId))) return { verdict: 'denied' };
 
   const grant = session.guilds?.[guildId];
   let level = grant?.level ?? 'none';
@@ -109,23 +109,26 @@ export function verdictMessage(verdict: DeniedVerdict): string {
     : 'Sem acesso a esta guild.';
 }
 
-/** Todas as guilds que o painel gerencia, na ordem em que foram configuradas. */
-export function configuredGuildIds(): string[] {
-  return env().guildIds;
+/**
+ * Todas as guilds que o painel gerencia. A fonte é o registro do banco
+ * (`guild_registry`), não mais o `GUILD_IDS`: aprovar um servidor no painel
+ * admin passa a valer sem redeploy.
+ */
+export async function configuredGuildIds(): Promise<string[]> {
+  return servedGuildIds();
 }
 
-export function isConfiguredGuild(guildId: string): boolean {
-  return env().guildIds.includes(guildId);
+export async function isConfiguredGuild(guildId: string): Promise<boolean> {
+  return (await servedGuildIds()).includes(guildId);
 }
 
 /**
- * A primeira guild configurada. Serve para o redirect da raiz e para rotas que
+ * A primeira guild atendida. Serve para o redirect da raiz e para rotas que
  * ainda não recebem a guild explicitamente — nunca como autorização: quem
  * decide acesso é sempre a guild da URL.
  */
-export function defaultGuildId(): string {
-  const [first] = env().guildIds;
-  // O schema do ambiente garante ao menos uma; isto é para o compilador.
-  if (!first) throw new Error('GUILD_IDS está vazio');
+export async function defaultGuildId(): Promise<string> {
+  const [first] = await servedGuildIds();
+  if (!first) throw new Error('nenhum servidor aprovado no registro');
   return first;
 }

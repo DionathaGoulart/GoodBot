@@ -89,7 +89,7 @@ async function invalidate(guildId: string): Promise<string | undefined> {
 
 /** Cria ou edita uma regra. `ruleId` no FormData = edição. */
 export async function saveAutomodRule(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = AutomodRuleSchema.safeParse(parseBody(formData.get('rule')));
@@ -137,7 +137,7 @@ export async function saveAutomodRule(formData: FormData): Promise<ActionResult>
 }
 
 export async function removeAutomodRule(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const ruleId = formData.get('ruleId');
@@ -165,7 +165,7 @@ export async function removeAutomodRule(formData: FormData): Promise<ActionResul
 
 /** Botões ▲▼: o cliente manda a lista inteira na ordem nova. */
 export async function reorderAutomod(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const body = parseBody(formData.get('ruleIds'));
@@ -205,7 +205,7 @@ export async function loadRaidState(guildId: string): Promise<RaidModeState | nu
 }
 
 export async function setRaidMode(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
   const active = formData.get('active') === 'true';
 

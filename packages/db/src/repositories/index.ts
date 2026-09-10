@@ -1,3 +1,4 @@
+export * from './registry';
 export * from './configs';
 export * from './cases';
 export * from './logs';

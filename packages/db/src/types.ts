@@ -3,6 +3,8 @@ import type { InferInsertModel, InferSelectModel } from 'drizzle-orm';
 
 export type Guild = InferSelectModel<typeof s.guilds>;
 export type NewGuild = InferInsertModel<typeof s.guilds>;
+export type GuildRegistryRow = InferSelectModel<typeof s.guildRegistry>;
+export type NewGuildRegistryRow = InferInsertModel<typeof s.guildRegistry>;
 export type GuildSettings = InferSelectModel<typeof s.guildSettings>;
 export type NewGuildSettings = InferInsertModel<typeof s.guildSettings>;
 export type ModuleConfigRow = InferSelectModel<typeof s.moduleConfigs>;

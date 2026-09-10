@@ -76,8 +76,8 @@ export interface ApiServerOptions {
   deps: ApiDeps;
   token: string;
   port: number;
-  /** Guilds esperadas no cache: quantas o `GUILD_IDS` configura. */
-  expectedGuilds?: number;
+  /** Guilds esperadas no cache: quantas o registro atende agora. */
+  expectedGuilds?: () => number;
   /** Filas do bot, para o `/health` e os gauges do `/metrics`. */
   queues?: () => QueueHealth;
   /** Volume de backups montado read-only (`/backups`); ausente em dev. */
@@ -146,7 +146,7 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
     createHealthRoutes({
       deps,
       token,
-      expectedGuilds: options.expectedGuilds ?? 1,
+      expectedGuilds: options.expectedGuilds ?? (() => 1),
       queues: options.queues,
       backupDir: options.backupDir,
     }),
