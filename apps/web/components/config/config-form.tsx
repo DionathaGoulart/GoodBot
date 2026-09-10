@@ -12,7 +12,7 @@ import { CONFIG_PAGES, type ConfigPage } from '@/lib/config-pages';
 
 /**
  * §6.4 — a casca de toda página de configuração: react-hook-form com o
- * resolver do schema de `@cobot/shared`, rodapé sticky que só aparece quando o
+ * resolver do schema de `@goodbot/shared`, rodapé sticky que só aparece quando o
  * formulário está sujo e toast no fim (§6.8).
  *
  * O `readOnly` é o modo `mod` (PRD §9.2): campos desabilitados e nenhum

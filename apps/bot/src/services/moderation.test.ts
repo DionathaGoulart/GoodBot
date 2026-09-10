@@ -1,4 +1,4 @@
-import { DEFAULT_MODERATION_CONFIG, isUserFacingError, MINUTE_MS } from '@cobot/shared';
+import { DEFAULT_MODERATION_CONFIG, isUserFacingError, MINUTE_MS } from '@goodbot/shared';
 import { Collection } from 'discord.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,8 +6,8 @@ import { ModerationService } from './moderation';
 
 import type { ConfigService } from './config';
 import type { ModlogService } from './modlog';
-import type { Case } from '@cobot/db';
-import type { ModerationConfig } from '@cobot/shared';
+import type { Case } from '@goodbot/db';
+import type { ModerationConfig } from '@goodbot/shared';
 import type { Client, Guild, GuildMember, User } from 'discord.js';
 
 const { createCase, scheduleAction, softDeleteCase, cancelScheduledActions, countWarnsSince } =
@@ -19,7 +19,7 @@ const { createCase, scheduleAction, softDeleteCase, cancelScheduledActions, coun
     countWarnsSince: vi.fn(),
   }));
 
-vi.mock('@cobot/db', () => ({
+vi.mock('@goodbot/db', () => ({
   createCase,
   scheduleAction,
   softDeleteCase,
@@ -107,7 +107,7 @@ function setup(
       fetch: vi.fn().mockRejectedValue(new Error('não deveria buscar')),
     },
     bans,
-    client: { user: { id: BOT_ID, tag: 'CoBot#0001' } },
+    client: { user: { id: BOT_ID, tag: 'Goodbot#0001' } },
   } as unknown as Guild;
 
   const config = {
@@ -121,7 +121,7 @@ function setup(
     postAction: vi.fn().mockResolvedValue(undefined),
   };
 
-  const client = { user: { id: BOT_ID, tag: 'CoBot#0001' } } as unknown as Client;
+  const client = { user: { id: BOT_ID, tag: 'Goodbot#0001' } } as unknown as Client;
 
   return {
     service: new ModerationService({ db: {} as never, client, config, modlog }),

@@ -1,5 +1,5 @@
 {
-  "name": "cobot",
+  "name": "goodbot",
   "version": "0.0.0",
   "private": true,
   "description": "Bot de moderação para Discord + painel web (monorepo pnpm)",
@@ -10,18 +10,18 @@
     "pnpm": ">=9"
   },
   "scripts": {
-    "dev": "concurrently -n bot,web -c cyan,magenta \"pnpm --filter @cobot/bot dev\" \"pnpm --filter @cobot/web dev\"",
+    "dev": "concurrently -n bot,web -c cyan,magenta \"pnpm --filter @goodbot/bot dev\" \"pnpm --filter @goodbot/web dev\"",
     "build": "pnpm -r build",
-    "lint": "eslint . && pnpm --filter @cobot/web lint",
+    "lint": "eslint . && pnpm --filter @goodbot/web lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "audit": "pnpm audit --audit-level high",
-    "guild": "pnpm --filter @cobot/guild-config guild",
-    "db:generate": "pnpm --filter @cobot/db db:generate",
-    "db:migrate": "pnpm --filter @cobot/db db:migrate",
-    "docker:build": "docker build --platform linux/amd64 -f infra/docker/bot.Dockerfile -t cobot-bot:local .",
+    "guild": "pnpm --filter @goodbot/guild-config guild",
+    "db:generate": "pnpm --filter @goodbot/db db:generate",
+    "db:migrate": "pnpm --filter @goodbot/db db:migrate",
+    "docker:build": "docker build --platform linux/amd64 -f infra/docker/bot.Dockerfile -t goodbot-bot:local .",
     "docker:up": "docker compose -f infra/docker-compose.yml --env-file .env up -d",
     "docker:down": "docker compose -f infra/docker-compose.yml --env-file .env down"
   },

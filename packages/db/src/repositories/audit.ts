@@ -5,7 +5,7 @@ import { auditLogs } from '../schema/audit';
 
 import type { DbExecutor } from '../client';
 import type { AuditLog, NewAuditLog } from '../types';
-import type { AuditSource } from '@cobot/shared';
+import type { AuditSource } from '@goodbot/shared';
 import type { SQL } from 'drizzle-orm';
 
 export type AppendAuditInput = Omit<NewAuditLog, 'id' | 'createdAt'>;

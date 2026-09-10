@@ -44,7 +44,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   // Pacotes do workspace são consumidos direto do fonte (TypeScript).
-  transpilePackages: ['@cobot/shared', '@cobot/db'],
+  transpilePackages: ['@goodbot/shared', '@goodbot/db'],
   experimental: {
     /**
      * Sem isto, um pedido RSC que falha na rede vira navegação de página

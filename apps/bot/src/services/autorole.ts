@@ -1,13 +1,13 @@
-import { scheduleAction } from '@cobot/db';
-import { MINUTE_MS, SECOND_MS } from '@cobot/shared';
+import { scheduleAction } from '@goodbot/db';
+import { MINUTE_MS, SECOND_MS } from '@goodbot/shared';
 
 import { childLogger } from '../logger';
 import { fetchMember } from './moderation';
 
 import type { AuditService } from './audit';
 import type { ConfigService } from './config';
-import type { Db } from '@cobot/db';
-import type { AutoroleConfig } from '@cobot/shared';
+import type { Db } from '@goodbot/db';
+import type { AutoroleConfig } from '@goodbot/shared';
 import type { Guild, GuildMember } from 'discord.js';
 
 const log = childLogger('autorole');

@@ -5,8 +5,8 @@ import {
   getTicketType,
   listTicketPanels,
   listTicketTypes,
-} from '@cobot/db';
-import { MessageTemplateSchema, UserFacingError } from '@cobot/shared';
+} from '@goodbot/db';
+import { MessageTemplateSchema, UserFacingError } from '@goodbot/shared';
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { defineCommand } from '../../lib/command';
@@ -15,7 +15,7 @@ import { levelAtLeast } from '../../services/permissions';
 import { openLimitFor } from '../../services/tickets';
 
 import type { AutocompleteContext, CommandContext } from '../../lib/command';
-import type { Ticket } from '@cobot/db';
+import type { Ticket } from '@goodbot/db';
 import type { GuildMember, GuildTextBasedChannel } from 'discord.js';
 
 /** Quem pode fechar/gerir: autor do ticket, suporte do tipo ou moderação. */
@@ -94,7 +94,11 @@ export default defineCommand({
             .setName('create')
             .setDescription('Cria um tipo de ticket')
             .addStringOption((option) =>
-              option.setName('nome').setDescription('Nome do tipo').setMaxLength(60).setRequired(true),
+              option
+                .setName('nome')
+                .setDescription('Nome do tipo')
+                .setMaxLength(60)
+                .setRequired(true),
             )
             .addChannelOption((option) =>
               option
@@ -242,7 +246,10 @@ export default defineCommand({
 
     if (sub === 'rename') {
       const { channel } = await ticketHere(ctx);
-      const name = await ctx.tickets.rename(channel, ctx.interaction.options.getString('nome', true));
+      const name = await ctx.tickets.rename(
+        channel,
+        ctx.interaction.options.getString('nome', true),
+      );
       await ctx.interaction.editReply({ content: `Canal renomeado para ${code(name)}.` });
       return;
     }
@@ -263,7 +270,9 @@ export default defineCommand({
     const included = sub === 'add';
     await ctx.tickets.setParticipant(channel, member as GuildMember, included);
     await ctx.interaction.editReply({
-      content: included ? `${user} agora vê este ticket.` : `${user} perdeu o acesso a este ticket.`,
+      content: included
+        ? `${user} agora vê este ticket.`
+        : `${user} perdeu o acesso a este ticket.`,
     });
   },
 });

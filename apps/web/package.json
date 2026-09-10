@@ -1,5 +1,5 @@
 {
-  "name": "@cobot/web",
+  "name": "@goodbot/web",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -11,8 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@cobot/db": "workspace:*",
-    "@cobot/shared": "workspace:*",
+    "@goodbot/db": "workspace:*",
+    "@goodbot/shared": "workspace:*",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@hookform/resolvers": "^5.9.1",
     "@tanstack/react-table": "^9.2.4",

@@ -7,7 +7,7 @@ import { loadRoleNames } from '@/lib/discord';
 
 import { ChannelTree } from './channel-tree';
 
-export const metadata = { title: 'Canais · CoBot' };
+export const metadata = { title: 'Canais · Goodbot' };
 
 export default async function ChannelsPage({ params }: PageProps<'/g/[guildId]/canais'>) {
   const { guildId } = await params;

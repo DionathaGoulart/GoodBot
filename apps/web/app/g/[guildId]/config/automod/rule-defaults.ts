@@ -1,4 +1,4 @@
-import type { AutomodRule, AutomodRuleConfigOf, AutomodRuleType } from '@cobot/shared';
+import type { AutomodRule, AutomodRuleConfigOf, AutomodRuleType } from '@goodbot/shared';
 
 /** Cada tipo nasce com o default do schema; `words` não tem lista padrão. */
 const DEFAULT_CONFIG: { [T in AutomodRuleType]: AutomodRuleConfigOf<T> } = {

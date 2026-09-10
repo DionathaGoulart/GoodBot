@@ -9,7 +9,7 @@ import { loadTicketPanels, loadTickets, loadTicketTypes } from '@/lib/tickets';
 import { TicketsConfigForm } from './form';
 import { TicketsTabs } from './tabs';
 
-export const metadata = { title: 'Tickets · CoBot' };
+export const metadata = { title: 'Tickets · Goodbot' };
 
 export default async function TicketsConfigPage({
   params,

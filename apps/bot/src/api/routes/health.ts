@@ -1,7 +1,7 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { HOUR_MS, VERSION } from '@cobot/shared';
+import { HOUR_MS, VERSION } from '@goodbot/shared';
 import { sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 
@@ -9,7 +9,7 @@ import { metrics } from '../../metrics';
 import { isAuthorized } from '../middleware/auth';
 
 import type { ApiDeps, ApiEnv } from '../context';
-import type { BackupHealth, HealthResponse, QueueHealth } from '@cobot/shared';
+import type { BackupHealth, HealthResponse, QueueHealth } from '@goodbot/shared';
 import type { Client } from 'discord.js';
 
 /** Um dump com mais de 48h significa que o job de backup parou (PRD §11). */

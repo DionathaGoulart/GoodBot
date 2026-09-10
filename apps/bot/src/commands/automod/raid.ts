@@ -1,4 +1,4 @@
-import { UserFacingError } from '@cobot/shared';
+import { UserFacingError } from '@goodbot/shared';
 import { PermissionFlagsBits, SlashCommandBuilder, time, TimestampStyles } from 'discord.js';
 
 import { RULE_TYPE_LABELS } from './shared';

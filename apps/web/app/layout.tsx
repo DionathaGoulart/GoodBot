@@ -10,8 +10,8 @@ import './globals.css';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'CoBot',
-  description: 'Painel de moderação e configuração do CoBot',
+  title: 'Goodbot',
+  description: 'Painel de moderação e configuração do Goodbot',
 };
 
 export default async function RootLayout({ children }: LayoutProps<'/'>) {

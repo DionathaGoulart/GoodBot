@@ -1,4 +1,4 @@
-import { MINUTE_MS } from '@cobot/shared';
+import { MINUTE_MS } from '@goodbot/shared';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { createMiddleware } from 'hono/factory';
 

@@ -1,4 +1,4 @@
-import { isSnowflake } from '@cobot/shared';
+import { isSnowflake } from '@goodbot/shared';
 import { createMiddleware } from 'hono/factory';
 
 import { ApiHttpError, notFound } from '../errors';

@@ -6,11 +6,9 @@ import { loadLogsPage } from '@/lib/module-config';
 
 import { LogsConfigForm } from './form';
 
-export const metadata = { title: 'Logs · CoBot' };
+export const metadata = { title: 'Logs · Goodbot' };
 
-export default async function LogsConfigPage({
-  params,
-}: PageProps<'/g/[guildId]/config/logs'>) {
+export default async function LogsConfigPage({ params }: PageProps<'/g/[guildId]/config/logs'>) {
   const { guildId } = await params;
   const session = await requireGuildAccess(guildId);
   const values = await loadLogsPage(guildId);

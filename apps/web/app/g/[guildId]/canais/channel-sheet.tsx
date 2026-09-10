@@ -10,7 +10,7 @@ import {
   type ChannelOverride,
   type GuildChannelDetail,
   type OverrideState,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { toast } from 'sonner';
 
 import {

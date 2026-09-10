@@ -1,6 +1,6 @@
 /**
  * Constantes do domínio. Única fonte de verdade para nomes de módulo, tipos de
- * caso, enums do banco e limites — bot, painel e `@cobot/db` importam daqui.
+ * caso, enums do banco e limites — bot, painel e `@goodbot/db` importam daqui.
  */
 
 /** Módulos configuráveis (linhas de `module_configs`). */

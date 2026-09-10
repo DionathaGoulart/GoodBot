@@ -1,11 +1,11 @@
-import { cancelScheduledActions, createCase, scheduleAction, softDeleteCase } from '@cobot/db';
+import { cancelScheduledActions, createCase, scheduleAction, softDeleteCase } from '@goodbot/db';
 import {
   DAY_MS,
   MAX_REASON_LENGTH,
   MAX_TIMEOUT_MS,
   UserFacingError,
   formatDuration,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { DiscordAPIError } from 'discord.js';
 
 import { childLogger } from '../logger';
@@ -16,8 +16,8 @@ import { canActOn, toMemberLike } from './permissions';
 import type { ConfigService, ResolvedSettings } from './config';
 import type { EscalationStep } from './escalation';
 import type { ModlogService } from './modlog';
-import type { Case, Db } from '@cobot/db';
-import type { CaseSource, CaseType, DmOnPunish, ModerationConfig } from '@cobot/shared';
+import type { Case, Db } from '@goodbot/db';
+import type { CaseSource, CaseType, DmOnPunish, ModerationConfig } from '@goodbot/shared';
 import type { Client, Guild, GuildMember, User } from 'discord.js';
 
 const log = childLogger('moderation');
@@ -320,7 +320,7 @@ export class ModerationService {
     const config = await this.moderationConfig(guild.id);
     const reason = normalizeReason(input.reason, config.defaultReason);
     const actorId = actor?.id ?? this.client.user?.id ?? guild.client.user.id;
-    const actorTag = actor?.user.tag ?? this.client.user?.tag ?? 'CoBot';
+    const actorTag = actor?.user.tag ?? this.client.user?.tag ?? 'Goodbot';
     const expiresAt = input.durationMs ? new Date(Date.now() + input.durationMs) : null;
 
     const kase = await createCase(this.db, {

@@ -23,7 +23,7 @@ import { punishMember, setMemberRoles } from '@/lib/members';
 import { moveRole, removeRole, saveRole } from '@/lib/roles';
 
 import type { ActionResult } from '@/lib/module-config';
-import type { BanListQuery, GuildBanPage, GuildChannelDetail } from '@cobot/shared';
+import type { BanListQuery, GuildBanPage, GuildChannelDetail } from '@goodbot/shared';
 
 /**
  * As ações da gestão de servidor (Etapa 16). Cascas finas sobre o `lib/`

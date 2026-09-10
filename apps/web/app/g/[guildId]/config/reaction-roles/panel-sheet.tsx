@@ -10,7 +10,7 @@ import {
   type ReactionRoleMode,
   type ReactionRolePanelInput,
   type ReactionRoleStyle,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { useFieldArray, useForm, useFormContext } from 'react-hook-form';
 import { toast } from 'sonner';
 

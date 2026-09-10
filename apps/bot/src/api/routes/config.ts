@@ -1,4 +1,4 @@
-import { InvalidateInputSchema } from '@cobot/shared';
+import { InvalidateInputSchema } from '@goodbot/shared';
 import { Hono } from 'hono';
 
 import { childLogger } from '../../logger';

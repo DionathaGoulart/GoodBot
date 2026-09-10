@@ -9,6 +9,6 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   // Os pacotes do workspace são consumidos do fonte: precisam entrar no bundle.
-  noExternal: [/^@cobot\//],
+  noExternal: [/^@goodbot\//],
   splitting: false,
 });

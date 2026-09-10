@@ -1,11 +1,11 @@
-import { setCaseModlogMessage } from '@cobot/db';
+import { setCaseModlogMessage } from '@goodbot/db';
 
 import { caseEmbed } from '../lib/case-embed';
 import { childLogger } from '../logger';
 
 import type { LogEntry, LogQueue } from './log-queue';
 import type { LogService } from './logs';
-import type { Case, Db } from '@cobot/db';
+import type { Case, Db } from '@goodbot/db';
 import type { Client } from 'discord.js';
 
 const log = childLogger('modlog');

@@ -1,4 +1,4 @@
-import { DEFAULT_COMMAND_OVERRIDE, isUserFacingError, UserFacingError } from '@cobot/shared';
+import { DEFAULT_COMMAND_OVERRIDE, isUserFacingError, UserFacingError } from '@goodbot/shared';
 import { MessageFlags } from 'discord.js';
 
 import { env } from '../env';
@@ -12,7 +12,7 @@ import { handleComponent, handleModal } from '../interactions/index';
 import { levelAtLeast, resolveLevel, toMemberLike } from '../services/permissions';
 
 import type { AnyCommand, AutocompleteContext, BotContext, CommandContext } from './command';
-import type { PermissionLevel } from '@cobot/shared';
+import type { PermissionLevel } from '@goodbot/shared';
 import type {
   ChatInputCommandInteraction,
   GuildMember,

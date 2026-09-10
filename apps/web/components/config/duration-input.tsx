@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { DAY_MS, HOUR_MS, MINUTE_MS, WEEK_MS } from '@cobot/shared';
+import { DAY_MS, HOUR_MS, MINUTE_MS, WEEK_MS } from '@goodbot/shared';
 
 import { Input } from '@/components/ui/input';
 import {
@@ -41,7 +41,7 @@ export function toMs(amount: number, unit: UnitKey): number {
 
 /**
  * §6.4 — duração numa moldura só: número + unidade, com atalhos como `tag`s.
- * O valor que sai é sempre em ms, que é o que os schemas de `@cobot/shared`
+ * O valor que sai é sempre em ms, que é o que os schemas de `@goodbot/shared`
  * esperam.
  */
 export function DurationInput({

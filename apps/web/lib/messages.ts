@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { AllowedMentionsSchema, MessageTemplateSchema, SnowflakeSchema } from '@cobot/shared';
+import { AllowedMentionsSchema, MessageTemplateSchema, SnowflakeSchema } from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -10,7 +10,7 @@ import { defaultGuildId, requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
-import type { ChannelMessageSummary, GuildChannelSummary } from '@cobot/shared';
+import type { ChannelMessageSummary, GuildChannelSummary } from '@goodbot/shared';
 
 const MESSAGES_PATH = (guildId: string) => `/g/${guildId}/mensagens`;
 

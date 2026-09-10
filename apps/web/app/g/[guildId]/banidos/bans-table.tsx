@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { MAX_REASON_LENGTH } from '@cobot/shared';
+import { MAX_REASON_LENGTH } from '@goodbot/shared';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -22,7 +22,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-import type { GuildBanPage, GuildBanSummary } from '@cobot/shared';
+import type { GuildBanPage, GuildBanSummary } from '@goodbot/shared';
 
 type BanRow = GuildBanSummary & Record<string, unknown>;
 
@@ -129,7 +129,11 @@ export function BansTable({
         header: 'USUÁRIO',
         cell: ({ row }) => (
           <span className="flex items-center gap-2">
-            <AvatarSq src={row.original.user.avatarUrl} name={row.original.user.username} size={24} />
+            <AvatarSq
+              src={row.original.user.avatarUrl}
+              name={row.original.user.username}
+              size={24}
+            />
             <span className="font-bold">{row.original.user.username}</span>
             {row.original.user.bot ? <Tag tone="muted">BOT</Tag> : null}
           </span>
@@ -251,12 +255,7 @@ export function BansTable({
 
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>CANCELAR</AlertDialogCancel>
-            <button
-              type="button"
-              className="btn-goodchat"
-              disabled={busy}
-              onClick={confirmUnban}
-            >
+            <button type="button" className="btn-goodchat" disabled={busy} onClick={confirmUnban}>
               {busy ? 'DESBANINDO_' : 'CONFIRMAR'}
             </button>
           </AlertDialogFooter>

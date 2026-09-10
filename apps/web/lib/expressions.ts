@@ -6,7 +6,7 @@ import {
   EmojiUpdateInputSchema,
   StickerCreateInputSchema,
   StickerUpdateInputSchema,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
@@ -15,7 +15,7 @@ import { defaultGuildId, requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
-import type { ExpressionOverview } from '@cobot/shared';
+import type { ExpressionOverview } from '@goodbot/shared';
 
 const PATH = (guildId: string) => `/g/${guildId}/emojis`;
 
@@ -81,7 +81,8 @@ export async function updateEmoji(formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const emojiId = formData.get('emojiId');
-  if (typeof emojiId !== 'string' || emojiId === '') return { ok: false, message: 'Emoji inválido.' };
+  if (typeof emojiId !== 'string' || emojiId === '')
+    return { ok: false, message: 'Emoji inválido.' };
 
   const raw = parseBody(formData.get('emoji'));
   const parsed = EmojiUpdateInputSchema.safeParse(
@@ -116,7 +117,8 @@ export async function deleteEmoji(formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const emojiId = formData.get('emojiId');
-  if (typeof emojiId !== 'string' || emojiId === '') return { ok: false, message: 'Emoji inválido.' };
+  if (typeof emojiId !== 'string' || emojiId === '')
+    return { ok: false, message: 'Emoji inválido.' };
 
   const parsed = ActorInputSchema.safeParse({ actorId: session.user.id });
   if (!parsed.success) return { ok: false, message: 'Sessão inválida.' };

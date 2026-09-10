@@ -1,4 +1,4 @@
-import { MAX_REASON_LENGTH } from '@cobot/shared';
+import { MAX_REASON_LENGTH } from '@goodbot/shared';
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { addUserOption, requireGuild } from './shared';

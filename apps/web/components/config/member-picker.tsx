@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { GuildMemberSummarySchema } from '@cobot/shared';
+import { GuildMemberSummarySchema } from '@goodbot/shared';
 import { cn } from 'cn';
 
 import { AvatarSq } from '@/components/retro/avatar-sq';
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
-import type { GuildMemberSummary } from '@cobot/shared';
+import type { GuildMemberSummary } from '@goodbot/shared';
 
 /** Espera antes de perguntar ao bot; digitar rápido não vira uma rajada. */
 const DEBOUNCE_MS = 250;
@@ -126,7 +126,9 @@ export function MemberPicker({
           <CommandList>
             {loading ? <p className="screen-meta terminal-cursor p-3">BUSCANDO</p> : null}
             {error ? (
-              <p className="p-3 text-[10px] uppercase tracking-[0.2em] text-error-text">! {error}</p>
+              <p className="p-3 text-[10px] uppercase tracking-[0.2em] text-error-text">
+                ! {error}
+              </p>
             ) : null}
             {!loading && !error && members.length === 0 ? (
               <CommandEmpty>Ninguém encontrado.</CommandEmpty>

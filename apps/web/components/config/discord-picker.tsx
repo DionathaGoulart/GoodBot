@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { GuildChannelSummarySchema, GuildRoleSummarySchema } from '@cobot/shared';
+import { GuildChannelSummarySchema, GuildRoleSummarySchema } from '@goodbot/shared';
 import { cn } from 'cn';
 
 import {
@@ -281,7 +281,11 @@ export function DiscordPicker({
             }}
           >
             {loading ? <p className="screen-meta terminal-cursor p-3">CARREGANDO</p> : null}
-            {error ? <p className="p-3 text-[10px] uppercase tracking-[0.2em] text-error-text">! {error}</p> : null}
+            {error ? (
+              <p className="p-3 text-[10px] uppercase tracking-[0.2em] text-error-text">
+                ! {error}
+              </p>
+            ) : null}
             {!loading && !error && visible.length === 0 ? (
               <CommandEmpty>Nada encontrado.</CommandEmpty>
             ) : null}

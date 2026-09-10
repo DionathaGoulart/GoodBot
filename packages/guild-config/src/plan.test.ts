@@ -1,11 +1,11 @@
-import { MANAGED_CHANNEL_TYPES, permissionsToBitfield } from '@cobot/shared';
+import { MANAGED_CHANNEL_TYPES, permissionsToBitfield } from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import { buildPlan } from './plan';
 import { GuildSpecSchema } from './schema';
 
 import type { CurrentState } from './plan';
-import type { GuildChannelDetail, GuildChannelSummary, GuildRoleSummary } from '@cobot/shared';
+import type { GuildChannelDetail, GuildChannelSummary, GuildRoleSummary } from '@goodbot/shared';
 
 const GUILD = '111111111111111111';
 
@@ -149,7 +149,7 @@ describe('buildPlan', () => {
   it('ignora cargos de bot e o próprio @everyone nas remoções', () => {
     const plan = buildPlan(
       spec({}),
-      state({ roles: [everyone, role({ id: '2', name: 'CoBot', managed: true })] }),
+      state({ roles: [everyone, role({ id: '2', name: 'Goodbot', managed: true })] }),
       { guildId: GUILD, allowDelete: true },
     );
 

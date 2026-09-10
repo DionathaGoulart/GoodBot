@@ -1,5 +1,5 @@
-import { setModuleConfig } from '@cobot/db';
-import { UserFacingError } from '@cobot/shared';
+import { setModuleConfig } from '@goodbot/db';
+import { UserFacingError } from '@goodbot/shared';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -55,16 +55,16 @@ export default defineCommand({
             .setRequired(true),
         )
         .addRoleOption((option) =>
-          option
-            .setName('cargo')
-            .setDescription('Cargo dado a quem clicar')
-            .setRequired(true),
+          option.setName('cargo').setDescription('Cargo dado a quem clicar').setRequired(true),
         )
         .addStringOption((option) =>
           option.setName('texto').setDescription('Texto da mensagem').setMaxLength(1_000),
         )
         .addStringOption((option) =>
-          option.setName('botao').setDescription('Texto do botão (padrão: Verificar)').setMaxLength(80),
+          option
+            .setName('botao')
+            .setDescription('Texto do botão (padrão: Verificar)')
+            .setMaxLength(80),
         ),
     ),
   module: 'autorole',

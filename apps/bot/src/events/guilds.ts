@@ -1,4 +1,4 @@
-import { guilds } from '@cobot/db';
+import { guilds } from '@goodbot/db';
 import { Events } from 'discord.js';
 import { eq, sql } from 'drizzle-orm';
 

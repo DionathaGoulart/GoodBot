@@ -1,4 +1,4 @@
-import { getPanel } from '@cobot/db';
+import { getPanel } from '@goodbot/db';
 import { MessageFlags } from 'discord.js';
 
 import {
@@ -11,7 +11,7 @@ import {
 } from '../services/reaction-roles';
 
 import type { BotContext } from '../lib/command';
-import type { PanelWithItems } from '@cobot/db';
+import type { PanelWithItems } from '@goodbot/db';
 import type { GuildMember, MessageComponentInteraction } from 'discord.js';
 
 /**

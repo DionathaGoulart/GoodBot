@@ -1,4 +1,4 @@
-import { BULK_DELETE_MAX_AGE_MS } from '@cobot/shared';
+import { BULK_DELETE_MAX_AGE_MS } from '@goodbot/shared';
 
 /** O mínimo de uma mensagem para os filtros; o `Message` real satisfaz isto. */
 export interface PurgeCandidate {

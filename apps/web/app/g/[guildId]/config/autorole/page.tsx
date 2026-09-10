@@ -6,7 +6,7 @@ import { loadModuleConfig } from '@/lib/module-config';
 
 import { AutoroleConfigForm } from './form';
 
-export const metadata = { title: 'Autorole · CoBot' };
+export const metadata = { title: 'Autorole · Goodbot' };
 
 export default async function AutoroleConfigPage({
   params,

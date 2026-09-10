@@ -13,10 +13,10 @@ import {
   STAT_GRANULARITIES,
   STAT_KINDS,
   TICKET_STATUSES,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { pgEnum } from 'drizzle-orm/pg-core';
 
-/** Enums do Postgres gerados a partir das listas de `@cobot/shared`. */
+/** Enums do Postgres gerados a partir das listas de `@goodbot/shared`. */
 export const moduleEnum = pgEnum('module', MODULES);
 export const caseTypeEnum = pgEnum('case_type', CASE_TYPES);
 export const caseSourceEnum = pgEnum('case_source', CASE_SOURCES);

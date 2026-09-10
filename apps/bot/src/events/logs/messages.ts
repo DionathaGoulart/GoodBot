@@ -15,8 +15,8 @@ import { fieldValue, formatDiff, quoteBlock } from '../../services/logs';
 
 import type { BotContext } from '../../lib/command';
 import type { CachedContent } from '../../services/message-cache';
-import type { CachedAttachment } from '@cobot/db';
-import type { LogsConfig } from '@cobot/shared';
+import type { CachedAttachment } from '@goodbot/db';
+import type { LogsConfig } from '@goodbot/shared';
 import type { APIEmbedField, Message, PartialMessage } from 'discord.js';
 
 /** Link direto para a mensagem no cliente do Discord. */
@@ -35,7 +35,7 @@ async function logsConfig(ctx: BotContext, guildId: string): Promise<LogsConfig>
   return ctx.config.get(guildId, 'logs');
 }
 
-/** Bot que fala pouco e o próprio CoBot nunca entram no log de mensagens. */
+/** Bot que fala pouco e o próprio Goodbot nunca entram no log de mensagens. */
 function skipAuthor(message: Message | PartialMessage, config: LogsConfig): boolean {
   if (!message.author) return false;
   return config.ignoreBots && message.author.bot;

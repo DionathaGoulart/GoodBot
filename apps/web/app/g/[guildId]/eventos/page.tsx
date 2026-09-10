@@ -6,7 +6,7 @@ import { loadScheduledEvents } from '@/lib/events';
 
 import { EventsScreen } from './events-screen';
 
-export const metadata = { title: 'Eventos · CoBot' };
+export const metadata = { title: 'Eventos · Goodbot' };
 
 /** §6.3 — criar e editar eventos agendados do Discord. */
 export default async function EventsPage({ params }: PageProps<'/g/[guildId]/eventos'>) {

@@ -4,14 +4,9 @@ import {
   createReminder,
   listPendingReminders,
   scheduleAction,
-} from '@cobot/db';
-import { MAX_MESSAGE_CONTENT_LENGTH, UserFacingError, formatDuration } from '@cobot/shared';
-import {
-  PermissionFlagsBits,
-  SlashCommandBuilder,
-  time,
-  TimestampStyles,
-} from 'discord.js';
+} from '@goodbot/db';
+import { MAX_MESSAGE_CONTENT_LENGTH, UserFacingError, formatDuration } from '@goodbot/shared';
+import { PermissionFlagsBits, SlashCommandBuilder, time, TimestampStyles } from 'discord.js';
 
 import { requireUtilities } from './shared';
 import { defineCommand } from '../../lib/command';
@@ -49,9 +44,7 @@ export default defineCommand({
             .setDescription('Avisar neste canal em vez de na DM (padrão: DM)'),
         ),
     )
-    .addSubcommand((sub) =>
-      sub.setName('list').setDescription('Lista seus lembretes pendentes'),
-    )
+    .addSubcommand((sub) => sub.setName('list').setDescription('Lista seus lembretes pendentes'))
     .addSubcommand((sub) =>
       sub
         .setName('cancel')
@@ -110,10 +103,9 @@ export default defineCommand({
         id,
       });
       if (!cancelled) {
-        throw new UserFacingError(
-          `Não achei um lembrete pendente seu com o ID \`${id}\`.`,
-          { code: 'REMINDER_NOT_FOUND' },
-        );
+        throw new UserFacingError(`Não achei um lembrete pendente seu com o ID \`${id}\`.`, {
+          code: 'REMINDER_NOT_FOUND',
+        });
       }
       await ctx.interaction.editReply({
         embeds: [

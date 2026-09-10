@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateEditor, type TemplatePreviewMode } from './template-editor';
 
-import type { MessageTemplate } from '@cobot/shared';
+import type { MessageTemplate } from '@goodbot/shared';
 
 const TEMPLATE: MessageTemplate = { content: '{author} {headline}' };
 

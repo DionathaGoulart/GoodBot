@@ -29,7 +29,7 @@ import {
 } from '@/lib/stats';
 import { formatPeriodLabel, parseRange, type Period } from '@/lib/stats-period';
 
-export const metadata = { title: 'Dashboard · CoBot' };
+export const metadata = { title: 'Dashboard · Goodbot' };
 
 const number = new Intl.NumberFormat('pt-BR');
 

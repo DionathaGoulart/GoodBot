@@ -1,9 +1,9 @@
-import { cacheMessages, deleteCachedMessagesBefore, getCachedMessages } from '@cobot/db';
-import { DAY_MS, MESSAGE_CACHE_RETENTION_DAYS, SECOND_MS } from '@cobot/shared';
+import { cacheMessages, deleteCachedMessagesBefore, getCachedMessages } from '@goodbot/db';
+import { DAY_MS, MESSAGE_CACHE_RETENTION_DAYS, SECOND_MS } from '@goodbot/shared';
 
 import { childLogger } from '../logger';
 
-import type { CacheMessageInput, CachedAttachment, Db } from '@cobot/db';
+import type { CacheMessageInput, CachedAttachment, Db } from '@goodbot/db';
 import type { Message, PartialMessage } from 'discord.js';
 
 const log = childLogger('message-cache');

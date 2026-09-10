@@ -29,7 +29,7 @@ import { PauseIcon, PlayIcon, RefreshCwIcon } from 'lucide-react';
 export const LIVE_INTERVAL_MS = 10_000;
 export const CONFIG_INTERVAL_MS = 30_000;
 
-const STORAGE_KEY = 'cobot:auto-refresh';
+const STORAGE_KEY = 'goodbot:auto-refresh';
 
 /** O intervalo é por tela, derivado da rota — não há um número global. */
 export function refreshIntervalFor(pathname: string): number {
@@ -87,7 +87,7 @@ const AutoRefreshContext = React.createContext<AutoRefreshValue | null>(null);
  * `localStorage` pode lançar (cookies bloqueados) e não existe no servidor;
  * ligado é o padrão nos dois casos.
  */
-const PREFERENCE_EVENT = 'cobot:auto-refresh-changed';
+const PREFERENCE_EVENT = 'goodbot:auto-refresh-changed';
 
 function readPreference(): boolean {
   try {

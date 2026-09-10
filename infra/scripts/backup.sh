@@ -22,7 +22,7 @@ alert() {
   # Sem webhook configurado o backup segue em silêncio (dev).
   [ -n "${ALERT_WEBHOOK_URL:-}" ] || return 0
   # `--data-binary @-` evita pôr a mensagem na linha de comando.
-  printf '{"username":"CoBot","embeds":[{"title":"> BACKUP FALHOU","description":%s,"color":14431557}]}' \
+  printf '{"username":"Goodbot","embeds":[{"title":"> BACKUP FALHOU","description":%s,"color":14431557}]}' \
     "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$/"/')" |
     curl -sS -X POST -H 'content-type: application/json' --data-binary @- \
       --max-time 10 "$ALERT_WEBHOOK_URL" >/dev/null 2>&1 || log 'não consegui alertar'
@@ -53,7 +53,7 @@ if pg_dump --no-owner --no-acl --clean --if-exists "$DATABASE_URL" | gzip -9 >"$
 else
   rm -f "$FILE.part"
   log 'FALHOU'
-  alert 'O \`pg_dump\` diário do CoBot falhou. Sem ele não existe cópia exportável do banco — veja docs/runbook.md.'
+  alert 'O \`pg_dump\` diário do Goodbot falhou. Sem ele não existe cópia exportável do banco — veja docs/runbook.md.'
   exit 1
 fi
 

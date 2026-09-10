@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { CommandSummary } from '@cobot/shared';
+import type { CommandSummary } from '@goodbot/shared';
 
 import { cachedInternalApi } from './internal-api';
 

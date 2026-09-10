@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { bitfieldToPermissions, hasDangerousPermissions } from '@cobot/shared';
+import { bitfieldToPermissions, hasDangerousPermissions } from '@goodbot/shared';
 import { useRouter } from 'next/navigation';
 
 import { deleteRoleAction, moveRoleAction } from '@/app/actions/guild';
@@ -13,7 +13,7 @@ import { Tag } from '@/components/retro/tag';
 
 import { EMPTY_ROLE, RoleSheet, type RoleEditing } from './role-sheet';
 
-import type { GuildRoleSummary } from '@cobot/shared';
+import type { GuildRoleSummary } from '@goodbot/shared';
 
 type RoleRow = GuildRoleSummary & Record<string, unknown>;
 
@@ -24,13 +24,7 @@ function withRoleId(id: string, extra: Record<string, string> = {}): FormData {
   return formData;
 }
 
-export function RolesTable({
-  roles,
-  readOnly,
-}: {
-  roles: GuildRoleSummary[];
-  readOnly: boolean;
-}) {
+export function RolesTable({ roles, readOnly }: { roles: GuildRoleSummary[]; readOnly: boolean }) {
   const router = useRouter();
   const [editing, setEditing] = React.useState<RoleEditing | null>(null);
   const rows = roles as RoleRow[];
@@ -45,7 +39,10 @@ export function RolesTable({
             <span
               aria-hidden
               className="size-4 shrink-0 border-2 border-base-300"
-              style={{ background: row.original.color === 0 ? 'transparent' : colorToHex(row.original.color) }}
+              style={{
+                background:
+                  row.original.color === 0 ? 'transparent' : colorToHex(row.original.color),
+              }}
             />
             <span className="font-bold">{row.original.name}</span>
           </span>
@@ -67,9 +64,7 @@ export function RolesTable({
       {
         accessorKey: 'memberCount',
         header: 'MEMBROS',
-        cell: ({ row }) => (
-          <span className="tabular-nums">{row.original.memberCount ?? 0}</span>
-        ),
+        cell: ({ row }) => <span className="tabular-nums">{row.original.memberCount ?? 0}</span>,
       },
       {
         accessorKey: 'position',

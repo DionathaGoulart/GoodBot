@@ -13,10 +13,10 @@ describe('renderTemplate', () => {
     expect(
       renderTemplate('Bem-vindo {mention} ao {server}! Você é o membro #{memberCount}.', {
         mention: '<@123>',
-        server: 'CoBot',
+        server: 'Goodbot',
         memberCount: 42,
       }),
-    ).toBe('Bem-vindo <@123> ao CoBot! Você é o membro #42.');
+    ).toBe('Bem-vindo <@123> ao Goodbot! Você é o membro #42.');
   });
 
   it('mantém placeholders sem valor ou desconhecidos', () => {
@@ -82,13 +82,13 @@ describe('renderMessageTemplate', () => {
     });
     const out = renderMessageTemplate(tpl, {
       user: 'ana',
-      server: 'CoBot',
+      server: 'Goodbot',
       ordinal: '3º',
       tag: 'ana#0',
       id: '123',
     });
     expect(out.content).toBe('Oi ana');
-    expect(out.embed?.title).toBe('Bem-vindo ao CoBot');
+    expect(out.embed?.title).toBe('Bem-vindo ao Goodbot');
     expect(out.embed?.description).toBe('Membro 3º');
     expect(out.embed?.footer).toBe('ana#0');
     expect(out.embed?.fields[0]).toEqual({ name: 'ID de ana', value: '123', inline: false });

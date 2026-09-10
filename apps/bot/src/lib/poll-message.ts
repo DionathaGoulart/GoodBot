@@ -3,7 +3,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, time, TimestampStyles } f
 import { botFooter, infoEmbed, successEmbed } from './embeds';
 import { formatTally, tallyPoll } from './poll';
 
-import type { Poll } from '@cobot/db';
+import type { Poll } from '@goodbot/db';
 import type { BaseMessageOptions } from 'discord.js';
 
 /** Prefixo do `custom_id` dos botões de voto: `poll:<id>:<opção>`. */
@@ -16,9 +16,7 @@ export function pollButtonId(pollId: string, optionId: string): string {
 }
 
 /** Devolve `null` quando o `custom_id` não é de enquete. */
-export function parsePollButtonId(
-  customId: string,
-): { pollId: string; optionId: string } | null {
+export function parsePollButtonId(customId: string): { pollId: string; optionId: string } | null {
   const [prefix, pollId, optionId] = customId.split(':');
   if (prefix !== POLL_BUTTON_PREFIX || !pollId || !optionId) return null;
   return { pollId, optionId };

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { ActorInputSchema, BanListQuerySchema, GuildSettingsInputSchema } from '@cobot/shared';
+import { ActorInputSchema, BanListQuerySchema, GuildSettingsInputSchema } from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
@@ -9,7 +9,7 @@ import { defaultGuildId, requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
-import type { BanListQuery, GuildBanPage, GuildProfile } from '@cobot/shared';
+import type { BanListQuery, GuildBanPage, GuildProfile } from '@goodbot/shared';
 
 const SETTINGS_PATH = (guildId: string) => `/g/${guildId}/servidor`;
 const BANS_PATH = (guildId: string) => `/g/${guildId}/banidos`;

@@ -5,7 +5,7 @@ import { botFooter, code, infoEmbed } from '../lib/embeds';
 import { groupByModule } from '../lib/loader';
 import { levelAtLeast } from '../services/permissions';
 
-import type { Module } from '@cobot/shared';
+import type { Module } from '@goodbot/shared';
 
 /** Nome amigável de cada módulo no `/help`. */
 const MODULE_LABELS: Record<Module, string> = {

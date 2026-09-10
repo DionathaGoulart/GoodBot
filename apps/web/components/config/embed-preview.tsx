@@ -1,6 +1,6 @@
-import { renderMessageTemplate } from '@cobot/shared';
+import { renderMessageTemplate } from '@goodbot/shared';
 
-import type { MessageTemplate, TemplateVariable } from '@cobot/shared';
+import type { MessageTemplate, TemplateVariable } from '@goodbot/shared';
 
 import { colorToHex } from './discord-options';
 
@@ -76,9 +76,7 @@ export function EmbedPreview({
                 ))}
               </dl>
             ) : null}
-            {rendered.embed.footer ? (
-              <p className="screen-meta">{rendered.embed.footer}</p>
-            ) : null}
+            {rendered.embed.footer ? <p className="screen-meta">{rendered.embed.footer}</p> : null}
           </div>
         </div>
       ) : null}

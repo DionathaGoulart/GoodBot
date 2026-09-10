@@ -10,7 +10,7 @@ import { loadSocial } from '@/lib/social';
 import { AccountsTable } from './accounts';
 import { SocialConfigForm } from './form';
 
-export const metadata = { title: 'Redes sociais · CoBot' };
+export const metadata = { title: 'Redes sociais · Goodbot' };
 
 export default async function SocialConfigPage({
   params,

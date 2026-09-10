@@ -9,7 +9,7 @@ import { loadPanels } from '@/lib/reaction-roles';
 import { ReactionRolesConfigForm } from './form';
 import { PanelsTable } from './panels';
 
-export const metadata = { title: 'Reaction roles · CoBot' };
+export const metadata = { title: 'Reaction roles · Goodbot' };
 
 export default async function ReactionRolesConfigPage({
   params,

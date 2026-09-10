@@ -1,10 +1,10 @@
-import { SECOND_MS } from '@cobot/shared';
+import { SECOND_MS } from '@goodbot/shared';
 
 import { memberVars, templateToMessage } from '../lib/template';
 import { childLogger } from '../logger';
 
 import type { ConfigService } from './config';
-import type { MessageTemplate, TemplateVars } from '@cobot/shared';
+import type { MessageTemplate, TemplateVars } from '@goodbot/shared';
 import type {
   BaseMessageOptions,
   Guild,

@@ -4,7 +4,7 @@ import { canManageRole, levelAtLeast, resolveLevel, toMemberLike } from '../serv
 
 import type { ApiDeps } from './context';
 import type { RoleLike } from '../services/permissions';
-import type { PermissionLevel } from '@cobot/shared';
+import type { PermissionLevel } from '@goodbot/shared';
 import type { Guild, GuildMember, Role } from 'discord.js';
 
 /**

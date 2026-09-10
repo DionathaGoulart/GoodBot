@@ -1,5 +1,5 @@
 {
-  "name": "@cobot/db",
+  "name": "@goodbot/db",
   "version": "0.0.0",
   "private": true,
   "description": "Schema Drizzle, migrations e cliente Postgres",
@@ -19,7 +19,7 @@
     "db:check": "drizzle-kit check"
   },
   "dependencies": {
-    "@cobot/shared": "workspace:*",
+    "@goodbot/shared": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9",
     "zod": "^4.5.4"

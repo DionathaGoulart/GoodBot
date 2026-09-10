@@ -1,4 +1,4 @@
-import { HOUR_MS } from '@cobot/shared';
+import { HOUR_MS } from '@goodbot/shared';
 
 import { childLogger } from '../logger';
 

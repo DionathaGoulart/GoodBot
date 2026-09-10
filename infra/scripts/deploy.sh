@@ -8,7 +8,7 @@
 #   ./deploy.sh sha-1a2b3c4  # volta para um build específico do GHCR
 set -euo pipefail
 
-APP_DIR=${APP_DIR:-/opt/cobot}
+APP_DIR=${APP_DIR:-/opt/goodbot}
 TAG=${1:-${TAG:-latest}}
 
 cd "$APP_DIR"

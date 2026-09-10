@@ -8,7 +8,7 @@ import {
   PERMISSION_LABELS,
   RoleWriteInputSchema,
   type PermissionName,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { useForm, useFormContext } from 'react-hook-form';
 import { toast } from 'sonner';
 

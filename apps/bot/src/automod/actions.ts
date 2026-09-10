@@ -1,4 +1,4 @@
-import { renderTemplate } from '@cobot/shared';
+import { renderTemplate } from '@goodbot/shared';
 import { EmbedBuilder } from 'discord.js';
 
 import { STATUS_COLORS, code, formatTitle } from '../lib/embeds';
@@ -7,7 +7,7 @@ import { childLogger } from '../logger';
 import type { LoadedRule, Violation } from './types';
 import type { ModerationService } from '../services/moderation';
 import type { ModlogService } from '../services/modlog';
-import type { AutomodActionConfig } from '@cobot/shared';
+import type { AutomodActionConfig } from '@goodbot/shared';
 import type { Guild, Message, PartialMessage, User } from 'discord.js';
 
 const log = childLogger('automod:actions');
@@ -56,7 +56,13 @@ export async function runActions(input: RunActionsInput): Promise<string[]> {
       if (done) taken.push(action.type);
     } catch (error) {
       log.error(
-        { err: error, guildId: guild.id, ruleId: rule.id, action: action.type, targetId: target.id },
+        {
+          err: error,
+          guildId: guild.id,
+          ruleId: rule.id,
+          action: action.type,
+          targetId: target.id,
+        },
         'falha ao executar ação de automod',
       );
     }
@@ -176,7 +182,11 @@ export function hitEmbed(input: RunActionInput): EmbedBuilder {
     embed.addFields({ name: 'Canal', value: `<#${input.message.channelId}>`, inline: true });
   }
   if (violation.detail) {
-    embed.addFields({ name: 'Detalhe', value: code(violation.detail.slice(0, 200)), inline: false });
+    embed.addFields({
+      name: 'Detalhe',
+      value: code(violation.detail.slice(0, 200)),
+      inline: false,
+    });
   }
   return embed;
 }

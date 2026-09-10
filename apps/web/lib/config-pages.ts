@@ -11,7 +11,7 @@ import {
   UtilitiesConfigSchema,
   WelcomeConfigSchema,
   type Module,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 
 import type { z } from 'zod';
 

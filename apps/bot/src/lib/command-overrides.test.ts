@@ -1,4 +1,4 @@
-import { CommandOverrideSchema, isUserFacingError } from '@cobot/shared';
+import { CommandOverrideSchema, isUserFacingError } from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import { assertCommandAllowed } from './command-overrides';
@@ -12,7 +12,9 @@ const override = (patch: Record<string, unknown> = {}) => CommandOverrideSchema.
 /** O caminho feliz é "nenhuma restrição": o mapa guarda exceções, não regras. */
 describe('assertCommandAllowed', () => {
   it('deixa passar quando não há restrição', () => {
-    expect(() => assertCommandAllowed(override(), { channelId: CHANNEL, roleIds: [] })).not.toThrow();
+    expect(() =>
+      assertCommandAllowed(override(), { channelId: CHANNEL, roleIds: [] }),
+    ).not.toThrow();
   });
 
   it('barra comando desativado', () => {
@@ -37,7 +39,9 @@ describe('assertCommandAllowed', () => {
 
   it('exige pelo menos um dos cargos permitidos', () => {
     const config = override({ allowedRoleIds: [ROLE] });
-    expect(() => assertCommandAllowed(config, { channelId: CHANNEL, roleIds: [] })).toThrow(/cargo/);
+    expect(() => assertCommandAllowed(config, { channelId: CHANNEL, roleIds: [] })).toThrow(
+      /cargo/,
+    );
     expect(() =>
       assertCommandAllowed(config, { channelId: CHANNEL, roleIds: [ROLE] }),
     ).not.toThrow();

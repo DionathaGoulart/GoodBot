@@ -12,13 +12,13 @@ import {
   listTickets,
   updateTicketPanel,
   updateTicketType,
-} from '@cobot/db';
+} from '@goodbot/db';
 import {
   TicketPanelInputSchema,
   TicketTypeInputSchema,
   type TicketPanelInput,
   type TicketTypeInput,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
@@ -220,11 +220,10 @@ export async function publishTicketPanel(formData: FormData): Promise<ActionResu
     return { ok: false, message: error instanceof Error ? error.message : 'O bot não respondeu.' };
   }
 
-  await withAudit(
-    { id: session.user.id, tag: session.user.name },
-    'tickets.panel.publish',
-    { type: 'ticket_panel', id },
-  );
+  await withAudit({ id: session.user.id, tag: session.user.name }, 'tickets.panel.publish', {
+    type: 'ticket_panel',
+    id,
+  });
   revalidatePath(PATH(guildId));
   return { ok: true, message: 'Painel publicado.' };
 }
@@ -289,11 +288,10 @@ export async function closeTicketAction(formData: FormData): Promise<ActionResul
     return { ok: false, message: error instanceof Error ? error.message : 'O bot não respondeu.' };
   }
 
-  await withAudit(
-    { id: session.user.id, tag: session.user.name },
-    'tickets.close',
-    { type: 'ticket', id: String(ticketId) },
-  );
+  await withAudit({ id: session.user.id, tag: session.user.name }, 'tickets.close', {
+    type: 'ticket',
+    id: String(ticketId),
+  });
   revalidatePath(PATH(guildId));
   return { ok: true, message: 'Ticket fechado.' };
 }

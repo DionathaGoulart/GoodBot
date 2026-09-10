@@ -1,4 +1,4 @@
-import type { GuildChannelSummary, GuildRoleSummary } from '@cobot/shared';
+import type { GuildChannelSummary, GuildRoleSummary } from '@goodbot/shared';
 
 /** Um item do `DiscordPicker` (§6.4), já pronto para desenhar. */
 export interface DiscordOption {

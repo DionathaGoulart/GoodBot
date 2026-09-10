@@ -1,5 +1,5 @@
-import { createDb } from '@cobot/db';
-import { VERSION } from '@cobot/shared';
+import { createDb } from '@goodbot/db';
+import { VERSION } from '@goodbot/shared';
 import { sql } from 'drizzle-orm';
 
 import { createApiServer } from './api/server';
@@ -33,7 +33,7 @@ import { TicketService } from './services/tickets';
 import { WelcomeService } from './services/welcome';
 
 import type { BotContext } from './lib/command';
-import type { Db } from '@cobot/db';
+import type { Db } from '@goodbot/db';
 import type { Client } from 'discord.js';
 
 /** Segundos para o shutdown terminar antes de matar o processo (PRD §7.5). */

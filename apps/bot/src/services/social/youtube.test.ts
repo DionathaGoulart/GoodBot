@@ -24,7 +24,7 @@ import {
 } from './youtube';
 
 import type { SocialAccountRef } from './types';
-import type { SocialKind } from '@cobot/shared';
+import type { SocialKind } from '@goodbot/shared';
 
 const CANAL = 'UCabcdefghijklmnopqrstuv';
 const LOFI = 'UCSJ4gkVC6NrvII8umztf0Ow';
@@ -83,7 +83,9 @@ function fakeYouTube(options: FakeOptions = {}) {
 }
 
 function calls(mock: typeof globalThis.fetch): string[] {
-  return (mock as unknown as { mock: { calls: unknown[][] } }).mock.calls.map(([url]) => String(url));
+  return (mock as unknown as { mock: { calls: unknown[][] } }).mock.calls.map(([url]) =>
+    String(url),
+  );
 }
 
 function account(overrides: Partial<SocialAccountRef> = {}): SocialAccountRef {
@@ -130,9 +132,7 @@ describe('parseYouTubeFeed', () => {
 
 describe('parseCanonical', () => {
   it('lê o canonical de uma live e o de um canal', () => {
-    expect(parseCanonical(LIVE_EM_ANDAMENTO)).toBe(
-      `https://www.youtube.com/watch?v=${LIVE_ID}`,
-    );
+    expect(parseCanonical(LIVE_EM_ANDAMENTO)).toBe(`https://www.youtube.com/watch?v=${LIVE_ID}`);
     expect(parseCanonical(LIVE_SEM_TRANSMISSAO)).toBe(
       `https://www.youtube.com/channel/${SEM_LIVE}`,
     );
@@ -377,7 +377,10 @@ describe('YouTubeProvider.fetchLatest', () => {
   });
 
   it('ID já anunciado não custa nem uma requisição de classificação', async () => {
-    const fetchMock = fakeYouTube({ shorts: ['bbbbbbbbbbb'], watch: { aaaaaaaaaaa: WATCH_VIDEO_DO_FEED } });
+    const fetchMock = fakeYouTube({
+      shorts: ['bbbbbbbbbbb'],
+      watch: { aaaaaaaaaaa: WATCH_VIDEO_DO_FEED },
+    });
     const provider = new YouTubeProvider({ fetch: fetchMock });
 
     const items = await provider.fetchLatest(
@@ -431,7 +434,10 @@ describe('YouTubeProvider.fetchLatest', () => {
   });
 
   it('não existe mais chamada à Data API, com ou sem chave', async () => {
-    const fetchMock = fakeYouTube({ live: LIVE_EM_ANDAMENTO, watch: { aaaaaaaaaaa: WATCH_VIDEO_DO_FEED } });
+    const fetchMock = fakeYouTube({
+      live: LIVE_EM_ANDAMENTO,
+      watch: { aaaaaaaaaaa: WATCH_VIDEO_DO_FEED },
+    });
     await new YouTubeProvider({ fetch: fetchMock }).fetchLatest(
       account({ kinds: ['video', 'short', 'live'] }),
     );

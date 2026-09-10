@@ -1,6 +1,6 @@
 'use client';
 
-import { MAX_TIMEOUT_MS, type ModerationConfig } from '@cobot/shared';
+import { MAX_TIMEOUT_MS, type ModerationConfig } from '@goodbot/shared';
 import { useFieldArray, useFormContext } from 'react-hook-form';
 
 import { ConfigForm } from '@/components/config/config-form';
@@ -41,7 +41,9 @@ function EscalationSteps() {
             type="button"
             className="btn-goodchat-outline"
             disabled={disabled}
-            onClick={() => append({ warns: 3, withinDays: 30, action: 'timeout', durationMs: 3_600_000 })}
+            onClick={() =>
+              append({ warns: 3, withinDays: 30, action: 'timeout', durationMs: 3_600_000 })
+            }
           >
             CRIAR DEGRAU
           </button>
@@ -104,7 +106,9 @@ function EscalationSteps() {
         type="button"
         className="btn-goodchat-outline self-start"
         disabled={disabled || fields.length >= 10}
-        onClick={() => append({ warns: 3, withinDays: 30, action: 'timeout', durationMs: 3_600_000 })}
+        onClick={() =>
+          append({ warns: 3, withinDays: 30, action: 'timeout', durationMs: 3_600_000 })
+        }
       >
         ADICIONAR DEGRAU
       </button>
@@ -153,9 +157,7 @@ export function ModerationConfigForm({
             description="Colado no fim da DM — bom lugar para o link de apelação."
             rows={4}
           />
-          <p className="screen-meta">
-            QUAIS PUNIÇÕES AVISAM POR DM FICAM NA TELA GERAL
-          </p>
+          <p className="screen-meta">QUAIS PUNIÇÕES AVISAM POR DM FICAM NA TELA GERAL</p>
         </Panel>
 
         <Panel title="ESCALADA.CFG" className="xl:col-span-2">

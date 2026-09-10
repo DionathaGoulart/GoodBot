@@ -4,7 +4,7 @@ import { guilds } from '../schema/guilds';
 import { statBuckets } from '../schema/stats';
 
 import type { Db, DbExecutor } from '../client';
-import type { StatGranularity, StatKind } from '@cobot/shared';
+import type { StatGranularity, StatKind } from '@goodbot/shared';
 
 /** Fuso usado quando a guild não tem `guild_settings` gravado. */
 const DEFAULT_TIMEZONE = 'America/Sao_Paulo';

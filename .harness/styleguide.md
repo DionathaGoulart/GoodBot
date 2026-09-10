@@ -1,9 +1,9 @@
-# CoBot — Style Guide do painel (skin `retro`, temas `crimson` e `rose`)
+# Goodbot — Style Guide do painel (skin `retro`, temas `crimson` e `rose`)
 
 **Origem:** portado de `GoodChat/.harness/styleguides/retro.md` + os tokens de
 `palettes.css`/`themes.css` daquele projeto. Os hex, a fonte e a identidade dos
 dois temas foram copiados **sem alteração**. O que mudou é só o vocabulário de
-componentes: o GoodChat é um chat (balão, composer, tile de conversa); o CoBot é
+componentes: o GoodChat é um chat (balão, composer, tile de conversa); o Goodbot é
 um painel de administração (tabela, formulário, gráfico, estados de
 loading/erro/vazio). §6 e §8 são a adaptação; §1–§5 são o original.
 
@@ -16,11 +16,11 @@ UI; embeds do Discord seguem só a §9.
 ## 0. Regras de uso no painel (leia primeiro)
 
 1. **Um skin, dois temas.** A skin é sempre `retro` (neobrutal). Não existe
-   skin `terminal` no CoBot — nada de glow, CRT, dashed, prompt de shell.
+   skin `terminal` no Goodbot — nada de glow, CRT, dashed, prompt de shell.
 2. **Tema padrão: `rose` (escuro).** Painel de moderação é usado à noite e por
    longos períodos; `crimson` (claro) é a alternativa. `prefers-color-scheme`
    decide na primeira visita; a escolha manual fica em `localStorage`
-   (`cobot-theme`) e é aplicada em `<html data-theme="crimson|rose">` por um
+   (`goodbot-theme`) e é aplicada em `<html data-theme="crimson|rose">` por um
    script inline no `<head>` **antes** da hidratação (sem flash).
 3. **Alternância:** toggle na topbar (ícone sol/lua, `icon-btn`), atalho
    `Shift+T`. Componente `ThemeToggle` em `apps/web/components/theme-toggle.tsx`;
@@ -227,7 +227,7 @@ infinite`. Usado em "salvando…", "carregando…" e em placeholders vivos, no
 6. **Micro-texto de máquina** — prefixo `>` nos kickers e labels, valores em
    colchetes (`[sem motivo]`, `[bot]`, `[expirado]`), estados em caixa alta.
 7. **WindowDots** — três quadrados-ou-círculos de janela: `bg-accent`,
-   `bg-base-300`, `bg-base-300`. **No CoBot são quadrados** (§4.3 vale
+   `bg-base-300`, `bg-base-300`. **No Goodbot são quadrados** (§4.3 vale
    para tudo; o GoodChat usava círculo por herança e isso não é portado).
 8. **Barra de título de painel** (`window-bar`) — linha inferior de 2px em
    `base-300` sobre `base-100`, nome do "arquivo" em micro-texto bold **em
@@ -459,7 +459,7 @@ bg-base-100` h-3, fill sólido `accent`, sem radius. Para cotas
   · `CONFIGURAÇÃO` (o índice `/config` e todo `/config/*`, na ordem bot →
   moderação → comunidade) · `SISTEMA` (saúde). O rótulo do grupo é um
   `<button>` com `section-label` e `▾`/`▸`; o que está fechado vive em
-  `localStorage` (`cobot-nav-collapsed`). O grupo da tela aberta nunca
+  `localStorage` (`goodbot-nav-collapsed`). O grupo da tela aberta nunca
   colapsa.
 - **Índice de configuração** (`/config`): um `panel` por família de
   `CONFIG_GROUPS` (`BOT.DIR`, `MODERACAO.DIR`, `COMUNIDADE.DIR`), com um card
@@ -559,11 +559,11 @@ Não é UI web, mas é a única "tela" do bot e deve parecer da mesma família:
 ## 10. Origem e decisões
 
 Portado de `GoodChat/.harness/styleguides/retro.md` (skin `retro` do
-Portfolio → GoodChat → CoBot). Decisões mantidas: par cream/crimson ·
+Portfolio → GoodChat → Goodbot). Decisões mantidas: par cream/crimson ·
 noir/rose; `font-black` sobre face 800; scanline na força base; foco sólido
 2px; zero radius sem exceção.
 
-Decisões novas do CoBot:
+Decisões novas do Goodbot:
 
 1. **Sem daisyUI** — a stack é shadcn; os nomes daisyUI (`base-100`, `accent`)
    ficam como nomes semânticos internos e são mapeados em §7.

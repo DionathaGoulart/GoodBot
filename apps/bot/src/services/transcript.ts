@@ -1,6 +1,6 @@
 import { AttachmentBuilder } from 'discord.js';
 
-import type { Ticket } from '@cobot/db';
+import type { Ticket } from '@goodbot/db';
 import type { GuildTextBasedChannel, Message } from 'discord.js';
 
 /** Teto de mensagens lidas de um ticket: acima disso o HTML fica impraticável. */
@@ -78,8 +78,7 @@ export function renderTranscriptHtml(
     .map((message) => {
       const attachments = message.attachments
         .map(
-          (file) =>
-            `<a class="file" href="${escapeHtml(file.url)}">${escapeHtml(file.name)}</a>`,
+          (file) => `<a class="file" href="${escapeHtml(file.url)}">${escapeHtml(file.name)}</a>`,
         )
         .join('');
       const embeds =
@@ -156,7 +155,7 @@ footer { margin-top: 24px; opacity: 0.5; text-transform: uppercase; font-size: 1
 <h1>${escapeHtml(title)}</h1>
 <dl>${metaRows}</dl>
 ${rows || '<p class="note">Nenhuma mensagem.</p>'}
-<footer>CoBot · transcript gerado em ${escapeHtml(formatDate(new Date(), timezone))}</footer>
+<footer>Goodbot · transcript gerado em ${escapeHtml(formatDate(new Date(), timezone))}</footer>
 </main>
 </body>
 </html>`;

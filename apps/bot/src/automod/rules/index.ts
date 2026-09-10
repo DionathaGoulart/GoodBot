@@ -5,7 +5,7 @@ import { spamRule } from './spam';
 import { wordsRule } from './words';
 
 import type { MessageRule } from '../types';
-import type { AutomodRuleType } from '@cobot/shared';
+import type { AutomodRuleType } from '@goodbot/shared';
 
 export { capsRule, linksRule, mentionsRule, spamRule, wordsRule };
 export { SpamTracker } from './spam';
@@ -25,8 +25,6 @@ export const MESSAGE_RULES: {
   mentions: mentionsRule,
 };
 
-export function isMessageRuleType(
-  type: AutomodRuleType,
-): type is Exclude<AutomodRuleType, 'raid'> {
+export function isMessageRuleType(type: AutomodRuleType): type is Exclude<AutomodRuleType, 'raid'> {
   return type !== 'raid';
 }

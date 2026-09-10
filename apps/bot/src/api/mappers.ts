@@ -1,4 +1,4 @@
-import { bitsToOverride, isEmptyOverride } from '@cobot/shared';
+import { bitsToOverride, isEmptyOverride } from '@goodbot/shared';
 import { OverwriteType, PermissionFlagsBits } from 'discord.js';
 
 import type {
@@ -8,7 +8,7 @@ import type {
   GuildMemberDetail,
   GuildMemberSummary,
   GuildRoleSummary,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import type {
   GuildBasedChannel,
   GuildMember,
@@ -34,7 +34,7 @@ interface AnyAuditLogEntry {
   changes: readonly { key: string; old?: unknown; new?: unknown }[];
 }
 
-/** Conversores do modelo do discord.js para os schemas de `@cobot/shared`. */
+/** Conversores do modelo do discord.js para os schemas de `@goodbot/shared`. */
 
 export function toChannelSummary(channel: GuildBasedChannel): GuildChannelSummary {
   return {

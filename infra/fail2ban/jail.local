@@ -3,21 +3,21 @@
 # Instalação na VM (⚠️ AÇÃO MANUAL — ver docs/runbook.md):
 #
 #   sudo apt-get install -y fail2ban
-#   sudo cp infra/fail2ban/cobot-api.conf /etc/fail2ban/filter.d/
-#   sudo cp infra/fail2ban/jail.local     /etc/fail2ban/jail.d/cobot.local
+#   sudo cp infra/fail2ban/goodbot-api.conf /etc/fail2ban/filter.d/
+#   sudo cp infra/fail2ban/jail.local     /etc/fail2ban/jail.d/goodbot.local
 #   sudo systemctl restart fail2ban
-#   sudo fail2ban-client status cobot-api
+#   sudo fail2ban-client status goodbot-api
 #
 # O log do Caddy vive no journal do Docker; a linha `backend` abaixo lê de lá.
 # Se o `journalmatch` não casar (Docker sem driver journald), troque `backend`
 # por `auto` e aponte `logpath` para o arquivo em
 # /var/lib/docker/containers/<id>/<id>-json.log.
 
-[cobot-api]
+[goodbot-api]
 enabled  = true
-filter   = cobot-api
+filter   = goodbot-api
 backend  = systemd
-journalmatch = CONTAINER_NAME=cobot-caddy
+journalmatch = CONTAINER_NAME=goodbot-caddy
 # 20 respostas 401 em 5 minutos = alguém adivinhando o token, não dedo gordo.
 maxretry = 20
 findtime = 5m
@@ -26,4 +26,4 @@ bantime  = 1h
 bantime.increment = true
 bantime.factor    = 4
 bantime.maxtime   = 7d
-action   = iptables-allports[name=cobot-api]
+action   = iptables-allports[name=goodbot-api]

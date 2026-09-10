@@ -1,4 +1,4 @@
-import type { SocialKind, SocialPlatform } from '@cobot/shared';
+import type { SocialKind, SocialPlatform } from '@goodbot/shared';
 
 /** Uma publicação vista numa plataforma, já normalizada (PRD §5.8). */
 export interface SocialItem {

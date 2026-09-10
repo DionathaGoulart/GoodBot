@@ -6,7 +6,7 @@ import { loadModuleConfig } from '@/lib/module-config';
 
 import { ModerationConfigForm } from './form';
 
-export const metadata = { title: 'Moderação · CoBot' };
+export const metadata = { title: 'Moderação · Goodbot' };
 
 export default async function ModerationConfigPage({
   params,

@@ -5,7 +5,7 @@ import { createdAt, snowflake, snowflakeArray, text, updatedAt } from './_column
 import { automodRuleTypeEnum } from './enums';
 import { guilds } from './guilds';
 
-import type { AutomodActionConfig } from '@cobot/shared';
+import type { AutomodActionConfig } from '@goodbot/shared';
 
 /** Regras de automod; `config` e `actions` validados por `AutomodRuleSchema`. */
 export const automodRules = pgTable(

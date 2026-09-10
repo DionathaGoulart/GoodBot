@@ -3,10 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 
-import {
-  deletePanelAction,
-  publishPanelAction,
-} from '@/app/actions/modules';
+import { deletePanelAction, publishPanelAction } from '@/app/actions/modules';
 import { ActionButton, ConfirmButton } from '@/components/config/confirm-button';
 import { DataTable, type PanelColumnDef } from '@/components/data-table';
 import { Panel } from '@/components/retro/panel';

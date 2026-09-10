@@ -1,6 +1,6 @@
 import { signOutAction } from '@/app/actions/auth';
 
-export const metadata = { title: 'Acesso negado · CoBot' };
+export const metadata = { title: 'Acesso negado · Goodbot' };
 
 const REASONS = {
   'rate-limit': {
@@ -22,7 +22,7 @@ export default async function DeniedPage({ searchParams }: PageProps<'/denied'>)
 
   return (
     <main className="screen-pad flex flex-1 flex-col items-center justify-center gap-6 text-center">
-      <p className="screen-kicker sigil">COBOT</p>
+      <p className="screen-kicker sigil">GOODBOT</p>
       <h1 className="screen-title text-4xl md:text-5xl">{copy.title}</h1>
       <p className="max-w-prose text-sm opacity-70">{copy.text}</p>
       <form action={signOutAction}>

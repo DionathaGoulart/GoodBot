@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 
 import { sendWelcomeTestAction } from '@/app/actions/config';
 
-import type { MessageTemplate } from '@cobot/shared';
+import type { MessageTemplate } from '@goodbot/shared';
 
 /**
  * §6.2 — "enviar teste": manda o template **como está no formulário**, sem

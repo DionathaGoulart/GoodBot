@@ -1,4 +1,4 @@
-import { SOCIAL_KIND_HEADLINE } from '@cobot/shared';
+import { SOCIAL_KIND_HEADLINE } from '@goodbot/shared';
 
 import { socialFetch, socialFetchOk } from './http';
 import { SocialProviderError } from './types';

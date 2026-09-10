@@ -1,4 +1,4 @@
-import { AUTOMOD_RULE_TYPES, AutomodRuleSchema } from '@cobot/shared';
+import { AUTOMOD_RULE_TYPES, AutomodRuleSchema } from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import { emptyRule, resetForType } from './rule-defaults';

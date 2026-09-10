@@ -35,7 +35,6 @@ export const TicketsConfigSchema = z.object({
 export type TicketsConfig = z.infer<typeof TicketsConfigSchema>;
 export const DEFAULT_TICKETS_CONFIG: TicketsConfig = TicketsConfigSchema.parse({});
 
-
 /** Um tipo de ticket no editor do painel (linha de `ticket_types`). */
 export const TicketTypeInputSchema = z.object({
   name: z.string().trim().min(1, 'Informe o nome do tipo').max(MAX_NAME_LENGTH),

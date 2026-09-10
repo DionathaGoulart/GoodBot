@@ -1,11 +1,11 @@
-import { MAX_MESSAGE_CONTENT_LENGTH } from '@cobot/shared';
+import { MAX_MESSAGE_CONTENT_LENGTH } from '@goodbot/shared';
 import safeRegex from 'safe-regex2';
 
 import { childLogger } from '../../logger';
 import { escapeRegex, normalizeText, WORD_END, WORD_START } from '../text';
 
 import type { MessageRule, WordMatcherCacheLike } from '../types';
-import type { WordsRuleConfigSchema } from '@cobot/shared';
+import type { WordsRuleConfigSchema } from '@goodbot/shared';
 import type { z } from 'zod';
 
 const log = childLogger('automod:words');

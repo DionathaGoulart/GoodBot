@@ -1,6 +1,6 @@
-import { UserFacingError } from '@cobot/shared';
+import { UserFacingError } from '@goodbot/shared';
 
-import type { CommandOverride } from '@cobot/shared';
+import type { CommandOverride } from '@goodbot/shared';
 
 /**
  * Restrições de comando configuradas no painel (PRD §6.2). Aplicadas **depois**

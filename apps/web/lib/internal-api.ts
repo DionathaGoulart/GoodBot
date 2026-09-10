@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createInternalClient } from '@cobot/shared';
+import { createInternalClient } from '@goodbot/shared';
 
 import { env } from './env';
 

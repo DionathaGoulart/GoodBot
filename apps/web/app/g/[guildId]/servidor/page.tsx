@@ -6,7 +6,7 @@ import { loadGuildProfile } from '@/lib/guild';
 
 import { ServerForm } from './server-form';
 
-export const metadata = { title: 'Servidor · CoBot' };
+export const metadata = { title: 'Servidor · Goodbot' };
 
 export default async function ServerPage({ params }: PageProps<'/g/[guildId]/servidor'>) {
   const { guildId } = await params;

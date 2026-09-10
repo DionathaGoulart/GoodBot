@@ -1,4 +1,4 @@
-import { UserFacingError } from '@cobot/shared';
+import { UserFacingError } from '@goodbot/shared';
 import { PermissionFlagsBits } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 

@@ -1,12 +1,12 @@
-import { getLogConfigs } from '@cobot/db';
-import { MAX_EMBED_FIELD_VALUE_LENGTH, MINUTE_MS } from '@cobot/shared';
+import { getLogConfigs } from '@goodbot/db';
+import { MAX_EMBED_FIELD_VALUE_LENGTH, MINUTE_MS } from '@goodbot/shared';
 
 import { childLogger } from '../logger';
 
 import type { ConfigService } from './config';
 import type { LogEntry, LogQueue } from './log-queue';
-import type { Db, LogConfigEntry, LogConfigMap } from '@cobot/db';
-import type { LogKind } from '@cobot/shared';
+import type { Db, LogConfigEntry, LogConfigMap } from '@goodbot/db';
+import type { LogKind } from '@goodbot/shared';
 
 const log = childLogger('logs');
 

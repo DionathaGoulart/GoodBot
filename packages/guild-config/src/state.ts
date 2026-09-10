@@ -1,5 +1,5 @@
 import type { CurrentState } from './plan';
-import type { GuildChannelDetail, InternalClient } from '@cobot/shared';
+import type { GuildChannelDetail, InternalClient } from '@goodbot/shared';
 
 /**
  * O resumo de canal não traz tópico, nsfw, slowmode nem overrides — e é

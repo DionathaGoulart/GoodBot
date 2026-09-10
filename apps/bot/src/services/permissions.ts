@@ -1,7 +1,7 @@
 import { PermissionFlagsBits } from 'discord.js';
 
 import type { ResolvedSettings } from './config';
-import type { PermissionLevel } from '@cobot/shared';
+import type { PermissionLevel } from '@goodbot/shared';
 import type { GuildMember, PermissionsBitField } from 'discord.js';
 
 /**

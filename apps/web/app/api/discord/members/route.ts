@@ -1,4 +1,4 @@
-import { GuildMemberSummarySchema } from '@cobot/shared';
+import { GuildMemberSummarySchema } from '@goodbot/shared';
 import { NextResponse } from 'next/server';
 
 import {

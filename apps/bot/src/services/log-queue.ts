@@ -1,4 +1,4 @@
-import { SECOND_MS } from '@cobot/shared';
+import { SECOND_MS } from '@goodbot/shared';
 import { DiscordAPIError, HTTPError } from 'discord.js';
 
 import { TEXT_CHANNEL_TYPES } from '../client';

@@ -7,14 +7,14 @@ import {
   releaseSocialPost,
   resetSocialFailures,
   touchSocialAccount,
-} from '@cobot/db';
+} from '@goodbot/db';
 import {
   SECOND_MS,
   SOCIAL_ACCOUNT_DELAY_MS,
   SOCIAL_DEFAULT_POLL_SECONDS,
   SOCIAL_KIND_LABEL,
   SOCIAL_MAX_FAILURES,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 
 import { childLogger } from '../logger';
 import { buildSocialMessage } from '../services/social/announce';
@@ -23,8 +23,8 @@ import type { AlertService } from '../services/alerts';
 import type { AuditService } from '../services/audit';
 import type { ConfigService } from '../services/config';
 import type { SocialItem, SocialProvider } from '../services/social/types';
-import type { Db, SocialAccount } from '@cobot/db';
-import type { SocialConfig } from '@cobot/shared';
+import type { Db, SocialAccount } from '@goodbot/db';
+import type { SocialConfig } from '@goodbot/shared';
 import type { Client, GuildTextBasedChannel } from 'discord.js';
 
 const log = childLogger('social');

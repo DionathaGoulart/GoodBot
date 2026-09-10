@@ -8,7 +8,7 @@ import { loadGeneralPage } from '@/lib/module-config';
 
 import { MessageComposer } from './composer';
 
-export const metadata = { title: 'Mensagens · CoBot' };
+export const metadata = { title: 'Mensagens · Goodbot' };
 
 /**
  * §6.2 — escrever, editar e apagar mensagens do bot em qualquer canal, com o

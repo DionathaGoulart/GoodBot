@@ -1,4 +1,4 @@
-import { AUDIT_SOURCES, type AuditSource } from '@cobot/shared';
+import { AUDIT_SOURCES, type AuditSource } from '@goodbot/shared';
 
 import type { TagTone } from '@/components/retro/tag';
 

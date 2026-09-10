@@ -1,11 +1,11 @@
-import { ensureGuildRow, incrementStatBuckets, setStatBucket } from '@cobot/db';
-import { HOUR_MS, MINUTE_MS, SECOND_MS } from '@cobot/shared';
+import { ensureGuildRow, incrementStatBuckets, setStatBucket } from '@goodbot/db';
+import { HOUR_MS, MINUTE_MS, SECOND_MS } from '@goodbot/shared';
 
 import { childLogger } from '../logger';
 
 import type { ConfigService } from './config';
-import type { Db, StatIncrement } from '@cobot/db';
-import type { CaseType, StatKind } from '@cobot/shared';
+import type { Db, StatIncrement } from '@goodbot/db';
+import type { CaseType, StatKind } from '@goodbot/shared';
 import type {
   Client,
   Guild,
@@ -49,7 +49,8 @@ function zoneOffsetMs(at: Date, timeZone: string): number {
     minute: '2-digit',
     second: '2-digit',
   }).formatToParts(at);
-  const get = (type: string): number => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  const get = (type: string): number =>
+    Number(parts.find((part) => part.type === type)?.value ?? 0);
   const asUtc = Date.UTC(
     get('year'),
     get('month') - 1,

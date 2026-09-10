@@ -151,7 +151,7 @@ describe('AutoRefreshProvider', () => {
   });
 
   it('respeita a preferência desligada do localStorage, mas mantém o botão manual', async () => {
-    window.localStorage.setItem('cobot:auto-refresh', 'off');
+    window.localStorage.setItem('goodbot:auto-refresh', 'off');
     render(
       <AutoRefreshProvider>
         <AutoRefreshIndicator />
@@ -174,7 +174,7 @@ describe('AutoRefreshProvider', () => {
     );
 
     act(() => screen.getByLabelText('Desligar a atualização automática').click());
-    expect(window.localStorage.getItem('cobot:auto-refresh')).toBe('off');
+    expect(window.localStorage.getItem('goodbot:auto-refresh')).toBe('off');
 
     act(() => void vi.advanceTimersByTime(LIVE_INTERVAL_MS * 3));
     expect(refresh).not.toHaveBeenCalled();

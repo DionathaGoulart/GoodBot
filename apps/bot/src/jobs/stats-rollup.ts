@@ -1,11 +1,11 @@
-import { rollupHourlyBuckets } from '@cobot/db';
-import { DAY_MS, HOUR_MS } from '@cobot/shared';
+import { rollupHourlyBuckets } from '@goodbot/db';
+import { DAY_MS, HOUR_MS } from '@goodbot/shared';
 
 import { childLogger } from '../logger';
 import { localDayKey } from '../services/stats';
 
 import type { ConfigService } from '../services/config';
-import type { Db } from '@cobot/db';
+import type { Db } from '@goodbot/db';
 import type { Client } from 'discord.js';
 
 const log = childLogger('stats-rollup');

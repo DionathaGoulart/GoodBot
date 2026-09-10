@@ -1,8 +1,8 @@
-import { DEFAULT_SOCIAL_CONFIG, SOCIAL_DEFAULT_TEMPLATE } from '@cobot/shared';
+import { DEFAULT_SOCIAL_CONFIG, SOCIAL_DEFAULT_TEMPLATE } from '@goodbot/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SocialAccountRef } from '../services/social/types';
-import type { SocialAccount } from '@cobot/db';
+import type { SocialAccount } from '@goodbot/db';
 
 const {
   listEnabledSocialAccounts,
@@ -24,7 +24,7 @@ const {
   touchSocialAccount: vi.fn(),
 }));
 
-vi.mock('@cobot/db', () => ({
+vi.mock('@goodbot/db', () => ({
   listEnabledSocialAccounts,
   claimSocialPost,
   hasSocialPost,

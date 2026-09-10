@@ -1,4 +1,4 @@
-import { HOUR_MS } from '@cobot/shared';
+import { HOUR_MS } from '@goodbot/shared';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -36,7 +36,7 @@ import { createSocialRoutes } from './routes/social';
 
 import type { ApiDeps, ApiEnv } from './context';
 import type { AlertService } from '../services/alerts';
-import type { QueueHealth } from '@cobot/shared';
+import type { QueueHealth } from '@goodbot/shared';
 import type { ServerType } from '@hono/node-server';
 import type { Context } from 'hono';
 

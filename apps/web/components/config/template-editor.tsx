@@ -6,7 +6,7 @@ import {
   type EmbedTemplate,
   type MessageTemplate,
   type TemplateVariable,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -207,9 +207,7 @@ export function TemplateEditor({
                 key={option.id}
                 type="button"
                 aria-pressed={index === mode}
-                className={
-                  index === mode ? 'icon-btn border-accent text-accent-text' : 'icon-btn'
-                }
+                className={index === mode ? 'icon-btn border-accent text-accent-text' : 'icon-btn'}
                 onClick={() => setMode(index)}
               >
                 {option.label}

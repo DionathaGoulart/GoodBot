@@ -1,6 +1,6 @@
 'use client';
 
-import { LOG_KINDS, type LogsPageValues } from '@cobot/shared';
+import { LOG_KINDS, type LogsPageValues } from '@goodbot/shared';
 
 import { ConfigForm } from '@/components/config/config-form';
 import { DiscordField, NumberField, SwitchField } from '@/components/config/fields';

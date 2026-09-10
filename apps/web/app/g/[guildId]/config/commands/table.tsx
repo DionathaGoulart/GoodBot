@@ -6,7 +6,7 @@ import {
   type CommandOverride,
   type CommandSummary,
   type UtilitiesConfig,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { useFormContext } from 'react-hook-form';
 
 import { ConfigForm } from '@/components/config/config-form';
@@ -124,13 +124,7 @@ function CommandRow({
   );
 }
 
-function CommandsGrid({
-  commands,
-  readOnly,
-}: {
-  commands: CommandSummary[];
-  readOnly: boolean;
-}) {
+function CommandsGrid({ commands, readOnly }: { commands: CommandSummary[]; readOnly: boolean }) {
   const [expanded, setExpanded] = React.useState<string | null>(null);
 
   return (

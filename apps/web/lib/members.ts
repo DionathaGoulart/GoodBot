@@ -1,7 +1,7 @@
 import 'server-only';
 
-import { countCasesForTarget, listCasesForTarget } from '@cobot/db';
-import { MemberRolesInputSchema, ModerationActionInputSchema } from '@cobot/shared';
+import { countCasesForTarget, listCasesForTarget } from '@goodbot/db';
+import { MemberRolesInputSchema, ModerationActionInputSchema } from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
@@ -11,7 +11,7 @@ import { db } from './db';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
-import type { GuildMemberDetail, GuildMemberSummary } from '@cobot/shared';
+import type { GuildMemberDetail, GuildMemberSummary } from '@goodbot/shared';
 
 const PATH = (guildId: string, userId: string) => `/g/${guildId}/membros/${userId}`;
 

@@ -13,7 +13,7 @@ import { createdAt, snowflake, snowflakeArray, text, timestamptz, updatedAt } fr
 import { reactionRoleModeEnum, reactionRoleStyleEnum, ticketStatusEnum } from './enums';
 import { guilds } from './guilds';
 
-import type { MessageTemplate } from '@cobot/shared';
+import type { MessageTemplate } from '@goodbot/shared';
 
 const guildRef = () =>
   snowflake('guild_id')

@@ -1,10 +1,10 @@
-import { InternalApiError, MANAGED_CHANNEL_TYPES } from '@cobot/shared';
+import { InternalApiError, MANAGED_CHANNEL_TYPES } from '@goodbot/shared';
 
 import { EVERYONE } from './schema';
 
 import type { Operation, Plan, CurrentState } from './plan';
 import type { OverrideSpec } from './schema';
-import type { ChannelOverride, InternalClient } from '@cobot/shared';
+import type { ChannelOverride, InternalClient } from '@goodbot/shared';
 
 const norm = (value: string): string => value.trim().toLowerCase();
 
@@ -153,7 +153,7 @@ export async function applyPlan(
   options: ApplyOptions,
 ): Promise<ApplyResult> {
   const { api, guildId, actorId } = options;
-  const reason = options.reason ?? 'guild.yaml aplicado pelo CoBot';
+  const reason = options.reason ?? 'guild.yaml aplicado pelo Goodbot';
   const throttle = options.throttle ?? new Throttle();
   const registry = new Registry(current, guildId);
   const failures: ApplyResult['failures'] = [];

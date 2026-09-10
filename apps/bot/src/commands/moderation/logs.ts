@@ -1,11 +1,11 @@
-import { LOG_KINDS } from '@cobot/shared';
+import { LOG_KINDS } from '@goodbot/shared';
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { defineCommand } from '../../lib/command';
 import { botFooter, code, infoEmbed } from '../../lib/embeds';
 
-import type { LogConfigMap } from '@cobot/db';
-import type { LogKind } from '@cobot/shared';
+import type { LogConfigMap } from '@goodbot/db';
+import type { LogKind } from '@goodbot/shared';
 
 /** Nome do tipo de log em pt-BR, na ordem de `LOG_KINDS`. */
 const KIND_LABELS: Record<LogKind, string> = {

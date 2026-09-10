@@ -7,7 +7,7 @@ import { ActionButton } from '@/components/config/confirm-button';
 import { Panel } from '@/components/retro/panel';
 import { Tag } from '@/components/retro/tag';
 
-import type { RaidModeState } from '@cobot/shared';
+import type { RaidModeState } from '@goodbot/shared';
 
 /**
  * §6.2 — o card anti-raid. O estado vive na memória do bot, não no banco:

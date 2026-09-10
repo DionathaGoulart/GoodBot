@@ -5,7 +5,7 @@ import { loadBans } from '@/lib/guild';
 
 import { BansTable } from './bans-table';
 
-export const metadata = { title: 'Banidos · CoBot' };
+export const metadata = { title: 'Banidos · Goodbot' };
 
 export default async function BansPage({
   params,

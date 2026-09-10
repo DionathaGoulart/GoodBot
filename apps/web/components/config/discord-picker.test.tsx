@@ -48,7 +48,13 @@ describe('DiscordPicker', () => {
     const fetchMock = mockRoles();
 
     render(
-      <DiscordPicker kind="role" includeEveryone multiple value={[ROLES[0]!.id]} onChange={vi.fn()} />,
+      <DiscordPicker
+        kind="role"
+        includeEveryone
+        multiple
+        value={[ROLES[0]!.id]}
+        onChange={vi.fn()}
+      />,
     );
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());

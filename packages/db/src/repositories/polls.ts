@@ -17,11 +17,7 @@ export async function createPoll(db: DbExecutor, input: CreatePollInput): Promis
 }
 
 /** A mensagem só existe depois do insert: o custom id dos botões usa o id da enquete. */
-export async function setPollMessage(
-  db: DbExecutor,
-  id: string,
-  messageId: string,
-): Promise<void> {
+export async function setPollMessage(db: DbExecutor, id: string, messageId: string): Promise<void> {
   await db.update(polls).set({ messageId }).where(eq(polls.id, id));
 }
 
@@ -39,9 +35,7 @@ export async function listOpenPolls(db: DbExecutor, guildId: string): Promise<Po
 }
 
 export type VoteResult =
-  | { status: 'ok'; poll: Poll; chosen: string[] }
-  | { status: 'closed' }
-  | { status: 'unknown' };
+  { status: 'ok'; poll: Poll; chosen: string[] } | { status: 'closed' } | { status: 'unknown' };
 
 /**
  * Registra (ou desfaz) o voto de um usuário. A leitura e a escrita do jsonb

@@ -13,7 +13,7 @@ import {
   MAX_GUILD_IMAGE_BYTES,
   parseImageDataUrl,
   scheduledEventProblems,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -47,7 +47,7 @@ import type {
   EventEntityType,
   GuildScheduledEventList,
   GuildScheduledEventSummary,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 
 /** Canais onde um evento do Discord acontece: voz e palco. */
 const EVENT_CHANNEL_TYPES = [2, 13];

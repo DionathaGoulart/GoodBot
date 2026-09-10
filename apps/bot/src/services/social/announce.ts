@@ -3,13 +3,13 @@ import {
   SOCIAL_KIND_HEADLINE,
   SOCIAL_KIND_LABEL,
   SOCIAL_PLATFORM_LABEL,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { EmbedBuilder } from 'discord.js';
 
 import { sanitizeVar, templateToMessage } from '../../lib/template';
 
 import type { SocialItem } from './types';
-import type { MessageTemplate, SocialKind, SocialPlatform, TemplateVars } from '@cobot/shared';
+import type { MessageTemplate, SocialKind, SocialPlatform, TemplateVars } from '@goodbot/shared';
 import type { BaseMessageOptions } from 'discord.js';
 
 /** As variáveis de template de uma publicação (PRD §5.8). */

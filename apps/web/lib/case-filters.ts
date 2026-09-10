@@ -5,7 +5,7 @@ import {
   type AuditSource,
   type CaseSource,
   type CaseType,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 
 import { addDays, zonedDayStart, DEFAULT_TIMEZONE } from './stats-period';
 

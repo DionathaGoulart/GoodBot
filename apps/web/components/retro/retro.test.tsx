@@ -28,7 +28,9 @@ describe('Panel', () => {
     const bar = container.querySelector('.window-bar');
     expect(bar?.className).not.toMatch(/opacity/);
     expect(screen.getByText('CASOS.LOG')).toHaveClass('window-bar-title');
-    expect(screen.getByRole('button', { name: 'EXPORTAR' }).closest('.window-bar-title')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'EXPORTAR' }).closest('.window-bar-title'),
+    ).toBeNull();
   });
 
   it('sem título não renderiza barra alguma', () => {

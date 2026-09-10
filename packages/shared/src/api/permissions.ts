@@ -206,7 +206,9 @@ export function permissionsToBitfield(names: readonly PermissionName[]): string 
 /** Bitfield textual → nomes conhecidos, na ordem de `PERMISSION_BITS`. */
 export function bitfieldToPermissions(bitfield: string): PermissionName[] {
   const bits = toBitfield(bitfield);
-  return PERMISSION_NAMES.filter((name) => (bits & PERMISSION_BITS[name]) === PERMISSION_BITS[name]);
+  return PERMISSION_NAMES.filter(
+    (name) => (bits & PERMISSION_BITS[name]) === PERMISSION_BITS[name],
+  );
 }
 
 /** As permissões perigosas que este bitfield concede (vazio = cargo comum). */

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AuditService, type AuditDeps } from './audit';
 
-import type { Db } from '@cobot/db';
+import type { Db } from '@goodbot/db';
 
 /** `db.insert(...).values(...).returning()` — o mínimo que o `appendAudit` usa. */
 function fakeDb() {
@@ -21,7 +21,7 @@ function fakeDb() {
 }
 
 const client = {
-  user: { id: '999', tag: 'CoBot#0001' },
+  user: { id: '999', tag: 'Goodbot#0001' },
   users: { cache: new Map([['111', { tag: 'membro#1234' }]]) },
 } as unknown as AuditDeps['client'];
 
@@ -62,7 +62,7 @@ describe('AuditService', () => {
       target: { type: 'member', id: '222' },
     });
 
-    expect(rows[0]).toMatchObject({ actorId: '999', actorTag: 'CoBot#0001', reason: null });
+    expect(rows[0]).toMatchObject({ actorId: '999', actorTag: 'Goodbot#0001', reason: null });
   });
 
   it('um id solto vira tag pelo cache, e um id fora dele vira ele mesmo', async () => {
@@ -93,7 +93,7 @@ describe('AuditService', () => {
   it('sem client, o ator padrão ainda é um snowflake gravável', async () => {
     const { db, rows } = fakeDb();
     await new AuditService({ db }).write({ guildId: '1', action: 'x', source: 'job' });
-    expect(rows[0]).toMatchObject({ actorId: '0', actorTag: 'CoBot' });
+    expect(rows[0]).toMatchObject({ actorId: '0', actorTag: 'Goodbot' });
   });
 });
 

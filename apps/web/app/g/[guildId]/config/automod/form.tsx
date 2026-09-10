@@ -1,6 +1,6 @@
 'use client';
 
-import type { AutomodConfig } from '@cobot/shared';
+import type { AutomodConfig } from '@goodbot/shared';
 
 import { ConfigForm } from '@/components/config/config-form';
 import { DiscordField, NumberField, SwitchField } from '@/components/config/fields';

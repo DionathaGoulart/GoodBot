@@ -4,7 +4,7 @@ import {
   MINUTE_MS,
   parseDuration,
   UserFacingError,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import {
   ApplicationCommandType,
   ContextMenuCommandBuilder,

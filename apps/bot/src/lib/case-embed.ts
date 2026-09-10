@@ -1,10 +1,10 @@
-import { formatDuration } from '@cobot/shared';
+import { formatDuration } from '@goodbot/shared';
 import { EmbedBuilder, time, TimestampStyles } from 'discord.js';
 
 import { code, formatTitle, STATUS_COLORS } from './embeds';
 
-import type { Case } from '@cobot/db';
-import type { CaseType } from '@cobot/shared';
+import type { Case } from '@goodbot/db';
+import type { CaseType } from '@goodbot/shared';
 
 /**
  * Cor por tipo de caso (styleguide §9). O guia nomeia quatro cores de status;

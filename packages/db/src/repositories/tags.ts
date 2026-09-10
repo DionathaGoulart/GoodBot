@@ -5,7 +5,7 @@ import { guilds } from '../schema/guilds';
 
 import type { DbExecutor } from '../client';
 import type { Tag } from '../types';
-import type { MessageTemplate } from '@cobot/shared';
+import type { MessageTemplate } from '@goodbot/shared';
 
 /**
  * Nome canônico de uma tag: minúsculo e sem espaços nas pontas. O índice único
@@ -45,11 +45,7 @@ export async function countTags(db: DbExecutor, guildId: string): Promise<number
   return row?.count ?? 0;
 }
 
-export async function getTag(
-  db: DbExecutor,
-  guildId: string,
-  name: string,
-): Promise<Tag | null> {
+export async function getTag(db: DbExecutor, guildId: string, name: string): Promise<Tag | null> {
   const [row] = await db
     .select()
     .from(tags)
@@ -103,11 +99,7 @@ export async function deleteTag(
  * Lê a tag e incrementa `uses` na mesma ida ao banco — o contador não pode
  * depender de o envio da mensagem dar certo depois.
  */
-export async function useTag(
-  db: DbExecutor,
-  guildId: string,
-  name: string,
-): Promise<Tag | null> {
+export async function useTag(db: DbExecutor, guildId: string, name: string): Promise<Tag | null> {
   const [row] = await db
     .update(tags)
     .set({ uses: sql`${tags.uses} + 1` })

@@ -1,11 +1,11 @@
-import { summary, topChannels, topUsers } from '@cobot/db';
-import { DAY_MS, UserFacingError } from '@cobot/shared';
+import { summary, topChannels, topUsers } from '@goodbot/db';
+import { DAY_MS, UserFacingError } from '@goodbot/shared';
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { defineCommand } from '../../lib/command';
 import { botFooter, code, infoEmbed } from '../../lib/embeds';
 
-import type { StatsPeriod, SummaryTile } from '@cobot/db';
+import type { StatsPeriod, SummaryTile } from '@goodbot/db';
 import type { APIEmbedField } from 'discord.js';
 
 /** Janela do resumo no Discord; o painel é quem oferece períodos livres. */
@@ -26,7 +26,9 @@ function tile(value: SummaryTile): string {
 
 function ranking(rows: readonly { id: string; count: number }[], mention: (id: string) => string) {
   if (rows.length === 0) return '—';
-  return rows.map((row, index) => `${index + 1}. ${mention(row.id)} — ${number(row.count)}`).join('\n');
+  return rows
+    .map((row, index) => `${index + 1}. ${mention(row.id)} — ${number(row.count)}`)
+    .join('\n');
 }
 
 export default defineCommand({

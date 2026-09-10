@@ -6,7 +6,7 @@ import * as RechartsPrimitive from 'recharts';
 import type { TooltipValueType } from 'recharts';
 
 // Format: { THEME_NAME: CSS_SELECTOR }
-// No CoBot o tema escuro é `rose` e vive num `data-theme` (globals.css).
+// No Goodbot o tema escuro é `rose` e vive num `data-theme` (globals.css).
 const THEMES = { light: '', dark: "[data-theme='rose']" } as const;
 
 const INITIAL_DIMENSION = { width: 320, height: 200 } as const;

@@ -1,6 +1,6 @@
 'use server';
 
-import { MessageTemplateSchema, SnowflakeSchema } from '@cobot/shared';
+import { MessageTemplateSchema, SnowflakeSchema } from '@goodbot/shared';
 import { z } from 'zod';
 
 import { defaultGuildId, requireGuildAccess } from '@/lib/auth/require';

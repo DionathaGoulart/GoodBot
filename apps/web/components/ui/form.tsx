@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 /**
  * §6.4 — o `form` do shadcn não existe no registry `radix-nova`, então mora
  * aqui. Amarra react-hook-form ao label/descrição/erro com os ids certos; o
- * resolver é sempre um schema Zod de `@cobot/shared`.
+ * resolver é sempre um schema Zod de `@goodbot/shared`.
  */
 const Form = FormProvider;
 

@@ -1,4 +1,4 @@
-/** Versão do CoBot exibida em embeds, `/ping` e no painel. */
+/** Versão do Goodbot exibida em embeds, `/ping` e no painel. */
 export const VERSION = '0.0.0';
 
 export * from './constants';

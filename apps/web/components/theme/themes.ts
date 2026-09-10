@@ -4,7 +4,7 @@ export type Theme = (typeof THEMES)[number];
 
 export const DEFAULT_THEME: Theme = 'rose';
 /** Chave no `localStorage`; o script inline do `<head>` lê a mesma. */
-export const THEME_STORAGE_KEY = 'cobot-theme';
+export const THEME_STORAGE_KEY = 'goodbot-theme';
 
 export function isTheme(value: unknown): value is Theme {
   return typeof value === 'string' && (THEMES as readonly string[]).includes(value);

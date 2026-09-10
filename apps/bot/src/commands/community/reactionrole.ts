@@ -7,21 +7,17 @@ import {
   getPanel,
   listPanels,
   removePanelItem,
-} from '@cobot/db';
-import { MessageTemplateSchema, UserFacingError } from '@cobot/shared';
+} from '@goodbot/db';
+import { MessageTemplateSchema, UserFacingError } from '@goodbot/shared';
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { defineCommand } from '../../lib/command';
 import { botFooter, code, infoEmbed, successEmbed } from '../../lib/embeds';
-import {
-  MAX_PANEL_ITEMS,
-  parseEmojiInput,
-  toEmojiIdentifier,
-} from '../../services/reaction-roles';
+import { MAX_PANEL_ITEMS, parseEmojiInput, toEmojiIdentifier } from '../../services/reaction-roles';
 
 import type { AutocompleteContext, CommandContext } from '../../lib/command';
-import type { PanelWithItems, ReactionRolePanel } from '@cobot/db';
-import type { ReactionRoleMode, ReactionRoleStyle } from '@cobot/shared';
+import type { PanelWithItems, ReactionRolePanel } from '@goodbot/db';
+import type { ReactionRoleMode, ReactionRoleStyle } from '@goodbot/shared';
 import type { Role } from 'discord.js';
 
 const MODE_LABEL: Record<ReactionRoleMode, string> = {
@@ -168,11 +164,7 @@ export default defineCommand({
         .setName('remove')
         .setDescription('Tira um cargo do painel')
         .addStringOption((option) =>
-          option
-            .setName('painel')
-            .setDescription('Painel')
-            .setAutocomplete(true)
-            .setRequired(true),
+          option.setName('painel').setDescription('Painel').setAutocomplete(true).setRequired(true),
         )
         .addRoleOption((option) =>
           option.setName('cargo').setDescription('Cargo a tirar').setRequired(true),
@@ -183,11 +175,7 @@ export default defineCommand({
         .setName('publish')
         .setDescription('Publica (ou reedita) a mensagem do painel')
         .addStringOption((option) =>
-          option
-            .setName('painel')
-            .setDescription('Painel')
-            .setAutocomplete(true)
-            .setRequired(true),
+          option.setName('painel').setDescription('Painel').setAutocomplete(true).setRequired(true),
         )
         .addChannelOption((option) =>
           option
@@ -201,11 +189,7 @@ export default defineCommand({
         .setName('delete')
         .setDescription('Apaga o painel (a mensagem publicada continua)')
         .addStringOption((option) =>
-          option
-            .setName('painel')
-            .setDescription('Painel')
-            .setAutocomplete(true)
-            .setRequired(true),
+          option.setName('painel').setDescription('Painel').setAutocomplete(true).setRequired(true),
         ),
     )
     .addSubcommand((sub) => sub.setName('list').setDescription('Lista os painéis do servidor')),
@@ -263,9 +247,12 @@ export default defineCommand({
       const config = await ctx.config.get(ctx.guildId, 'reaction_roles');
       const total = await countPanels(ctx.db, ctx.guildId);
       if (total >= config.maxPanels) {
-        throw new UserFacingError(`Este servidor já tem ${total} painéis (máx. ${config.maxPanels}).`, {
-          code: 'PANEL_LIMIT',
-        });
+        throw new UserFacingError(
+          `Este servidor já tem ${total} painéis (máx. ${config.maxPanels}).`,
+          {
+            code: 'PANEL_LIMIT',
+          },
+        );
       }
 
       const channel = ctx.interaction.options.getChannel('canal', true);
@@ -320,7 +307,8 @@ export default defineCommand({
     if (sub === 'publish') {
       await requireEnabled(ctx);
       const guild = ctx.interaction.guild;
-      if (!guild) throw new UserFacingError('Comando só disponível no servidor.', { code: 'NO_GUILD' });
+      if (!guild)
+        throw new UserFacingError('Comando só disponível no servidor.', { code: 'NO_GUILD' });
       if (panel.items.length === 0) {
         throw new UserFacingError('Adicione ao menos um cargo antes de publicar.', {
           code: 'EMPTY_PANEL',
@@ -373,9 +361,12 @@ export default defineCommand({
     const rawEmoji = ctx.interaction.options.getString('emoji');
     const emoji = rawEmoji ? parseEmojiInput(rawEmoji) : null;
     if (rawEmoji && !emoji) {
-      throw new UserFacingError('Não reconheci esse emoji. Use um emoji do teclado ou do servidor.', {
-        code: 'BAD_EMOJI',
-      });
+      throw new UserFacingError(
+        'Não reconheci esse emoji. Use um emoji do teclado ou do servidor.',
+        {
+          code: 'BAD_EMOJI',
+        },
+      );
     }
     if (panel.style === 'reactions' && !emoji) {
       throw new UserFacingError('Painéis de reação exigem um emoji em cada cargo.', {

@@ -22,7 +22,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: cobot-bot
+  IMAGE_NAME: goodbot-bot
 
 jobs:
   # 1. Migrations antes de tudo: se o schema não subir, nada mais sobe.
@@ -42,7 +42,7 @@ jobs:
           cache: pnpm
 
       - name: Instalar dependências
-        run: pnpm install --frozen-lockfile --filter @cobot/db...
+        run: pnpm install --frozen-lockfile --filter @goodbot/db...
 
       - name: Aplicar migrations
         # Conexão direta (5432) com `?sslmode=require`, nunca o pooler.
@@ -118,7 +118,7 @@ jobs:
           envs: GHCR_USER,GHCR_TOKEN
           script_stop: true
           script: |
-            cd /opt/cobot
+            cd /opt/goodbot
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose pull
             docker compose up -d --remove-orphans

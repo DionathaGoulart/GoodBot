@@ -1,7 +1,7 @@
 import 'server-only';
 
-import { getCaseByNumber, searchCases } from '@cobot/db';
-import { MAX_REASON_LENGTH } from '@cobot/shared';
+import { getCaseByNumber, searchCases } from '@goodbot/db';
+import { MAX_REASON_LENGTH } from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
@@ -16,7 +16,7 @@ import { guildTimezone } from './stats';
 
 import type { ActionResult } from './module-config';
 import type { AccessLevel } from './auth/access';
-import type { Case } from '@cobot/db';
+import type { Case } from '@goodbot/db';
 
 const LIST_PATH = (guildId: string) => `/g/${guildId}/casos`;
 const DETAIL_PATH = (guildId: string, caseNumber: number) => `/g/${guildId}/casos/${caseNumber}`;

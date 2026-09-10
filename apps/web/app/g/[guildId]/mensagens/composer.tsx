@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { NO_MENTIONS, type AllowedMentions, type MessageTemplate } from '@cobot/shared';
+import { NO_MENTIONS, type AllowedMentions, type MessageTemplate } from '@goodbot/shared';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-import type { ChannelMessageSummary, GuildChannelSummary } from '@cobot/shared';
+import type { ChannelMessageSummary, GuildChannelSummary } from '@goodbot/shared';
 
 const EMPTY_TEMPLATE: MessageTemplate = { content: '' };
 

@@ -8,7 +8,7 @@ import { ErrorState } from '@/components/retro/states';
 
 import { CommandsForm } from './table';
 
-export const metadata = { title: 'Comandos · CoBot' };
+export const metadata = { title: 'Comandos · Goodbot' };
 
 export default async function CommandsConfigPage({
   params,

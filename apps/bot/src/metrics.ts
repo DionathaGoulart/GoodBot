@@ -173,20 +173,20 @@ class Summary {
 }
 
 export const metrics = {
-  events: new Counter('cobot_events_total', 'Eventos do gateway processados, por tipo.'),
-  commands: new Counter('cobot_commands_total', 'Comandos executados até o fim, por nome.'),
-  errors: new Counter('cobot_errors_total', 'Erros não tratados, por escopo.'),
-  apiRequests: new Counter('cobot_api_requests_total', 'Requisições à API interna, por status.'),
+  events: new Counter('goodbot_events_total', 'Eventos do gateway processados, por tipo.'),
+  commands: new Counter('goodbot_commands_total', 'Comandos executados até o fim, por nome.'),
+  errors: new Counter('goodbot_errors_total', 'Erros não tratados, por escopo.'),
+  apiRequests: new Counter('goodbot_api_requests_total', 'Requisições à API interna, por status.'),
   apiUnauthorized: new Counter(
-    'cobot_api_unauthorized_total',
+    'goodbot_api_unauthorized_total',
     'Respostas 401 da API interna (alguém sondando o token).',
   ),
-  automodHits: new Counter('cobot_automod_hits_total', 'Acionamentos de regra de automod.'),
-  apiLatency: new Summary('cobot_api_duration_ms', 'Latência da API interna, em ms.'),
-  dbLatency: new Summary('cobot_db_duration_ms', 'Latência do Postgres gerenciado, em ms.'),
-  queue: new Gauge('cobot_queue_size', 'Itens represados em cada fila do bot.'),
-  process: new Gauge('cobot_process', 'Métricas do processo (memória, uptime).'),
-  gateway: new Gauge('cobot_gateway', 'Estado do gateway do Discord.'),
+  automodHits: new Counter('goodbot_automod_hits_total', 'Acionamentos de regra de automod.'),
+  apiLatency: new Summary('goodbot_api_duration_ms', 'Latência da API interna, em ms.'),
+  dbLatency: new Summary('goodbot_db_duration_ms', 'Latência do Postgres gerenciado, em ms.'),
+  queue: new Gauge('goodbot_queue_size', 'Itens represados em cada fila do bot.'),
+  process: new Gauge('goodbot_process', 'Métricas do processo (memória, uptime).'),
+  gateway: new Gauge('goodbot_gateway', 'Estado do gateway do Discord.'),
 };
 
 export type Metrics = typeof metrics;

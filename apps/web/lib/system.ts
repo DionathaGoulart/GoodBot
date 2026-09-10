@@ -2,7 +2,7 @@ import 'server-only';
 
 import { internalApi } from './internal-api';
 
-import type { HealthResponse } from '@cobot/shared';
+import type { HealthResponse } from '@goodbot/shared';
 
 export interface SystemHealth {
   /** `null` quando a API do bot não respondeu. */

@@ -1,5 +1,5 @@
-import { getCaseByNumber, softDeleteCase, updateCaseReason } from '@cobot/db';
-import { CaseDeleteInputSchema, CaseEditInputSchema } from '@cobot/shared';
+import { getCaseByNumber, softDeleteCase, updateCaseReason } from '@goodbot/db';
+import { CaseDeleteInputSchema, CaseEditInputSchema } from '@goodbot/shared';
 import { Hono } from 'hono';
 
 import { requireActor } from '../actor';
@@ -7,8 +7,8 @@ import { ApiHttpError, notFound } from '../errors';
 import { validate } from '../validate';
 
 import type { ApiDeps, ApiEnv } from '../context';
-import type { Case } from '@cobot/db';
-import type { CaseSummary } from '@cobot/shared';
+import type { Case } from '@goodbot/db';
+import type { CaseSummary } from '@goodbot/shared';
 
 function toSummary(kase: Case): CaseSummary {
   return {

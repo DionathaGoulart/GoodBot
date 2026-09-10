@@ -1,9 +1,9 @@
-import { PERMISSION_BITS, type PermissionName } from '@cobot/shared';
+import { PERMISSION_BITS, type PermissionName } from '@goodbot/shared';
 import { PermissionFlagsBits } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 
 /**
- * `@cobot/shared` não depende do discord.js (o painel o importa e ele não roda
+ * `@goodbot/shared` não depende do discord.js (o painel o importa e ele não roda
  * no browser), então os bits de permissão estão escritos à mão lá. Este teste é
  * o que garante que não há erro de digitação: um bit errado aqui abriria um
  * cargo com a permissão errada no servidor de alguém.

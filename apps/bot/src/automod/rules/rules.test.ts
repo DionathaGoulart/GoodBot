@@ -4,7 +4,7 @@ import {
   MentionsRuleConfigSchema,
   SpamRuleConfigSchema,
   WordsRuleConfigSchema,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import { capsRule } from './caps';
@@ -268,9 +268,9 @@ describe('mentionsRule', () => {
 
   it('conta usuários e cargos juntos', () => {
     expect(check({ mentionedUserIds: ['1', '2'], mentionedRoleIds: ['3'] })).toBeNull();
-    expect(
-      check({ mentionedUserIds: ['1', '2'], mentionedRoleIds: ['3', '4'] })?.reason,
-    ).toContain('Menção em massa');
+    expect(check({ mentionedUserIds: ['1', '2'], mentionedRoleIds: ['3', '4'] })?.reason).toContain(
+      'Menção em massa',
+    );
   });
 
   it('não conta a mesma menção duas vezes', () => {

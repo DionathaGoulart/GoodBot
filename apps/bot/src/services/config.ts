@@ -1,11 +1,11 @@
-import { getAllModuleConfigs, getModuleConfig, guildSettings } from '@cobot/db';
-import { MINUTE_MS, MODULES } from '@cobot/shared';
+import { getAllModuleConfigs, getModuleConfig, guildSettings } from '@goodbot/db';
+import { MINUTE_MS, MODULES } from '@goodbot/shared';
 import { eq } from 'drizzle-orm';
 
 import { childLogger } from '../logger';
 
-import type { Db } from '@cobot/db';
-import type { DmOnPunish, Module, ModuleConfig } from '@cobot/shared';
+import type { Db } from '@goodbot/db';
+import type { DmOnPunish, Module, ModuleConfig } from '@goodbot/shared';
 
 /** `guild_settings` com defaults aplicados quando a guild ainda não tem linha. */
 export interface ResolvedSettings {

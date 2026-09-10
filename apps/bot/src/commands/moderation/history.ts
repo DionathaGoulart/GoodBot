@@ -1,5 +1,5 @@
-import { countCasesForTarget, listCasesForTarget } from '@cobot/db';
-import { CASE_TYPES, MINUTE_MS } from '@cobot/shared';
+import { countCasesForTarget, listCasesForTarget } from '@goodbot/db';
+import { CASE_TYPES, MINUTE_MS } from '@goodbot/shared';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -15,8 +15,8 @@ import { defineCommand } from '../../lib/command';
 import { botFooter, code, infoEmbed } from '../../lib/embeds';
 
 import type { CommandContext } from '../../lib/command';
-import type { Case } from '@cobot/db';
-import type { CaseType } from '@cobot/shared';
+import type { Case } from '@goodbot/db';
+import type { CaseType } from '@goodbot/shared';
 import type { User } from 'discord.js';
 
 const PAGE_SIZE = 5;

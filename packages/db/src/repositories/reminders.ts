@@ -26,11 +26,7 @@ export async function listPendingReminders(
     .select()
     .from(reminders)
     .where(
-      and(
-        eq(reminders.guildId, guildId),
-        eq(reminders.userId, userId),
-        isNull(reminders.doneAt),
-      ),
+      and(eq(reminders.guildId, guildId), eq(reminders.userId, userId), isNull(reminders.doneAt)),
     )
     .orderBy(asc(reminders.runAt));
 }
@@ -44,11 +40,7 @@ export async function countPendingReminders(
     .select({ total: sql<number>`count(*)` })
     .from(reminders)
     .where(
-      and(
-        eq(reminders.guildId, guildId),
-        eq(reminders.userId, userId),
-        isNull(reminders.doneAt),
-      ),
+      and(eq(reminders.guildId, guildId), eq(reminders.userId, userId), isNull(reminders.doneAt)),
     );
   return Number(row?.total ?? 0);
 }

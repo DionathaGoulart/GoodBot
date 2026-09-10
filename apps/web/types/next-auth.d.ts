@@ -13,6 +13,6 @@ declare module 'next-auth' {
 }
 
 // O `JWT` mora em `@auth/core/jwt`, que não é dependência direta do painel:
-// os campos extras do token são tipados em `auth.ts` (`CobotToken`).
+// os campos extras do token são tipados em `auth.ts` (`GoodbotToken`).
 
 export {};

@@ -1,7 +1,13 @@
 import { PermissionFlagsBits } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 
-import { canActOn, canManageRole, levelAtLeast, resolveLevel, type MemberLike } from './permissions';
+import {
+  canActOn,
+  canManageRole,
+  levelAtLeast,
+  resolveLevel,
+  type MemberLike,
+} from './permissions';
 
 function member(overrides: Partial<MemberLike> = {}): MemberLike {
   const permissions = new Set<bigint>(overrides.hasPermission ? [] : []);

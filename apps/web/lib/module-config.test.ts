@@ -1,4 +1,4 @@
-import { DEFAULT_LOGS_CONFIG, DEFAULT_MODERATION_CONFIG } from '@cobot/shared';
+import { DEFAULT_LOGS_CONFIG, DEFAULT_MODERATION_CONFIG } from '@goodbot/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const GUILD_ID = '100000000000000000';
@@ -14,7 +14,7 @@ const invalidateConfig = vi.fn();
 const revalidatePath = vi.fn();
 
 vi.mock('server-only', () => ({}));
-vi.mock('@cobot/db', () => ({
+vi.mock('@goodbot/db', () => ({
   getModuleConfig: (...args: unknown[]) => getModuleConfig(...args),
   getLogConfigs: (...args: unknown[]) => getLogConfigs(...args),
   getGuildSettings: (...args: unknown[]) => getGuildSettings(...args),
@@ -121,11 +121,46 @@ describe('saveModuleConfig', () => {
       updatedBy: null,
     });
     getLogConfigs.mockResolvedValue({
-      modlog: { kind: 'modlog', enabled: false, channelId: null, ignoredChannelIds: [], ignoredRoleIds: [], stored: false },
-      messages: { kind: 'messages', enabled: false, channelId: null, ignoredChannelIds: [], ignoredRoleIds: [], stored: false },
-      members: { kind: 'members', enabled: false, channelId: null, ignoredChannelIds: [], ignoredRoleIds: [], stored: false },
-      server: { kind: 'server', enabled: false, channelId: null, ignoredChannelIds: [], ignoredRoleIds: [], stored: false },
-      voice: { kind: 'voice', enabled: false, channelId: null, ignoredChannelIds: [], ignoredRoleIds: [], stored: false },
+      modlog: {
+        kind: 'modlog',
+        enabled: false,
+        channelId: null,
+        ignoredChannelIds: [],
+        ignoredRoleIds: [],
+        stored: false,
+      },
+      messages: {
+        kind: 'messages',
+        enabled: false,
+        channelId: null,
+        ignoredChannelIds: [],
+        ignoredRoleIds: [],
+        stored: false,
+      },
+      members: {
+        kind: 'members',
+        enabled: false,
+        channelId: null,
+        ignoredChannelIds: [],
+        ignoredRoleIds: [],
+        stored: false,
+      },
+      server: {
+        kind: 'server',
+        enabled: false,
+        channelId: null,
+        ignoredChannelIds: [],
+        ignoredRoleIds: [],
+        stored: false,
+      },
+      voice: {
+        kind: 'voice',
+        enabled: false,
+        channelId: null,
+        ignoredChannelIds: [],
+        ignoredRoleIds: [],
+        stored: false,
+      },
     });
 
     const kind = { enabled: false, channelId: null, ignoredChannelIds: [], ignoredRoleIds: [] };

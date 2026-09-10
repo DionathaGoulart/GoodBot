@@ -1,7 +1,7 @@
 import 'server-only';
 
-import { guildSettings, guilds } from '@cobot/db';
-import { InternalApiError } from '@cobot/shared';
+import { guildSettings, guilds } from '@goodbot/db';
+import { InternalApiError } from '@goodbot/shared';
 import { eq } from 'drizzle-orm';
 
 import { db } from '../db';

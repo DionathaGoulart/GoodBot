@@ -5,7 +5,7 @@ import {
   type ModuleConfig,
   type ModuleConfigInput,
   parseModuleConfigOrDefault,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { guildSettings, moduleConfigs } from '../schema/configs';
@@ -57,7 +57,7 @@ function toResult<M extends Module>(
 }
 
 /**
- * Lê o config de um módulo, valida com o Zod de `@cobot/shared` e aplica os
+ * Lê o config de um módulo, valida com o Zod de `@goodbot/shared` e aplica os
  * defaults. Nunca lança por jsonb inválido: volta ao default e marca
  * `stored: false` para o chamador logar.
  */

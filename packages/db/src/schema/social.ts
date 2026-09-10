@@ -13,7 +13,7 @@ import { createdAt, snowflake, text, timestamptz, updatedAt } from './_columns';
 import { socialKindEnum, socialPlatformEnum } from './enums';
 import { guilds } from './guilds';
 
-import type { MessageTemplate, SocialKind, SocialPlatform } from '@cobot/shared';
+import type { MessageTemplate, SocialKind, SocialPlatform } from '@goodbot/shared';
 
 const guildRef = () =>
   snowflake('guild_id')

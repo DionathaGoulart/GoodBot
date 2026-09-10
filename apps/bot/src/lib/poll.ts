@@ -1,6 +1,6 @@
-import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS } from '@cobot/shared';
+import { POLL_MAX_OPTIONS, POLL_MIN_OPTIONS } from '@goodbot/shared';
 
-import type { PollOption, PollVotes } from '@cobot/db';
+import type { PollOption, PollVotes } from '@goodbot/db';
 
 /** Largura da barra de resultado em caracteres. */
 export const BAR_WIDTH = 12;

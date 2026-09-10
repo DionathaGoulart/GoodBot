@@ -1,15 +1,21 @@
-import { AutomodRuleSchema, DEFAULT_AUTOMOD_CONFIG } from '@cobot/shared';
+import { AutomodRuleSchema, DEFAULT_AUTOMOD_CONFIG } from '@goodbot/shared';
 import { Collection, PermissionFlagsBits } from 'discord.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AutomodService, globalExemption, raidActions, ruleExemption, toLoadedRule } from './engine';
+import {
+  AutomodService,
+  globalExemption,
+  raidActions,
+  ruleExemption,
+  toLoadedRule,
+} from './engine';
 
 import type { LoadedRule } from './types';
 import type { ConfigService } from '../services/config';
 import type { ModerationService } from '../services/moderation';
 import type { ModlogService } from '../services/modlog';
-import type { AutomodRuleRow, Db } from '@cobot/db';
-import type { AutomodConfig } from '@cobot/shared';
+import type { AutomodRuleRow, Db } from '@goodbot/db';
+import type { AutomodConfig } from '@goodbot/shared';
 import type { Guild, GuildMember, Message } from 'discord.js';
 
 const { getAutomodRules, recordAutomodHit, deleteAutomodHitsBefore } = vi.hoisted(() => ({
@@ -18,7 +24,7 @@ const { getAutomodRules, recordAutomodHit, deleteAutomodHitsBefore } = vi.hoiste
   deleteAutomodHitsBefore: vi.fn(),
 }));
 
-vi.mock('@cobot/db', () => ({ getAutomodRules, recordAutomodHit, deleteAutomodHitsBefore }));
+vi.mock('@goodbot/db', () => ({ getAutomodRules, recordAutomodHit, deleteAutomodHitsBefore }));
 
 const GUILD_ID = '900000000000000000';
 const CHANNEL_ID = '800000000000000000';
@@ -79,7 +85,10 @@ interface MessageOptions {
   moderator?: boolean;
 }
 
-function makeMessage(options: MessageOptions): { message: Message; remove: ReturnType<typeof vi.fn> } {
+function makeMessage(options: MessageOptions): {
+  message: Message;
+  remove: ReturnType<typeof vi.fn>;
+} {
   const remove = vi.fn().mockResolvedValue(undefined);
   const roles = new Collection<string, unknown>();
   for (const id of options.roleIds ?? []) roles.set(id, { id });
@@ -220,11 +229,15 @@ describe('helpers', () => {
       exemptRoleIds: [EXEMPT_ROLE_ID],
       exemptModerators: true,
     };
-    expect(globalExemption(config, { channelId: CHANNEL_ID, roleIds: [], isModerator: false })).toBe(
-      'exempt-channel',
-    );
     expect(
-      globalExemption(config, { channelId: 'outro', roleIds: [EXEMPT_ROLE_ID], isModerator: false }),
+      globalExemption(config, { channelId: CHANNEL_ID, roleIds: [], isModerator: false }),
+    ).toBe('exempt-channel');
+    expect(
+      globalExemption(config, {
+        channelId: 'outro',
+        roleIds: [EXEMPT_ROLE_ID],
+        isModerator: false,
+      }),
     ).toBe('exempt-role');
     expect(globalExemption(config, { channelId: 'outro', roleIds: [], isModerator: true })).toBe(
       'exempt-moderator',

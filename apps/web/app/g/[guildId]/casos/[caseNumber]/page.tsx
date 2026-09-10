@@ -8,13 +8,13 @@ import { hasAccess } from '@/lib/auth/access';
 import { requireGuildAccess } from '@/lib/auth/require';
 import { CASE_TONES } from '@/lib/case-tones';
 import { canSeeDeleted, loadCaseDetail } from '@/lib/cases';
-import { formatDuration } from '@cobot/shared';
+import { formatDuration } from '@goodbot/shared';
 
 import { CaseActions } from './case-actions';
 
 import type { CaseRow } from '@/lib/cases';
 
-export const metadata = { title: 'Caso · CoBot' };
+export const metadata = { title: 'Caso · Goodbot' };
 
 function when(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString('pt-BR') : '—';

@@ -1,4 +1,4 @@
-import { getPanelByMessage } from '@cobot/db';
+import { getPanelByMessage } from '@goodbot/db';
 import { Events } from 'discord.js';
 
 import { defineEvent } from '../../lib/event';

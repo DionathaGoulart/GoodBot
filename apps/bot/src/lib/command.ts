@@ -15,8 +15,8 @@ import type { YouTubeProvider } from '../services/social/index';
 import type { StatsService } from '../services/stats';
 import type { TicketService } from '../services/tickets';
 import type { WelcomeService } from '../services/welcome';
-import type { Db } from '@cobot/db';
-import type { Module, PermissionLevel } from '@cobot/shared';
+import type { Db } from '@goodbot/db';
+import type { Module, PermissionLevel } from '@goodbot/shared';
 import type {
   Collection,
   AutocompleteInteraction,

@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline/promises';
 
-import { createInternalClient } from '@cobot/shared';
+import { createInternalClient } from '@goodbot/shared';
 
 import { DEFAULT_MIN_INTERVAL_MS, Throttle, applyPlan } from './apply';
 import { destructiveOps, formatPlan } from './format';
@@ -17,7 +17,7 @@ import type { LoadedServer } from './load';
 const CLI_TIMEOUT_MS = 30_000;
 
 const USO = `
-cobot-guild — aplica um guild.yaml num servidor do Discord
+goodbot-guild — aplica um guild.yaml num servidor do Discord
 
   pnpm guild list
   pnpm guild plan  --server <slug> [--allow-delete] [--reorder]

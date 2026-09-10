@@ -21,7 +21,7 @@ import { groupLabelForPath, navGroupsFor } from './nav';
 import type { AccessLevel } from '@/lib/auth/access';
 
 /** Grupos fechados, por rótulo. Só isto vai para o `localStorage`. */
-const STORAGE_KEY = 'cobot-nav-collapsed';
+const STORAGE_KEY = 'goodbot-nav-collapsed';
 
 // Mesmo padrão do `ThemeProvider`: o `localStorage` é um store externo, lido
 // por `useSyncExternalStore`. Assim o servidor renderiza tudo aberto e o
@@ -107,7 +107,7 @@ export function AppSidebar({
   return (
     <Sidebar>
       <SidebarHeader className="gap-1 border-b-2 border-base-300 px-4 py-4">
-        <p className="screen-kicker sigil">COBOT</p>
+        <p className="screen-kicker sigil">GOODBOT</p>
         <p className="screen-title text-lg">{guildName}</p>
       </SidebarHeader>
       <SidebarContent>

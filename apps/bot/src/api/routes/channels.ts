@@ -8,7 +8,7 @@ import {
   UserFacingError,
   isEmptyOverride,
   overrideToBits,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import { Hono } from 'hono';
 
@@ -18,13 +18,8 @@ import { toChannelDetail } from '../mappers';
 import { validate } from '../validate';
 
 import type { ApiDeps, ApiEnv } from '../context';
-import type { ChannelOverride } from '@cobot/shared';
-import type {
-  CategoryChannel,
-  Guild,
-  GuildMember,
-  NonThreadGuildBasedChannel,
-} from 'discord.js';
+import type { ChannelOverride } from '@goodbot/shared';
+import type { CategoryChannel, Guild, GuildMember, NonThreadGuildBasedChannel } from 'discord.js';
 
 function requireChannel(guild: Guild, channelId: string): NonThreadGuildBasedChannel {
   const channel = guild.channels.cache.get(channelId);
@@ -112,120 +107,125 @@ function bitState(allow: string, deny: string, flag: bigint): boolean | null {
  * dentro do Discord, para os dois caminhos se desfazerem um ao outro.
  */
 export function createChannelRoutes(deps: ApiDeps): Hono<ApiEnv> {
-  return new Hono<ApiEnv>()
-    .get('/:channelId', (c) => {
-      const guild = c.get('guild');
-      return c.json(toChannelDetail(requireChannel(guild, c.req.param('channelId'))));
-    })
+  return (
+    new Hono<ApiEnv>()
+      .get('/:channelId', (c) => {
+        const guild = c.get('guild');
+        return c.json(toChannelDetail(requireChannel(guild, c.req.param('channelId'))));
+      })
 
-    .post('/', validate('json', ChannelCreateInputSchema), async (c) => {
-      const input = c.req.valid('json');
-      const guild = c.get('guild');
-      const actor = await requireActor(deps, guild, input.actorId, 'admin');
-      const reason = input.reason ?? `Criado pelo painel por ${actor.user.tag}`;
+      .post('/', validate('json', ChannelCreateInputSchema), async (c) => {
+        const input = c.req.valid('json');
+        const guild = c.get('guild');
+        const actor = await requireActor(deps, guild, input.actorId, 'admin');
+        const reason = input.reason ?? `Criado pelo painel por ${actor.user.tag}`;
 
-      const parent = input.type === MANAGED_CHANNEL_TYPES.category ? null : resolveParent(guild, input.parentId);
-      const channel = await guild.channels.create({
-        name: input.name,
-        type: input.type,
-        ...(parent ? { parent } : {}),
-        ...(input.type === MANAGED_CHANNEL_TYPES.category
-          ? {}
-          : {
-              ...(input.topic === null ? {} : { topic: input.topic }),
-              nsfw: input.nsfw,
-              rateLimitPerUser: input.slowmodeSeconds,
-            }),
-        reason,
-      });
-      return c.json(toChannelDetail(channel));
-    })
+        const parent =
+          input.type === MANAGED_CHANNEL_TYPES.category
+            ? null
+            : resolveParent(guild, input.parentId);
+        const channel = await guild.channels.create({
+          name: input.name,
+          type: input.type,
+          ...(parent ? { parent } : {}),
+          ...(input.type === MANAGED_CHANNEL_TYPES.category
+            ? {}
+            : {
+                ...(input.topic === null ? {} : { topic: input.topic }),
+                nsfw: input.nsfw,
+                rateLimitPerUser: input.slowmodeSeconds,
+              }),
+          reason,
+        });
+        return c.json(toChannelDetail(channel));
+      })
 
-    .patch('/:channelId', validate('json', ChannelUpdateInputSchema), async (c) => {
-      const input = c.req.valid('json');
-      const guild = c.get('guild');
-      const actor = await requireActor(deps, guild, input.actorId, 'admin');
-      const channel = requireChannel(guild, c.req.param('channelId'));
-      const reason = input.reason ?? `Editado pelo painel por ${actor.user.tag}`;
+      .patch('/:channelId', validate('json', ChannelUpdateInputSchema), async (c) => {
+        const input = c.req.valid('json');
+        const guild = c.get('guild');
+        const actor = await requireActor(deps, guild, input.actorId, 'admin');
+        const channel = requireChannel(guild, c.req.param('channelId'));
+        const reason = input.reason ?? `Editado pelo painel por ${actor.user.tag}`;
 
-      const parent =
-        channel.type === ChannelType.GuildCategory ? null : resolveParent(guild, input.parentId);
-      const updated = await channel.edit({
-        name: input.name,
-        ...(channel.type === ChannelType.GuildCategory ? {} : { parent }),
-        ...editableFields(channel, input),
-        reason,
-      });
-      return c.json(toChannelDetail(updated));
-    })
+        const parent =
+          channel.type === ChannelType.GuildCategory ? null : resolveParent(guild, input.parentId);
+        const updated = await channel.edit({
+          name: input.name,
+          ...(channel.type === ChannelType.GuildCategory ? {} : { parent }),
+          ...editableFields(channel, input),
+          reason,
+        });
+        return c.json(toChannelDetail(updated));
+      })
 
-    .delete('/:channelId', validate('json', ActorInputSchema), async (c) => {
-      const input = c.req.valid('json');
-      const guild = c.get('guild');
-      const actor = await requireActor(deps, guild, input.actorId, 'admin');
-      const channel = requireChannel(guild, c.req.param('channelId'));
+      .delete('/:channelId', validate('json', ActorInputSchema), async (c) => {
+        const input = c.req.valid('json');
+        const guild = c.get('guild');
+        const actor = await requireActor(deps, guild, input.actorId, 'admin');
+        const channel = requireChannel(guild, c.req.param('channelId'));
 
-      await channel.delete(input.reason ?? `Apagado pelo painel por ${actor.user.tag}`);
-      return c.json({ ok: true as const });
-    })
+        await channel.delete(input.reason ?? `Apagado pelo painel por ${actor.user.tag}`);
+        return c.json({ ok: true as const });
+      })
 
-    .post('/:channelId/slowmode', validate('json', SlowmodeInputSchema), async (c) => {
-      const input = c.req.valid('json');
-      const guild = c.get('guild');
-      const actor = await requireActor(deps, guild, input.actorId, 'admin');
-      const channel = requireChannel(guild, c.req.param('channelId'));
-      if (!('rateLimitPerUser' in channel)) {
-        throw new UserFacingError('Esse canal não tem modo lento.', { code: 'NO_SLOWMODE' });
-      }
+      .post('/:channelId/slowmode', validate('json', SlowmodeInputSchema), async (c) => {
+        const input = c.req.valid('json');
+        const guild = c.get('guild');
+        const actor = await requireActor(deps, guild, input.actorId, 'admin');
+        const channel = requireChannel(guild, c.req.param('channelId'));
+        if (!('rateLimitPerUser' in channel)) {
+          throw new UserFacingError('Esse canal não tem modo lento.', { code: 'NO_SLOWMODE' });
+        }
 
-      const updated = await channel.edit({
-        rateLimitPerUser: input.seconds,
-        reason: input.reason ?? `Modo lento pelo painel por ${actor.user.tag}`,
-      });
-      return c.json(toChannelDetail(updated));
-    })
+        const updated = await channel.edit({
+          rateLimitPerUser: input.seconds,
+          reason: input.reason ?? `Modo lento pelo painel por ${actor.user.tag}`,
+        });
+        return c.json(toChannelDetail(updated));
+      })
 
-    .post('/:channelId/lock', validate('json', ActorInputSchema), async (c) => {
-      const input = c.req.valid('json');
-      const guild = c.get('guild');
-      const actor = await requireActor(deps, guild, input.actorId, 'admin');
-      const channel = requireChannel(guild, c.req.param('channelId'));
+      .post('/:channelId/lock', validate('json', ActorInputSchema), async (c) => {
+        const input = c.req.valid('json');
+        const guild = c.get('guild');
+        const actor = await requireActor(deps, guild, input.actorId, 'admin');
+        const channel = requireChannel(guild, c.req.param('channelId'));
 
-      await channel.permissionOverwrites.edit(
-        guild.roles.everyone,
-        { SendMessages: false },
-        { reason: input.reason ?? `Trancado pelo painel por ${actor.user.tag}` },
-      );
-      return c.json(toChannelDetail(requireChannel(guild, channel.id)));
-    })
+        await channel.permissionOverwrites.edit(
+          guild.roles.everyone,
+          { SendMessages: false },
+          { reason: input.reason ?? `Trancado pelo painel por ${actor.user.tag}` },
+        );
+        return c.json(toChannelDetail(requireChannel(guild, channel.id)));
+      })
 
-    /** Volta a herdar em vez de liberar: o `/unlock` do Discord faz igual. */
-    .post('/:channelId/unlock', validate('json', ActorInputSchema), async (c) => {
-      const input = c.req.valid('json');
-      const guild = c.get('guild');
-      const actor = await requireActor(deps, guild, input.actorId, 'admin');
-      const channel = requireChannel(guild, c.req.param('channelId'));
+      /** Volta a herdar em vez de liberar: o `/unlock` do Discord faz igual. */
+      .post('/:channelId/unlock', validate('json', ActorInputSchema), async (c) => {
+        const input = c.req.valid('json');
+        const guild = c.get('guild');
+        const actor = await requireActor(deps, guild, input.actorId, 'admin');
+        const channel = requireChannel(guild, c.req.param('channelId'));
 
-      await channel.permissionOverwrites.edit(
-        guild.roles.everyone,
-        { SendMessages: null },
-        { reason: input.reason ?? `Destrancado pelo painel por ${actor.user.tag}` },
-      );
-      return c.json(toChannelDetail(requireChannel(guild, channel.id)));
-    })
+        await channel.permissionOverwrites.edit(
+          guild.roles.everyone,
+          { SendMessages: null },
+          { reason: input.reason ?? `Destrancado pelo painel por ${actor.user.tag}` },
+        );
+        return c.json(toChannelDetail(requireChannel(guild, channel.id)));
+      })
 
-    .post('/:channelId/overrides', validate('json', ChannelOverridesInputSchema), async (c) => {
-      const input = c.req.valid('json');
-      const guild = c.get('guild');
-      const actor = await requireActor(deps, guild, input.actorId, 'admin');
-      const channel = requireChannel(guild, c.req.param('channelId'));
-      assertOverridesAllowed(guild, actor, input.overrides);
+      .post('/:channelId/overrides', validate('json', ChannelOverridesInputSchema), async (c) => {
+        const input = c.req.valid('json');
+        const guild = c.get('guild');
+        const actor = await requireActor(deps, guild, input.actorId, 'admin');
+        const channel = requireChannel(guild, c.req.param('channelId'));
+        assertOverridesAllowed(guild, actor, input.overrides);
 
-      await applyOverrides(
-        channel,
-        input.overrides,
-        input.reason ?? `Permissões pelo painel por ${actor.user.tag}`,
-      );
-      return c.json(toChannelDetail(requireChannel(guild, channel.id)));
-    });
+        await applyOverrides(
+          channel,
+          input.overrides,
+          input.reason ?? `Permissões pelo painel por ${actor.user.tag}`,
+        );
+        return c.json(toChannelDetail(requireChannel(guild, channel.id)));
+      })
+  );
 }

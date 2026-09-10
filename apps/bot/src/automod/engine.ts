@@ -1,11 +1,11 @@
-import { deleteAutomodHitsBefore, getAutomodRules, recordAutomodHit } from '@cobot/db';
+import { deleteAutomodHitsBefore, getAutomodRules, recordAutomodHit } from '@goodbot/db';
 import {
   AUTOMOD_HITS_RETENTION_DAYS,
   AutomodRuleSchema,
   DAY_MS,
   MINUTE_MS,
   SECOND_MS,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { PermissionFlagsBits } from 'discord.js';
 
 import { botFooter, warningEmbed } from '../lib/embeds';
@@ -19,8 +19,8 @@ import type { AuditService } from '../services/audit';
 import type { ConfigService } from '../services/config';
 import type { ModerationService } from '../services/moderation';
 import type { ModlogService } from '../services/modlog';
-import type { AutomodRuleRow, Db } from '@cobot/db';
-import type { AutomodActionConfig, AutomodConfig, AutomodRuleType } from '@cobot/shared';
+import type { AutomodRuleRow, Db } from '@goodbot/db';
+import type { AutomodActionConfig, AutomodConfig, AutomodRuleType } from '@goodbot/shared';
 import type { Guild, GuildMember, Message, PartialMessage, User } from 'discord.js';
 
 const log = childLogger('automod');

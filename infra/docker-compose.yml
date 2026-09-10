@@ -3,7 +3,7 @@
 # Supabase (PRD §7.2, §7.5).
 #
 #   docker compose -f infra/docker-compose.yml --env-file .env up -d
-name: cobot
+name: goodbot
 
 x-logging: &logging
   driver: json-file
@@ -17,16 +17,16 @@ services:
     # `pull`. `TAG` fixa um sha específico para rollback:
     #   TAG=sha-1a2b3c4 docker compose ... up -d
     # Para rodar a imagem local (`pnpm docker:build`), sobrescreva as duas:
-    #   BOT_IMAGE=cobot-bot TAG=local
-    image: ${BOT_IMAGE:-ghcr.io/dionathagoulart/cobot-bot}:${TAG:-latest}
-    container_name: cobot-bot
+    #   BOT_IMAGE=goodbot-bot TAG=local
+    image: ${BOT_IMAGE:-ghcr.io/dionathagoulart/goodbot-bot}:${TAG:-latest}
+    container_name: goodbot-bot
     platform: linux/amd64
     # Sem `build:` de propósito: se o pull falhar (credencial do GHCR, por
     # exemplo), o compose cairia em build local e o deploy passaria sem trocar
     # a imagem. Para construir na mão use `pnpm docker:build`.
     restart: unless-stopped
     # Duas origens possíveis, ambas opcionais: `../.env` é a raiz do monorepo
-    # (rodando do repositório) e `./.env` é `/opt/cobot/.env` na VM, onde só o
+    # (rodando do repositório) e `./.env` é `/opt/goodbot/.env` na VM, onde só o
     # compose e o Caddyfile são copiados.
     env_file:
       - path: ../.env
@@ -43,7 +43,7 @@ services:
     # do Compose (PRD §7.3).
     expose:
       - '3001'
-    networks: [cobot]
+    networks: [goodbot]
     volumes:
       - backups:/backups:ro
     mem_limit: 384m
@@ -74,7 +74,7 @@ services:
 
   caddy:
     image: caddy:2-alpine
-    container_name: cobot-caddy
+    container_name: goodbot-caddy
     restart: unless-stopped
     depends_on:
       bot:
@@ -92,7 +92,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    networks: [cobot]
+    networks: [goodbot]
     mem_limit: 64m
     # O Caddy **não** é read_only: ele grava certificados em /data.
     # `NET_BIND_SERVICE` é o que sobra do `cap_drop: ALL` para ouvir em 80/443.
@@ -111,7 +111,7 @@ services:
   # tier não é exportável — este é.
   backup:
     image: postgres:16-alpine
-    container_name: cobot-backup
+    container_name: goodbot-backup
     restart: unless-stopped
     # Sem `env_file`: este container não tem por que enxergar o DISCORD_TOKEN
     # nem o INTERNAL_API_TOKEN. Só o que ele usa, vindo da substituição do
@@ -138,7 +138,7 @@ services:
           fi
           sleep 900
         done
-    networks: [cobot]
+    networks: [goodbot]
     mem_limit: 128m
     pids_limit: 64
     cap_drop: [ALL]
@@ -147,7 +147,7 @@ services:
     logging: *logging
 
 networks:
-  cobot:
+  goodbot:
     driver: bridge
 
 volumes:

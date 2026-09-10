@@ -1,9 +1,9 @@
-import { renderMessageTemplate } from '@cobot/shared';
+import { renderMessageTemplate } from '@goodbot/shared';
 import { EmbedBuilder } from 'discord.js';
 
 import { DEFAULT_EMBED_COLOR } from './embeds';
 
-import type { EmbedTemplate, MessageTemplate, TemplateVars } from '@cobot/shared';
+import type { EmbedTemplate, MessageTemplate, TemplateVars } from '@goodbot/shared';
 import type {
   BaseMessageOptions,
   Guild,

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { InternalApiError } from '@cobot/shared';
+import { InternalApiError } from '@goodbot/shared';
 
 import type { ActionResult } from './module-config';
 

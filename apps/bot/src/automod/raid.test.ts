@@ -1,4 +1,4 @@
-import { MINUTE_MS } from '@cobot/shared';
+import { MINUTE_MS } from '@goodbot/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { RaidService } from './raid';

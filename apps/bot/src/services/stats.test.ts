@@ -1,9 +1,9 @@
-import { DEFAULT_STATS_CONFIG, HOUR_MS, MINUTE_MS } from '@cobot/shared';
+import { DEFAULT_STATS_CONFIG, HOUR_MS, MINUTE_MS } from '@goodbot/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 import { localDayKey, startOfDayInZone, startOfHour, StatsService } from './stats';
 
-import type { StatsConfig } from '@cobot/shared';
+import type { StatsConfig } from '@goodbot/shared';
 
 const GUILD = '100000000000000001';
 const CHANNEL = '200000000000000002';
@@ -54,7 +54,9 @@ function harness(config: Partial<StatsConfig> = {}, timezone = 'America/Sao_Paul
   });
 
   const rows = (): WrittenRow[] =>
-    written.flat().filter((row): row is WrittenRow => typeof row === 'object' && row !== null && 'kind' in row);
+    written
+      .flat()
+      .filter((row): row is WrittenRow => typeof row === 'object' && row !== null && 'kind' in row);
 
   return { stats, rows, setNow: (value) => (now = value) };
 }

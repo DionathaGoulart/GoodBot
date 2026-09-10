@@ -1,16 +1,11 @@
 'use client';
 
-import { BOOST_TEMPLATE_VARIABLES, MEMBER_TEMPLATE_VARIABLES } from '@cobot/shared';
+import { BOOST_TEMPLATE_VARIABLES, MEMBER_TEMPLATE_VARIABLES } from '@goodbot/shared';
 
-import type { WelcomeConfig } from '@cobot/shared';
+import type { WelcomeConfig } from '@goodbot/shared';
 
 import { ConfigForm } from '@/components/config/config-form';
-import {
-  DiscordField,
-  NumberField,
-  SwitchField,
-  TemplateField,
-} from '@/components/config/fields';
+import { DiscordField, NumberField, SwitchField, TemplateField } from '@/components/config/fields';
 import { ModuleToggle } from '@/components/config/module-toggle';
 import { TestSendButton } from '@/components/config/test-send-button';
 import { Panel } from '@/components/retro/panel';

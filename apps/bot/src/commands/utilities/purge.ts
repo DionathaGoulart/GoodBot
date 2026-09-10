@@ -1,4 +1,4 @@
-import { MAX_PURGE, UserFacingError, isSnowflake } from '@cobot/shared';
+import { MAX_PURGE, UserFacingError, isSnowflake } from '@goodbot/shared';
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { runPurge } from './purge-run';
@@ -8,10 +8,7 @@ import { defineCommand } from '../../lib/command';
 import type { PurgeFilters } from '../../lib/purge';
 import type { ChatInputCommandInteraction } from 'discord.js';
 
-function readMessageId(
-  interaction: ChatInputCommandInteraction,
-  name: string,
-): string | undefined {
+function readMessageId(interaction: ChatInputCommandInteraction, name: string): string | undefined {
   const raw = interaction.options.getString(name);
   if (!raw) return undefined;
   if (!isSnowflake(raw)) {
@@ -36,41 +33,39 @@ function readFilters(interaction: ChatInputCommandInteraction): PurgeFilters {
 }
 
 const builder = new SlashCommandBuilder()
-    .setName('purge')
-    .setDescription('Apaga mensagens em lote, com filtros')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
-    .addIntegerOption((option) =>
-      option
-        .setName('quantidade')
-        .setDescription(`Quantas mensagens apagar (1–${MAX_PURGE})`)
-        .setMinValue(1)
-        .setMaxValue(MAX_PURGE)
-        .setRequired(true),
-    )
-    .addUserOption((option) =>
-      option.setName('usuario').setDescription('Só mensagens deste usuário'),
-    )
-    .addBooleanOption((option) =>
-      option.setName('apenas_bots').setDescription('Só mensagens de bots'),
-    )
-    .addStringOption((option) =>
-      option.setName('contem').setDescription('Só mensagens que contenham este texto'),
-    )
-    .addBooleanOption((option) =>
-      option.setName('apenas_links').setDescription('Só mensagens com link'),
-    )
-    .addBooleanOption((option) =>
-      option.setName('apenas_anexos').setDescription('Só mensagens com anexo ou embed'),
-    )
-    .addStringOption((option) =>
-      option.setName('antes_de').setDescription('Só mensagens anteriores a este ID'),
-    )
-    .addStringOption((option) =>
-      option.setName('depois_de').setDescription('Só mensagens posteriores a este ID'),
-    )
-    .addBooleanOption((option) =>
-      option.setName('incluir_fixadas').setDescription('Também apagar mensagens fixadas'),
-    );
+  .setName('purge')
+  .setDescription('Apaga mensagens em lote, com filtros')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+  .addIntegerOption((option) =>
+    option
+      .setName('quantidade')
+      .setDescription(`Quantas mensagens apagar (1–${MAX_PURGE})`)
+      .setMinValue(1)
+      .setMaxValue(MAX_PURGE)
+      .setRequired(true),
+  )
+  .addUserOption((option) => option.setName('usuario').setDescription('Só mensagens deste usuário'))
+  .addBooleanOption((option) =>
+    option.setName('apenas_bots').setDescription('Só mensagens de bots'),
+  )
+  .addStringOption((option) =>
+    option.setName('contem').setDescription('Só mensagens que contenham este texto'),
+  )
+  .addBooleanOption((option) =>
+    option.setName('apenas_links').setDescription('Só mensagens com link'),
+  )
+  .addBooleanOption((option) =>
+    option.setName('apenas_anexos').setDescription('Só mensagens com anexo ou embed'),
+  )
+  .addStringOption((option) =>
+    option.setName('antes_de').setDescription('Só mensagens anteriores a este ID'),
+  )
+  .addStringOption((option) =>
+    option.setName('depois_de').setDescription('Só mensagens posteriores a este ID'),
+  )
+  .addBooleanOption((option) =>
+    option.setName('incluir_fixadas').setDescription('Também apagar mensagens fixadas'),
+  );
 addChannelOption(builder, 'Canal onde apagar (padrão: este)');
 
 export default defineCommand({
@@ -88,7 +83,10 @@ export default defineCommand({
     await runPurge(ctx, {
       channel: resolveTextChannel(interaction),
       filters: readFilters(interaction),
-      amount: Math.min(interaction.options.getInteger('quantidade', true), config.purge.maxPerCommand),
+      amount: Math.min(
+        interaction.options.getInteger('quantidade', true),
+        config.purge.maxPerCommand,
+      ),
       title: 'Purge',
       logToModlog: config.purge.logToModlog,
     });

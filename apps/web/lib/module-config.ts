@@ -9,7 +9,7 @@ import {
   setLogConfig,
   setModuleConfig,
   type ModuleConfigResult,
-} from '@cobot/db';
+} from '@goodbot/db';
 import {
   DEFAULT_GUILD_SETTINGS,
   LOG_KINDS,
@@ -18,7 +18,7 @@ import {
   type LogsPageValues,
   type Module,
   type ModuleConfigInput,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
@@ -180,13 +180,16 @@ async function invalidateBotCache(guildId: string, page: ConfigPage): Promise<st
 
 /**
  * Salva uma página de configuração (PRD §6.2): valida com o schema de
- * `@cobot/shared`, grava, registra a auditoria com o diff, invalida o cache do
+ * `@goodbot/shared`, grava, registra a auditoria com o diff, invalida o cache do
  * bot e revalida a rota. Nada é gravado se a validação falhar.
  *
  * O bot fora do ar **não** desfaz o salvamento: o config já está no banco e o
  * cache dele expira sozinho em minutos — só avisamos no toast.
  */
-export async function saveModuleConfig(page: ConfigPage, formData: FormData): Promise<ActionResult> {
+export async function saveModuleConfig(
+  page: ConfigPage,
+  formData: FormData,
+): Promise<ActionResult> {
   const guildId = defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 

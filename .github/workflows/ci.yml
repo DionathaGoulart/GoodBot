@@ -26,19 +26,19 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: cobot
-          POSTGRES_PASSWORD: cobot
-          POSTGRES_DB: cobot
+          POSTGRES_USER: goodbot
+          POSTGRES_PASSWORD: goodbot
+          POSTGRES_DB: goodbot
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U cobot -d cobot"
+          --health-cmd "pg_isready -U goodbot -d goodbot"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
     env:
-      DATABASE_URL: postgres://cobot:cobot@localhost:5432/cobot
+      DATABASE_URL: postgres://goodbot:goodbot@localhost:5432/goodbot
       NODE_ENV: test
       TZ: America/Sao_Paulo
 

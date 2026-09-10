@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { CASE_SOURCES, CASE_TYPES } from '@cobot/shared';
+import { CASE_SOURCES, CASE_TYPES } from '@goodbot/shared';
 import { useRouter } from 'next/navigation';
 
 import { MemberPicker } from '@/components/config/member-picker';

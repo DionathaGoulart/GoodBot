@@ -15,7 +15,7 @@ import {
   seriesByDayAndKey,
   summary,
   topChannels,
-} from '@cobot/db';
+} from '@goodbot/db';
 import { unstable_cache } from 'next/cache';
 
 import { db } from './db';
@@ -32,7 +32,7 @@ import {
   type Period,
 } from './stats-period';
 
-import type { AuditSource } from '@cobot/shared';
+import type { AuditSource } from '@goodbot/shared';
 
 /**
  * Leituras do dashboard (PRD §6.1). Quase tudo passa por `unstable_cache` de

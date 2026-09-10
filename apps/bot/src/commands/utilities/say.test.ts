@@ -1,4 +1,4 @@
-import { MAX_MESSAGE_CONTENT_LENGTH } from '@cobot/shared';
+import { MAX_MESSAGE_CONTENT_LENGTH } from '@goodbot/shared';
 import { PermissionFlagsBits } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 

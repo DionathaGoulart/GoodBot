@@ -1,5 +1,5 @@
-import { claimDueActions, completeReminder, createCase, getReminder } from '@cobot/db';
-import { DEFAULT_REASON, SECOND_MS } from '@cobot/shared';
+import { claimDueActions, completeReminder, createCase, getReminder } from '@goodbot/db';
+import { DEFAULT_REASON, SECOND_MS } from '@goodbot/shared';
 
 import { botFooter, code, infoEmbed } from '../lib/embeds';
 import { logEmbed } from '../lib/log-embeds';
@@ -12,8 +12,8 @@ import type { ConfigService } from './config';
 import type { LockService } from './locks';
 import type { ModlogService } from './modlog';
 import type { PollService } from './polls';
-import type { Db, ScheduledAction } from '@cobot/db';
-import type { CaseType } from '@cobot/shared';
+import type { Db, ScheduledAction } from '@goodbot/db';
+import type { CaseType } from '@goodbot/shared';
 import type { Client } from 'discord.js';
 
 const log = childLogger('scheduler');
@@ -196,7 +196,7 @@ export class Scheduler {
       targetId,
       targetTag,
       actorId: bot?.id ?? this.deps.client.application?.id ?? targetId,
-      actorTag: bot?.tag ?? 'CoBot',
+      actorTag: bot?.tag ?? 'Goodbot',
       reason: reason || DEFAULT_REASON,
       durationMs: null,
       expiresAt: null,
@@ -270,7 +270,9 @@ export class Scheduler {
       {
         title: 'Lembrete',
         description: pending.text,
-        fields: [{ name: 'Criado em', value: code(pending.createdAt.toISOString()), inline: false }],
+        fields: [
+          { name: 'Criado em', value: code(pending.createdAt.toISOString()), inline: false },
+        ],
         footer: botFooter(`ID: ${pending.id}`),
       },
       settings.embedColor,

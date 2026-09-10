@@ -11,7 +11,7 @@
  * radius, espessura ou sombra.
  */
 
-/* Os componentes shadcn usam a variante `dark:`; no CoBot ela é o tema rose. */
+/* Os componentes shadcn usam a variante `dark:`; no Goodbot ela é o tema rose. */
 @custom-variant dark (&:is([data-theme='rose'] *));
 
 /* ── §2.1 Paleta bruta ───────────────────────────────────────────────────── */

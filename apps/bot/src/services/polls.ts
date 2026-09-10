@@ -1,9 +1,9 @@
-import { closePoll, getPoll } from '@cobot/db';
+import { closePoll, getPoll } from '@goodbot/db';
 
 import { pollMessage } from '../lib/poll-message';
 import { childLogger } from '../logger';
 
-import type { Db, Poll } from '@cobot/db';
+import type { Db, Poll } from '@goodbot/db';
 import type { Client } from 'discord.js';
 
 const log = childLogger('polls');

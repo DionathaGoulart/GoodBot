@@ -19,7 +19,7 @@ const revalidatePath = vi.fn();
 let level: 'mod' | 'admin' = 'admin';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@cobot/db', () => ({
+vi.mock('@goodbot/db', () => ({
   listCasesForTarget: vi.fn(),
   countCasesForTarget: vi.fn(),
 }));
@@ -134,9 +134,7 @@ describe('nível insuficiente', () => {
 
 describe('payloads', () => {
   it('o actorId vem sempre da sessão, nunca do corpo', async () => {
-    await saveRole(
-      form({ role: JSON.stringify({ name: 'Mod', actorId: '999999999999999999' }) }),
-    );
+    await saveRole(form({ role: JSON.stringify({ name: 'Mod', actorId: '999999999999999999' }) }));
 
     expect(createRole).toHaveBeenCalledWith(GUILD_ID, expect.objectContaining({ actorId: ACTOR }));
   });

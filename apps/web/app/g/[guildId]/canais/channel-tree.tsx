@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { MANAGED_CHANNEL_TYPES } from '@cobot/shared';
+import { MANAGED_CHANNEL_TYPES } from '@goodbot/shared';
 import { useRouter } from 'next/navigation';
 
 import { deleteChannelAction, toggleChannelLockAction } from '@/app/actions/guild';
@@ -13,7 +13,7 @@ import { Tag } from '@/components/retro/tag';
 import { ChannelSheet, type ChannelEditing } from './channel-sheet';
 
 import type { ChannelBranch } from '@/lib/channels';
-import type { GuildChannelSummary } from '@cobot/shared';
+import type { GuildChannelSummary } from '@goodbot/shared';
 
 /** O prefixo que o Discord mostra na frente do nome de cada tipo de canal. */
 const PREFIX: Record<number, string> = {
@@ -63,7 +63,9 @@ function ChannelRow({
                   label="TRANCAR"
                   busyLabel="TRANCANDO_"
                   successTitle="TRANCADO"
-                  action={() => toggleChannelLockAction(withChannelId(channel.id, { lock: 'true' }))}
+                  action={() =>
+                    toggleChannelLockAction(withChannelId(channel.id, { lock: 'true' }))
+                  }
                   onDone={onDone}
                 />
                 <ActionButton

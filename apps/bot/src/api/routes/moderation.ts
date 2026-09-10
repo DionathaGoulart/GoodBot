@@ -1,4 +1,4 @@
-import { ModerationActionInputSchema } from '@cobot/shared';
+import { ModerationActionInputSchema } from '@goodbot/shared';
 import { Hono } from 'hono';
 
 import { requireActor } from '../actor';
@@ -7,7 +7,7 @@ import { validate } from '../validate';
 
 import type { ActionResult } from '../../services/moderation';
 import type { ApiDeps, ApiEnv } from '../context';
-import type { ModerationActionInput, ModerationActionResult } from '@cobot/shared';
+import type { ModerationActionInput, ModerationActionResult } from '@goodbot/shared';
 import type { Guild, GuildMember, User } from 'discord.js';
 
 interface Command {

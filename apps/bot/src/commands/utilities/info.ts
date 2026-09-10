@@ -1,5 +1,5 @@
-import { countCasesByType } from '@cobot/db';
-import { CASE_TYPES, UserFacingError } from '@cobot/shared';
+import { countCasesByType } from '@goodbot/db';
+import { CASE_TYPES, UserFacingError } from '@goodbot/shared';
 import {
   ChannelType,
   GuildPremiumTier,
@@ -17,7 +17,7 @@ import { roleMentions } from '../../lib/log-embeds';
 import { fetchMember } from '../../services/moderation';
 import { levelAtLeast } from '../../services/permissions';
 
-import type { CaseType } from '@cobot/shared';
+import type { CaseType } from '@goodbot/shared';
 import type { APIEmbedField, GuildMember } from 'discord.js';
 
 const CASE_TYPE_LABELS: Record<CaseType, string> = {
@@ -188,9 +188,7 @@ export const avatar = defineCommand({
     .setName('avatar')
     .setDescription('Mostra o avatar de um usuário')
     .setDefaultMemberPermissions(PermissionFlagsBits.SendMessages)
-    .addUserOption((option) =>
-      option.setName('usuario').setDescription('De quem (padrão: você)'),
-    ),
+    .addUserOption((option) => option.setName('usuario').setDescription('De quem (padrão: você)')),
   module: 'utilities',
   level: 'member',
   cooldown: 5,

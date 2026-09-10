@@ -1,26 +1,26 @@
 # Somente o Postgres para desenvolvimento local.
 # Uso: docker compose -f infra/docker-compose.dev.yml up -d
-name: cobot-dev
+name: goodbot-dev
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: cobot-dev-postgres
+    container_name: goodbot-dev-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: cobot
-      POSTGRES_PASSWORD: cobot
-      POSTGRES_DB: cobot
+      POSTGRES_USER: goodbot
+      POSTGRES_PASSWORD: goodbot
+      POSTGRES_DB: goodbot
       TZ: America/Sao_Paulo
     ports:
       - '127.0.0.1:5432:5432'
     volumes:
-      - cobot-dev-pgdata:/var/lib/postgresql/data
+      - goodbot-dev-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U cobot -d cobot']
+      test: ['CMD-SHELL', 'pg_isready -U goodbot -d goodbot']
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  cobot-dev-pgdata:
+  goodbot-dev-pgdata:

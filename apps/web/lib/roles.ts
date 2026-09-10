@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { RoleMoveInputSchema, RoleWriteInputSchema } from '@cobot/shared';
+import { RoleMoveInputSchema, RoleWriteInputSchema } from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
@@ -9,7 +9,7 @@ import { defaultGuildId, requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
-import type { GuildRoleSummary } from '@cobot/shared';
+import type { GuildRoleSummary } from '@goodbot/shared';
 
 const PATH = (guildId: string) => `/g/${guildId}/cargos`;
 

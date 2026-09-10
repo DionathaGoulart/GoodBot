@@ -1,9 +1,9 @@
-import { UserFacingError } from '@cobot/shared';
+import { UserFacingError } from '@goodbot/shared';
 import { DiscordAPIError, HTTPError } from 'discord.js';
 
 import { childLogger } from '../logger';
 
-import type { ApiError } from '@cobot/shared';
+import type { ApiError } from '@goodbot/shared';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 const log = childLogger('api');

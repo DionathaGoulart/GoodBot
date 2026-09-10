@@ -15,7 +15,7 @@ import {
   emojiSlotState,
   parseImageDataUrl,
   stickerSlotState,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -48,12 +48,11 @@ import type {
   GuildEmojiSummary,
   GuildStickerSummary,
   SlotState,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 
 /** O que está aberto para apagar; `kind` decide qual action é chamada. */
 type DeleteTarget =
-  | { kind: 'emoji'; item: GuildEmojiSummary }
-  | { kind: 'sticker'; item: GuildStickerSummary };
+  { kind: 'emoji'; item: GuildEmojiSummary } | { kind: 'sticker'; item: GuildStickerSummary };
 
 function SlotLine({ label, state }: { label: string; state: SlotState }) {
   return (
@@ -249,7 +248,7 @@ export function ExpressionsScreen({
                 id="emoji-name"
                 value={emojiName}
                 maxLength={MAX_EMOJI_NAME_LENGTH}
-                placeholder="cobot_ok"
+                placeholder="goodbot_ok"
                 disabled={busy}
                 onChange={(event) => setEmojiName(event.target.value)}
               />
@@ -340,9 +339,7 @@ export function ExpressionsScreen({
                 type="button"
                 className="btn-goodchat"
                 disabled={
-                  busy ||
-                  !emojiNameOk ||
-                  (!editingEmoji && (!emojiImage || targetSlots.full))
+                  busy || !emojiNameOk || (!editingEmoji && (!emojiImage || targetSlots.full))
                 }
                 onClick={() => void submitEmoji()}
               >

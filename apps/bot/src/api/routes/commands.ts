@@ -4,7 +4,7 @@ import { isUserContextCommand } from '../../lib/command';
 
 import type { AnyCommand } from '../../lib/command';
 import type { ApiDeps, ApiEnv } from '../context';
-import type { CommandSummary } from '@cobot/shared';
+import type { CommandSummary } from '@goodbot/shared';
 import type { APIApplicationCommandOption } from 'discord.js';
 
 /** `1` = subcomando, `2` = grupo de subcomandos (enum do Discord). */

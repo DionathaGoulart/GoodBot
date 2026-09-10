@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { TagInputSchema, type TagInput } from '@cobot/shared';
+import { TagInputSchema, type TagInput } from '@goodbot/shared';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';

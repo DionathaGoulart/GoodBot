@@ -6,7 +6,7 @@ import { loadRoles } from '@/lib/roles';
 
 import { RolesTable } from './roles-table';
 
-export const metadata = { title: 'Cargos · CoBot' };
+export const metadata = { title: 'Cargos · Goodbot' };
 
 export default async function RolesPage({ params }: PageProps<'/g/[guildId]/cargos'>) {
   const { guildId } = await params;
@@ -25,10 +25,7 @@ export default async function RolesPage({ params }: PageProps<'/g/[guildId]/carg
         <ErrorState description={error} />
       ) : (
         // `@everyone` tem o ID da guild e não é gerenciável: fica fora da lista.
-        <RolesTable
-          roles={roles.filter((role) => role.id !== guildId)}
-          readOnly={readOnly}
-        />
+        <RolesTable roles={roles.filter((role) => role.id !== guildId)} readOnly={readOnly} />
       )}
     </>
   );

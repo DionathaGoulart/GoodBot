@@ -8,12 +8,12 @@ import {
   normalizeTagName,
   updateTag,
   useTag,
-} from '@cobot/db';
+} from '@goodbot/db';
 import {
   MAX_MESSAGE_CONTENT_LENGTH,
   MessageTemplateSchema,
   UserFacingError,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { PermissionFlagsBits, SlashCommandBuilder, time, TimestampStyles } from 'discord.js';
 
 import { defineCommand } from '../../lib/command';
@@ -24,7 +24,7 @@ import { memberVars, templateToMessage } from '../../lib/template';
 import { levelAtLeast } from '../../services/permissions';
 
 import type { CommandContext } from '../../lib/command';
-import type { TagsConfig } from '@cobot/shared';
+import type { TagsConfig } from '@goodbot/shared';
 
 /** Nome de tag: sem espaço, para caber num `/tag nome:`. */
 const MAX_NAME_LENGTH = 32;
@@ -75,11 +75,7 @@ export const tag = defineCommand({
     .setDescription('Envia uma tag salva')
     .setDefaultMemberPermissions(PermissionFlagsBits.SendMessages)
     .addStringOption((option) =>
-      option
-        .setName('nome')
-        .setDescription('Nome da tag')
-        .setAutocomplete(true)
-        .setRequired(true),
+      option.setName('nome').setDescription('Nome da tag').setAutocomplete(true).setRequired(true),
     ),
   module: 'tags',
   level: 'member',
@@ -92,9 +88,7 @@ export const tag = defineCommand({
     }
     const names = await listTagNames(db, guildId);
     const query = interaction.options.getFocused();
-    await interaction.respond(
-      matchTagNames(names, query).map((name) => ({ name, value: name })),
-    );
+    await interaction.respond(matchTagNames(names, query).map((name) => ({ name, value: name })));
   },
   async execute(ctx) {
     const config = await tagsConfig(ctx);
@@ -312,10 +306,9 @@ export const tags = defineCommand({
 
     const total = await countTags(ctx.db, ctx.guildId);
     if (total >= config.maxTags) {
-      throw new UserFacingError(
-        `Este servidor já tem ${total} tags (máx. ${config.maxTags}).`,
-        { code: 'TAG_LIMIT' },
-      );
+      throw new UserFacingError(`Este servidor já tem ${total} tags (máx. ${config.maxTags}).`, {
+        code: 'TAG_LIMIT',
+      });
     }
 
     const created = await createTag(ctx.db, {

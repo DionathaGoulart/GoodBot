@@ -1,4 +1,4 @@
-import { ActorInputSchema, CreateInviteInputSchema, UserFacingError } from '@cobot/shared';
+import { ActorInputSchema, CreateInviteInputSchema, UserFacingError } from '@goodbot/shared';
 import { ChannelType } from 'discord.js';
 import { Hono } from 'hono';
 
@@ -7,7 +7,7 @@ import { forbidden, notFound } from '../errors';
 import { validate } from '../validate';
 
 import type { ApiDeps, ApiEnv } from '../context';
-import type { GuildInviteSummary } from '@cobot/shared';
+import type { GuildInviteSummary } from '@goodbot/shared';
 import type { Guild, GuildBasedChannel, Invite } from 'discord.js';
 
 /** Onde um convite pode nascer: canal onde alguém entra e fica. */
@@ -115,7 +115,10 @@ export function createInviteRoutes(deps: ApiDeps): Hono<ApiEnv> {
       const invites = await guild.invites.fetch({ cache: false });
       if (!invites.has(code)) throw notFound('Convite não encontrado.', 'INVITE_NOT_FOUND');
 
-      await guild.invites.delete(code, input.reason ?? `Revogado pelo painel por ${actor.user.tag}`);
+      await guild.invites.delete(
+        code,
+        input.reason ?? `Revogado pelo painel por ${actor.user.tag}`,
+      );
       return c.json({ ok: true as const });
     });
 }

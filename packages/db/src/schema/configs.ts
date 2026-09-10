@@ -4,7 +4,7 @@ import { createdAt, snowflake, snowflakeArray, text, updatedAt } from './_column
 import { logKindEnum, moduleEnum } from './enums';
 import { guilds } from './guilds';
 
-import type { DmOnPunish } from '@cobot/shared';
+import type { DmOnPunish } from '@goodbot/shared';
 
 /** Preferências gerais da guild (PRD §8). */
 export const guildSettings = pgTable('guild_settings', {
@@ -24,7 +24,7 @@ export const guildSettings = pgTable('guild_settings', {
   updatedAt: updatedAt(),
 });
 
-/** Config jsonb por módulo, validado pelo Zod de `@cobot/shared`. */
+/** Config jsonb por módulo, validado pelo Zod de `@goodbot/shared`. */
 export const moduleConfigs = pgTable(
   'module_configs',
   {

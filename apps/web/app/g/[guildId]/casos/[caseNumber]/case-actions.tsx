@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { MAX_REASON_LENGTH } from '@cobot/shared';
+import { MAX_REASON_LENGTH } from '@goodbot/shared';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 

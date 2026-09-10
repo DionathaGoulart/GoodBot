@@ -44,10 +44,10 @@ importers:
 
   apps/bot:
     dependencies:
-      '@cobot/db':
+      '@goodbot/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@cobot/shared':
+      '@goodbot/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@hono/node-server':
@@ -96,15 +96,15 @@ importers:
 
   apps/web:
     dependencies:
-      '@cobot/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@cobot/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@fontsource-variable/jetbrains-mono':
         specifier: ^5.3.0
         version: 5.3.0
+      '@goodbot/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@goodbot/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@hookform/resolvers':
         specifier: ^5.9.1
         version: 5.9.1(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.87.0(react@19.2.8))(zod@4.5.4)
@@ -214,7 +214,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@cobot/shared':
+      '@goodbot/shared':
         specifier: workspace:*
         version: link:../shared
       drizzle-orm:
@@ -248,7 +248,7 @@ importers:
 
   packages/guild-config:
     dependencies:
-      '@cobot/shared':
+      '@goodbot/shared':
         specifier: workspace:*
         version: link:../shared
       yaml:

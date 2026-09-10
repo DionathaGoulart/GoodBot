@@ -8,8 +8,8 @@ import {
   getAutomodRules,
   reorderAutomodRules,
   updateAutomodRule,
-} from '@cobot/db';
-import { AutomodRuleSchema, DAY_MS, type AutomodRule, type RaidModeState } from '@cobot/shared';
+} from '@goodbot/db';
+import { AutomodRuleSchema, DAY_MS, type AutomodRule, type RaidModeState } from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';

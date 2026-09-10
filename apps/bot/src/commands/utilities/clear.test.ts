@@ -1,4 +1,4 @@
-import { MAX_PURGE } from '@cobot/shared';
+import { MAX_PURGE } from '@goodbot/shared';
 import { PermissionFlagsBits } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 

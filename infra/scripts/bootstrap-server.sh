@@ -8,12 +8,12 @@
 #   sudo bash infra/scripts/bootstrap-server.sh
 #
 # Faz: swap de 2 GB, portas 80/443 no iptables da Oracle, Docker Engine,
-# /opt/cobot com o compose, o Caddyfile e um .env esqueleto, fail2ban na API
+# /opt/goodbot com o compose, o Caddyfile e um .env esqueleto, fail2ban na API
 # e um `docker system prune` semanal.
 # Não faz (⚠️ ação manual): VCN/Security List, DNS, preencher o .env.
 set -euo pipefail
 
-APP_DIR=/opt/cobot
+APP_DIR=/opt/goodbot
 SERVICE_USER=${SUDO_USER:-ubuntu}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
@@ -79,7 +79,7 @@ fi
 usermod -aG docker "$SERVICE_USER"
 systemctl enable --now docker
 
-# ── 4. /opt/cobot ────────────────────────────────────────────────────────────
+# ── 4. /opt/goodbot ────────────────────────────────────────────────────────────
 log "Diretório $APP_DIR"
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 750 "$APP_DIR"
 
@@ -134,12 +134,12 @@ if ! command -v fail2ban-client >/dev/null; then
   DEBIAN_FRONTEND=noninteractive apt-get update -qq
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fail2ban
 fi
-if [[ -f "$HERE/fail2ban/cobot-api.conf" ]]; then
-  install -m 644 "$HERE/fail2ban/cobot-api.conf" /etc/fail2ban/filter.d/cobot-api.conf
-  install -m 644 "$HERE/fail2ban/jail.local" /etc/fail2ban/jail.d/cobot.local
+if [[ -f "$HERE/fail2ban/goodbot-api.conf" ]]; then
+  install -m 644 "$HERE/fail2ban/goodbot-api.conf" /etc/fail2ban/filter.d/goodbot-api.conf
+  install -m 644 "$HERE/fail2ban/jail.local" /etc/fail2ban/jail.d/goodbot.local
   systemctl enable --now fail2ban
   systemctl restart fail2ban
-  fail2ban-client status cobot-api || echo 'aviso: a jail não subiu — confira o backend do log (jail.local).' >&2
+  fail2ban-client status goodbot-api || echo 'aviso: a jail não subiu — confira o backend do log (jail.local).' >&2
 else
   echo "aviso: $HERE/fail2ban não encontrado — copie manualmente." >&2
 fi
@@ -147,13 +147,13 @@ fi
 # ── 6. Faxina semanal do Docker ──────────────────────────────────────────────
 # O disco da VM é pequeno e cada deploy deixa uma imagem antiga para trás.
 log 'docker system prune semanal'
-cat >/etc/cron.weekly/cobot-docker-prune <<'CRON'
+cat >/etc/cron.weekly/goodbot-docker-prune <<'CRON'
 #!/bin/sh
 # Remove imagens, containers e redes sem uso. `--volumes` NUNCA: o volume
 # `backups` e o `caddy_data` (certificados) moram aqui.
 docker system prune -af --filter 'until=168h' >/dev/null 2>&1
 CRON
-chmod 755 /etc/cron.weekly/cobot-docker-prune
+chmod 755 /etc/cron.weekly/goodbot-docker-prune
 
 log 'Pronto'
 cat <<TXT

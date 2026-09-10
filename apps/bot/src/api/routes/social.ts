@@ -5,13 +5,13 @@ import {
   getSocialAccount,
   listSocialAccounts,
   updateSocialAccount,
-} from '@cobot/db';
+} from '@goodbot/db';
 import {
   MAX_SOCIAL_ACCOUNTS,
   SocialAccountInputSchema,
   SocialResolveInputSchema,
   UserFacingError,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { Hono } from 'hono';
 
 import { childLogger } from '../../logger';
@@ -21,14 +21,14 @@ import { ApiHttpError, notFound } from '../errors';
 import { validate } from '../validate';
 
 import type { ApiDeps, ApiEnv } from '../context';
-import type { SocialAccount } from '@cobot/db';
+import type { SocialAccount } from '@goodbot/db';
 import type {
   SocialAccountInput,
   SocialAccountSummary,
   SocialOverview,
   SocialResolveResult,
   SocialTestResult,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import type { Guild, GuildTextBasedChannel } from 'discord.js';
 
 const log = childLogger('api');

@@ -27,7 +27,7 @@ import { DiscordPicker } from './discord-picker';
 import { DurationInput } from './duration-input';
 import { TemplateEditor, type TemplatePreviewMode } from './template-editor';
 
-import type { MessageTemplate, TemplateVariable } from '@cobot/shared';
+import type { MessageTemplate, TemplateVariable } from '@goodbot/shared';
 
 /**
  * Os campos das telas de configuração. Todos falam com o react-hook-form pelo

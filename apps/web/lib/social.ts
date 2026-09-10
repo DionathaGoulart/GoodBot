@@ -6,7 +6,7 @@ import {
   type SocialAccountInput,
   type SocialOverview,
   type SocialResolveResult,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';

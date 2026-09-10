@@ -6,7 +6,7 @@ import { searchMembers } from '@/lib/members';
 
 import { MembersTable } from './members-table';
 
-export const metadata = { title: 'Membros · CoBot' };
+export const metadata = { title: 'Membros · Goodbot' };
 
 export default async function MembersPage({
   params,
@@ -34,12 +34,7 @@ export default async function MembersPage({
       {error ? (
         <ErrorState description={error} />
       ) : (
-        <MembersTable
-          guildId={guildId}
-          members={members}
-          roleNames={roleNames}
-          query={query}
-        />
+        <MembersTable guildId={guildId} members={members} roleNames={roleNames} query={query} />
       )}
     </>
   );

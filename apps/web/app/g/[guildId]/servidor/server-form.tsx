@@ -11,7 +11,7 @@ import {
   VERIFICATION_LEVELS,
   guildGates,
   parseImageDataUrl,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { toast } from 'sonner';
 
 import { saveGuildProfileAction } from '@/app/actions/guild';
@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
-import type { GuildProfile } from '@cobot/shared';
+import type { GuildProfile } from '@goodbot/shared';
 
 /**
  * Uma imagem do formulário tem três estados, e os três precisam existir:
@@ -257,7 +257,10 @@ export function ServerForm({ profile, readOnly }: { profile: GuildProfile; readO
 
       <fieldset disabled={locked} className="flex min-w-0 flex-col gap-6">
         <Panel title="IDENTIDADE.CFG">
-          <Field label="Nome" hint={`De ${String(MIN_GUILD_NAME_LENGTH)} a ${String(MAX_GUILD_NAME_LENGTH)} caracteres.`}>
+          <Field
+            label="Nome"
+            hint={`De ${String(MIN_GUILD_NAME_LENGTH)} a ${String(MAX_GUILD_NAME_LENGTH)} caracteres.`}
+          >
             <Input
               value={values.name}
               maxLength={MAX_GUILD_NAME_LENGTH}
@@ -303,7 +306,10 @@ export function ServerForm({ profile, readOnly }: { profile: GuildProfile; readO
         </Panel>
 
         <Panel title="MODERACAO.CFG">
-          <Field label="Nível de verificação" hint="Quanto o Discord exige antes de deixar alguém falar.">
+          <Field
+            label="Nível de verificação"
+            hint="Quanto o Discord exige antes de deixar alguém falar."
+          >
             <Select
               value={String(values.verificationLevel)}
               disabled={locked}
@@ -369,12 +375,7 @@ export function ServerForm({ profile, readOnly }: { profile: GuildProfile; readO
         <p className="screen-meta">MODO LEITURA · SÓ ADMIN PODE SALVAR</p>
       ) : dirty ? (
         <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-4 border-t-2 border-base-300 bg-base-100 px-4 py-3 sm:-mx-6 sm:px-6">
-          <button
-            type="button"
-            className="btn-goodchat-outline"
-            disabled={saving}
-            onClick={reset}
-          >
+          <button type="button" className="btn-goodchat-outline" disabled={saving} onClick={reset}>
             DESCARTAR
           </button>
           <button type="submit" className="btn-goodchat" disabled={saving}>

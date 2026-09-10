@@ -1,4 +1,4 @@
-import { formatDuration } from '@cobot/shared';
+import { formatDuration } from '@goodbot/shared';
 import { AuditLogEvent, Events, time, TimestampStyles } from 'discord.js';
 
 import { findAuditEntry } from '../../lib/audit-log';
@@ -17,7 +17,7 @@ import {
 import { fieldValue } from '../../services/logs';
 
 import type { BotContext } from '../../lib/command';
-import type { LogsConfig } from '@cobot/shared';
+import type { LogsConfig } from '@goodbot/shared';
 import type { APIEmbedField, GuildMember, PartialGuildMember } from 'discord.js';
 
 async function logsConfig(ctx: BotContext, guildId: string): Promise<LogsConfig> {
@@ -191,7 +191,7 @@ export const guildMemberUpdate = defineEvent(
 );
 
 /**
- * Ban/unban feitos fora do bot. Quando o executor é o próprio CoBot o caso já
+ * Ban/unban feitos fora do bot. Quando o executor é o próprio Goodbot o caso já
  * foi para o mod-log, e repetir aqui duplicaria o registro (PRD §5.4).
  */
 export const guildBanAdd = defineEvent(Events.GuildBanAdd, async (ctx, ban) => {

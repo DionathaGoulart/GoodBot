@@ -4,7 +4,7 @@ import {
   getPanel,
   getTicket,
   getTicketPanel,
-} from '@cobot/db';
+} from '@goodbot/db';
 import {
   CloseTicketInputSchema,
   MessageTemplateSchema,
@@ -14,7 +14,7 @@ import {
   PublishPanelInputSchema,
   SendMessageInputSchema,
   UserFacingError,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { PermissionFlagsBits } from 'discord.js';
 import { Hono } from 'hono';
 
@@ -35,7 +35,7 @@ import type {
   CloseTicketResult,
   MessageTemplate,
   SendMessageResult,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import type {
   Embed,
   Guild,

@@ -4,10 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
-import {
-  deleteAutomodRuleAction,
-  reorderAutomodRulesAction,
-} from '@/app/actions/modules';
+import { deleteAutomodRuleAction, reorderAutomodRulesAction } from '@/app/actions/modules';
 import { ConfirmButton } from '@/components/config/confirm-button';
 import { DataTable, moveRow, type PanelColumnDef } from '@/components/data-table';
 import { Panel } from '@/components/retro/panel';

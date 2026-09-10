@@ -1,7 +1,7 @@
-import { MANAGED_CHANNEL_TYPES, PERMISSION_NAMES } from '@cobot/shared';
+import { MANAGED_CHANNEL_TYPES, PERMISSION_NAMES } from '@goodbot/shared';
 import { z } from 'zod';
 
-import type { ManagedChannelType, PermissionName } from '@cobot/shared';
+import type { ManagedChannelType, PermissionName } from '@goodbot/shared';
 
 /**
  * O `guild.yaml` descreve o servidor por **nome**, nunca por ID. Dois motivos:

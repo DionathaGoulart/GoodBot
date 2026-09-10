@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { MAX_TIMEOUT_MS, MAX_REASON_LENGTH, HOUR_MS } from '@cobot/shared';
+import { MAX_TIMEOUT_MS, MAX_REASON_LENGTH, HOUR_MS } from '@goodbot/shared';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -20,7 +20,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-import type { GuildMemberDetail } from '@cobot/shared';
+import type { GuildMemberDetail } from '@goodbot/shared';
 
 type ActionType = 'ban' | 'kick' | 'timeout' | 'warn' | 'note';
 
@@ -172,7 +172,9 @@ export function MemberModeration({ member }: { member: GuildMemberDetail }) {
               <div className="flex flex-col gap-2">
                 <Label htmlFor="punish-duration">
                   Duração
-                  {spec.duration === 'required' ? <span className="text-accent-text"> *</span> : null}
+                  {spec.duration === 'required' ? (
+                    <span className="text-accent-text"> *</span>
+                  ) : null}
                 </Label>
                 <DurationInput
                   id="punish-duration"

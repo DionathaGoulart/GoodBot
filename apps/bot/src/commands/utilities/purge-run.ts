@@ -1,4 +1,4 @@
-import { SECOND_MS } from '@cobot/shared';
+import { SECOND_MS } from '@goodbot/shared';
 
 import { botFooter, code, successEmbed } from '../../lib/embeds';
 import { logEmbed } from '../../lib/log-embeds';
@@ -136,7 +136,11 @@ export async function runPurge(ctx: CommandContext, request: PurgeRequest): Prom
           title,
           tone: 'delete',
           fields: [
-            { name: 'Moderador', value: `<@${ctx.member.id}>\n${code(ctx.member.id)}`, inline: true },
+            {
+              name: 'Moderador',
+              value: `<@${ctx.member.id}>\n${code(ctx.member.id)}`,
+              inline: true,
+            },
             { name: 'Canal', value: `<#${channel.id}>`, inline: true },
             { name: 'Apagadas', value: `${deleted}`, inline: true },
             { name: 'Filtros', value: describeFilters(filters), inline: false },

@@ -1,4 +1,4 @@
-import { MAX_SLOWMODE_SECONDS, UserFacingError, formatDuration } from '@cobot/shared';
+import { MAX_SLOWMODE_SECONDS, UserFacingError, formatDuration } from '@goodbot/shared';
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { addChannelOption, requireUtilities, resolveChannel } from './shared';
@@ -32,14 +32,16 @@ export default defineCommand({
     const config = await requireUtilities(ctx);
     const seconds = ctx.interaction.options.getInteger('segundos', true);
     if (seconds > config.slowmode.maxSeconds) {
-      throw new UserFacingError(
-        `O máximo configurado aqui é ${config.slowmode.maxSeconds}s.`,
-        { code: 'SLOWMODE_TOO_LONG' },
-      );
+      throw new UserFacingError(`O máximo configurado aqui é ${config.slowmode.maxSeconds}s.`, {
+        code: 'SLOWMODE_TOO_LONG',
+      });
     }
 
     const channel = resolveChannel(ctx.interaction);
-    if (channel.type === ChannelType.GuildCategory || channel.type === ChannelType.GuildStageVoice) {
+    if (
+      channel.type === ChannelType.GuildCategory ||
+      channel.type === ChannelType.GuildStageVoice
+    ) {
       throw new UserFacingError('Esse tipo de canal não tem modo lento.', {
         code: 'BAD_CHANNEL',
       });

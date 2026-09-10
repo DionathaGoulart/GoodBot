@@ -4,7 +4,7 @@ import {
   deleteSocialAccount,
   getSocialAccount,
   listSocialAccounts,
-} from '@cobot/db';
+} from '@goodbot/db';
 import {
   MAX_SOCIAL_ACCOUNTS,
   SOCIAL_DEFAULT_TEMPLATE,
@@ -14,7 +14,7 @@ import {
   SOCIAL_PLATFORM,
   SocialAccountInputSchema,
   UserFacingError,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { defineCommand } from '../../lib/command';
@@ -23,7 +23,7 @@ import { buildSocialMessage, sampleSocialItem } from '../../services/social/anno
 import { SocialProviderError } from '../../services/social/types';
 
 import type { CommandContext } from '../../lib/command';
-import type { SocialAccount } from '@cobot/db';
+import type { SocialAccount } from '@goodbot/db';
 
 /** Como uma conta aparece na lista e no autocomplete. */
 function label(account: SocialAccount): string {

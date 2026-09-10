@@ -1,5 +1,5 @@
-import { setAutomodRuleEnabled } from '@cobot/db';
-import { MAX_MESSAGE_CONTENT_LENGTH, UserFacingError } from '@cobot/shared';
+import { setAutomodRuleEnabled } from '@goodbot/db';
+import { MAX_MESSAGE_CONTENT_LENGTH, UserFacingError } from '@goodbot/shared';
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { RULE_TYPE_LABELS, resolveRule, ruleChoices } from './shared';
@@ -15,7 +15,8 @@ function ruleLine(loaded: LoadedRule): string {
   const actions = rule.actions.map((action) => action.type).join(', ');
   const exemptions: string[] = [];
   if (rule.exemptRoleIds.length > 0) exemptions.push(`${rule.exemptRoleIds.length} cargo(s)`);
-  if (rule.exemptChannelIds.length > 0) exemptions.push(`${rule.exemptChannelIds.length} canal(is)`);
+  if (rule.exemptChannelIds.length > 0)
+    exemptions.push(`${rule.exemptChannelIds.length} canal(is)`);
   const suffix = exemptions.length > 0 ? ` · isenta ${exemptions.join(' e ')}` : '';
 
   return (
@@ -137,7 +138,9 @@ export default defineCommand({
     .setName('automod')
     .setDescription('Regras de automod')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addSubcommand((sub) => sub.setName('list').setDescription('Lista as regras e o estado de cada uma'))
+    .addSubcommand((sub) =>
+      sub.setName('list').setDescription('Lista as regras e o estado de cada uma'),
+    )
     .addSubcommand((sub) =>
       sub
         .setName('toggle')

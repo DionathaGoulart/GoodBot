@@ -112,10 +112,7 @@ export const LIVE_SEM_TRANSMISSAO = `<!DOCTYPE html><html lang="pt-BR"><head>
 </head><body></body></html>`;
 
 /** A mesma página, mas com o `<link rel="canonical">` fora do ar. */
-export const LIVE_SEM_CANONICAL = LIVE_SEM_TRANSMISSAO.replace(
-  /<link rel="canonical"[^>]*>\n/,
-  '',
-);
+export const LIVE_SEM_CANONICAL = LIVE_SEM_TRANSMISSAO.replace(/<link rel="canonical"[^>]*>\n/, '');
 
 /**
  * `GET watch?v=jNQXAC9IVRw` de um vídeo comum. Recorte real — e aqui as tags

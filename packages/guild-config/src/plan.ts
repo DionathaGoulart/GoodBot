@@ -1,9 +1,9 @@
-import { MANAGED_CHANNEL_TYPES, PERMISSION_BITS, permissionsToBitfield } from '@cobot/shared';
+import { MANAGED_CHANNEL_TYPES, PERMISSION_BITS, permissionsToBitfield } from '@goodbot/shared';
 
 import { EVERYONE } from './schema';
 
 import type { CategorySpec, ChannelSpec, GuildSpec, OverrideSpec, RoleSpec } from './schema';
-import type { GuildChannelDetail, GuildChannelSummary, GuildRoleSummary } from '@cobot/shared';
+import type { GuildChannelDetail, GuildChannelSummary, GuildRoleSummary } from '@goodbot/shared';
 
 /**
  * Toda operação aponta para o alvo **pelo nome**, nunca por ID. Um `create`

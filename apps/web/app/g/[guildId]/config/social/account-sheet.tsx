@@ -11,7 +11,7 @@ import {
   SocialAccountInputSchema,
   type SocialAccountInput,
   type SocialKind,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { useFormContext, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 

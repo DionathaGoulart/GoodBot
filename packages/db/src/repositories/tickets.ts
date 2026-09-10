@@ -5,7 +5,7 @@ import { guilds } from '../schema/guilds';
 
 import type { DbExecutor } from '../client';
 import type { Ticket, TicketPanel, TicketType } from '../types';
-import type { MessageTemplate } from '@cobot/shared';
+import type { MessageTemplate } from '@goodbot/shared';
 
 async function ensureGuild(db: DbExecutor, guildId: string): Promise<void> {
   await db

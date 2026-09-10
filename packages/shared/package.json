@@ -1,5 +1,5 @@
 {
-  "name": "@cobot/shared",
+  "name": "@goodbot/shared",
   "version": "0.0.0",
   "private": true,
   "description": "Schemas Zod, tipos e constantes compartilhados entre bot e painel",

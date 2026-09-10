@@ -6,8 +6,8 @@ import { isStale, resolveGuildLevel, retryAt } from '@/lib/auth/resolve';
 
 import type { AccessLevel } from '@/lib/auth/access';
 
-/** Campos que o CoBot guarda no JWT, além dos do Auth.js. */
-interface CobotToken {
+/** Campos que o Goodbot guarda no JWT, além dos do Auth.js. */
+interface GoodbotToken {
   sub?: string;
   name?: string | null;
   picture?: string | null;
@@ -53,15 +53,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
     ],
     callbacks: {
       async jwt({ token, account, profile }) {
-        const cobot = token as CobotToken;
+        const goodbot = token as GoodbotToken;
 
         // Só existem no login; das renovações em diante vale o que ficou aqui.
-        if (account?.providerAccountId) cobot.discordId = account.providerAccountId;
-        else if (typeof profile?.id === 'string') cobot.discordId = profile.id;
+        if (account?.providerAccountId) goodbot.discordId = account.providerAccountId;
+        else if (typeof profile?.id === 'string') goodbot.discordId = profile.id;
 
-        const userId = cobot.discordId;
+        const userId = goodbot.discordId;
         if (!userId) return token;
-        if (cobot.guildId === config.GUILD_ID && !isStale(cobot.checkedAt)) return token;
+        if (goodbot.guildId === config.GUILD_ID && !isStale(goodbot.checkedAt)) return token;
 
         // Um `jwt` que lança faz o Auth.js descartar o token inteiro, e o
         // painel cai em `/login` no meio da sessão. Falar com a API do bot é a
@@ -69,25 +69,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
         // devolve 429 (a Vercel sai toda pelo mesmo IP) e a permissão não tem
         // como ser confirmada. Nesse caso vale o nível que já estava no token.
         try {
-          cobot.level = await resolveGuildLevel(userId);
-          cobot.guildId = config.GUILD_ID;
-          cobot.checkedAt = Date.now();
+          goodbot.level = await resolveGuildLevel(userId);
+          goodbot.guildId = config.GUILD_ID;
+          goodbot.checkedAt = Date.now();
         } catch {
           // Sem nível anterior desta guild não há o que preservar; segue sem
           // permissão e tenta de novo na próxima requisição.
-          if (cobot.guildId !== config.GUILD_ID || !cobot.level) return token;
-          cobot.checkedAt = retryAt();
+          if (goodbot.guildId !== config.GUILD_ID || !goodbot.level) return token;
+          goodbot.checkedAt = retryAt();
         }
         return token;
       },
       session({ session, token }) {
-        const cobot = token as CobotToken;
-        session.user.id = cobot.discordId ?? '';
-        session.user.name = cobot.name ?? 'desconhecido';
-        session.user.image = cobot.picture ?? null;
-        session.level = cobot.level ?? 'none';
-        session.guildId = cobot.guildId ?? config.GUILD_ID;
-        session.checkedAt = cobot.checkedAt ?? 0;
+        const goodbot = token as GoodbotToken;
+        session.user.id = goodbot.discordId ?? '';
+        session.user.name = goodbot.name ?? 'desconhecido';
+        session.user.image = goodbot.picture ?? null;
+        session.level = goodbot.level ?? 'none';
+        session.guildId = goodbot.guildId ?? config.GUILD_ID;
+        session.checkedAt = goodbot.checkedAt ?? 0;
         return session;
       },
     },

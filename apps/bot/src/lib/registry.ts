@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
 
-import { getCommandsHash, setCommandsHash } from '@cobot/db';
+import { getCommandsHash, setCommandsHash } from '@goodbot/db';
 import { REST, Routes } from 'discord.js';
 
 import { childLogger } from '../logger';
 
 import type { AnyCommand } from './command';
-import type { Db } from '@cobot/db';
+import type { Db } from '@goodbot/db';
 import type { RESTPostAPIApplicationCommandsJSONBody } from 'discord.js';
 
 const log = childLogger('registry');

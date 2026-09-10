@@ -37,10 +37,7 @@ export async function getChannelLock(
   return row ?? null;
 }
 
-export async function listChannelLocks(
-  db: DbExecutor,
-  guildId: string,
-): Promise<ChannelLock[]> {
+export async function listChannelLocks(db: DbExecutor, guildId: string): Promise<ChannelLock[]> {
   return db.select().from(channelLocks).where(eq(channelLocks.guildId, guildId));
 }
 

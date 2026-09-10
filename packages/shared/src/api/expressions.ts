@@ -76,7 +76,10 @@ export function stickerSlotState(limits: ExpressionLimits): SlotState {
 }
 
 /** A recusa com a contagem dentro — é isso que o usuário precisa ler. */
-export function slotsFullMessage(kind: 'emoji-static' | 'emoji-animated' | 'sticker', state: SlotState): string {
+export function slotsFullMessage(
+  kind: 'emoji-static' | 'emoji-animated' | 'sticker',
+  state: SlotState,
+): string {
   const what =
     kind === 'sticker'
       ? 'stickers'

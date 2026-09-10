@@ -3,16 +3,11 @@
 import { useFormContext } from 'react-hook-form';
 
 import { ConfigForm } from '@/components/config/config-form';
-import {
-  DiscordField,
-  NumberField,
-  SwitchField,
-  TextField,
-} from '@/components/config/fields';
+import { DiscordField, NumberField, SwitchField, TextField } from '@/components/config/fields';
 import { ModuleToggle } from '@/components/config/module-toggle';
 import { Panel } from '@/components/retro/panel';
 
-import type { AutoroleConfig } from '@cobot/shared';
+import type { AutoroleConfig } from '@goodbot/shared';
 
 /**
  * A mensagem de verificação é publicada pelo comando `/verify painel` — o

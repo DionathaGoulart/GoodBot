@@ -1,11 +1,6 @@
 'use server';
 
-import {
-  removeAutomodRule,
-  reorderAutomod,
-  saveAutomodRule,
-  setRaidMode,
-} from '@/lib/automod';
+import { removeAutomodRule, reorderAutomod, saveAutomodRule, setRaidMode } from '@/lib/automod';
 import { publishPanel, removePanel, savePanel } from '@/lib/reaction-roles';
 import {
   closeTicketAction,

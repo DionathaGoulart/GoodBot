@@ -14,9 +14,9 @@ import { MemberCases } from './member-cases';
 import { MemberModeration } from './member-moderation';
 import { MemberRoles } from './member-roles';
 
-import type { GuildMemberDetail } from '@cobot/shared';
+import type { GuildMemberDetail } from '@goodbot/shared';
 
-export const metadata = { title: 'Membro · CoBot' };
+export const metadata = { title: 'Membro · Goodbot' };
 
 function when(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString('pt-BR') : '—';

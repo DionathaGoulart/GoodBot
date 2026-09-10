@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactionRolesConfig } from '@cobot/shared';
+import type { ReactionRolesConfig } from '@goodbot/shared';
 
 import { ConfigForm } from '@/components/config/config-form';
 import { NumberField, SwitchField } from '@/components/config/fields';

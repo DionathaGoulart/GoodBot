@@ -1,6 +1,6 @@
 'use client';
 
-import type { SocialConfig } from '@cobot/shared';
+import type { SocialConfig } from '@goodbot/shared';
 
 import { ConfigForm } from '@/components/config/config-form';
 import { NumberField } from '@/components/config/fields';

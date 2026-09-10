@@ -1,4 +1,4 @@
-import { votePoll } from '@cobot/db';
+import { votePoll } from '@goodbot/db';
 import { MessageFlags } from 'discord.js';
 
 import { parsePollButtonId, pollMessage } from '../lib/poll-message';
@@ -47,9 +47,7 @@ export async function handlePollButton(
 
   await interaction.editReply({
     content:
-      chosen.length === 0
-        ? 'Voto retirado.'
-        : `Voto registrado: **${chosen.join('**, **')}**.`,
+      chosen.length === 0 ? 'Voto retirado.' : `Voto registrado: **${chosen.join('**, **')}**.`,
   });
 
   // A contagem pública vive na mensagem original; um erro aqui não pode

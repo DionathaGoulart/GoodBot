@@ -1,4 +1,4 @@
-import { LOG_KINDS } from '@cobot/shared';
+import { LOG_KINDS } from '@goodbot/shared';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { logConfigs } from '../schema/configs';
@@ -6,7 +6,7 @@ import { guilds } from '../schema/guilds';
 
 import type { DbExecutor } from '../client';
 import type { LogConfig } from '../types';
-import type { LogKind } from '@cobot/shared';
+import type { LogKind } from '@goodbot/shared';
 
 /** Uma linha por tipo de log, com defaults para os tipos ainda sem linha. */
 export type LogConfigMap = { [K in LogKind]: LogConfigEntry };

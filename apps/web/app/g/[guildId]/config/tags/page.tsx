@@ -8,7 +8,7 @@ import { loadTags } from '@/lib/tags';
 import { TagsConfigForm } from './form';
 import { TagsTable } from './table';
 
-export const metadata = { title: 'Tags · CoBot' };
+export const metadata = { title: 'Tags · Goodbot' };
 
 export default async function TagsConfigPage({ params }: PageProps<'/g/[guildId]/config/tags'>) {
   const { guildId } = await params;

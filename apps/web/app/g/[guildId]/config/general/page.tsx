@@ -6,7 +6,7 @@ import { ScreenHeader } from '@/components/retro/screen-header';
 
 import { GeneralConfigForm } from './form';
 
-export const metadata = { title: 'Geral · CoBot' };
+export const metadata = { title: 'Geral · Goodbot' };
 
 export default async function GeneralConfigPage({
   params,

@@ -6,7 +6,7 @@ import { loadExpressions } from '@/lib/expressions';
 
 import { ExpressionsScreen } from './expressions-screen';
 
-export const metadata = { title: 'Emojis · CoBot' };
+export const metadata = { title: 'Emojis · Goodbot' };
 
 /** §6.3 — emojis e stickers do servidor, com os slots do nível de impulso. */
 export default async function ExpressionsPage({ params }: PageProps<'/g/[guildId]/emojis'>) {
@@ -26,10 +26,7 @@ export default async function ExpressionsPage({ params }: PageProps<'/g/[guildId
         }
       />
       {overview ? (
-        <ExpressionsScreen
-          overview={overview}
-          readOnly={!hasAccess(session.level, 'admin')}
-        />
+        <ExpressionsScreen overview={overview} readOnly={!hasAccess(session.level, 'admin')} />
       ) : (
         <ErrorState description={error ?? 'O bot não respondeu.'} />
       )}

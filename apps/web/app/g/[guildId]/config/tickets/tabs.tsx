@@ -54,10 +54,7 @@ export function TicketsTabs({
   const router = useRouter();
   const [editingType, setEditingType] = React.useState<TypeEditing | null>(null);
   const [editingPanel, setEditingPanel] = React.useState<TicketPanelEditing | null>(null);
-  const typeName = React.useMemo(
-    () => new Map(types.map((type) => [type.id, type.name])),
-    [types],
-  );
+  const typeName = React.useMemo(() => new Map(types.map((type) => [type.id, type.name])), [types]);
 
   const typeColumns = React.useMemo<PanelColumnDef<TicketTypeRow>[]>(
     () => [
@@ -245,7 +242,11 @@ export function TicketsTabs({
         accessorKey: 'openedAt',
         header: 'ABERTO EM',
         cell: ({ row }) => (
-          <time className="screen-meta" dateTime={row.original.openedAt} title={row.original.openedAt}>
+          <time
+            className="screen-meta"
+            dateTime={row.original.openedAt}
+            title={row.original.openedAt}
+          >
             {new Date(row.original.openedAt).toLocaleDateString('pt-BR')}
           </time>
         ),

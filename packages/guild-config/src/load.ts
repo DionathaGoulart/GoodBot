@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { SnowflakeSchema } from '@cobot/shared';
+import { SnowflakeSchema } from '@goodbot/shared';
 import { parse } from 'yaml';
 import { z } from 'zod';
 

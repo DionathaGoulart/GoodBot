@@ -1,11 +1,11 @@
-import { closePoll, createPoll, getPoll, scheduleAction, setPollMessage } from '@cobot/db';
+import { closePoll, createPoll, getPoll, scheduleAction, setPollMessage } from '@goodbot/db';
 import {
   MAX_EMBED_TITLE_LENGTH,
   POLL_MAX_OPTIONS,
   POLL_MIN_OPTIONS,
   UserFacingError,
   formatDuration,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { requireUtilities, resolveTextChannel } from './shared';
@@ -17,7 +17,7 @@ import { levelAtLeast } from '../../services/permissions';
 import { readDuration } from '../moderation/shared';
 
 import type { CommandContext } from '../../lib/command';
-import type { UtilitiesConfig } from '@cobot/shared';
+import type { UtilitiesConfig } from '@goodbot/shared';
 
 const MAX_QUESTION_LENGTH = 256;
 
@@ -34,7 +34,9 @@ function assertCanCreate(ctx: CommandContext, config: UtilitiesConfig): void {
 async function create(ctx: CommandContext, config: UtilitiesConfig): Promise<void> {
   assertCanCreate(ctx, config);
 
-  const question = ctx.interaction.options.getString('pergunta', true).slice(0, MAX_QUESTION_LENGTH);
+  const question = ctx.interaction.options
+    .getString('pergunta', true)
+    .slice(0, MAX_QUESTION_LENGTH);
   const options = parsePollOptions(ctx.interaction.options.getString('opcoes', true));
   if (options.length === 0) {
     throw new UserFacingError(
@@ -184,4 +186,3 @@ export default defineCommand({
     await create(ctx, config);
   },
 });
-

@@ -1,14 +1,14 @@
-import { SECOND_MS } from '@cobot/shared';
+import { SECOND_MS } from '@goodbot/shared';
 
 import { SocialProviderError } from './types';
 
-import type { SocialPlatform } from '@cobot/shared';
+import type { SocialPlatform } from '@goodbot/shared';
 
 /** Nenhuma API de rede social merece segurar o job por mais que isto. */
 export const SOCIAL_HTTP_TIMEOUT_MS = 10 * SECOND_MS;
 
 /** `User-Agent` honesto: alguns feeds recusam cliente sem identificação. */
-export const SOCIAL_USER_AGENT = 'CoBot/1.0 (+https://github.com/DionathaGoulart/cobot)';
+export const SOCIAL_USER_AGENT = 'Goodbot/1.0 (+https://github.com/DionathaGoulart/goodbot)';
 
 /**
  * Cabeçalhos de toda requisição ao YouTube. `SOCS=CAI` é o cookie que a própria

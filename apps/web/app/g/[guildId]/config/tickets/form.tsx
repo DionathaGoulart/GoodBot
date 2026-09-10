@@ -1,6 +1,6 @@
 'use client';
 
-import type { TicketsConfig } from '@cobot/shared';
+import type { TicketsConfig } from '@goodbot/shared';
 
 import { ConfigForm } from '@/components/config/config-form';
 import {

@@ -1,9 +1,9 @@
-import { appendAudit } from '@cobot/db';
+import { appendAudit } from '@goodbot/db';
 
 import { childLogger } from '../logger';
 
-import type { Db } from '@cobot/db';
-import type { AuditSource } from '@cobot/shared';
+import type { Db } from '@goodbot/db';
+import type { AuditSource } from '@goodbot/shared';
 import type { Client } from 'discord.js';
 
 const log = childLogger('audit');
@@ -97,6 +97,6 @@ export class AuditService {
       return { id: actor, tag: this.client?.users.cache.get(actor)?.tag ?? actor };
     }
     const user = this.client?.user;
-    return { id: user?.id ?? '0', tag: user?.tag ?? 'CoBot' };
+    return { id: user?.id ?? '0', tag: user?.tag ?? 'Goodbot' };
   }
 }

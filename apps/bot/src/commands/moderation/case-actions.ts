@@ -1,11 +1,11 @@
-import { getCaseByNumber, softDeleteCase, updateCaseReason } from '@cobot/db';
-import { MAX_REASON_LENGTH, UserFacingError } from '@cobot/shared';
+import { getCaseByNumber, softDeleteCase, updateCaseReason } from '@goodbot/db';
+import { MAX_REASON_LENGTH, UserFacingError } from '@goodbot/shared';
 
 import { caseEmbed } from '../../lib/case-embed';
 import { botFooter, successEmbed } from '../../lib/embeds';
 
 import type { CommandContext } from '../../lib/command';
-import type { Case } from '@cobot/db';
+import type { Case } from '@goodbot/db';
 
 /** Busca um caso pelo número ou explica que ele não existe. */
 export async function requireCase(

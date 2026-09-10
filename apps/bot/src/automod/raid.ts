@@ -1,4 +1,4 @@
-import { MINUTE_MS, SECOND_MS } from '@cobot/shared';
+import { MINUTE_MS, SECOND_MS } from '@goodbot/shared';
 
 /** Quem ligou o modo raid: o gatilho automático ou um admin com `/raid on`. */
 export type RaidSource = 'auto' | 'manual';
@@ -59,7 +59,12 @@ export class RaidService {
     return this.get(guildId) !== null;
   }
 
-  activate(input: { guildId: string; source: RaidSource; minutes: number; ruleId?: string }): RaidState {
+  activate(input: {
+    guildId: string;
+    source: RaidSource;
+    minutes: number;
+    ruleId?: string;
+  }): RaidState {
     const state: RaidState = {
       guildId: input.guildId,
       source: input.source,

@@ -33,12 +33,7 @@ const EXISTING: AccountEditing = {
 
 function renderSheet(editing: AccountEditing, readOnly = false) {
   return render(
-    <AccountSheet
-      editing={editing}
-      embedColor={0xdc143c}
-      readOnly={readOnly}
-      onClose={vi.fn()}
-    />,
+    <AccountSheet editing={editing} embedColor={0xdc143c} readOnly={readOnly} onClose={vi.fn()} />,
   );
 }
 
@@ -72,7 +67,7 @@ describe('AccountSheet — campo do canal', () => {
     renderSheet({ id: null, account: EMPTY_ACCOUNT });
 
     fireEvent.change(screen.getByPlaceholderText('youtube.com/@canal'), {
-      target: { value: '@naoexiste-xyz-cobot' },
+      target: { value: '@naoexiste-xyz-goodbot' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'BUSCAR' }));
 

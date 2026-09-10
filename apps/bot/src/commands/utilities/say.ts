@@ -1,4 +1,4 @@
-import { MAX_MESSAGE_CONTENT_LENGTH, MINUTE_MS, UserFacingError } from '@cobot/shared';
+import { MAX_MESSAGE_CONTENT_LENGTH, MINUTE_MS, UserFacingError } from '@goodbot/shared';
 import {
   LabelBuilder,
   MessageFlags,
@@ -116,7 +116,10 @@ function buildModal(customId: string, channelName: string): ModalBuilder {
  * inteiro, e um `@everyone` colado sem querer acorda o servidor. `@everyone` só
  * entra quando quem mandou tem a permissão no próprio Discord (PRD §9.2).
  */
-export function mentionOptions(enabled: boolean, canMentionEveryone: boolean): MessageMentionOptions {
+export function mentionOptions(
+  enabled: boolean,
+  canMentionEveryone: boolean,
+): MessageMentionOptions {
   if (!enabled) return { parse: [] };
   const parse: MessageMentionTypes[] = ['users', 'roles'];
   if (canMentionEveryone) parse.push('everyone');
@@ -125,9 +128,7 @@ export function mentionOptions(enabled: boolean, canMentionEveryone: boolean): M
 
 /** Trecho do conteúdo para o mod-log, sem estourar o field do embed. */
 export function preview(content: string): string {
-  return content.length > LOG_PREVIEW_LENGTH
-    ? `${content.slice(0, LOG_PREVIEW_LENGTH)}…`
-    : content;
+  return content.length > LOG_PREVIEW_LENGTH ? `${content.slice(0, LOG_PREVIEW_LENGTH)}…` : content;
 }
 
 /**
@@ -135,12 +136,12 @@ export function preview(content: string): string {
  * canal de voz não tem mensagem fixada no Discord: dizer "confira o limite de
  * 50" ali mandaria a pessoa procurar um problema que não existe.
  */
-export function pinOutcome(
-  voiceChat: boolean,
-  ok: boolean,
-): { ok: boolean; detail: string } {
+export function pinOutcome(voiceChat: boolean, ok: boolean): { ok: boolean; detail: string } {
   if (voiceChat) {
-    return { ok: false, detail: 'Não dá para fixar: o chat de canal de voz do Discord não tem mensagem fixada.' };
+    return {
+      ok: false,
+      detail: 'Não dá para fixar: o chat de canal de voz do Discord não tem mensagem fixada.',
+    };
   }
   return ok
     ? { ok: true, detail: 'Fixada no canal.' }

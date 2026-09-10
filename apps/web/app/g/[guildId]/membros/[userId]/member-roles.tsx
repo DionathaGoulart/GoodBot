@@ -9,7 +9,7 @@ import { DiscordPicker } from '@/components/config/discord-picker';
 import { Panel } from '@/components/retro/panel';
 import { Tag } from '@/components/retro/tag';
 
-import type { GuildMemberDetail } from '@cobot/shared';
+import type { GuildMemberDetail } from '@goodbot/shared';
 
 /**
  * §6.3 — cargos do membro. O que sai daqui é o diff (`add`/`remove`), não a

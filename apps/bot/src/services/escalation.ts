@@ -1,8 +1,8 @@
-import { countWarnsSince } from '@cobot/db';
-import { DAY_MS } from '@cobot/shared';
+import { countWarnsSince } from '@goodbot/db';
+import { DAY_MS } from '@goodbot/shared';
 
-import type { Db } from '@cobot/db';
-import type { ModerationConfig } from '@cobot/shared';
+import type { Db } from '@goodbot/db';
+import type { ModerationConfig } from '@goodbot/shared';
 
 export type EscalationStep = ModerationConfig['escalation']['steps'][number];
 

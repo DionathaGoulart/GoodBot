@@ -1,4 +1,4 @@
-import { DEFAULT_WELCOME_CONFIG, WelcomeConfigSchema } from '@cobot/shared';
+import { DEFAULT_WELCOME_CONFIG, WelcomeConfigSchema } from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import { boostTransition } from './welcome';
@@ -20,7 +20,9 @@ describe('boostTransition', () => {
 
   // Apelido, cargo e avatar chegam no mesmo `guildMemberUpdate`.
   it('ignora atualização que não mexeu no impulso', () => {
-    expect(boostTransition({ premiumSince: NOW, partial: false }, { premiumSince: NOW })).toBeNull();
+    expect(
+      boostTransition({ premiumSince: NOW, partial: false }, { premiumSince: NOW }),
+    ).toBeNull();
     expect(
       boostTransition({ premiumSince: null, partial: false }, { premiumSince: null }),
     ).toBeNull();
@@ -29,8 +31,12 @@ describe('boostTransition', () => {
   // Membro parcial tem `premiumSince` nulo por falta de dado, não por não
   // impulsionar: agradecer aí seria agradecer alguém que já era booster.
   it('não decide nada a partir de um membro parcial', () => {
-    expect(boostTransition({ premiumSince: null, partial: true }, { premiumSince: NOW })).toBeNull();
-    expect(boostTransition({ premiumSince: NOW, partial: true }, { premiumSince: null })).toBeNull();
+    expect(
+      boostTransition({ premiumSince: null, partial: true }, { premiumSince: NOW }),
+    ).toBeNull();
+    expect(
+      boostTransition({ premiumSince: NOW, partial: true }, { premiumSince: null }),
+    ).toBeNull();
   });
 });
 

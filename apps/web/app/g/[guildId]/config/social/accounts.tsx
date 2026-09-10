@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { SOCIAL_KIND_LABEL, SOCIAL_MAX_FAILURES } from '@cobot/shared';
+import { SOCIAL_KIND_LABEL, SOCIAL_MAX_FAILURES } from '@goodbot/shared';
 import { useRouter } from 'next/navigation';
 
 import { deleteSocialAccountAction, testSocialAccountAction } from '@/app/actions/social';
@@ -13,7 +13,7 @@ import { Tag } from '@/components/retro/tag';
 
 import { AccountSheet, EMPTY_ACCOUNT, type AccountEditing } from './account-sheet';
 
-import type { SocialAccountSummary } from '@cobot/shared';
+import type { SocialAccountSummary } from '@goodbot/shared';
 
 const MINUTE_MS = 60_000;
 
@@ -71,7 +71,11 @@ function AccountState({ account }: { account: SocialAccountSummary }) {
     <span className="flex flex-col gap-1">
       <Tag tone="success">OK</Tag>
       {account.lastCheckedAt ? (
-        <time dateTime={account.lastCheckedAt} title={account.lastCheckedAt} className="screen-meta">
+        <time
+          dateTime={account.lastCheckedAt}
+          title={account.lastCheckedAt}
+          className="screen-meta"
+        >
           {now > 0 ? sinceLabel(account.lastCheckedAt, now) : '—'}
         </time>
       ) : (

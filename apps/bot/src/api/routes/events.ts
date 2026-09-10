@@ -4,7 +4,7 @@ import {
   ScheduledEventInputSchema,
   UserFacingError,
   scheduledEventProblems,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { ChannelType } from 'discord.js';
 import { Hono } from 'hono';
 
@@ -13,7 +13,7 @@ import { ApiHttpError, forbidden, notFound } from '../errors';
 import { validate } from '../validate';
 
 import type { ApiDeps, ApiEnv } from '../context';
-import type { GuildScheduledEventSummary, ScheduledEventInput } from '@cobot/shared';
+import type { GuildScheduledEventSummary, ScheduledEventInput } from '@goodbot/shared';
 import type {
   Guild,
   GuildScheduledEvent,

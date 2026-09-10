@@ -1,6 +1,6 @@
 import { cn } from 'cn';
 
-/** §4.7 — três quadrados de janela. No CoBot são quadrados, nunca círculos. */
+/** §4.7 — três quadrados de janela. No Goodbot são quadrados, nunca círculos. */
 export function WindowDots({
   tone = 'accent',
   className,

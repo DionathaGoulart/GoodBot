@@ -7,7 +7,7 @@ import { auditFiltersToQuery, parseAuditFilters } from '@/lib/case-filters';
 
 import { AuditTable } from './audit-table';
 
-export const metadata = { title: 'Auditoria · CoBot' };
+export const metadata = { title: 'Auditoria · Goodbot' };
 
 /**
  * Auditoria do painel (PRD §6.5). Tabela imutável: toda mutação feita por aqui

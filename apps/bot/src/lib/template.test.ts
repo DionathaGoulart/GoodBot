@@ -1,4 +1,4 @@
-import { MessageTemplateSchema } from '@cobot/shared';
+import { MessageTemplateSchema } from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import { memberVars, ordinal, sanitizeVar, templateToMessage } from './template';
@@ -14,7 +14,7 @@ function fakeMember(overrides: { username?: string; guildName?: string } = {}) {
       displayName: overrides.username ?? 'dio',
       tag: `${overrides.username ?? 'dio'}#0001`,
     },
-    guild: { name: overrides.guildName ?? 'CoBot', memberCount: 42 },
+    guild: { name: overrides.guildName ?? 'Goodbot', memberCount: 42 },
   } as never;
 }
 
@@ -37,7 +37,7 @@ describe('memberVars', () => {
       mention: '<@123456789012345678>',
       tag: 'dio#0001',
       id: '123456789012345678',
-      server: 'CoBot',
+      server: 'Goodbot',
       memberCount: 42,
       ordinal: '42º',
     });
@@ -77,7 +77,7 @@ describe('templateToMessage', () => {
 
     expect(message.content).toBe('Bem-vindo <@123456789012345678>!');
     const embed = (message.embeds?.[0] as EmbedBuilder | undefined)?.toJSON();
-    expect(embed?.title).toBe('CoBot');
+    expect(embed?.title).toBe('Goodbot');
     expect(embed?.description).toBe('Você é o 42º membro.');
     expect(embed?.fields?.[0]?.value).toBe('dio#0001');
     expect(embed?.color).toBe(0x123456);

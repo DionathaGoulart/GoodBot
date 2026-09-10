@@ -1,4 +1,4 @@
-import { getPanel, setPanelMessage } from '@cobot/db';
+import { getPanel, setPanelMessage } from '@goodbot/db';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -11,8 +11,8 @@ import { templateToMessage } from '../lib/template';
 import { childLogger } from '../logger';
 
 import type { ConfigService } from './config';
-import type { Db, PanelWithItems, ReactionRoleItem } from '@cobot/db';
-import type { ReactionRoleMode } from '@cobot/shared';
+import type { Db, PanelWithItems, ReactionRoleItem } from '@goodbot/db';
+import type { ReactionRoleMode } from '@goodbot/shared';
 import type { BaseMessageOptions, Client, Guild, GuildMember } from 'discord.js';
 
 const log = childLogger('reaction-roles');
@@ -115,10 +115,11 @@ export function resolveClick(input: ModeInput & { roleId: string }): RoleChange 
  * Uma escolha no select menu. Em `multiple` o menu só soma; nos outros modos a
  * seleção passa a ser o conjunto exato do painel (desmarcar tira o cargo).
  */
-export function resolveSelect(input: ModeInput & { selectedRoleIds: readonly string[] }): RoleChange {
+export function resolveSelect(
+  input: ModeInput & { selectedRoleIds: readonly string[] },
+): RoleChange {
   const { mode, selectedRoleIds, panelRoleIds, currentRoleIds } = input;
-  const selected =
-    mode === 'single' ? selectedRoleIds.slice(0, 1) : [...new Set(selectedRoleIds)];
+  const selected = mode === 'single' ? selectedRoleIds.slice(0, 1) : [...new Set(selectedRoleIds)];
   const valid = selected.filter((id) => panelRoleIds.includes(id));
 
   const add = valid.filter((id) => !currentRoleIds.includes(id));
@@ -129,9 +130,7 @@ export function resolveSelect(input: ModeInput & { selectedRoleIds: readonly str
 }
 
 /** Reagir dá o cargo; tirar a reação sempre tira, em qualquer modo. */
-export function resolveReaction(
-  input: ModeInput & { roleId: string; added: boolean },
-): RoleChange {
+export function resolveReaction(input: ModeInput & { roleId: string; added: boolean }): RoleChange {
   if (!input.added) {
     return input.currentRoleIds.includes(input.roleId)
       ? { add: [], remove: [input.roleId] }
@@ -208,10 +207,7 @@ export class ReactionRoleService {
   constructor(private readonly deps: ReactionRolesDeps) {}
 
   /** Item do painel cujo emoji bate com o da reação (`name:id` ou unicode). */
-  static findItemByEmoji(
-    panel: PanelWithItems,
-    identifier: string,
-  ): ReactionRoleItem | undefined {
+  static findItemByEmoji(panel: PanelWithItems, identifier: string): ReactionRoleItem | undefined {
     return panel.items.find((item) => item.emoji === identifier);
   }
 
@@ -255,7 +251,10 @@ export class ReactionRoleService {
   /** Deixa na mensagem exatamente as reações dos itens, na ordem do painel. */
   private async syncReactions(
     panel: PanelWithItems,
-    message: { reactions: { removeAll(): Promise<unknown> }; react(emoji: string): Promise<unknown> },
+    message: {
+      reactions: { removeAll(): Promise<unknown> };
+      react(emoji: string): Promise<unknown>;
+    },
   ): Promise<void> {
     await message.reactions.removeAll().catch(() => null);
     for (const item of panel.items) {

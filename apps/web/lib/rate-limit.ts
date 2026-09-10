@@ -1,4 +1,4 @@
-import { MINUTE_MS } from '@cobot/shared';
+import { MINUTE_MS } from '@goodbot/shared';
 
 /** Teto por IP, igual ao da API do bot (PRD §7.3). */
 export const WEB_LIMIT_PER_MINUTE = 60;
@@ -68,9 +68,7 @@ export type RateLimiter = ReturnType<typeof createRateLimiter>;
  * **primeiro** valor é o cliente real (o oposto do Caddy, onde o proxy anexa
  * ao que o cliente mandou — ver `apps/bot/src/api/middleware/rate-limit.ts`).
  */
-export function clientIp(headers: {
-  get(name: string): string | null;
-}): string {
+export function clientIp(headers: { get(name: string): string | null }): string {
   const forwarded = headers.get('x-forwarded-for');
   const first = forwarded?.split(',')[0]?.trim();
   return first || headers.get('x-real-ip') || 'unknown';

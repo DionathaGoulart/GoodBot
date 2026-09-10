@@ -29,9 +29,9 @@ describe('socialVars', () => {
   });
 
   it('usa o headline que o provider mandou', () => {
-    expect(socialVars({ ...ITEM, kind: 'live', headline: 'está ao vivo' }, 'youtube').headline).toBe(
-      'está ao vivo',
-    );
+    expect(
+      socialVars({ ...ITEM, kind: 'live', headline: 'está ao vivo' }, 'youtube').headline,
+    ).toBe('está ao vivo');
   });
 
   it('cai no headline do tipo quando o item não trouxe um', () => {
@@ -46,7 +46,13 @@ describe('buildSocialMessage', () => {
     const message = buildSocialMessage(
       {
         content: '{author} publicou um {kind}!',
-        embed: { title: '{title}', description: '{url}', color: null, fields: [], timestamp: false },
+        embed: {
+          title: '{title}',
+          description: '{url}',
+          color: null,
+          fields: [],
+          timestamp: false,
+        },
       },
       ITEM,
       'youtube',

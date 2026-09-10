@@ -8,9 +8,9 @@
 # depois de qualquer mudança no schema):
 #
 #   docker compose -f infra/docker-compose.dev.yml up -d postgres
-#   createdb -h localhost -U cobot cobot_restore
+#   createdb -h localhost -U goodbot goodbot_restore
 #   infra/scripts/restore.sh daily-20260907-030000.sql.gz \
-#     postgres://cobot:cobot@localhost:5432/cobot_restore
+#     postgres://goodbot:goodbot@localhost:5432/goodbot_restore
 #
 # NUNCA aponte para a DATABASE_URL de produção sem ter certeza: o dump é
 # gerado com `--clean --if-exists`, ou seja, ele **derruba** as tabelas antes

@@ -1,4 +1,4 @@
-import { isSnowflake } from '@cobot/shared';
+import { isSnowflake } from '@goodbot/shared';
 import { z } from 'zod';
 
 // O `.env` da raiz é carregado pelo próprio Node (`--env-file-if-exists` nos

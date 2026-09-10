@@ -1,4 +1,4 @@
-import { MAX_EMBED_FIELD_VALUE_LENGTH } from '@cobot/shared';
+import { MAX_EMBED_FIELD_VALUE_LENGTH } from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import { diffIds, fieldValue, formatDiff, quoteBlock, resolveLogTarget, truncate } from './logs';

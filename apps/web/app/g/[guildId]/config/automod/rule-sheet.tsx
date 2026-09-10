@@ -11,7 +11,7 @@ import {
   type AutomodAction,
   type AutomodRule,
   type AutomodRuleType,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { useFieldArray, useForm, useFormContext } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -37,7 +37,7 @@ import {
 
 import { emptyRule, resetForType } from './rule-defaults';
 
-/** Rótulos das telas; a fonte dos valores continua sendo `@cobot/shared`. */
+/** Rótulos das telas; a fonte dos valores continua sendo `@goodbot/shared`. */
 const TYPE_LABEL: Record<AutomodRuleType, string> = {
   spam: 'SPAM',
   links: 'LINKS',

@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_MODERATION_CONFIG, type GeneralPageValues } from '@cobot/shared';
+import { DEFAULT_MODERATION_CONFIG, type GeneralPageValues } from '@goodbot/shared';
 import { useFormContext } from 'react-hook-form';
 
 import { ConfigForm } from '@/components/config/config-form';

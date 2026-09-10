@@ -6,7 +6,7 @@ import {
   ChannelUpdateInputSchema,
   MANAGED_CHANNEL_TYPES,
   SlowmodeInputSchema,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
@@ -15,7 +15,7 @@ import { defaultGuildId, requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
-import type { GuildChannelDetail, GuildChannelSummary } from '@cobot/shared';
+import type { GuildChannelDetail, GuildChannelSummary } from '@goodbot/shared';
 
 const PATH = (guildId: string) => `/g/${guildId}/canais`;
 
@@ -213,10 +213,14 @@ export async function toggleChannelLock(formData: FormData): Promise<ActionResul
     return failure(error, 'O bot não respondeu; o canal não mudou.');
   }
 
-  await withAudit({ id: session.user.id, tag: session.user.name }, lock ? 'channel.lock' : 'channel.unlock', {
-    type: 'channel',
-    id,
-  });
+  await withAudit(
+    { id: session.user.id, tag: session.user.name },
+    lock ? 'channel.lock' : 'channel.unlock',
+    {
+      type: 'channel',
+      id,
+    },
+  );
   revalidatePath(PATH(guildId));
   return { ok: true, message: lock ? 'Canal trancado.' : 'Canal destrancado.' };
 }

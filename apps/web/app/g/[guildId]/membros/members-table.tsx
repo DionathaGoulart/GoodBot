@@ -9,7 +9,7 @@ import { Panel } from '@/components/retro/panel';
 import { Tag } from '@/components/retro/tag';
 import { Input } from '@/components/ui/input';
 
-import type { GuildMemberSummary } from '@cobot/shared';
+import type { GuildMemberSummary } from '@goodbot/shared';
 
 type MemberRow = GuildMemberSummary & Record<string, unknown>;
 

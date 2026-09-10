@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { appendAudit, listAuditActions, searchAudit } from '@cobot/db';
+import { appendAudit, listAuditActions, searchAudit } from '@goodbot/db';
 import { headers } from 'next/headers';
 
 import { PAGE_SIZE, filterRange, type AuditFilters } from './case-filters';
@@ -8,7 +8,7 @@ import { db } from './db';
 import { env } from './env';
 import { guildTimezone } from './stats';
 
-import type { AuditSource } from '@cobot/shared';
+import type { AuditSource } from '@goodbot/shared';
 
 export interface AuditActor {
   id: string;

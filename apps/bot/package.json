@@ -1,5 +1,5 @@
 {
-  "name": "@cobot/bot",
+  "name": "@goodbot/bot",
   "version": "0.0.0",
   "private": true,
   "description": "Bot de moderação para Discord (discord.js v14)",
@@ -12,8 +12,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@cobot/db": "workspace:*",
-    "@cobot/shared": "workspace:*",
+    "@goodbot/db": "workspace:*",
+    "@goodbot/shared": "workspace:*",
     "@hono/node-server": "^2.1.1",
     "@hono/zod-validator": "^0.9.1",
     "discord.js": "^14.27.0",

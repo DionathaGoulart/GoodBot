@@ -6,7 +6,7 @@ import { loadInvites } from '@/lib/invites';
 
 import { InvitesScreen } from './invites-screen';
 
-export const metadata = { title: 'Convites · CoBot' };
+export const metadata = { title: 'Convites · Goodbot' };
 
 /**
  * §6.3 — criar e revogar convites. `mod` vê a lista (é ela que explica de onde

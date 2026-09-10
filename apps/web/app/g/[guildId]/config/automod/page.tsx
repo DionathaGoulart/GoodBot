@@ -9,7 +9,7 @@ import { AutomodConfigForm } from './form';
 import { RaidCard } from './raid-card';
 import { AutomodRulesTable } from './rules-table';
 
-export const metadata = { title: 'Automod · CoBot' };
+export const metadata = { title: 'Automod · Goodbot' };
 
 export default async function AutomodConfigPage({
   params,

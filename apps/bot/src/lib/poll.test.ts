@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { BAR_WIDTH, formatBar, formatTally, parsePollOptions, tallyPoll } from './poll';
 
-import type { PollOption } from '@cobot/db';
+import type { PollOption } from '@goodbot/db';
 
 const options: PollOption[] = [
   { id: '0', label: 'Sim' },

@@ -1,6 +1,6 @@
 import { signInWithDiscord } from '@/app/actions/auth';
 
-export const metadata = { title: 'Entrar · CoBot' };
+export const metadata = { title: 'Entrar · Goodbot' };
 
 export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
   const { reason } = await searchParams;
@@ -8,7 +8,7 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
   return (
     <main className="screen-pad flex flex-1 flex-col items-center justify-center gap-8">
       <div className="flex flex-col items-center gap-3 text-center">
-        <p className="screen-kicker sigil">COBOT</p>
+        <p className="screen-kicker sigil">GOODBOT</p>
         <h1 className="screen-title text-5xl underline decoration-accent decoration-4 underline-offset-4 md:text-6xl">
           PAINEL
         </h1>

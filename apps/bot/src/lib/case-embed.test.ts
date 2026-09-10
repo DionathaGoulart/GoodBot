@@ -1,10 +1,10 @@
-import { CASE_TYPES } from '@cobot/shared';
+import { CASE_TYPES } from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import { caseEmbed, caseFooter, caseLine, caseTypeLabel, CASE_TYPE_COLORS } from './case-embed';
 import { STATUS_COLORS } from './embeds';
 
-import type { Case } from '@cobot/db';
+import type { Case } from '@goodbot/db';
 
 function makeCase(overrides: Partial<Case> = {}): Case {
   return {

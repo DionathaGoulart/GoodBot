@@ -23,7 +23,7 @@ const ICON = dataUrl('image/png', 1024);
 function settings(overrides: Record<string, unknown> = {}) {
   return {
     actorId: ACTOR,
-    name: 'CoBot Lab',
+    name: 'Goodbot Lab',
     description: '',
     verificationLevel: 2,
     systemChannelId: '',

@@ -1,9 +1,9 @@
-import { TicketsConfigSchema } from '@cobot/shared';
+import { TicketsConfigSchema } from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import { MAX_CHANNEL_NAME_LENGTH, openLimitFor, renderChannelName } from './tickets';
 
-import type { TicketType } from '@cobot/db';
+import type { TicketType } from '@goodbot/db';
 
 const type = (overrides: Partial<TicketType> = {}): TicketType =>
   ({
@@ -22,18 +22,21 @@ const type = (overrides: Partial<TicketType> = {}): TicketType =>
 
 describe('renderChannelName', () => {
   it('substitui as três variáveis do padrão', () => {
-    expect(renderChannelName('{type}-{number}-{user}', { number: 7, user: 'fulano', type: 'suporte' }))
-      .toBe('suporte-7-fulano');
+    expect(
+      renderChannelName('{type}-{number}-{user}', { number: 7, user: 'fulano', type: 'suporte' }),
+    ).toBe('suporte-7-fulano');
   });
 
   it('usa o padrão default do PRD', () => {
-    expect(renderChannelName('ticket-{number}', { number: 12, user: 'x', type: 'y' }))
-      .toBe('ticket-12');
+    expect(renderChannelName('ticket-{number}', { number: 12, user: 'x', type: 'y' })).toBe(
+      'ticket-12',
+    );
   });
 
   it('tira acento e caixa alta — o Discord não aceita', () => {
-    expect(renderChannelName('{user}', { number: 1, user: 'João Ção', type: 't' }))
-      .toBe('joao-cao');
+    expect(renderChannelName('{user}', { number: 1, user: 'João Ção', type: 't' })).toBe(
+      'joao-cao',
+    );
   });
 
   it('colapsa separadores e não deixa traço nas pontas', () => {

@@ -1,4 +1,4 @@
-import { MemberRolesInputSchema, isSnowflake } from '@cobot/shared';
+import { MemberRolesInputSchema, isSnowflake } from '@goodbot/shared';
 import { Hono } from 'hono';
 
 import { fetchMember } from '../../services/moderation';

@@ -1,9 +1,9 @@
-import { deleteChannelLock, getChannelLock, listChannelLocks, saveChannelLock } from '@cobot/db';
+import { deleteChannelLock, getChannelLock, listChannelLocks, saveChannelLock } from '@goodbot/db';
 import { OverwriteType, PermissionFlagsBits } from 'discord.js';
 
 import { botFooter, infoEmbed, warningEmbed } from '../lib/embeds';
 
-import type { ChannelLock, Db, LockOverwrite } from '@cobot/db';
+import type { ChannelLock, Db, LockOverwrite } from '@goodbot/db';
 import type { AnyThreadChannel, GuildBasedChannel } from 'discord.js';
 
 /**

@@ -4,12 +4,17 @@ import { Panel } from '@/components/retro/panel';
 import { ScreenHeader } from '@/components/retro/screen-header';
 import { Tag } from '@/components/retro/tag';
 import { requireGuildAccess } from '@/lib/auth/require';
-import { CONFIG_GROUPS, CONFIG_PAGES, CONFIG_PAGE_KEYS, type ConfigGroup } from '@/lib/config-pages';
+import {
+  CONFIG_GROUPS,
+  CONFIG_PAGES,
+  CONFIG_PAGE_KEYS,
+  type ConfigGroup,
+} from '@/lib/config-pages';
 import { loadModulesEnabled } from '@/lib/module-config';
 
-import type { Module } from '@cobot/shared';
+import type { Module } from '@goodbot/shared';
 
-export const metadata = { title: 'Configurações · CoBot' };
+export const metadata = { title: 'Configurações · Goodbot' };
 
 /**
  * Índice de `/config` (PRD §6.2). As onze telas de configuração numa lista

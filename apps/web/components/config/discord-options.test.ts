@@ -9,7 +9,7 @@ import {
   TEXT_CHANNEL_TYPES,
 } from './discord-options';
 
-import type { GuildChannelSummary, GuildRoleSummary } from '@cobot/shared';
+import type { GuildChannelSummary, GuildRoleSummary } from '@goodbot/shared';
 
 const OPTIONS = [
   { id: '100000000000000001', label: 'regras' },
@@ -62,17 +62,62 @@ describe('channelsToOptions', () => {
 describe('rolesToOptions', () => {
   it('tira o @everyone e ordena do cargo mais alto para o mais baixo', () => {
     const roles: GuildRoleSummary[] = [
-      { id: '1', name: '@everyone', color: 0, position: 0, managed: false, hoist: false, mentionable: false, permissions: '0' },
-      { id: '2', name: 'Membro', color: 0, position: 1, managed: false, hoist: false, mentionable: false, permissions: '0' },
-      { id: '3', name: 'Admin', color: 0xdc143c, position: 9, managed: false, hoist: false, mentionable: false, permissions: '8' },
+      {
+        id: '1',
+        name: '@everyone',
+        color: 0,
+        position: 0,
+        managed: false,
+        hoist: false,
+        mentionable: false,
+        permissions: '0',
+      },
+      {
+        id: '2',
+        name: 'Membro',
+        color: 0,
+        position: 1,
+        managed: false,
+        hoist: false,
+        mentionable: false,
+        permissions: '0',
+      },
+      {
+        id: '3',
+        name: 'Admin',
+        color: 0xdc143c,
+        position: 9,
+        managed: false,
+        hoist: false,
+        mentionable: false,
+        permissions: '8',
+      },
     ];
     expect(rolesToOptions(roles).map((o) => o.label)).toEqual(['Admin', 'Membro']);
   });
 
   it('inclui o @everyone sem o arroba quando o campo pede', () => {
     const roles: GuildRoleSummary[] = [
-      { id: '1', name: '@everyone', color: 0, position: 0, managed: false, hoist: false, mentionable: false, permissions: '0' },
-      { id: '2', name: 'Membro', color: 0, position: 1, managed: false, hoist: false, mentionable: false, permissions: '0' },
+      {
+        id: '1',
+        name: '@everyone',
+        color: 0,
+        position: 0,
+        managed: false,
+        hoist: false,
+        mentionable: false,
+        permissions: '0',
+      },
+      {
+        id: '2',
+        name: 'Membro',
+        color: 0,
+        position: 1,
+        managed: false,
+        hoist: false,
+        mentionable: false,
+        permissions: '0',
+      },
     ];
     expect(rolesToOptions(roles, { includeEveryone: true }).map((o) => o.label)).toEqual([
       'Membro',

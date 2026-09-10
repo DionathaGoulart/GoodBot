@@ -1,7 +1,7 @@
-import { UserFacingError } from '@cobot/shared';
+import { UserFacingError } from '@goodbot/shared';
 
 import type { LoadedRule } from '../../automod/types';
-import type { AutomodRuleType } from '@cobot/shared';
+import type { AutomodRuleType } from '@goodbot/shared';
 
 /** Nome de cada tipo de regra em pt-BR (embeds e escolhas dos comandos). */
 export const RULE_TYPE_LABELS: Record<AutomodRuleType, string> = {

@@ -4,7 +4,7 @@ import {
   MAX_REASON_LENGTH,
   parseDuration,
   UserFacingError,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 
 import { caseEmbed } from '../../lib/case-embed';
 

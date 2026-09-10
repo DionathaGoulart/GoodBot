@@ -5,9 +5,9 @@ import { StatTile } from '@/components/retro/stat-tile';
 import { requireGuildAccess } from '@/lib/auth/require';
 import { formatBytes, formatUptime, loadSystemHealth } from '@/lib/system';
 
-import type { HealthResponse } from '@cobot/shared';
+import type { HealthResponse } from '@goodbot/shared';
 
-export const metadata = { title: 'Saúde · CoBot' };
+export const metadata = { title: 'Saúde · Goodbot' };
 
 // A saúde é sempre a de agora: nada de cache entre requisições.
 export const dynamic = 'force-dynamic';
@@ -32,10 +32,7 @@ export default async function SystemPage({ params }: PageProps<'/g/[guildId]/sys
 
       {health === null ? (
         <Panel title="SAUDE.SYS" tone="error">
-          <ErrorState
-            title="BOT FORA"
-            description={error ?? 'A API do bot não respondeu.'}
-          />
+          <ErrorState title="BOT FORA" description={error ?? 'A API do bot não respondeu.'} />
         </Panel>
       ) : (
         <>
@@ -90,7 +87,10 @@ export default async function SystemPage({ params }: PageProps<'/g/[guildId]/sys
                 ['Versão', `v${health.version}`],
                 ['Commit', health.process?.commit ?? 'local (sem GIT_SHA)'],
                 ['Node', health.process?.nodeVersion ?? '—'],
-                ['Guilds em cache', `${String(health.guilds.cached)}/${String(health.guilds.expected)}`],
+                [
+                  'Guilds em cache',
+                  `${String(health.guilds.cached)}/${String(health.guilds.expected)}`,
+                ],
               ]}
             />
           </Panel>

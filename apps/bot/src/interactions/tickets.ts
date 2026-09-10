@@ -1,5 +1,5 @@
-import { getTicketType } from '@cobot/db';
-import { isUserFacingError } from '@cobot/shared';
+import { getTicketType } from '@goodbot/db';
+import { isUserFacingError } from '@goodbot/shared';
 import {
   ActionRowBuilder,
   MessageFlags,
@@ -17,7 +17,7 @@ import {
 } from '../services/tickets';
 
 import type { BotContext } from '../lib/command';
-import type { Ticket } from '@cobot/db';
+import type { Ticket } from '@goodbot/db';
 import type {
   ButtonInteraction,
   GuildMember,
@@ -48,7 +48,13 @@ async function scopeFor(
   const guildId = interaction.guildId;
   const member = interaction.member as GuildMember | null;
   const channel = interaction.channel;
-  if (!guildId || !member || !('roles' in member) || !channel?.isTextBased() || channel.isDMBased()) {
+  if (
+    !guildId ||
+    !member ||
+    !('roles' in member) ||
+    !channel?.isTextBased() ||
+    channel.isDMBased()
+  ) {
     await interaction.editReply({ content: 'Não consegui identificar este ticket.' });
     return null;
   }

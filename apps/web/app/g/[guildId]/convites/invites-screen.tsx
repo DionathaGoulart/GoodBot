@@ -6,7 +6,7 @@ import {
   INVITE_MAX_AGE_LABEL,
   INVITE_MAX_USES_LABEL,
   INVITE_MAX_USES_OPTIONS,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-import type { GuildInviteList, GuildInviteSummary } from '@cobot/shared';
+import type { GuildInviteList, GuildInviteSummary } from '@goodbot/shared';
 
 type InviteRow = GuildInviteSummary & Record<string, unknown>;
 
@@ -65,13 +65,7 @@ function ExpiryCell({ invite }: { invite: GuildInviteSummary }) {
   );
 }
 
-export function InvitesScreen({
-  list,
-  readOnly,
-}: {
-  list: GuildInviteList;
-  readOnly: boolean;
-}) {
+export function InvitesScreen({ list, readOnly }: { list: GuildInviteList; readOnly: boolean }) {
   const router = useRouter();
 
   const [channelId, setChannelId] = React.useState<string[]>([]);

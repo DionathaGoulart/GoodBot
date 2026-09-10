@@ -6,7 +6,7 @@ import { loadGeneralPage, loadModuleConfig } from '@/lib/module-config';
 
 import { WelcomeConfigForm } from './form';
 
-export const metadata = { title: 'Boas-vindas · CoBot' };
+export const metadata = { title: 'Boas-vindas · Goodbot' };
 
 export default async function WelcomeConfigPage({
   params,

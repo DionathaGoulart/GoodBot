@@ -1,7 +1,14 @@
-# CoBot — PRD (Product Requirements Document)
+# Goodbot — PRD (Product Requirements Document)
 
-Versão 1.1 · 2026-09-06 · Documento de referência para todas as sessões.
-Leia junto com `.harness/styleguide.md` (UI) e `.harness/plan.md` (execução).
+Versão 1.2 · 2026-09-10 · Documento de referência para todas as sessões.
+Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (UI).
+
+> **v1.2 — nome e guild como código.** O projeto passou a se chamar
+> **Goodbot** (era CoBot): pacotes `@goodbot/*`, imagem `goodbot-bot`,
+> métricas `goodbot_*` e `/opt/goodbot` na VM — os passos externos estão em
+> `docs/migracao-nome.md`. Entrou também a §5.9, guild como código. O que
+> **não** mudou: requisitos funcionais existentes, modelo de dados, permissões
+> e hospedagem.
 
 > **v1.1 — mudança de hospedagem.** A v1.0 assumia tudo numa VM ARM
 > (Ampere A1) com um único Docker Compose. A capacidade A1 do free tier é
@@ -15,7 +22,7 @@ Leia junto com `.harness/styleguide.md` (UI) e `.harness/plan.md` (execução).
 
 ## 1. Visão
 
-CoBot é um bot de moderação completo para Discord acompanhado de um painel web
+Goodbot é um bot de moderação completo para Discord acompanhado de um painel web
 que gerencia **tudo** do servidor e do bot: configuração de cada módulo,
 membros, cargos, canais, casos de moderação e estatísticas de atividade. Roda
 em uma única instância ARM (Oracle Cloud Free Tier) com Docker Compose, custo
@@ -316,6 +323,41 @@ Business ou Creator vinculada a uma Página, um app na Meta e as permissões
 que sirva (a Content Posting API é de publicação, a Display API exige
 aprovação comercial), ou seja, melhor esforço e aviso explícito no painel.
 
+### 5.9 Guild como código (CLI)
+
+Configurar um servidor pelo painel custa uma chamada por clique. Para trabalho
+em escala — montar um servidor do zero, replicar uma estrutura em outro, ou
+revisar em PR o que mudou na hierarquia — existe um caminho declarativo.
+
+Um arquivo `infra/discord/<slug>/guild.yaml` descreve **cargos, categorias,
+canais e permissões de canal**. O comando `pnpm guild plan` compara esse
+arquivo com o estado real da guild e imprime a diferença; `pnpm guild apply`
+executa. O pacote é `packages/guild-config`.
+
+Requisitos que o desenho tem de cumprir:
+
+- **Nenhum ID no arquivo.** Todo alvo é referenciado por nome; a resolução
+  nome → ID acontece durante o apply, contra a guild. É o que permite versionar
+  o arquivo num repositório público e aplicar o mesmo spec em servidores
+  diferentes. `GUILD_ID`, `ACTOR_ID` e o token ficam num `.env` por servidor,
+  fora do versionamento.
+- **Idempotência.** Rodar duas vezes seguidas não produz efeito na segunda.
+  Só as permissões que o produto conhece (§`PERMISSION_BITS`) entram na
+  comparação — comparar o bitfield inteiro faria todo apply reescrever todo
+  cargo, já que o bot preserva os bits que não conhece.
+- **Nada é apagado por padrão.** Remoção exige `--allow-delete`, sai num bloco
+  separado do plano e pede confirmação digitada que o `--yes` não pula: apagar
+  canal leva as mensagens junto.
+- **Mesmo caminho de escrita do painel.** O CLI é cliente da API do bot (§5.7),
+  não do Discord. Herda `actorId`, checagem de nível, hierarquia, validação Zod
+  e rate limit sem reimplementar nada.
+- **Respeitar o rate limit.** Pausa configurável entre chamadas (padrão 120 ms)
+  e uma repescagem quando a API devolve 503 com `retryAfter`.
+
+Fora de escopo na v1: emojis, stickers, eventos agendados, webhooks, fóruns,
+palcos e tópicos; posição de canal (a API não expõe, então a ordem é a de
+criação); e geração do `guild.yaml` a partir de um servidor existente.
+
 ## 6. Requisitos funcionais — Painel
 
 Acesso: login com Discord OAuth2 (Auth.js). Após login, o painel verifica se
@@ -450,8 +492,8 @@ level)`.
   rota (memória), body ≤ 256 KB, Zod em toda entrada, sem CORS (nenhum
   `Access-Control-Allow-Origin`), sem listagem de rotas, respostas de erro
   sem stack. O container do bot não publica porta no host: só o Caddy
-  alcança `bot:3001` pela rede do Compose. **Única exceção ao teto de corpo**
-  (Etapa 23): `PATCH /guilds/:id` aceita 12 MB, porque ícone e banner do
+  alcança `bot:3001` pela rede do Compose. **Única exceção ao teto de corpo**:
+  `PATCH /guilds/:id` aceita 12 MB, porque ícone e banner do
   servidor viajam como data URL e 8 MB de imagem (o limite do Discord) viram
   ~11 MB em base64. Toda outra rota continua em 256 KB.
 - **Segredos**: só via `.env` na VM (nunca commitado; `.env.example` sim),
@@ -468,7 +510,7 @@ level)`.
   aplicação sem privilégio de superusuário; senha só em segredo; painel usa a
   string do **pooler** (pgBouncer, porta 6543) e o bot usa a conexão direta
   (5432), que suporta pool longo; backups do provedor + `pg_dump` próprio
-  (§7.5 e etapa de hardening).
+  (§7.5).
 - **Entrada do usuário**: regex de filtro de palavras compilada com limite de
   tamanho e testada com timeout (safe-regex ou `re2`; fallback: rejeitar
   regex com grupos aninhados quantificados).
@@ -497,7 +539,7 @@ level)`.
   `restart: unless-stopped`.
 - Migrations executadas pela CI contra o Postgres gerenciado, em um job que
   roda **antes** do deploy do bot e do painel; nunca pelo processo do bot no
-  boot. Deploy manual usa `pnpm --filter @cobot/db db:migrate` com a
+  boot. Deploy manual usa `pnpm --filter @goodbot/db db:migrate` com a
   `DATABASE_URL` de produção.
 - O painel na Vercel é stateless: qualquer instância pode atender qualquer
   request; nada de estado em memória entre requests.
@@ -607,12 +649,12 @@ KickMembers, BanMembers, ModerateMembers, ViewAuditLog, ManageThreads,
 AddReactions, UseExternalEmojis, MuteMembers, DeafenMembers, MoveMembers,
 CreateInstantInvite, ManageEvents, ManageGuildExpressions`.
 
-`ManageGuild` entrou na Etapa 23 (editar nome, ícone, banner e nível de
-verificação pelo painel). Sem ela o bot continua funcionando: a tela
+`ManageGuild` cobre editar nome, ícone, banner e nível de verificação pelo
+painel. Sem ela o bot continua funcionando: a tela
 `/servidor` fica em leitura e diz o que falta, em vez de falhar no envio.
 
-`CreateInstantInvite`, `ManageEvents` e `ManageGuildExpressions` entraram na
-Etapa 25 (convites, eventos agendados, emojis e stickers pelo painel). Valem a
+`CreateInstantInvite`, `ManageEvents` e `ManageGuildExpressions` cobrem
+convites, eventos agendados, emojis e stickers pelo painel. Valem a
 mesma regra: sem elas as telas `/convites`, `/eventos` e `/emojis` ficam em
 leitura e explicam qual permissão falta. `ManageGuild` também é o que o Discord
 exige para *listar* convites.
@@ -622,7 +664,7 @@ DirectMessages, GuildEmojisAndStickers`.
 
 ## 11. Riscos
 
-Status revisado na Etapa 20 (2026-09-07). **Feito** = mitigação implementada e
+Status revisado em 2026-09-07. **Feito** = mitigação implementada e
 verificável no repositório; **parcial** = implementada com limitação conhecida,
 descrita na linha; **manual** = depende de uma ação do operador na VM ou num
 provedor, documentada em `docs/runbook.md`.
@@ -631,9 +673,9 @@ provedor, documentada em `docs/runbook.md`.
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
 | Intents privilegiadas exigem verificação acima de 100 servidores  | irrelevante em single-server; documentar                                                                                                   | feito — §10 e §7.3 |
 | Free tier da Oracle reclama instâncias ociosas                    | bot mantém CPU > 0; monitorar; não é "idle" com gateway aberto                                                                             | feito — gateway aberto + `/metrics` |
-| **Capacidade Ampere A1 indisponível**                             | resolvido: v1.1 usa E2.1.Micro (x86), que não sofre com capacidade                                                                         | feito — Etapa 18 |
+| **Capacidade Ampere A1 indisponível**                             | resolvido: v1.1 usa E2.1.Micro (x86), que não sofre com capacidade                                                                         | feito |
 | **API do bot exposta na internet**                                | subdomínio próprio, Bearer de 32 bytes com comparação timing-safe, rate limit 60/min por IP, body ≤ 256 KB, sem CORS, fail2ban no Caddy (§7.3) | feito (fail2ban **manual**) — `api/server.ts`, `infra/fail2ban/`; alerta a cada 50 respostas 401 numa hora |
-| **Latência web → bot / web → banco**                              | Vercel e Supabase na mesma região (`sa-east-1` / GRU quando possível); painel usa cache do bot; server components paralelizam fetches       | feito — medida no card **Saúde** (`/g/[guildId]/system`) e no `cobot_api_duration_ms` |
+| **Latência web → bot / web → banco**                              | Vercel e Supabase na mesma região (`sa-east-1` / GRU quando possível); painel usa cache do bot; server components paralelizam fetches       | feito — medida no card **Saúde** (`/g/[guildId]/system`) e no `goodbot_api_duration_ms` |
 | **Limites do free tier da Vercel/Supabase**                       | painel de um servidor está muito abaixo dos limites; alerta de uso; migração para VM continua possível (o Compose antigo fica documentado)  | parcial — não existe alerta automático de cota; é item do checklist mensal do runbook (a Vercel e o Supabase não expõem isso no free tier) |
 | **Supabase pausa projeto por inatividade (7 dias)**               | o bot mantém conexão e escrita constante; alerta se `pg_dump` diário falhar                                                                | feito — ping a cada 60s (`watchDatabase`), alerta "Postgres inacessível"; `backup.sh` alerta ao falhar |
 | Regex do usuário (ReDoS)                                          | limite + timeout + validação no painel                                                                                                     | feito — `safe-regex2` no schema Zod (painel recusa ao salvar) **e** na compilação do bot; padrão ≤ 200 chars, entrada ≤ 2 000 chars |
@@ -674,3 +716,6 @@ provedor, documentada em `docs/runbook.md`.
 | GitHub Actions → SSH deploy         | build amd64 na CI (imagem no GHCR), servidor só faz `docker compose pull && up -d`; sem build na instância free tier                   |
 | Config no banco, não em arquivo     | painel precisa alterar em tempo real sem redeploy                                                                                      |
 | Stats em buckets agregados          | free tier: nunca guardar evento bruto por mensagem; consultas do painel ficam baratas                                                  |
+| **Guild como código em YAML**       | estrutura de servidor é dado declarativo e revisável em PR; YAML aceita comentário, que JSON não aceita, e o arquivo é para humano escrever à mão |
+| **Spec sem ID, resolvido em runtime** | um `guild.yaml` com ID identifica a guild de quem o escreveu (o repositório é público) e não pode ser reaproveitado em outro servidor |
+| **CLI como cliente da API do bot**  | escrever direto no Discord duplicaria as checagens de permissão e hierarquia que já existem na API; um segundo caminho de escrita é um segundo lugar para errar |

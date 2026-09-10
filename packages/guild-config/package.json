@@ -1,5 +1,5 @@
 {
-  "name": "@cobot/guild-config",
+  "name": "@goodbot/guild-config",
   "version": "0.0.0",
   "private": true,
   "description": "Guild como código: aplica um guild.yaml num servidor do Discord pela API do bot",
@@ -16,7 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@cobot/shared": "workspace:*",
+    "@goodbot/shared": "workspace:*",
     "yaml": "^2.9.0",
     "zod": "^4.5.4"
   },

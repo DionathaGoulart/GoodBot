@@ -1,7 +1,7 @@
 import 'server-only';
 
-import { countTags, createTag, deleteTag, getTag, listTags, updateTag } from '@cobot/db';
-import { TagInputSchema } from '@cobot/shared';
+import { countTags, createTag, deleteTag, getTag, listTags, updateTag } from '@goodbot/db';
+import { TagInputSchema } from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
@@ -9,7 +9,7 @@ import { defaultGuildId, requireGuildAccess } from './auth/require';
 import { db } from './db';
 import { loadModuleConfig, toFieldErrors, type ActionResult } from './module-config';
 
-import type { Tag } from '@cobot/db';
+import type { Tag } from '@goodbot/db';
 
 export interface TagRow {
   name: string;

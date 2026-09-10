@@ -1,5 +1,5 @@
-import { scheduleAction } from '@cobot/db';
-import { DEFAULT_REASON, UserFacingError, formatDuration } from '@cobot/shared';
+import { scheduleAction } from '@goodbot/db';
+import { DEFAULT_REASON, UserFacingError, formatDuration } from '@goodbot/shared';
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { addChannelOption, requireUtilities, resolveChannel } from './shared';
@@ -11,7 +11,7 @@ import { readDuration } from '../moderation/shared';
 
 import type { CommandContext } from '../../lib/command';
 import type { LockableChannel } from '../../services/locks';
-import type { UtilitiesConfig } from '@cobot/shared';
+import type { UtilitiesConfig } from '@goodbot/shared';
 import type { Guild } from 'discord.js';
 
 /** `@everyone` (o id da guild) mais os cargos configurados. */

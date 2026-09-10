@@ -21,7 +21,6 @@ export const DEFAULT_REACTION_ROLES_CONFIG: ReactionRolesConfig = ReactionRolesC
   {},
 );
 
-
 /** Um cargo dentro de um painel, como o editor do painel web o envia. */
 export const ReactionRoleItemInputSchema = z.object({
   roleId: SnowflakeSchema,

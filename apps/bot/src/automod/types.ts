@@ -1,4 +1,4 @@
-import type { AutomodRule, AutomodRuleType } from '@cobot/shared';
+import type { AutomodRule, AutomodRuleType } from '@goodbot/shared';
 
 /**
  * Regra validada por `AutomodRuleSchema`, junto do `id` da linha do banco. O

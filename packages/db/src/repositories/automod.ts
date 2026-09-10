@@ -11,10 +11,7 @@ import type { AutomodHit, AutomodRuleRow, NewAutomodRuleRow } from '../types';
  * valida cada linha com `AutomodRuleSchema` antes de usar — o jsonb aqui é
  * `unknown` de propósito.
  */
-export async function getAutomodRules(
-  db: DbExecutor,
-  guildId: string,
-): Promise<AutomodRuleRow[]> {
+export async function getAutomodRules(db: DbExecutor, guildId: string): Promise<AutomodRuleRow[]> {
   return db
     .select()
     .from(automodRules)
@@ -82,7 +79,14 @@ export async function deleteAutomodRule(
 export type UpdateAutomodRuleInput = Partial<
   Pick<
     NewAutomodRuleRow,
-    'name' | 'type' | 'enabled' | 'priority' | 'config' | 'actions' | 'exemptRoleIds' | 'exemptChannelIds'
+    | 'name'
+    | 'type'
+    | 'enabled'
+    | 'priority'
+    | 'config'
+    | 'actions'
+    | 'exemptRoleIds'
+    | 'exemptChannelIds'
   >
 >;
 

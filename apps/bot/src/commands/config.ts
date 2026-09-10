@@ -1,10 +1,10 @@
-import { MODULES } from '@cobot/shared';
+import { MODULES } from '@goodbot/shared';
 import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
 import { defineCommand } from '../lib/command';
 import { botFooter, code, successEmbed } from '../lib/embeds';
 
-import type { Module } from '@cobot/shared';
+import type { Module } from '@goodbot/shared';
 
 export default defineCommand({
   data: new SlashCommandBuilder()

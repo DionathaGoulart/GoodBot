@@ -7,7 +7,7 @@ import {
   MemberSearchQuerySchema,
   guildSettingsBlockers,
   isSnowflake,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { AuditLogEvent, DiscordAPIError, RESTJSONErrorCodes } from 'discord.js';
 import { Hono } from 'hono';
 
@@ -25,7 +25,7 @@ import { toModerationResult } from './moderation';
 import { validate } from '../validate';
 
 import type { ApiDeps, ApiEnv } from '../context';
-import type { BanListQuery, GuildBanSummary, GuildProfile } from '@cobot/shared';
+import type { BanListQuery, GuildBanSummary, GuildProfile } from '@goodbot/shared';
 import type { Guild, GuildBan, GuildMember, GuildVerificationLevel } from 'discord.js';
 
 /**
@@ -197,137 +197,139 @@ async function collectBans(
 }
 
 export function createGuildRoutes(deps: ApiDeps): Hono<ApiEnv> {
-  return new Hono<ApiEnv>()
-    .get('/', (c) => c.json(toGuildProfile(c.get('guild'))))
+  return (
+    new Hono<ApiEnv>()
+      .get('/', (c) => c.json(toGuildProfile(c.get('guild'))))
 
-    /**
-     * Editar o servidor pelo painel (§6.3). Só `admin`, e nada sai daqui para
-     * o Discord antes de checar `ManageGuild` e as features de impulso — um
-     * 400 genérico do Discord não diz ao usuário o que faltou.
-     */
-    .patch('/', validate('json', GuildSettingsInputSchema), async (c) => {
-      const input = c.req.valid('json');
-      const guild = c.get('guild');
-      const actor = await requireActor(deps, guild, input.actorId, 'admin');
+      /**
+       * Editar o servidor pelo painel (§6.3). Só `admin`, e nada sai daqui para
+       * o Discord antes de checar `ManageGuild` e as features de impulso — um
+       * 400 genérico do Discord não diz ao usuário o que faltou.
+       */
+      .patch('/', validate('json', GuildSettingsInputSchema), async (c) => {
+        const input = c.req.valid('json');
+        const guild = c.get('guild');
+        const actor = await requireActor(deps, guild, input.actorId, 'admin');
 
-      if (!requireBotMember(guild).permissions.has('ManageGuild')) {
-        throw forbidden(
-          'O bot não tem a permissão Gerenciar Servidor; reconvide-o com ela.',
-          'MISSING_MANAGE_GUILD',
-        );
-      }
+        if (!requireBotMember(guild).permissions.has('ManageGuild')) {
+          throw forbidden(
+            'O bot não tem a permissão Gerenciar Servidor; reconvide-o com ela.',
+            'MISSING_MANAGE_GUILD',
+          );
+        }
 
-      const blockers = guildSettingsBlockers(input, guild.features);
-      if (blockers.length > 0) {
-        throw new ApiHttpError(
-          400,
-          'MISSING_GUILD_FEATURE',
-          blockers.map((blocker) => blocker.message).join(' '),
-          blockers.map((blocker) => ({ path: blocker.field, message: blocker.message })),
-        );
-      }
+        const blockers = guildSettingsBlockers(input, guild.features);
+        if (blockers.length > 0) {
+          throw new ApiHttpError(
+            400,
+            'MISSING_GUILD_FEATURE',
+            blockers.map((blocker) => blocker.message).join(' '),
+            blockers.map((blocker) => ({ path: blocker.field, message: blocker.message })),
+          );
+        }
 
-      const edited = await guild.edit({
-        name: input.name,
-        description: input.description,
-        verificationLevel: input.verificationLevel as GuildVerificationLevel,
-        systemChannel: input.systemChannelId,
-        afkChannel: input.afkChannelId,
-        afkTimeout: input.afkTimeout,
-        ...(input.icon === undefined ? {} : { icon: input.icon }),
-        ...(input.banner === undefined ? {} : { banner: input.banner }),
-        reason: input.reason ?? `Editado pelo painel por ${actor.user.tag}`,
-      });
-      return c.json(toGuildProfile(edited));
-    })
+        const edited = await guild.edit({
+          name: input.name,
+          description: input.description,
+          verificationLevel: input.verificationLevel as GuildVerificationLevel,
+          systemChannel: input.systemChannelId,
+          afkChannel: input.afkChannelId,
+          afkTimeout: input.afkTimeout,
+          ...(input.icon === undefined ? {} : { icon: input.icon }),
+          ...(input.banner === undefined ? {} : { banner: input.banner }),
+          reason: input.reason ?? `Editado pelo painel por ${actor.user.tag}`,
+        });
+        return c.json(toGuildProfile(edited));
+      })
 
-    .get('/bans', validate('query', BanListQuerySchema), async (c) => {
-      const guild = c.get('guild');
-      if (!guild.members.me?.permissions.has('BanMembers')) {
-        throw forbidden(
-          'O bot não tem a permissão Banir Membros; reconvide-o com ela.',
-          'MISSING_BAN_MEMBERS',
-        );
-      }
+      .get('/bans', validate('query', BanListQuerySchema), async (c) => {
+        const guild = c.get('guild');
+        if (!guild.members.me?.permissions.has('BanMembers')) {
+          throw forbidden(
+            'O bot não tem a permissão Banir Membros; reconvide-o com ela.',
+            'MISSING_BAN_MEMBERS',
+          );
+        }
 
-      const { bans, nextCursor } = await collectBans(guild, c.req.valid('query'));
-      const authors = await fetchBanAuthors(guild);
-      return c.json({
-        bans: bans.map((ban) => toBanSummary(ban, authors.get(ban.user.id))),
-        nextCursor,
-        executorsResolved: guild.members.me.permissions.has('ViewAuditLog'),
-      });
-    })
+        const { bans, nextCursor } = await collectBans(guild, c.req.valid('query'));
+        const authors = await fetchBanAuthors(guild);
+        return c.json({
+          bans: bans.map((ban) => toBanSummary(ban, authors.get(ban.user.id))),
+          nextCursor,
+          executorsResolved: guild.members.me.permissions.has('ViewAuditLog'),
+        });
+      })
 
-    /**
-     * Desbanir pelo painel. Passa pelo `ModerationService`, o mesmo do
-     * `/unban`, então caso, mod-log e escalada saem idênticos — só o `source`
-     * muda para `dashboard` (PRD §5.7).
-     */
-    .delete('/bans/:userId', validate('json', ActorInputSchema), async (c) => {
-      const input = c.req.valid('json');
-      const guild = c.get('guild');
-      const userId = c.req.param('userId');
-      if (!isSnowflake(userId)) throw notFound('Usuário inválido.', 'INVALID_USER_ID');
+      /**
+       * Desbanir pelo painel. Passa pelo `ModerationService`, o mesmo do
+       * `/unban`, então caso, mod-log e escalada saem idênticos — só o `source`
+       * muda para `dashboard` (PRD §5.7).
+       */
+      .delete('/bans/:userId', validate('json', ActorInputSchema), async (c) => {
+        const input = c.req.valid('json');
+        const guild = c.get('guild');
+        const userId = c.req.param('userId');
+        if (!isSnowflake(userId)) throw notFound('Usuário inválido.', 'INVALID_USER_ID');
 
-      const actor = await requireActor(deps, guild, input.actorId, 'mod');
-      const target = await deps.client.users.fetch(userId).catch(() => null);
-      if (!target) throw notFound('Usuário não encontrado.', 'TARGET_NOT_FOUND');
-      await deps.moderation.assertCanAct(guild, actor, target);
+        const actor = await requireActor(deps, guild, input.actorId, 'mod');
+        const target = await deps.client.users.fetch(userId).catch(() => null);
+        if (!target) throw notFound('Usuário não encontrado.', 'TARGET_NOT_FOUND');
+        await deps.moderation.assertCanAct(guild, actor, target);
 
-      const result = await deps.moderation.unban({
-        guild,
-        actor,
-        target,
-        source: 'dashboard',
-        ...(input.reason === undefined ? {} : { reason: input.reason }),
-      });
-      return c.json(toModerationResult(result));
-    })
+        const result = await deps.moderation.unban({
+          guild,
+          actor,
+          target,
+          source: 'dashboard',
+          ...(input.reason === undefined ? {} : { reason: input.reason }),
+        });
+        return c.json(toModerationResult(result));
+      })
 
-    .get('/channels', (c) => {
-      const guild = c.get('guild');
-      const channels = [...guild.channels.cache.values()]
-        .map(toChannelSummary)
-        .sort((a, b) => a.position - b.position);
-      return c.json(channels);
-    })
+      .get('/channels', (c) => {
+        const guild = c.get('guild');
+        const channels = [...guild.channels.cache.values()]
+          .map(toChannelSummary)
+          .sort((a, b) => a.position - b.position);
+        return c.json(channels);
+      })
 
-    .get('/roles', (c) => {
-      const guild = c.get('guild');
-      const roles = [...guild.roles.cache.values()]
-        .map(toRoleSummary)
-        .sort((a, b) => b.position - a.position);
-      return c.json(roles);
-    })
+      .get('/roles', (c) => {
+        const guild = c.get('guild');
+        const roles = [...guild.roles.cache.values()]
+          .map(toRoleSummary)
+          .sort((a, b) => b.position - a.position);
+        return c.json(roles);
+      })
 
-    .get('/members', validate('query', MemberSearchQuerySchema), async (c) => {
-      const { q, limit } = c.req.valid('query');
-      const members = await searchMembers(c.get('guild'), q, limit);
-      return c.json(members.map(toMemberSummary));
-    })
+      .get('/members', validate('query', MemberSearchQuerySchema), async (c) => {
+        const { q, limit } = c.req.valid('query');
+        const members = await searchMembers(c.get('guild'), q, limit);
+        return c.json(members.map(toMemberSummary));
+      })
 
-    .get('/members/:userId', async (c) => {
-      const userId = c.req.param('userId');
-      if (!isSnowflake(userId)) throw notFound('Usuário inválido.', 'INVALID_USER_ID');
+      .get('/members/:userId', async (c) => {
+        const userId = c.req.param('userId');
+        if (!isSnowflake(userId)) throw notFound('Usuário inválido.', 'INVALID_USER_ID');
 
-      const member = await fetchMember(c.get('guild'), userId);
-      if (!member) throw notFound('Este usuário não está no servidor.', 'MEMBER_NOT_FOUND');
-      return c.json(toMemberDetail(member));
-    })
+        const member = await fetchMember(c.get('guild'), userId);
+        if (!member) throw notFound('Este usuário não está no servidor.', 'MEMBER_NOT_FOUND');
+        return c.json(toMemberDetail(member));
+      })
 
-    .get('/audit-log', validate('query', AuditLogQuerySchema), async (c) => {
-      const { type, limit, before } = c.req.valid('query');
-      const guild = c.get('guild');
-      if (!guild.members.me?.permissions.has('ViewAuditLog')) {
-        throw notFound('O bot não tem permissão para ver o audit log.', 'MISSING_PERMISSION');
-      }
+      .get('/audit-log', validate('query', AuditLogQuerySchema), async (c) => {
+        const { type, limit, before } = c.req.valid('query');
+        const guild = c.get('guild');
+        if (!guild.members.me?.permissions.has('ViewAuditLog')) {
+          throw notFound('O bot não tem permissão para ver o audit log.', 'MISSING_PERMISSION');
+        }
 
-      const logs = await guild.fetchAuditLogs({
-        limit,
-        ...(type === undefined ? {} : { type }),
-        ...(before === undefined ? {} : { before }),
-      });
-      return c.json([...logs.entries.values()].map(toAuditLogEntry));
-    });
+        const logs = await guild.fetchAuditLogs({
+          limit,
+          ...(type === undefined ? {} : { type }),
+          ...(before === undefined ? {} : { before }),
+        });
+        return c.json([...logs.entries.values()].map(toAuditLogEntry));
+      })
+  );
 }

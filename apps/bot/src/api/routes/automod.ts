@@ -1,11 +1,11 @@
-import { RaidModeInputSchema } from '@cobot/shared';
+import { RaidModeInputSchema } from '@goodbot/shared';
 import { Hono } from 'hono';
 
 import { childLogger } from '../../logger';
 import { validate } from '../validate';
 
 import type { ApiDeps, ApiEnv } from '../context';
-import type { RaidModeState } from '@cobot/shared';
+import type { RaidModeState } from '@goodbot/shared';
 
 const log = childLogger('api');
 

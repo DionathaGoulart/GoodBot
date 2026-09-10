@@ -1,13 +1,7 @@
-import { BULK_DELETE_MAX_AGE_MS } from '@cobot/shared';
+import { BULK_DELETE_MAX_AGE_MS } from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
-import {
-  chunk,
-  describeFilters,
-  isBulkDeletable,
-  matchesPurgeFilters,
-  splitByAge,
-} from './purge';
+import { chunk, describeFilters, isBulkDeletable, matchesPurgeFilters, splitByAge } from './purge';
 
 import type { PurgeCandidate } from './purge';
 
@@ -43,9 +37,9 @@ describe('matchesPurgeFilters', () => {
 
   it('filtra só bots', () => {
     expect(matchesPurgeFilters(message(), { botsOnly: true })).toBe(false);
-    expect(matchesPurgeFilters(message({ author: { id: '1', bot: true } }), { botsOnly: true })).toBe(
-      true,
-    );
+    expect(
+      matchesPurgeFilters(message({ author: { id: '1', bot: true } }), { botsOnly: true }),
+    ).toBe(true);
   });
 
   it('procura o texto sem diferenciar maiúsculas', () => {
@@ -59,9 +53,9 @@ describe('matchesPurgeFilters', () => {
       matchesPurgeFilters(message({ content: 'veja https://exemplo.com' }), { linksOnly: true }),
     ).toBe(true);
     expect(matchesPurgeFilters(message(), { attachmentsOnly: true })).toBe(false);
-    expect(matchesPurgeFilters(message({ attachments: { size: 1 } }), { attachmentsOnly: true })).toBe(
-      true,
-    );
+    expect(
+      matchesPurgeFilters(message({ attachments: { size: 1 } }), { attachmentsOnly: true }),
+    ).toBe(true);
     expect(matchesPurgeFilters(message({ embeds: [{}] }), { attachmentsOnly: true })).toBe(true);
   });
 
@@ -75,7 +69,9 @@ describe('matchesPurgeFilters', () => {
   it('combina filtros com E', () => {
     const filters = { userId: '111', contains: 'mundo' };
     expect(matchesPurgeFilters(message(), filters)).toBe(true);
-    expect(matchesPurgeFilters(message({ author: { id: '222', bot: false } }), filters)).toBe(false);
+    expect(matchesPurgeFilters(message({ author: { id: '222', bot: false } }), filters)).toBe(
+      false,
+    );
   });
 });
 

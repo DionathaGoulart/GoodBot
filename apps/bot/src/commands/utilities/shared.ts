@@ -1,4 +1,4 @@
-import { UserFacingError } from '@cobot/shared';
+import { UserFacingError } from '@goodbot/shared';
 import { ChannelType } from 'discord.js';
 
 import { isLockable } from '../../services/locks';

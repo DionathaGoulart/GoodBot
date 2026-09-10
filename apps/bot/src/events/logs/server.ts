@@ -17,7 +17,7 @@ import {
 import { fieldValue } from '../../services/logs';
 
 import type { BotContext } from '../../lib/command';
-import type { LogsConfig } from '@cobot/shared';
+import type { LogsConfig } from '@goodbot/shared';
 import type {
   APIEmbedField,
   DMChannel,

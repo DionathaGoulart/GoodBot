@@ -1,19 +1,13 @@
 'use client';
 
-import type { TagsConfig } from '@cobot/shared';
+import type { TagsConfig } from '@goodbot/shared';
 
 import { ConfigForm } from '@/components/config/config-form';
 import { DiscordField, NumberField, SwitchField } from '@/components/config/fields';
 import { ModuleToggle } from '@/components/config/module-toggle';
 import { Panel } from '@/components/retro/panel';
 
-export function TagsConfigForm({
-  values,
-  readOnly,
-}: {
-  values: TagsConfig;
-  readOnly: boolean;
-}) {
+export function TagsConfigForm({ values, readOnly }: { values: TagsConfig; readOnly: boolean }) {
   return (
     <ConfigForm page="tags" defaultValues={values} readOnly={readOnly}>
       <ModuleToggle description="Respostas prontas chamadas por /tag." />
@@ -31,13 +25,7 @@ export function TagsConfigForm({
           label="Qualquer membro pode usar"
           description="Desligado, só quem pode criar consegue chamar /tag."
         />
-        <NumberField
-          name="maxTags"
-          label="Limite de tags"
-          min={1}
-          max={1_000}
-          suffix="TAGS"
-        />
+        <NumberField name="maxTags" label="Limite de tags" min={1} max={1_000} suffix="TAGS" />
         <NumberField
           name="cooldownSeconds"
           label="Cooldown por usuário"

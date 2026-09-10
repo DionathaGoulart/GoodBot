@@ -9,8 +9,8 @@ import {
   listPanels,
   replacePanelItems,
   updatePanel,
-} from '@cobot/db';
-import { ReactionRolePanelInputSchema, type ReactionRolePanelInput } from '@cobot/shared';
+} from '@goodbot/db';
+import { ReactionRolePanelInputSchema, type ReactionRolePanelInput } from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
@@ -134,11 +134,10 @@ export async function publishPanel(formData: FormData): Promise<ActionResult> {
     return { ok: false, message: error instanceof Error ? error.message : 'O bot não respondeu.' };
   }
 
-  await withAudit(
-    { id: session.user.id, tag: session.user.name },
-    'reaction_roles.panel.publish',
-    { type: 'reaction_role_panel', id },
-  );
+  await withAudit({ id: session.user.id, tag: session.user.name }, 'reaction_roles.panel.publish', {
+    type: 'reaction_role_panel',
+    id,
+  });
   revalidatePath(PATH(guildId));
   return { ok: true, message: 'Painel publicado.' };
 }

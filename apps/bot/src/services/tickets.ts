@@ -9,8 +9,8 @@ import {
   listTicketTypes,
   setTicketPanelMessage,
   setTicketTranscript,
-} from '@cobot/db';
-import { UserFacingError } from '@cobot/shared';
+} from '@goodbot/db';
+import { UserFacingError } from '@goodbot/shared';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -23,15 +23,11 @@ import {
 import { botFooter, code, infoEmbed, successEmbed } from '../lib/embeds';
 import { memberVars, templateToMessage } from '../lib/template';
 import { childLogger } from '../logger';
-import {
-  buildTranscriptFiles,
-  collectMessages,
-  transcriptMeta,
-} from './transcript';
+import { buildTranscriptFiles, collectMessages, transcriptMeta } from './transcript';
 
 import type { ConfigService } from './config';
-import type { Db, Ticket, TicketType } from '@cobot/db';
-import type { MessageTemplate, TicketsConfig } from '@cobot/shared';
+import type { Db, Ticket, TicketType } from '@goodbot/db';
+import type { MessageTemplate, TicketsConfig } from '@goodbot/shared';
 import type {
   BaseMessageOptions,
   Guild,
@@ -57,8 +53,7 @@ export function ticketOpenButtonId(typeId: string): string {
 }
 
 const DEFAULT_OPENING: MessageTemplate = {
-  content:
-    'Descreva seu pedido com o máximo de detalhes. A equipe responde por aqui.',
+  content: 'Descreva seu pedido com o máximo de detalhes. A equipe responde por aqui.',
 };
 
 /**
@@ -194,12 +189,14 @@ export class TicketService {
           ? []
           : [
               new ActionRowBuilder<ButtonBuilder>().addComponents(
-                offered.slice(0, 5).map((type) =>
-                  new ButtonBuilder()
-                    .setCustomId(ticketOpenButtonId(type.id))
-                    .setLabel(type.name.slice(0, 80).toUpperCase())
-                    .setStyle(ButtonStyle.Primary),
-                ),
+                offered
+                  .slice(0, 5)
+                  .map((type) =>
+                    new ButtonBuilder()
+                      .setCustomId(ticketOpenButtonId(type.id))
+                      .setLabel(type.name.slice(0, 80).toUpperCase())
+                      .setStyle(ButtonStyle.Primary),
+                  ),
               ),
             ],
     };
@@ -342,11 +339,11 @@ export class TicketService {
     ticket: Ticket,
   ): Promise<void> {
     const settings = await this.deps.config.getSettings(member.guild.id);
-    const body = templateToMessage(
-      type.openingMessage ?? DEFAULT_OPENING,
-      memberVars(member),
-      { embedColor: settings.embedColor, user: member.user, guild: member.guild },
-    );
+    const body = templateToMessage(type.openingMessage ?? DEFAULT_OPENING, memberVars(member), {
+      embedColor: settings.embedColor,
+      user: member.user,
+      guild: member.guild,
+    });
 
     const mentions = [`<@${member.id}>`, ...type.supportRoleIds.map((id) => `<@&${id}>`)].join(' ');
     const message = await channel.send({

@@ -106,7 +106,11 @@ export const GuildImageSchema = z.string().superRefine((value, ctx) => {
  */
 export const GUILD_FEATURE_GATES = {
   banner: { feature: 'BANNER', label: 'Banner do servidor', requirement: 'Impulso nível 2' },
-  animatedIcon: { feature: 'ANIMATED_ICON', label: 'Ícone animado', requirement: 'Impulso nível 1' },
+  animatedIcon: {
+    feature: 'ANIMATED_ICON',
+    label: 'Ícone animado',
+    requirement: 'Impulso nível 1',
+  },
   splash: { feature: 'INVITE_SPLASH', label: 'Fundo do convite', requirement: 'Impulso nível 1' },
   description: {
     feature: 'COMMUNITY',
@@ -153,7 +157,7 @@ export type GuildBotPermissions = z.infer<typeof GuildBotPermissionsSchema>;
 /**
  * O servidor como o Discord o guarda — nome, imagens, canais de sistema. Não
  * confundir com `GuildSettingsSchema` (`config/guild-settings`), que é a
- * configuração do CoBot para a guild.
+ * configuração do Goodbot para a guild.
  */
 export const GuildProfileSchema = z.object({
   id: SnowflakeSchema,

@@ -1,4 +1,4 @@
-# CoBot — instruções para o Claude Code
+# Goodbot — instruções para o Claude Code
 
 Bot de moderação para Discord (discord.js v14) + painel web (Next.js) num
 monorepo pnpm. Tudo em TypeScript. Idioma do projeto: **pt-BR** (docs,
@@ -27,12 +27,14 @@ aprovar app numa plataforma), pare e peça — não invente contorno.
 ## Layout do repositório
 
 ```
-apps/bot          discord.js v14, handler próprio, API interna Hono, pino
-apps/web          Next.js App Router, Tailwind, shadcn/ui, Auth.js (Discord)
-packages/db       Drizzle: schema em src/schema/*.ts, migrations em drizzle/
-packages/shared   Zod: schemas de config por módulo, payloads da API interna, tipos, constantes
-infra/            docker-compose.yml, Caddyfile, Dockerfiles, scripts de deploy
-.harness/         prd.md, styleguide.md, plan.md (fonte de verdade)
+apps/bot                discord.js v14, handler próprio, API interna Hono, pino
+apps/web                Next.js App Router, Tailwind, shadcn/ui, Auth.js (Discord)
+packages/db             Drizzle: schema em src/schema/*.ts, migrations em drizzle/
+packages/shared         Zod: schemas de config por módulo, payloads da API interna, tipos, constantes
+packages/guild-config   guild como código: guild.yaml -> plano -> apply pela API do bot
+infra/                  docker-compose.yml, Caddyfile, Dockerfiles, deploy, discord/<slug>/
+.harness/               prd.md, architecture.md, styleguide.md (fonte de verdade)
+docs/                   guias: primeiros passos, módulos, API, banco, runbook
 ```
 
 ## Convenções
@@ -42,7 +44,7 @@ infra/            docker-compose.yml, Caddyfile, Dockerfiles, scripts de deploy
   atalhos da raiz (`pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm typecheck`,
   `pnpm test`). Node 22 LTS.
 - **Schema e migrations:** só em `packages/db`. Alterou `src/schema/*.ts` →
-  `pnpm --filter @cobot/db db:generate` (gera SQL em `drizzle/`) → revisar o
+  `pnpm --filter @goodbot/db db:generate` (gera SQL em `drizzle/`) → revisar o
   SQL → `db:migrate`. Nunca editar migration já aplicada; nunca `db:push` fora
   de dev.
 - **Validação:** todo input externo (slash command options, body da API
@@ -70,6 +72,10 @@ infra/            docker-compose.yml, Caddyfile, Dockerfiles, scripts de deploy
 - **UI:** seguir `.harness/styleguide.md` à risca: radius 0, borda 2px,
   sombra dura, JetBrains Mono, temas `crimson`/`rose`, hex só em
   `globals.css`. Componentes shadcn são editados em `apps/web/components/ui`.
+- **Guild como código:** estrutura de servidor (cargos, canais, permissões)
+  vive em `infra/discord/<slug>/guild.yaml`, **sem nenhum ID** — tudo por nome.
+  Segredo do servidor fica no `.env` ao lado, gitignored. Rode `pnpm guild plan`
+  antes de `apply`; nada é apagado sem `--allow-delete`.
 - **Discord:** IDs sempre `string`; nunca `Number(snowflake)`. Comandos
   registrados como guild commands. Respeitar rate limits (PRD §7.4).
 - **API do bot:** desde a v1.1 ela é exposta na internet (`bot.<dominio>`),
@@ -88,7 +94,7 @@ infra/            docker-compose.yml, Caddyfile, Dockerfiles, scripts de deploy
 cp .env.example .env            # preencher DISCORD_TOKEN, etc.
 docker compose -f infra/docker-compose.dev.yml up -d postgres
 pnpm install
-pnpm --filter @cobot/db db:migrate
+pnpm --filter @goodbot/db db:migrate
 pnpm dev                        # bot + web em paralelo (turbo/concurrently)
 ```
 

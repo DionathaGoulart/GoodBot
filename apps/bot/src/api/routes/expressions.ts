@@ -7,7 +7,7 @@ import {
   emojiSlotState,
   slotsFullMessage,
   stickerSlotState,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import { Hono } from 'hono';
 
 import { requireActor } from '../actor';
@@ -20,7 +20,7 @@ import type {
   GuildEmojiSummary,
   GuildStickerSummary,
   SlotState,
-} from '@cobot/shared';
+} from '@goodbot/shared';
 import type { Guild, GuildEmoji, Sticker } from 'discord.js';
 
 function toEmojiSummary(emoji: GuildEmoji): GuildEmojiSummary {

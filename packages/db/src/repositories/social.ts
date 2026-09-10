@@ -5,7 +5,7 @@ import { socialAccounts, socialPosts } from '../schema/social';
 
 import type { DbExecutor } from '../client';
 import type { SocialAccount, SocialPost } from '../types';
-import type { MessageTemplate, SocialKind, SocialPlatform } from '@cobot/shared';
+import type { MessageTemplate, SocialKind, SocialPlatform } from '@goodbot/shared';
 
 export interface SocialAccountInputRow {
   platform: SocialPlatform;

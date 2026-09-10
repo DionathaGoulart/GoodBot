@@ -5,7 +5,7 @@ import { guilds } from '../schema/guilds';
 
 import type { DbExecutor } from '../client';
 import type { ReactionRoleItem, ReactionRolePanel } from '../types';
-import type { MessageTemplate, ReactionRoleMode, ReactionRoleStyle } from '@cobot/shared';
+import type { MessageTemplate, ReactionRoleMode, ReactionRoleStyle } from '@goodbot/shared';
 
 /** Painel com os itens já carregados — é sempre assim que o bot o usa. */
 export interface PanelWithItems extends ReactionRolePanel {
@@ -36,10 +36,7 @@ async function ensureGuild(db: DbExecutor, guildId: string): Promise<void> {
     .onConflictDoNothing({ target: guilds.id });
 }
 
-export async function listPanels(
-  db: DbExecutor,
-  guildId: string,
-): Promise<ReactionRolePanel[]> {
+export async function listPanels(db: DbExecutor, guildId: string): Promise<ReactionRolePanel[]> {
   return db
     .select()
     .from(reactionRolePanels)
@@ -55,10 +52,7 @@ export async function countPanels(db: DbExecutor, guildId: string): Promise<numb
   return row?.count ?? 0;
 }
 
-export async function listPanelItems(
-  db: DbExecutor,
-  panelId: string,
-): Promise<ReactionRoleItem[]> {
+export async function listPanelItems(db: DbExecutor, panelId: string): Promise<ReactionRoleItem[]> {
   return db
     .select()
     .from(reactionRoleItems)

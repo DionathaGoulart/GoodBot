@@ -1,4 +1,4 @@
-import { MINUTE_MS, SECOND_MS } from '@cobot/shared';
+import { MINUTE_MS, SECOND_MS } from '@goodbot/shared';
 
 import { STATUS_COLORS } from '../lib/embeds';
 import { childLogger } from '../logger';
@@ -117,7 +117,7 @@ export function buildPayload(input: AlertInput, suppressed = 0): unknown {
   }
 
   return {
-    username: 'CoBot',
+    username: 'Goodbot',
     embeds: [
       {
         title: `> ${input.title.toUpperCase()}`,

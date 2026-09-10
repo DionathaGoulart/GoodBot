@@ -8,7 +8,7 @@ import { loadCasesPage } from '@/lib/cases';
 import { CaseFiltersBar } from './filters';
 import { CasesTable } from './cases-table';
 
-export const metadata = { title: 'Casos · CoBot' };
+export const metadata = { title: 'Casos · Goodbot' };
 
 /**
  * Casos (PRD §6.4). O filtro inteiro mora na URL: a página é compartilhável e

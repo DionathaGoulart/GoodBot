@@ -37,7 +37,12 @@ describe('slots por nível de impulso', () => {
       remaining: 0,
       full: true,
     });
-    expect(emojiSlotState(limits, true)).toEqual({ limit: 50, used: 3, remaining: 47, full: false });
+    expect(emojiSlotState(limits, true)).toEqual({
+      limit: 50,
+      used: 3,
+      remaining: 47,
+      full: false,
+    });
   });
 
   it('impulso nível 2 abre mais slots com os mesmos emojis', () => {
@@ -61,7 +66,7 @@ describe('slots por nível de impulso', () => {
 
 describe('EmojiNameSchema', () => {
   it('aceita letras, números e sublinhado', () => {
-    expect(EmojiNameSchema.safeParse('cobot_ok1').success).toBe(true);
+    expect(EmojiNameSchema.safeParse('goodbot_ok1').success).toBe(true);
   });
 
   it('recusa espaço e acento', () => {
@@ -73,7 +78,7 @@ describe('EmojiCreateInputSchema', () => {
   it('aceita um PNG pequeno sem cargos', () => {
     const parsed = EmojiCreateInputSchema.safeParse({
       actorId: ACTOR,
-      name: 'cobot',
+      name: 'goodbot',
       image: TINY_PNG,
     });
     expect(parsed.success).toBe(true);
@@ -83,7 +88,7 @@ describe('EmojiCreateInputSchema', () => {
   it('recusa formato que o Discord não aceita em emoji', () => {
     const parsed = EmojiCreateInputSchema.safeParse({
       actorId: ACTOR,
-      name: 'cobot',
+      name: 'goodbot',
       image: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
     });
     expect(parsed.success).toBe(false);
