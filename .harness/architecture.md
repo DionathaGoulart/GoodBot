@@ -87,8 +87,9 @@ Antes do `login`, o `GUILD_IDS` é semeado no registro (`RegistryService.seed`)
 e o espelho em memória é carregado: quando o primeiro evento chegar, o bot já
 sabe quem atende. No `ready`, cada guild **atendida pelo registro** é preparada
 por vez (`lib/guild-setup.ts`: upsert, config, guild commands — o cache de
-membros **não** é preenchido no boot desde a Etapa 6 do plano; ele tem teto por
-guild e se enche pelos eventos). Guild ausente vira log de erro e não impede as outras. Guild em que
+membros **não** é preenchido no boot: ele tem teto por
+guild e se enche pelos eventos, porque a RAM crescia com a soma dos membros de
+todos os servidores). Guild ausente vira log de erro e não impede as outras. Guild em que
 o bot está mas não atende ganha linha `pending` e fica calada; bloqueada, ele
 sai. Os dois recursos do processo (LRU de mensagens, intervalo de flush das
 stats) recebem o maior cache e o menor intervalo entre as guilds — quem resolve
@@ -429,7 +430,7 @@ os toca).
 
 ---
 
-## 9. Quatro fluxos de ponta a ponta
+## 9. Cinco fluxos de ponta a ponta
 
 **Um slash command (`/ban`)**
 
@@ -466,6 +467,33 @@ load.ts lê guild.yaml + .env ─▶ state.ts busca cargos, canais e cada detalh
   ─▶ apply.ts executa em ordem: cargos, categorias, canais, permissões
      (cada criação alimenta o Registry que a operação seguinte consulta)
 ```
+
+**Um convite (`invite.` ou `demo.`)**
+
+```
+invite.<host>/convite ─▶ clique ─▶ GET /api/invite/start
+  ─▶ lib/invite/state.ts assina <payload>.<hmac> (AUTH_SECRET, 15 min)
+  ─▶ OAuth do Discord (scope bot+identify, redirect_uri do AUTH_URL)
+  ─▶ GET /api/invite/callback: state válido? fluxo bate com o host?
+  ─▶ lib/invite/discord.ts troca o code ─▶ prova a instalação e quem convidou
+  ─▶ ensureGuildRegistered: linha `pending` ou `demo` (+1 h) — nunca sobrescreve
+  ─▶ /convite/pronto lê o REGISTRO (não a query) e diz o que aconteceu
+```
+
+Quatro coisas nesse caminho não são gosto:
+
+- **O `state` é assinado** porque é ele que carrega o fluxo. Sem HMAC, trocar
+  `pending` por `demo` na URL é auto-aprovação; e a TTL curta é o que impede
+  reusar um `state` antigo. Ele é emitido no **clique**, não na renderização,
+  senão uma aba esquecida aberta gera `state` vencido.
+- **O `guild_id` da query é ignorado**: qualquer um digita um. Quem prova a
+  instalação é a troca do `code`, e é ela que devolve `invitedBy`.
+- **O `redirect_uri` sai do `AUTH_URL`**, nunca do header `Host` — quem manda
+  o header é o cliente, e esse valor tem de bater exatamente com o que está no
+  Developer Portal.
+- **`ensureGuildRegistered` não sobrescreve status existente**, e isso resolve
+  três casos numa linha: bloqueado continua bloqueado, aprovado não volta para
+  a fila, e a demo não se renova.
 
 ---
 

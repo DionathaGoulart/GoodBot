@@ -9,8 +9,7 @@ import type { ErrorEntry } from '@goodbot/shared';
 export const ERROR_LOG_SIZE = 100;
 
 /**
- * Os últimos erros do processo, para o card "Saúde e uso" do painel admin
- * (plano, Etapa 4).
+ * Os últimos erros do processo, para o card "Saúde e uso" do painel do dono.
  *
  * O `/metrics` já conta **quantos** erros houve por escopo; isto diz **quais**,
  * que é o que decide se vale abrir o log da VM. Nada aqui substitui o pino: a

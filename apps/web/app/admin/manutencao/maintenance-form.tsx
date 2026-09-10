@@ -14,7 +14,7 @@ import type { MaintenanceOutcome, ResyncOutcome } from '@/lib/admin';
 import type { MaintenanceState, ResyncCommandsResult } from '@goodbot/shared';
 
 /**
- * Modo manutenção e re-registro de comandos (plano, Etapa 4, item 4).
+ * Modo manutenção e re-registro de comandos.
  *
  * Ligar a manutenção **não** derruba o bot: ele continua online no Discord,
  * continua registrando eventos e continua respondendo `/health` — só recusa

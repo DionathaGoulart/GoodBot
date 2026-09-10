@@ -43,7 +43,7 @@ const COPY: Record<InviteFlow, { kicker: string; titulo: string; texto: string; 
 };
 
 /**
- * A porta de entrada de `invite.` e `demo.` (plano, Etapa 2).
+ * A porta de entrada de `invite.` e `demo.`.
  *
  * É uma página com botão, e não um redirecionamento automático, por dois
  * motivos: a pessoa precisa saber **antes** que a demo tem prazo, e um link

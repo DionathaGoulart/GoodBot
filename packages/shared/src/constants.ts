@@ -33,10 +33,10 @@ export const GUILD_STATUSES = ['pending', 'approved', 'demo', 'blocked'] as cons
 export type GuildStatus = (typeof GUILD_STATUSES)[number];
 
 /**
- * Os dois caminhos de entrada do bot (plano, Etapa 2). O convite do Discord
- * **não** conta ao bot por onde a pessoa veio, então cada fluxo tem o seu
- * próprio subdomínio (`invite.` e `demo.`): o link passa por nós, nós é que
- * chamamos o OAuth, e o `state` assinado devolve o fluxo no callback.
+ * Os dois caminhos de entrada do bot. O convite do Discord **não** conta ao
+ * bot por onde a pessoa veio, então cada fluxo tem o seu próprio subdomínio
+ * (`invite.` e `demo.`): o link passa por nós, nós é que chamamos o OAuth, e o
+ * `state` assinado devolve o fluxo no callback.
  *
  * `invite` entra como `pending` (espera aprovação); `demo` entra atendido e
  * com prazo.
@@ -221,17 +221,16 @@ export const DAY_MS = 24 * HOUR_MS;
 export const WEEK_MS = 7 * DAY_MS;
 
 /**
- * Quanto tempo o bot atende um servidor que entrou pelo link de demonstração
- * (plano, Etapa 2). É fixo de propósito: a demo existe para mostrar o produto,
- * não para virar um plano gratuito com prazo negociável.
+ * Quanto tempo o bot atende um servidor que entrou pelo link de demonstração.
+ * É fixo de propósito: a demo existe para mostrar o produto, não para virar um
+ * plano gratuito com prazo negociável.
  */
 export const DEMO_DURATION_MS = HOUR_MS;
 
 /**
- * Quanto antes do fim da demo o bot avisa no servidor (plano, Etapa 3). Dez
- * minutos é o que dá para alguém ler o aviso e ainda clicar no convite normal
- * antes de o bot sair — mais cedo o recado se perde na conversa, mais tarde
- * vira surpresa.
+ * Quanto antes do fim da demo o bot avisa no servidor. Dez minutos é o que dá
+ * para alguém ler o aviso e ainda clicar no convite normal antes de o bot sair
+ * — mais cedo o recado se perde na conversa, mais tarde vira surpresa.
  */
 export const DEMO_WARNING_BEFORE_MS = 10 * MINUTE_MS;
 

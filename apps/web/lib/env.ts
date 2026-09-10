@@ -22,7 +22,7 @@ const EnvSchema = z.object({
   AUTH_SECRET: z.string().min(32, 'gere com: openssl rand -base64 32'),
   AUTH_URL: z.url(),
   /**
-   * O dono do bot — quem abre `admin.<domínio>` (plano, Etapa 4).
+   * O dono do bot — quem abre `admin.<domínio>`.
    *
    * **Não** é cargo em servidor nenhum, de propósito: quem administra um
    * servidor qualquer viraria administrador do bot inteiro. E é opcional para

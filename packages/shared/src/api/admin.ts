@@ -37,7 +37,7 @@ export const AdminGuildLiveSchema = z.object({
   iconUrl: z.string().nullable(),
   memberCount: z.number().int().min(0),
   ownerId: SnowflakeSchema,
-  /** `null` quando o dono não está no cache de membros (Etapa 6). */
+  /** `null` quando o dono não está no cache de membros. */
   ownerTag: z.string().nullable(),
   /** Quando o bot entrou; `null` no caso raro de o gateway não informar. */
   joinedAt: z.string().nullable(),

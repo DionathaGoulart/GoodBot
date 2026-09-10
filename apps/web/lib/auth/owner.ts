@@ -9,7 +9,7 @@ import { actionLimiter, clientIp } from '@/lib/rate-limit';
 import { siteUrl } from '@/lib/site-url';
 
 /**
- * A porta do painel do dono do bot (`admin.<domínio>`, plano, Etapa 4).
+ * A porta do painel do dono do bot (`admin.<domínio>`).
  *
  * O nível aqui **não** vem do Discord: ser dono, admin ou moderador de um
  * servidor não diz nada sobre ser dono do bot — se dissesse, qualquer um que

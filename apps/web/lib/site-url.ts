@@ -17,7 +17,7 @@ import type { SiteHost } from './hosts';
  * estável. Trocar de domínio continua sendo trocar uma variável só.
  *
  * A montagem em si está em `shared` porque o bot faz a mesma conta para o link
- * do convite que ele manda quando a demo acaba (Etapa 3).
+ * do convite que ele manda quando a demo acaba.
  */
 export function siteUrl(site: SiteHost, path = '/'): string {
   return subdomainUrl(env().AUTH_URL, site === 'app' ? null : site, path);

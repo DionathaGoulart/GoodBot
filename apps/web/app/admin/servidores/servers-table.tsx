@@ -24,7 +24,7 @@ import { useAdminAction } from '../use-admin-action';
 import type { AdminGuildRow } from '@/lib/admin';
 
 /**
- * Listar e expulsar (plano, Etapa 4, item 1).
+ * Listar e expulsar.
  *
  * Expulsar é `AlertDialog` porque o bot fala num servidor que não é nosso e
  * some de lá — e porque o motivo digitado vira a mensagem de despedida. Não é

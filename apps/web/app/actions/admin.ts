@@ -13,9 +13,9 @@ import type { BroadcastOutcome, MaintenanceOutcome, ResyncOutcome } from '@/lib/
 import type { ActionResult } from '@/lib/module-config';
 
 /**
- * As ações do painel do dono (plano, Etapa 4). Cascas finas sobre `lib/admin`,
- * como o resto do painel: a checagem de `OWNER_DISCORD_ID` mora lá, junto da
- * escrita, para nenhum caminho novo conseguir escapar dela.
+ * As ações do painel do dono. Cascas finas sobre `lib/admin`, como o resto do
+ * painel: a checagem de `OWNER_DISCORD_ID` mora lá, junto da escrita, para
+ * nenhum caminho novo conseguir escapar dela.
  */
 
 export async function approveGuildAction(formData: FormData): Promise<ActionResult> {

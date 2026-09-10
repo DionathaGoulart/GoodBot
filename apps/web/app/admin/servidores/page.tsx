@@ -11,7 +11,7 @@ export const metadata = { title: 'Servidores · Admin · Goodbot' };
 export const dynamic = 'force-dynamic';
 
 /**
- * Listar e expulsar (plano, Etapa 4, item 1).
+ * Listar e expulsar.
  *
  * A lista é o **registro**, não o cache do bot: um servidor que aprovamos e do
  * qual o bot foi removido precisa aparecer aqui — é exatamente o caso que

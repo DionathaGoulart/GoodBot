@@ -6,7 +6,7 @@ export interface EventHandler<K extends keyof ClientEvents = keyof ClientEvents>
   /** `true` → registrado com `client.once` (ex.: `clientReady`). */
   once?: boolean;
   /**
-   * `true` → roda mesmo em guild que o bot **não** atende (plano, Etapa 8).
+   * `true` → roda mesmo em guild que o bot **não** atende.
    *
    * É a exceção, e ela existe para os eventos que decidem o próprio estado do
    * registro: `guildCreate` é quem cria a linha `pending`, `guildDelete` é

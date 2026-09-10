@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  */
 export const maxDuration = 120;
 
-/** Broadcast e manutenção (plano, Etapa 4, item 4). */
+/** Broadcast e manutenção. */
 export default async function AdminManutencaoPage() {
   await requireBotOwner();
   const [{ maintenance }, { rows }] = await Promise.all([loadAdminSystem(), loadAdminGuilds()]);

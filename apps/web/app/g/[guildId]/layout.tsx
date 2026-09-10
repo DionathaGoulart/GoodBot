@@ -15,7 +15,7 @@ export default async function GuildLayout({ children, params }: LayoutProps<'/g/
 
   // Com mais de um servidor o nome deixa de ser enfeite: sem ele as duas
   // telas ficam idênticas e não dá para saber onde se está clicando. A lista é
-  // só a que este usuário pode abrir (plano, Etapa 5).
+  // só a que este usuário pode abrir.
   const guilds = await listAccessibleGuilds();
   const atual = guilds.find((g) => g.id === guildId);
   const guildName = atual?.name ?? 'SERVIDOR';

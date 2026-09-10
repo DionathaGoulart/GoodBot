@@ -34,7 +34,7 @@ import type {
 } from '@goodbot/shared';
 
 /**
- * Os dados do painel do dono do bot (plano, Etapa 4).
+ * Os dados do painel do dono do bot.
  *
  * A regra que organiza este arquivo: **o registro vem do Postgres, o estado ao
  * vivo vem do bot.** Não é gosto — é o que mantém a fila de aprovação

@@ -148,6 +148,10 @@ depois**, senão ele fica online e calado lá.
    (`/opt/goodbot/.env`), separado por vírgula. O painel não precisa da
    variável: ele lê o registro no banco.
 
+   Este é o caminho de quem tem acesso à VM, e existe para os servidores que
+   já eram seus. Para os outros, o caminho normal é o link de convite (§7.2) e
+   a fila do painel do dono (§7.4) — nenhum dos dois pede SSH nem reinício.
+
    Se hoje está como `GUILD_ID`, pode trocar o nome ou deixar: `GUILD_IDS`
    ganha quando os dois existem.
 
@@ -156,16 +160,9 @@ depois**, senão ele fica online e calado lá.
    dos comandos.
 
 > A semeadura só vale para servidor **sem linha** no registro. Se o bot já foi
-> convidado antes (a linha nasce `pending`), acrescentar o ID não aprova nada —
-> até o painel admin existir, aprovar é um `update` na tabela:
->
-> ```sql
-> update guild_registry
->    set status = 'approved', approved_at = now(), updated_at = now()
->  where guild_id = '<id>';
-> ```
->
-> O bot relê o registro a cada minuto; não precisa reiniciar.
+> convidado antes (a linha nasce `pending`), acrescentar o ID não aprova nada:
+> quem aprova é a fila do painel do dono (§7.4). O bot relê o registro a cada
+> minuto; não precisa reiniciar.
 
 O que muda no painel: entrar leva ao seletor (`/servidores`) quando você tem
 acesso a mais de um; com um só, direto para ele. A barra lateral mostra o nome

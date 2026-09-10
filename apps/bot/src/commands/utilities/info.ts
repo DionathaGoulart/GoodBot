@@ -247,8 +247,8 @@ export const roleinfo = defineCommand({
       ? 'Administrador (todas)'
       : role.permissions.toArray().slice(0, 20).map(code).join(' ') || '—';
 
-    // Desde a Etapa 6 o cache de membros tem teto, então contar nele daria um
-    // número errado com cara de certo. Num servidor grande a resposta é "—".
+    // O cache de membros tem teto, então contar nele daria um número errado
+    // com cara de certo. Num servidor grande a resposta é "—".
     const counts = await roleMemberCounts(role.guild);
     const membros = counts ? String(counts.get(role.id) ?? 0) : '—';
 

@@ -23,7 +23,7 @@ import { useAdminAction } from '../use-admin-action';
 import type { AdminGuildRow } from '@/lib/admin';
 
 /**
- * A fila de decisão (plano, Etapa 4, item 2).
+ * A fila de decisão.
  *
  * Aprovar é direto: é uma escrita no banco e o bot a lê em até um minuto, então
  * não há o que confirmar — e desfazer é bloquear, que está ao lado. Bloquear é

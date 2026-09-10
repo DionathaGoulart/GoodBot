@@ -66,7 +66,7 @@ function requireOwner(options: AdminRoutesOptions, actorId: string): void {
   }
 }
 
-/** O dono do servidor pelo cache; nunca vale um fetch (plano, Etapa 6). */
+/** O dono do servidor pelo cache; nunca vale um fetch. */
 function ownerTagOf(guild: Guild): string | null {
   const member = guild.members.cache.get(guild.ownerId);
   if (member) return member.user.tag;
@@ -92,7 +92,7 @@ function describe(error: unknown): string {
 }
 
 /**
- * As rotas do painel do dono (plano, Etapa 4).
+ * As rotas do painel do dono.
  *
  * São as únicas fora de `/guilds`, e por isso não passam pelo `withGuild`: a
  * lista de servidores existe justamente para mostrar as guilds que o bot **não**

@@ -485,7 +485,7 @@ export interface GuildUsageRow {
 }
 
 /**
- * Uso por servidor desde `since`, para o painel admin (plano, Etapa 4).
+ * Uso por servidor desde `since`, para o painel admin.
  *
  * Sem `guildId` no `where` de propósito: é a **única** leitura do projeto que
  * cruza servidores, e é o que a tela do dono do bot existe para mostrar. Todo o

@@ -160,8 +160,8 @@ export class AutomodService {
     );
     if (rules.length === 0) return null;
 
-    // Com o teto do cache de membros (Etapa 6) o `guild.members.cache` deixou
-    // de ter o servidor inteiro. O `message.member` cobre a mensagem normal; o
+    // Com o teto do cache de membros o `guild.members.cache` deixou de ter o
+    // servidor inteiro. O `message.member` cobre a mensagem normal; o
     // `fetchMember` é a rede de segurança da edição de mensagem antiga, e só
     // dispara chamada quando o membro não está em cache. Sem ele, um moderador
     // fora do cache perderia a isenção por cargo — falso positivo com punição.

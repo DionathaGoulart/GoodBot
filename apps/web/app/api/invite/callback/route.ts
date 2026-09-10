@@ -7,7 +7,7 @@ import { verifyInviteState } from '@/lib/invite/state';
 import { siteUrl } from '@/lib/site-url';
 
 /**
- * A volta do OAuth de convite (plano, Etapa 2).
+ * A volta do OAuth de convite.
  *
  * O Discord manda `code`, `guild_id` e o nosso `state`. A ordem das checagens
  * é a ordem da confiança:

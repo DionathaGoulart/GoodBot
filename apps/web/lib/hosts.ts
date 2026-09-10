@@ -5,9 +5,9 @@ import type { InviteFlow } from '@goodbot/shared';
  * separa é o subdomínio, resolvido aqui e aplicado no `proxy.ts`.
  *
  * · `app` — `goodbot.<domínio>`, o painel de sempre;
- * · `invite` / `demo` — os dois fluxos de convite (Etapa 2);
+ * · `invite` / `demo` — os dois fluxos de convite;
  * · `admin` — o painel do dono do bot: fila de aprovação, blocklist, saúde,
- *   broadcast e manutenção (Etapa 4).
+ *   broadcast e manutenção.
  *
  * Este módulo é **puro de propósito**: ele roda no `proxy.ts`, que não pode
  * importar nada marcado como `server-only`. Quem precisa montar uma URL

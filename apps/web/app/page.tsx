@@ -10,7 +10,7 @@ import { listAccessibleGuilds } from '@/lib/guilds';
 export const dynamic = 'force-dynamic';
 
 /**
- * A raiz decide para onde a pessoa vai (plano, Etapa 5):
+ * A raiz decide para onde a pessoa vai:
  *
  * · um servidor acessível → direto para ele, sem tela intermediária;
  * · mais de um → o seletor;

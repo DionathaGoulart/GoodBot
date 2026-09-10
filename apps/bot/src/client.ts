@@ -36,7 +36,7 @@ export const PARTIALS = [
 ] as const;
 
 /**
- * Teto do cache de membros **por guild** (plano, Etapa 6).
+ * Teto do cache de membros **por guild**.
  *
  * Cada guild tem o seu `GuildMemberManager`, então a conta de RAM é
  * `guilds × MEMBER_CACHE_MAX`, e não um teto global. Sem teto ela era

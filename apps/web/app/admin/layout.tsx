@@ -8,7 +8,7 @@ import { AdminNav } from './admin-nav';
 export const metadata = { title: 'Admin · Goodbot' };
 
 /**
- * O painel do dono do bot (`admin.<domínio>`, plano, Etapa 4).
+ * O painel do dono do bot (`admin.<domínio>`).
  *
  * Casco próprio, sem a sidebar do painel comum: aquela é organizada por guild
  * (`/g/[guildId]/...`) e aqui não existe "a" guild — a tela toda é sobre o

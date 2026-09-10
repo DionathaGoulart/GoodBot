@@ -32,10 +32,10 @@ import type { Guild, GuildBan, GuildMember, GuildVerificationLevel } from 'disco
 /**
  * Busca de membros.
  *
- * Até a Etapa 6 do plano isto filtrava `guild.members.cache`, porque o boot
- * puxava o servidor inteiro para a memória. Com o teto por guild o cache virou
- * uma amostra — quem apareceu por último —, e filtrar nele devolveria "2 de 13"
- * de novo. Agora quem responde é o Discord:
+ * Isto já filtrou `guild.members.cache`, quando o boot puxava o servidor
+ * inteiro para a memória. Com o teto por guild o cache virou uma amostra —
+ * quem apareceu por último —, e filtrar nele devolveria "2 de 13" de novo.
+ * Agora quem responde é o Discord:
  *
  * · ID → `fetchMember` (cache, e só então uma chamada);
  * · busca vazia (a primeira abertura da tela) → uma página de membros;

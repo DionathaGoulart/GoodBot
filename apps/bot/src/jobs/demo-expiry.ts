@@ -31,13 +31,13 @@ export interface DemoExpiryJobDeps {
   alerts?: Pick<AlertService, 'emit'>;
   intervalMs?: number;
   warnBeforeMs?: number;
-  /** Relógio injetável: o teste não pode esperar uma hora (plano, Etapa 3). */
+  /** Relógio injetável: o teste não pode esperar uma hora. */
   now?: () => number;
 }
 
 /**
- * O fim da demonstração (plano, Etapa 3): avisa faltando 10 minutos, se
- * despede e sai quando o prazo acaba.
+ * O fim da demonstração: avisa faltando 10 minutos, se despede e sai quando o
+ * prazo acaba.
  *
  * O job **não** é quem decide se o bot atende — isso é o `isGuildServed`, que
  * conta o prazo na hora. Aqui é só a parte visível: sem esta passada uma demo

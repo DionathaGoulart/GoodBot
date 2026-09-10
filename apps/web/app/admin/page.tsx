@@ -22,10 +22,10 @@ const CONTAINER_MEMORY_BYTES = 384 * 1024 * 1024;
 const MEMORY_WARNING_RATIO = 0.8;
 
 /**
- * "Saúde e uso" (plano, Etapa 4, item 3). É a tela que avisa quando a VM está
- * chegando no limite — por isso a memória tem faixa e não só valor, e por isso
- * "guilds em cache vs esperadas" fica ao lado dela: as duas contam a mesma
- * história de capacidade por ângulos diferentes.
+ * "Saúde e uso". É a tela que avisa quando a VM está chegando no limite — por
+ * isso a memória tem faixa e não só valor, e por isso "guilds em cache vs
+ * esperadas" fica ao lado dela: as duas contam a mesma história de capacidade
+ * por ângulos diferentes.
  */
 export default async function AdminPage() {
   await requireBotOwner();

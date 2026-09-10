@@ -28,9 +28,9 @@ export interface RegistryServiceOptions {
 }
 
 /**
- * Quem o bot atende. Substitui o `GUILD_IDS` como fronteira de segurança
- * (plano, Etapa 1) e é consultado em **toda** interação, então a leitura é
- * síncrona e vem de um espelho em memória — nunca de uma query por evento.
+ * Quem o bot atende. Substitui o `GUILD_IDS` como fronteira de segurança e é
+ * consultado em **toda** interação, então a leitura é síncrona e vem de um
+ * espelho em memória — nunca de uma query por evento.
  *
  * O registro inteiro cabe na memória com folga: o teto do produto é 100
  * servidores (as intents privilegiadas passam a exigir verificação acima

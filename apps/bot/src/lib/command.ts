@@ -40,9 +40,9 @@ export interface BotContext {
   client: Client;
   db: Db;
   config: ConfigService;
-  /** Quem o bot atende (plano, Etapa 1); espelho em memória do registro. */
+  /** Quem o bot atende; espelho em memória do registro. */
   registry: RegistryService;
-  /** Modo manutenção (plano, Etapa 4); espelho em memória, leitura síncrona. */
+  /** Modo manutenção; espelho em memória, leitura síncrona. */
   maintenance: MaintenanceService;
   moderation: ModerationService;
   /** Motor de automod (§5.2); nunca lança. */

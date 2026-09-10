@@ -167,7 +167,7 @@ export async function markGuildLeft(db: DbExecutor, guildId: string): Promise<vo
 }
 
 /**
- * Demos vencidas que o job de expiração ainda não tratou (plano, Etapa 3).
+ * Demos vencidas que o job de expiração ainda não tratou.
  *
  * O `demo_ended_at` é o que fecha a varredura: o `status` continua `demo` para
  * sempre (é ele que diz "este servidor já usou a sua demo" na tela do convite

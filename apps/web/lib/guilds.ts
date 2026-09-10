@@ -17,7 +17,7 @@ export interface ManagedGuild {
 }
 
 /**
- * Os servidores que **este usuário** pode abrir (plano, Etapa 5).
+ * Os servidores que **este usuário** pode abrir.
  *
  * Até aqui a lista era "tudo o que o bot atende", o que bastava enquanto os
  * servidores eram todos do dono do bot. Com servidores de terceiros isso virou

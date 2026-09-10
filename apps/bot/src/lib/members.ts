@@ -15,8 +15,8 @@ export const ROLE_SCAN_MAX_PAGES = 5;
  * Quantos membros têm cada cargo, ou `null` quando não dá para saber sem varrer
  * um servidor grande inteiro.
  *
- * Antes da Etapa 6 isto era `role.members.size`, que lia o cache — e o cache
- * tinha o servidor inteiro. Com o teto por guild ele passou a ser uma amostra,
+ * Isto já foi `role.members.size`, que lia o cache — e o cache tinha o
+ * servidor inteiro. Com o teto por guild ele passou a ser uma amostra,
  * e contar nele daria um número **errado com cara de certo**, que é pior do
  * que não ter número. Daí as três respostas possíveis:
  *

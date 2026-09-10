@@ -15,7 +15,7 @@ export const INVITE_CALLBACK_PATH = '/api/invite/callback';
 
 /**
  * `identify` acompanha `bot` para sabermos **quem** convidou (`invitedBy` no
- * registro, e a fila de aprovação da Etapa 4 precisa disso). O token que sai
+ * registro, e a fila de aprovação precisa disso). O token que sai
  * daí é usado uma vez, no callback, e descartado — nada é guardado.
  */
 const SCOPES = ['bot', 'applications.commands', 'identify'] as const;

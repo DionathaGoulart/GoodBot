@@ -52,8 +52,8 @@ interface Fakes {
 
 function makeDeps(overrides: { warn?: () => unknown } = {}): Fakes {
   const members = new Map<string, ReturnType<typeof fakeMember>>();
-  // Desde a Etapa 6 a busca do painel pergunta ao Discord em vez de varrer o
-  // cache: sem busca é `list`, com texto é `search`.
+  // A busca do painel pergunta ao Discord em vez de varrer o cache: sem busca
+  // é `list`, com texto é `search`.
   const list = vi.fn(() => Promise.resolve(members));
   const search = vi.fn(() => Promise.resolve(members));
   const guild = {

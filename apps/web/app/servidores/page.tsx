@@ -21,8 +21,8 @@ const NIVEL: Record<Exclude<AccessLevel, 'none'>, string> = {
 };
 
 /**
- * O seletor de servidor (plano, Etapa 5). É a tela de pouso de quem entra com
- * acesso a mais de um servidor, e o destino do ícone da topbar.
+ * O seletor de servidor. É a tela de pouso de quem entra com acesso a mais de
+ * um servidor, e o destino do ícone da topbar.
  *
  * Ele mostra só o que **este usuário** pode abrir: a lista vem de
  * `listAccessibleGuilds`, filtrada pelo nível por guild da sessão.

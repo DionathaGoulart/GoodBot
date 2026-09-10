@@ -52,7 +52,7 @@ describe('parseEnv — guilds', () => {
     expect(parseEnv({ ...base, GUILD_IDS: `${A},${B},${A}` }).guildIds).toEqual([A, B]);
   });
 
-  it('aceita a ausência das duas — desde a Etapa 1 quem manda é o registro', () => {
+  it('aceita a ausência das duas — quem manda é o registro', () => {
     // A variável virou semente: o bot sobe sem ela e atende quem já está na
     // tabela `guild_registry`.
     expect(parseEnv(base).guildIds).toEqual([]);

@@ -27,7 +27,7 @@ import type { BroadcastOutcome } from '@/lib/admin';
 import type { BroadcastResult } from '@goodbot/shared';
 
 /**
- * Broadcast (plano, Etapa 4, item 4).
+ * Broadcast.
  *
  * Três travas, e cada uma existe por um motivo diferente:
  *

@@ -34,8 +34,8 @@ async function handleUnserved(ctx: BotContext, client: Client): Promise<void> {
 export default defineEvent(
   Events.ClientReady,
   async (ctx, client) => {
-    // A fronteira é o registro (plano, Etapa 1): o `GUILD_IDS` já foi semeado
-    // no boot e daqui em diante quem manda é a tabela.
+    // A fronteira é o registro: o `GUILD_IDS` já foi semeado no boot e daqui
+    // em diante quem manda é a tabela.
     const presentes: Guild[] = [];
     const ausentes: string[] = [];
     for (const guildId of ctx.registry.servedGuildIds()) {

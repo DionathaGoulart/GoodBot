@@ -132,10 +132,10 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
     // vencida, e ali fica calado em vez de responder com config que não existe.
     if (!interaction.inGuild() || !ctx.registry.serves(interaction.guildId)) return;
 
-    // Manutenção (plano, Etapa 4): o bot continua no ar e continua vendo os
-    // eventos, mas não executa nada que escreva. O aviso é efêmero e vem antes
-    // de qualquer leitura de config — a manutenção existe justamente para as
-    // horas em que o banco não é confiável.
+    // Manutenção: o bot continua no ar e continua vendo os eventos, mas não
+    // executa nada que escreva. O aviso é efêmero e vem antes de qualquer
+    // leitura de config — a manutenção existe justamente para as horas em que
+    // o banco não é confiável.
     if (ctx.maintenance.active()) {
       if (interaction.isAutocomplete()) return;
       await replyMaintenance(interaction, ctx.maintenance.message());

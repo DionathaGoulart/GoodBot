@@ -26,7 +26,7 @@ export function Topbar({
   guildId: string;
   guildName: string;
   guildIconUrl?: string | null;
-  /** Só há o que trocar com mais de um servidor acessível (plano, Etapa 5). */
+  /** Só há o que trocar com mais de um servidor acessível. */
   canSwitch?: boolean;
   status: BotStatus;
   user: { name: string; image: string | null };

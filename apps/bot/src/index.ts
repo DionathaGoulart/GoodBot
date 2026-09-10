@@ -59,11 +59,11 @@ async function main(): Promise<void> {
   const client = createClient();
   const alerts = new AlertService({ webhookUrl: env.ALERT_WEBHOOK_URL });
   const config = new ConfigService(db);
-  // Quem o bot atende (plano, Etapa 1). Espelho em memória: o handler de
-  // interação consulta a cada evento e não pode pagar uma query por isso.
+  // Quem o bot atende. Espelho em memória: o handler de interação consulta a
+  // cada evento e não pode pagar uma query por isso.
   const registry = new RegistryService({ db });
-  // Modo manutenção (plano, Etapa 4). Mesmo desenho do registro, e pelo mesmo
-  // motivo: é lido em toda interação e não pode custar uma query por evento.
+  // Modo manutenção. Mesmo desenho do registro, e pelo mesmo motivo: é lido
+  // em toda interação e não pode custar uma query por evento.
   const maintenance = new MaintenanceService({ db });
   // A trilha do que o bot faz sozinho (§6.5); o painel escreve na mesma tabela.
   const audit = new AuditService({ db, client });
@@ -153,8 +153,8 @@ async function main(): Promise<void> {
   const social = new YouTubeProvider();
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
-  // O fim da demo (plano, Etapa 3): avisa, se despede e sai. O link do convite
-  // sai do `AUTH_URL` pela mesma conta que o painel faz para os subdomínios.
+  // O fim da demo: avisa, se despede e sai. O link do convite sai do
+  // `AUTH_URL` pela mesma conta que o painel faz para os subdomínios.
   const demoExpiry = new DemoExpiryJob({
     db,
     client,

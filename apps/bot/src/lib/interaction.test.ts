@@ -73,10 +73,10 @@ beforeEach(() => {
 });
 
 /**
- * O portão da manutenção (plano, Etapa 4). O que ele precisa garantir é a
- * diferença entre "em manutenção" e "caiu": o bot continua respondendo — só
- * que com um aviso — em vez de deixar a interação sem resposta, que é o que
- * vira "falha na interação" na tela de quem tentou.
+ * O portão da manutenção. O que ele precisa garantir é a diferença entre "em
+ * manutenção" e "caiu": o bot continua respondendo — só que com um aviso — em
+ * vez de deixar a interação sem resposta, que é o que vira "falha na
+ * interação" na tela de quem tentou.
  */
 describe('modo manutenção', () => {
   it('recusa o comando com aviso efêmero e não executa nada', async () => {

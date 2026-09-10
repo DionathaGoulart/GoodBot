@@ -12,7 +12,7 @@ export const metadata = { title: 'Fila · Admin · Goodbot' };
 export const dynamic = 'force-dynamic';
 
 /**
- * Aprovar e bloquear (plano, Etapa 4, item 2).
+ * Aprovar e bloquear.
  *
  * A fila junta duas histórias porque elas fazem a mesma pergunta: quem entrou
  * pelo convite normal e espera (`pending`), e quem entrou pela demonstração,

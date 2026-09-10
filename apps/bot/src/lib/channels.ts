@@ -20,7 +20,7 @@ export function canBotSend(channel: GuildBasedChannel): boolean {
 
 /**
  * Onde falar com o servidor quando não há canal configurado para o assunto —
- * hoje, os avisos de fim da demo (plano, Etapa 3).
+ * hoje, os avisos de fim da demo.
  *
  * Primeiro o canal de sistema, que é onde o Discord já põe as mensagens de
  * entrada e é o que o dono do servidor espera. Sem ele (ou sem permissão de

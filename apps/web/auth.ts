@@ -50,7 +50,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
     cookies: {
       /**
        * O cookie de sessão precisa valer no host do painel **e** nos rótulos
-       * dele, porque o painel do dono mora em `admin.<host>` (plano, Etapa 4).
+       * dele, porque o painel do dono mora em `admin.<host>`.
        *
        * Sem `domain` o cookie é *host-only*: o navegador o manda de volta só
        * para o host exato que o criou. Quem entra em `goodbot.<domínio>`
@@ -100,9 +100,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
         const anterior = goodbot.guilds ?? {};
         const guilds: Record<string, GuildGrant> = {};
 
-        // Quais servidores existem para o painel vem do registro (plano, Etapa
-        // 1). Se o banco não responder, o token anterior continua valendo: um
-        // `jwt` que lança derruba a sessão inteira no meio do uso.
+        // Quais servidores existem para o painel vem do registro. Se o banco
+        // não responder, o token anterior continua valendo: um `jwt` que lança
+        // derruba a sessão inteira no meio do uso.
         let atendidas: string[];
         try {
           atendidas = await servedGuildIds();

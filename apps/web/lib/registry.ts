@@ -6,9 +6,9 @@ import { cache } from 'react';
 import { db } from './db';
 
 /**
- * Os servidores que o bot atende, lidos do registro (`guild_registry`). Desde
- * a Etapa 1 do plano é esta tabela — e não o `GUILD_IDS` — que diz quais
- * guilds existem para o painel.
+ * Os servidores que o bot atende, lidos do registro (`guild_registry`). É
+ * esta tabela — e não o `GUILD_IDS` — que diz quais guilds existem para o
+ * painel.
  *
  * O `cache` do React memoiza por requisição: um render toca isto em vários
  * pontos (layout, sessão, seletor) e todos devem enxergar a mesma lista sem

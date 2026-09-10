@@ -19,9 +19,9 @@ const blankToUndefined = (value: unknown): unknown => (value === '' ? undefined 
  * GitHub Secrets, Vercel), e obrigar a renomear em todos de uma vez só para
  * acrescentar um servidor seria um degrau desnecessário.
  *
- * Desde a Etapa 1 do plano quem decide o que o bot atende é a tabela
- * `guild_registry`. Estes IDs só entram nela **uma vez**, como `approved`, na
- * primeira subida; depois disso a variável pode sair do ambiente.
+ * Quem decide o que o bot atende é a tabela `guild_registry`, não esta
+ * variável. Estes IDs só entram nela **uma vez**, como `approved`, na primeira
+ * subida; depois disso a variável pode sair do ambiente.
  */
 const guildIds = z.preprocess(parseIdList, z.array(snowflake));
 
@@ -47,7 +47,7 @@ const EnvSchema = z
      */
     AUTH_URL: z.preprocess(blankToUndefined, z.url().optional()),
     /**
-     * O dono do bot — quem pode usar o painel admin (plano, Etapa 4).
+     * O dono do bot — quem pode usar o painel admin.
      *
      * Opcional para o bot **subir** sem ela, mas as rotas `/admin` recusam
      * tudo enquanto ela não existir. Fechado por ausência é a única escolha

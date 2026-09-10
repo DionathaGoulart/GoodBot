@@ -27,7 +27,7 @@ export interface MaintenanceServiceOptions {
 }
 
 /**
- * Modo manutenção (plano, Etapa 4).
+ * Modo manutenção.
  *
  * Ligado, o bot continua no ar — `/health` responde, o gateway segue conectado,
  * os eventos continuam sendo registrados — e recusa **interação** com um aviso

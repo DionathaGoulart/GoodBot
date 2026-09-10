@@ -85,9 +85,9 @@ export interface ApiServerOptions {
   backupDir?: string;
   alerts?: Pick<AlertService, 'emit'>;
   /**
-   * O painel do dono (plano, Etapa 4). Sem `ownerId` as rotas continuam
-   * montadas e recusam tudo com um motivo legível — melhor do que um 404, que
-   * faria parecer bug de deploy quando o que falta é uma variável.
+   * O painel do dono. Sem `ownerId` as rotas continuam montadas e recusam
+   * tudo com um motivo legível — melhor do que um 404, que faria parecer bug
+   * de deploy quando o que falta é uma variável.
    */
   admin: { ownerId?: string; discordToken: string; clientId: string };
 }

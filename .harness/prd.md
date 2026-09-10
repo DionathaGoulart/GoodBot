@@ -1,7 +1,18 @@
 # Goodbot — PRD (Product Requirements Document)
 
-Versão 1.2 · 2026-09-10 · Documento de referência para todas as sessões.
+Versão 1.3 · 2026-09-10 · Documento de referência para todas as sessões.
 Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (UI).
+
+> **v1.3 — bot público.** O Goodbot deixou de atender uma lista de servidores
+> no ambiente e passou a atender uma **tabela** (`guild_registry`): quem entra
+> por `invite.` espera aprovação, quem entra por `demo.` é atendido por uma
+> hora, e o dono do bot decide o resto num painel próprio em `admin.<domínio>`.
+> O que mudou: entrou a §5.10 (o ciclo de vida do convite), e com ela
+> `guild_registry` na §8, a fronteira da §7.1, o convite e os hostnames na
+> §7.3, o acesso da §6 e o teto de 100 servidores na §11 — que deixou de ser
+> irrelevante. Quem opera o bot como produto continua na §9.3. O que **não**
+> mudou: os módulos do bot, o resto do modelo de dados, os níveis de permissão
+> dentro de um servidor e a hospedagem.
 
 > **v1.2 — nome e guild como código.** O projeto passou a se chamar
 > **Goodbot** (era CoBot): pacotes `@goodbot/*`, imagem `goodbot-bot`,
@@ -364,12 +375,67 @@ Fora de escopo na v1: emojis, stickers, eventos agendados, webhooks, fóruns,
 palcos e tópicos; e posição de canal (a API não expõe, então a ordem é a de
 criação).
 
+### 5.10 Bot público: convite, aprovação e demonstração
+
+Desde a v1.3 o Goodbot é público: qualquer pessoa pode convidá-lo. Quem o bot
+atende **não** é uma variável de ambiente, é a tabela `guild_registry` (§8), e
+todo servidor tem um estado:
+
+| Status     | Como chega                                    | O bot atende?    |
+| ---------- | --------------------------------------------- | ---------------- |
+| `pending`  | convite por `invite.` — espera aprovação      | não, fica calado |
+| `approved` | o dono do bot aprovou no painel dele (§9.3)   | sim, sem prazo   |
+| `demo`     | convite por `demo.` — aprovado na hora        | sim, por 1 hora  |
+| `blocked`  | o dono do bot bloqueou                        | não, e ele sai   |
+
+Não atender é **estado válido**: o bot fica na guild e ignora tudo — nem
+interação, nem evento do gateway. Isso é requisito de privacidade, não detalhe
+de implementação: sem o filtro no caminho do evento, um servidor que nunca foi
+aprovado alimentaria o `message_cache` (com conteúdo de mensagem) e as
+estatísticas.
+
+**Os dois links de convite são dois hostnames** (`invite.` e `demo.`), e não a
+URL crua do Discord, porque **o convite do Discord não diz ao bot por onde a
+pessoa veio**. O link passa pelo nosso domínio, que redireciona ao OAuth com
+`redirect_uri` de volta para nós; o Discord devolve o `code` na nossa URL, a
+troca prova a instalação e diz quem convidou, e o hostname diz qual dos dois
+fluxos foi usado. Exigências:
+
+- O `state` do OAuth é **assinado** (HMAC-SHA256 com o `AUTH_SECRET`) e vale
+  15 minutos. Sem assinatura, alguém troca `state=pending` por `state=demo`
+  — ou por um status que nem devia existir ali — e se aprova sozinho. O
+  callback ainda confere se o fluxo do `state` bate com o hostname que o
+  recebeu: divergir é `state` reaproveitado.
+- O `state` é assinado no **clique**, não ao renderizar a página: uma aba
+  esquecida aberta não gera `state` vencido.
+- A tela de entrada tem **botão**, e não redireciona sozinha: a pessoa precisa
+  saber que a demo tem prazo antes de instalar, e um link que dispara o OAuth
+  ao ser aberto seria consumido pela prévia que o Discord ou o WhatsApp geram
+  quando alguém cola a URL.
+- **Install Link = `None`** no Developer Portal. Com o link de instalação do
+  Discord ligado, o botão "Add App" do perfil do bot instalaria sem passar por
+  nenhum dos dois fluxos, e esse servidor entraria sem classificação.
+
+**A demonstração** dura 1 hora, é fixa (não é negociável por servidor: seria um
+plano gratuito, que não é o que a demo é) e **não se renova** — quem já teve a
+sua entra na fila de aprovação como qualquer um. Faltando 10 minutos o bot
+avisa no servidor; no fim, se despede com o link do convite normal e sai. O
+aviso e a despedida existem para não deixar a pior versão possível: um bot mudo
+parado no servidor, sem ninguém entender se quebrou, se foi banido ou se a demo
+acabou.
+
+**Teto a manter à vista: 100 servidores.** Acima disso, o Discord exige
+verificação da aplicação para as intents privilegiadas (`GuildMembers` e
+`MessageContent`), das quais automod e logs dependem (§7.3, §10). O modelo com
+aprovação é o que segura isso — e a demo que expira sozinha também.
+
 ## 6. Requisitos funcionais — Painel
 
-Acesso: login com Discord OAuth2 (Auth.js). Após login, o painel verifica se
-o usuário é membro do servidor configurado **e** tem permissão
+Acesso: login com Discord OAuth2 (Auth.js). Após login, o painel verifica, na
+**guild da URL**, se o usuário é membro dela **e** tem permissão
 `Administrator` **ou** `ManageGuild` **ou** um dos cargos listados em
-`dashboard_access_roles`. Caso contrário → "Acesso negado". Sessão JWT
+`dashboard_access_roles` — e se essa guild é atendida pelo registro (§5.10).
+Caso contrário → "Acesso negado". Sessão JWT
 (cookie httpOnly), 7 dias, re-verificação de permissão a cada 15 min
 (cache) e em toda ação de escrita.
 
@@ -446,13 +512,18 @@ ator, ação, período, e diff antes/depois em JSON. Imutável (sem delete).
 
 - Toda tabela tem `guild_id` (snowflake como `bigint`/`text`) e todo índice
   composto começa por ele.
-- O bot lê **`GUILD_IDS`** do ambiente — um ou mais snowflakes separados por
-  vírgula, com `GUILD_ID` singular ainda aceito como lista de um — e ignora
-  eventos de guild fora da lista num único ponto (`lib/interaction.ts`). Estar
-  numa guild não listada é estado válido: o bot fica calado nela.
-- No `ready`, cada guild é preparada por vez: upsert, carga do cache de
-  membros, aquecimento da config e registro dos guild commands (um hash por
-  guild, então acrescentar um servidor não re-registra os outros).
+- Quem o bot atende é o **registro** (`guild_registry`, §5.10), não o
+  ambiente: o `GUILD_IDS` sobrou como **semente** (no boot cria a linha
+  `approved` de quem ainda não tem uma; quem já tem não é tocado) e deixou de
+  ser obrigatório. A fronteira vale nos **dois** caminhos de entrada — a
+  interação (`lib/interaction.ts`) e o evento do gateway (`lib/loader.ts`) —,
+  e o filtro do evento fica no carregador, não em cada handler, para handler
+  novo já nascer filtrado. Estar numa guild que o bot não atende é estado
+  válido: ele fica calado nela.
+- No `ready`, cada guild **atendida** é preparada por vez: upsert, aquecimento
+  da config e registro dos guild commands (um hash por guild, então
+  acrescentar um servidor não re-registra os outros). Guild em que o bot está
+  sem estar no registro ganha linha `pending`; guild bloqueada, ele deixa.
 - Dois recursos são do **processo** e não da guild: o LRU do cache de mensagens
   e o intervalo de flush das estatísticas. Com várias guilds vale o maior cache
   e o menor intervalo — a guild mais exigente é atendida e as outras ganham
@@ -461,9 +532,15 @@ ator, ação, período, e diff antes/depois em JSON. Imutável (sem delete).
   (`Record<guildId, {level, checkedAt}>`). Um nível único seria furo de
   permissão: alguém pode ser dono de um servidor e nem estar no outro. Quem
   decide acesso é sempre a guild da URL (`/g/[guildId]/...`), nunca "a" guild
-  da sessão; guild fora do `GUILD_IDS` é negada antes de consultar o bot.
+  da sessão; guild fora do registro é negada antes de consultar o bot. Toda
+  action de escrita recebe a guild no primeiro argumento — nenhuma resolve
+  sozinha "a" guild.
+- A lista que o painel oferece é o registro **∩** o que este usuário pode
+  abrir. Com servidores de terceiros, mostrar o registro inteiro seria
+  vazamento: quem entra num servidor leria o nome de todos os outros.
 - A barra lateral mostra o nome real de cada servidor e oferece a troca quando
-  há mais de um.
+  há mais de um; com mais de um acessível, a raiz manda para o seletor, e com
+  um só vai direto para ele.
 
 **Limite prático.** O cache de membros tem teto **por guild**
 (`MEMBER_CACHE_MAX`, 200) e sweeper de hora em hora, e o `ready` não carrega
@@ -508,7 +585,19 @@ guilds.members.read`; `AUTH_SECRET` ≥ 32 bytes; cookies `Secure`,
   de membros).
 - **Autorização**: checagem de permissão em **todo** server action / route
   handler, não só no layout; helper `requireGuildAccess(session, guildId,
-level)`.
+level)`. A guild conferida é sempre a que vai ser lida ou escrita, e ela
+  chega explícita — da URL nas páginas, no primeiro argumento nas actions, em
+  `?guildId=` nas rotas de apoio, que devolvem 404 sem o parâmetro em vez de
+  adivinhar.
+- **Convite (`invite.` / `demo.`)**: o `state` do OAuth é assinado com HMAC do
+  `AUTH_SECRET` e vale 15 min; o `guild_id` da query **não** é confiável (é o
+  `code` trocado com o Discord que prova a instalação); o `redirect_uri` é
+  derivado do `AUTH_URL`, nunca do header `Host`, que é do cliente. Detalhe do
+  fluxo em §5.10.
+- **Painel do dono (`admin.`)**: `OWNER_DISCORD_ID` conferido nos dois lados,
+  painel e bot (§9.3). O cookie de sessão sai com `domain` explícito para
+  valer entre os hostnames irmãos; entrar acontece num lugar só, o `/login` do
+  host do painel, que é o único `redirect_uri` registrado no Discord.
 - **API do bot (exposta)**: desde a v1.1 o painel roda fora da VM, então a
   API do bot é publicada pelo Caddy num subdomínio dedicado
   (`bot.<dominio>`), **só** com TLS. Defesas obrigatórias, porque o token
@@ -579,6 +668,13 @@ PKs internas como `bigserial` ou `uuid` onde indicado.
 
 ```
 guilds            (id PK text, name, icon, owner_id, joined_at, left_at)
+guild_registry    (guild_id PK text, status enum(pending|approved|demo|blocked),
+                   invited_by, invited_at, approved_at, expires_at (só demo), left_at, note,
+                   demo_warned_at, demo_ended_at)
+                   idx (status), (expires_at) where expires_at not null
+                   -- quem o bot atende (§5.10); `demo_ended_at` fecha a varredura do job,
+                   -- e não o status, porque a linha precisa continuar dizendo "este
+                   -- servidor já usou a demo dele"
 guild_settings    (guild_id PK/FK, timezone, embed_color, mod_role_ids[], admin_role_ids[],
                    dashboard_access_role_ids[], log_channel_id, dm_on_punish jsonb, updated_at)
 module_configs    (guild_id, module PK(guild_id,module), enabled, config jsonb, version, updated_at, updated_by)
@@ -712,7 +808,7 @@ provedor, documentada em `docs/runbook.md`.
 
 | Risco                                                             | Mitigação                                                                                                                                  | Status |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| Intents privilegiadas exigem verificação acima de 100 servidores  | irrelevante em single-server; documentar                                                                                                   | feito — §10 e §7.3 |
+| Intents privilegiadas exigem verificação acima de 100 servidores  | **passou a valer com o bot público**: quem entra depende de aprovação, e a demo expira sozinha, então o número não cresce sem decisão (§5.10) | parcial — não há alerta automático ao chegar perto de 100; é item do checklist do runbook |
 | Free tier da Oracle reclama instâncias ociosas                    | bot mantém CPU > 0; monitorar; não é "idle" com gateway aberto                                                                             | feito — gateway aberto + `/metrics` |
 | **Capacidade Ampere A1 indisponível**                             | resolvido: v1.1 usa E2.1.Micro (x86), que não sofre com capacidade                                                                         | feito |
 | **API do bot exposta na internet**                                | subdomínio próprio, Bearer de 32 bytes com comparação timing-safe, rate limit 60/min por IP, body ≤ 256 KB, sem CORS, fail2ban no Caddy (§7.3) | feito (fail2ban **manual**) — `api/server.ts`, `infra/fail2ban/`; alerta a cada 50 respostas 401 numa hora |
@@ -760,3 +856,6 @@ provedor, documentada em `docs/runbook.md`.
 | **Guild como código em YAML**       | estrutura de servidor é dado declarativo e revisável em PR; YAML aceita comentário, que JSON não aceita, e o arquivo é para humano escrever à mão |
 | **Spec sem ID, resolvido em runtime** | um `guild.yaml` com ID identifica a guild de quem o escreveu (o repositório é público) e não pode ser reaproveitado em outro servidor |
 | **CLI como cliente da API do bot**  | escrever direto no Discord duplicaria as checagens de permissão e hierarquia que já existem na API; um segundo caminho de escrita é um segundo lugar para errar |
+| **Quem o bot atende é tabela, não variável** (v1.3) | aprovar um servidor não pode exigir deploy nem SSH; e a fila continua funcionando com o bot fora do ar, que é justamente o dia em que se precisa dela. O `GUILD_IDS` sobrou como semente do registro no boot |
+| **Demo com prazo fixo de 1 h, sem renovação** (v1.3) | prazo por servidor viraria um plano gratuito negociável; renovar viraria acesso permanente por reconvite. O prazo curto também é o que segura o teto de 100 servidores das intents privilegiadas |
+| **`state` do convite assinado** (v1.3) | é o `state` que carrega o fluxo (`pending` ou `demo`), então sem HMAC quem cola o link escolhe o próprio status. Assinado no clique, com validade de 15 min |

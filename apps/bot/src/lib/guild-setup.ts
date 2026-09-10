@@ -49,9 +49,9 @@ export interface ProcessTuning {
 
 /**
  * Guarda o que cada guild pediu e resolve o conflito a cada mudança. É uma
- * classe, e não um `Math.max` no `ready`, porque desde a Etapa 1 uma guild
- * pode entrar depois do boot: sem memória do que as outras pediram, preparar
- * a nova encolheria o cache de todas.
+ * classe, e não um `Math.max` no `ready`, porque uma guild pode entrar depois
+ * do boot — o registro aprova a qualquer momento: sem memória do que as outras
+ * pediram, preparar a nova encolheria o cache de todas.
  */
 export class ProcessTuner {
   private readonly perGuild = new Map<string, ProcessTuning>();
@@ -88,9 +88,9 @@ export async function prepareGuild(ctx: BotContext, guild: Guild): Promise<Proce
   await upsertGuild(ctx, guild);
 
   // Aqui havia um `guild.members.fetch()` — o servidor inteiro para o cache, a
-  // cada boot. Ele saiu na Etapa 6 do plano: a RAM crescia com a **soma** dos
-  // membros de todos os servidores, e com servidores de terceiros isso estoura
-  // os 384 MB do container antes de qualquer outra coisa dar sinal.
+  // cada boot. Ele saiu porque a RAM crescia com a **soma** dos membros de
+  // todos os servidores, e com servidores de terceiros isso estoura os 384 MB
+  // do container antes de qualquer outra coisa dar sinal.
   //
   // O cache agora se enche sozinho pelos eventos (quem fala, quem entra, quem
   // é punido) e tem teto por guild (`MEMBER_CACHE_MAX`). Quem precisa de um

@@ -75,11 +75,11 @@ export function loadEvents(client: Client, events: readonly EventHandler[], ctx:
       // no `/metrics` em vez de sumir.
       metrics.events.inc({ event: event.name });
 
-      // O registro tem de valer aqui, e não só nas interações (plano, Etapa
-      // 8). O gateway não filtra por servidor: sem este guarda, um servidor
-      // que só apertou "adicionar" e ainda espera aprovação já alimentaria o
-      // `message_cache` — com conteúdo de mensagem — e as estatísticas. Nunca
-      // guardamos dado de quem não autorizou.
+      // O registro tem de valer aqui, e não só nas interações. O gateway não
+      // filtra por servidor: sem este guarda, um servidor que só apertou
+      // "adicionar" e ainda espera aprovação já alimentaria o `message_cache`
+      // — com conteúdo de mensagem — e as estatísticas. Nunca guardamos dado
+      // de quem não autorizou.
       if (!event.always) {
         const guildId = guildIdOfEvent(args);
         if (guildId !== null && !ctx.registry.serves(guildId)) return;
