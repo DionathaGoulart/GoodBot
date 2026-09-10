@@ -141,10 +141,13 @@ class Registry {
   }
 }
 
+/**
+ * Todo override declarado vai, inclusive o que herda os dois lados: é assim
+ * que o yaml **remove** um override, porque a API apaga o que chega vazio
+ * (`isEmptyOverride`). Filtrar aqui tiraria a única forma de remover.
+ */
 function toOverrides(spec: OverrideSpec[], registry: Registry): ChannelOverride[] {
-  return spec
-    .filter((o) => o.view !== 'inherit' || o.send !== 'inherit')
-    .map((o) => ({ roleId: registry.requireRole(o.role), view: o.view, send: o.send }));
+  return spec.map((o) => ({ roleId: registry.requireRole(o.role), view: o.view, send: o.send }));
 }
 
 export async function applyPlan(

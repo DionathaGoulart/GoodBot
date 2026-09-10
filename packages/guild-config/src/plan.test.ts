@@ -187,6 +187,57 @@ describe('buildPlan', () => {
     expect(plan.operations).toEqual([]);
   });
 
+  it('ignora override que existe no canal e o spec não cita', () => {
+    // O cargo do próprio bot costuma ter override em canal fechado. Se isso
+    // entrasse na comparação, o plano nunca esvaziaria: a API não remove quem
+    // ficou de fora, então a operação voltaria a cada execução.
+    const bot = role({ id: '9', name: 'Goodbot', managed: true });
+    const logs = channel({ id: '11', name: 'logs' });
+    const current = state({
+      roles: [everyone, bot],
+      channels: [logs],
+      details: new Map([
+        [
+          '11',
+          detail(logs, {
+            overrides: [
+              { roleId: GUILD, view: 'deny', send: 'inherit' },
+              { roleId: '9', view: 'allow', send: 'allow' },
+            ],
+          }),
+        ],
+      ]),
+    });
+
+    const plan = buildPlan(
+      spec({ channels: [{ name: 'logs', overrides: [{ role: '@everyone', view: 'deny' }] }] }),
+      current,
+      { guildId: GUILD },
+    );
+
+    expect(plan.operations).toEqual([]);
+  });
+
+  it('declarar tudo como inherit é como o spec remove um override', () => {
+    const logs = channel({ id: '11', name: 'logs' });
+    const plan = buildPlan(
+      spec({
+        channels: [
+          { name: 'logs', overrides: [{ role: '@everyone', view: 'inherit', send: 'inherit' }] },
+        ],
+      }),
+      state({
+        channels: [logs],
+        details: new Map([
+          ['11', detail(logs, { overrides: [{ roleId: GUILD, view: 'deny', send: 'inherit' }] })],
+        ]),
+      }),
+      { guildId: GUILD },
+    );
+
+    expect(plan.operations.map((o) => o.kind)).toEqual(['overrides.set']);
+  });
+
   it('distingue canais de mesmo nome em categorias diferentes', () => {
     const catA = channel({ id: '10', name: 'A', type: MANAGED_CHANNEL_TYPES.category });
     const geralA = channel({ id: '11', name: 'geral', parentId: '10' });

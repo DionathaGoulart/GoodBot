@@ -100,35 +100,42 @@ function channelChanges(spec: ChannelSpec, detail: GuildChannelDetail | undefine
   return changes;
 }
 
-/** Override que não libera nem nega nada não precisa existir no canal. */
-const meaningful = (o: { view: string; send: string }): boolean =>
-  o.view !== 'inherit' || o.send !== 'inherit';
+/** Um override que não libera nem nega nada é a ausência do override. */
+const inherits = (o: { view: string; send: string }): boolean =>
+  o.view === 'inherit' && o.send === 'inherit';
 
 /**
- * `detail` ausente é canal que ainda vai nascer: ele nasce sem override
- * nenhum, então só há trabalho a fazer se o spec pedir algum. Cargo do spec
- * que ainda não existe também obriga a escrever, porque o ID dele só aparece
- * durante o apply.
+ * A comparação olha **só os cargos que o spec cita**, e não o conjunto inteiro
+ * de overrides do canal. É o que a escrita do outro lado permite: a rota de
+ * overrides edita um cargo por vez e não apaga quem ficou de fora
+ * (`applyOverrides` em `apps/bot/src/api/routes/channels.ts`).
+ *
+ * Comparar o conjunto inteiro faria o plano nunca convergir: qualquer override
+ * que exista no canal e não esteja no yaml — o do cargo do próprio bot, por
+ * exemplo — apareceria como diferença, o apply não o removeria, e a operação
+ * voltaria no plano seguinte, para sempre.
+ *
+ * Para **tirar** um override, declare-o com `view` e `send` em `inherit`: aí
+ * ele é enviado e a API o apaga.
  */
 function overridesMatch(
   spec: OverrideSpec[],
   detail: GuildChannelDetail | undefined,
   roleIdByName: Map<string, string>,
 ): boolean {
-  const wanted = spec.filter(meaningful);
-  if (!detail) return wanted.length === 0;
+  // Canal que ainda vai nascer não tem override nenhum: só há trabalho se o
+  // spec pedir algo além de herdar.
+  if (!detail) return spec.every(inherits);
 
-  const resolved = new Map<string, OverrideSpec>();
-  for (const override of wanted) {
+  return spec.every((override) => {
     const id = roleIdByName.get(norm(override.role));
+    // Cargo que ainda não existe: o ID só aparece durante o apply.
     if (id === undefined) return false;
-    resolved.set(id, override);
-  }
-  const current = detail.overrides.filter(meaningful);
-  if (current.length !== resolved.size) return false;
-  return current.every((o) => {
-    const want = resolved.get(o.roleId);
-    return want !== undefined && want.view === o.view && want.send === o.send;
+    const current = detail.overrides.find((o) => o.roleId === id);
+    return (
+      (current?.view ?? 'inherit') === override.view &&
+      (current?.send ?? 'inherit') === override.send
+    );
   });
 }
 
@@ -163,8 +170,19 @@ export function buildPlan(spec: GuildSpec, current: CurrentState, options: PlanO
     roleByName.set(key, role);
   }
 
-  /** Inclui `@everyone`, que é alvo válido de override. */
-  const roleIdByName = new Map<string, string>([...roleByName].map(([k, r]) => [k, r.id]));
+  /**
+   * A resolução de override enxerga **todos** os cargos, inclusive os
+   * `managed` de bot e o `@everyone` — não só os que o spec gerencia. Um canal
+   * fechado quase sempre tem override no cargo do próprio bot, e o registry do
+   * apply resolve esses nomes normalmente. Enxergar menos aqui faria o plano
+   * acusar uma diferença que o apply já considera resolvida, e a operação
+   * voltaria em toda execução.
+   */
+  const roleIdByName = new Map<string, string>();
+  for (const role of current.roles) {
+    const key = norm(role.name);
+    if (!roleIdByName.has(key)) roleIdByName.set(key, role.id);
+  }
   roleIdByName.set(norm(EVERYONE), options.guildId);
 
   const specRoleNames = new Set<string>();
