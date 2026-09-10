@@ -91,7 +91,7 @@ describe('saveModuleConfig', () => {
       '200000000000000000',
     );
     expect(withAudit).toHaveBeenCalledWith(
-      { id: '200000000000000000', tag: 'mod#1' },
+      { id: '200000000000000000', tag: 'mod#1', guildId: GUILD_ID },
       'config.moderation.update',
       { type: 'module', id: 'moderation' },
       DEFAULT_MODERATION_CONFIG,

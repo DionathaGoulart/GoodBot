@@ -31,7 +31,8 @@ No [Developer Portal](https://discord.com/developers/applications):
 
 Ligue o **Modo desenvolvedor** no Discord (Configurações > Avançado) para
 conseguir copiar IDs. Botão direito no servidor > **Copiar ID do servidor** →
-`GUILD_ID`.
+`GUILD_IDS`. Mais de um servidor? Separe por vírgula:
+`GUILD_IDS=111...,222...`.
 
 ## 3. Variáveis
 
@@ -45,7 +46,7 @@ O mínimo para subir:
 DISCORD_TOKEN=...
 DISCORD_CLIENT_ID=...
 DISCORD_CLIENT_SECRET=...
-GUILD_ID=...
+GUILD_IDS=...
 DATABASE_URL=postgres://goodbot:goodbot@localhost:5432/goodbot
 INTERNAL_API_TOKEN=$(openssl rand -hex 32)
 AUTH_SECRET=$(openssl rand -base64 32)
@@ -106,6 +107,52 @@ Discord, e sim com a API do bot. Confira `INTERNAL_API_URL` e se o
 
 **`connect ECONNREFUSED ...:5432`** — o Postgres do Docker não subiu.
 `docker compose -f infra/docker-compose.dev.yml ps`.
+
+## 7.1 Adicionar um segundo servidor
+
+O bot atende vários servidores. A ordem importa: **convide primeiro, configure
+depois**, senão ele fica online e calado lá.
+
+1. **Convide o bot** pelo OAuth2 URL Generator (escopos `bot` e
+   `applications.commands`, permissões do PRD §10).
+2. **Ponha o cargo do bot no topo** da lista de cargos do servidor novo. Regra
+   do Discord: cargo só mexe em cargo abaixo dele.
+3. **Acrescente o ID** à variável, separado por vírgula, nos dois lugares:
+
+   | Onde                               | Variável                |
+   | ---------------------------------- | ----------------------- |
+   | `.env` da VM (`/opt/goodbot/.env`) | `GUILD_IDS=<id1>,<id2>` |
+   | variáveis do projeto na Vercel     | `GUILD_IDS=<id1>,<id2>` |
+
+   Se hoje está como `GUILD_ID`, pode trocar o nome ou deixar: `GUILD_IDS`
+   ganha quando os dois existem.
+
+4. **Reinicie o bot** e faça um redeploy do painel. O `ready` prepara a guild
+   nova: cache de membros, config e registro dos comandos.
+
+O que muda no painel: a barra lateral passa a mostrar o nome real de cada
+servidor e a oferecer a troca. Seu nível de permissão é resolvido **por
+servidor** — ser dono de um não dá nada no outro.
+
+### O que conferir depois
+
+```bash
+curl -s -H "Authorization: Bearer $INTERNAL_API_TOKEN" \
+  https://bot.<dominio>/health
+```
+
+O bloco `guilds` deve mostrar `cached` igual a `expected`. Se `cached` for
+menor, o bot não está em algum servidor da lista — o log do boot diz qual.
+
+### Quanto a VM aguenta
+
+O gargalo é o cache de membros: o boot carrega a lista completa de cada guild e
+a RAM cresce com a **soma** dos membros. O container tem `mem_limit: 384m`, o
+que dá ordem de 10⁵ membros somados. O consumo real está no `rssBytes` do
+`/health` — vale olhar depois de acrescentar um servidor grande.
+
+Se um dia apertar, a saída não é VM maior: é pôr teto no `GuildMemberManager`
+(`apps/bot/src/client.ts`) e buscar membro sob demanda.
 
 ## 8. Depois daqui
 

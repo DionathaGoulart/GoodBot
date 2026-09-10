@@ -54,8 +54,10 @@ export class MessageCacheService {
   }
 
   /**
-   * Ajusta o LRU ao `logs.messageCache.perChannel` da guild. Single-server
-   * hoje: o valor é aplicado uma vez no `ready`.
+   * Ajusta o LRU ao `logs.messageCache.perChannel`. O cache é do processo e a
+   * config é por guild, então o `ready` aplica aqui o **maior** valor entre as
+   * guilds configuradas: sobra folga para as menos exigentes e nenhuma fica
+   * com cache curto demais.
    */
   setPerChannel(value: number): void {
     this.perChannel = value;

@@ -65,7 +65,7 @@ export async function createEmoji(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'emoji.create',
     { type: 'emoji', id: emoji.id },
     null,
@@ -101,7 +101,7 @@ export async function updateEmoji(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'emoji.update',
     { type: 'emoji', id: emojiId },
     before && { name: before.name, roleIds: before.roleIds },
@@ -133,7 +133,7 @@ export async function deleteEmoji(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'emoji.delete',
     { type: 'emoji', id: emojiId },
     before,
@@ -162,7 +162,7 @@ export async function createSticker(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'sticker.create',
     { type: 'sticker', id: sticker.id },
     null,
@@ -199,7 +199,7 @@ export async function updateSticker(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'sticker.update',
     { type: 'sticker', id: stickerId },
     before && { name: before.name, description: before.description, tags: before.tags },
@@ -232,7 +232,7 @@ export async function deleteSticker(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'sticker.delete',
     { type: 'sticker', id: stickerId },
     before,

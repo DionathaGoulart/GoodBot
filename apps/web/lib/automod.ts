@@ -124,7 +124,7 @@ export async function saveAutomodRule(formData: FormData): Promise<ActionResult>
   if (!saved) return { ok: false, message: 'Essa regra não existe mais.' };
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     isEdit ? 'automod.rule.update' : 'automod.rule.create',
     { type: 'automod_rule', id: saved.id },
     before,
@@ -151,7 +151,7 @@ export async function removeAutomodRule(formData: FormData): Promise<ActionResul
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'automod.rule.delete',
     { type: 'automod_rule', id: ruleId },
     before,
@@ -183,7 +183,7 @@ export async function reorderAutomod(formData: FormData): Promise<ActionResult> 
 
   await reorderAutomodRules(db(), guildId, ruleIds);
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'automod.rule.reorder',
     { type: 'module', id: 'automod' },
     before,
@@ -216,7 +216,7 @@ export async function setRaidMode(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     active ? 'automod.raid.enable' : 'automod.raid.disable',
     { type: 'module', id: 'automod' },
     null,

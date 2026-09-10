@@ -76,7 +76,7 @@ export interface ApiServerOptions {
   deps: ApiDeps;
   token: string;
   port: number;
-  /** Guilds esperadas no cache — hoje uma (`GUILD_ID`). */
+  /** Guilds esperadas no cache: quantas o `GUILD_IDS` configura. */
   expectedGuilds?: number;
   /** Filas do bot, para o `/health` e os gauges do `/metrics`. */
   queues?: () => QueueHealth;

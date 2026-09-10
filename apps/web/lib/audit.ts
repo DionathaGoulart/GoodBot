@@ -5,7 +5,6 @@ import { headers } from 'next/headers';
 
 import { PAGE_SIZE, filterRange, type AuditFilters } from './case-filters';
 import { db } from './db';
-import { env } from './env';
 import { guildTimezone } from './stats';
 
 import type { AuditSource } from '@goodbot/shared';
@@ -13,6 +12,12 @@ import type { AuditSource } from '@goodbot/shared';
 export interface AuditActor {
   id: string;
   tag: string;
+  /**
+   * Obrigatório de propósito. Com mais de uma guild, cair num padrão faria a
+   * linha de auditoria apontar para o servidor errado — e auditoria errada é
+   * pior do que auditoria ausente.
+   */
+  guildId: string;
 }
 
 /**
@@ -35,7 +40,7 @@ export async function withAudit(
   const forwarded = requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim();
 
   await appendAudit(db(), {
-    guildId: env().GUILD_ID,
+    guildId: actor.guildId,
     actorId: actor.id,
     actorTag: actor.tag,
     action,

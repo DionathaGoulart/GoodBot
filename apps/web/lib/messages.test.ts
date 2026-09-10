@@ -67,7 +67,7 @@ describe('sendChannelMessage', () => {
     await sendChannelMessage(compose({ template: { content: 'olá' } }));
 
     expect(withAudit).toHaveBeenCalledWith(
-      { id: ACTOR, tag: 'admin#1' },
+      { id: ACTOR, tag: 'admin#1', guildId: GUILD_ID },
       'message.send',
       { type: 'message', id: MESSAGE },
       null,
@@ -99,7 +99,7 @@ describe('sendChannelMessage', () => {
     await sendChannelMessage(compose({ messageId: MESSAGE, template: { content: 'depois' } }));
 
     expect(withAudit).toHaveBeenCalledWith(
-      { id: ACTOR, tag: 'admin#1' },
+      { id: ACTOR, tag: 'admin#1', guildId: GUILD_ID },
       'message.edit',
       { type: 'message', id: MESSAGE },
       { id: MESSAGE, content: 'antes' },
@@ -119,7 +119,7 @@ describe('deleteChannelMessage', () => {
 
     expect(result.ok).toBe(true);
     expect(withAudit).toHaveBeenCalledWith(
-      { id: ACTOR, tag: 'admin#1' },
+      { id: ACTOR, tag: 'admin#1', guildId: GUILD_ID },
       'message.delete',
       { type: 'message', id: MESSAGE },
       { id: MESSAGE, content: 'tchau' },

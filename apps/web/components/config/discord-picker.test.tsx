@@ -2,6 +2,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { TEST_GUILD_ID } from '@/vitest.setup';
+
 import { DiscordPicker } from './discord-picker';
 
 const ROLES = [
@@ -58,7 +60,11 @@ describe('DiscordPicker', () => {
     );
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(fetchMock).toHaveBeenCalledWith('/api/discord/roles', { cache: 'no-store' });
+    // A guild vai na query: o cache do picker é do módulo e serve todas as
+    // abas abertas, então a lista precisa dizer de qual servidor é.
+    expect(fetchMock).toHaveBeenCalledWith(`/api/discord/roles?guildId=${TEST_GUILD_ID}`, {
+      cache: 'no-store',
+    });
   });
 
   it('não pergunta ao bot quando não há nada escolhido', () => {

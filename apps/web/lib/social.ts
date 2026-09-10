@@ -95,7 +95,7 @@ export async function saveSocialAccount(formData: FormData): Promise<ActionResul
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     id ? 'social.account.update' : 'social.account.create',
     { type: 'social_account', id: saved.id },
     null,
@@ -123,10 +123,14 @@ export async function removeSocialAccount(formData: FormData): Promise<ActionRes
     return toActionResult(error);
   }
 
-  await withAudit({ id: session.user.id, tag: session.user.name }, 'social.account.delete', {
-    type: 'social_account',
-    id,
-  });
+  await withAudit(
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
+    'social.account.delete',
+    {
+      type: 'social_account',
+      id,
+    },
+  );
   revalidatePath(PATH(guildId));
   return { ok: true };
 }

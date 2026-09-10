@@ -442,18 +442,34 @@ ator, ação, período, e diff antes/depois em JSON. Imutável (sem delete).
 
 ## 7. Requisitos não funcionais
 
-### 7.1 Single-server hoje, multi-server amanhã
+### 7.1 Multi-server
 
 - Toda tabela tem `guild_id` (snowflake como `bigint`/`text`) e todo índice
   composto começa por ele.
-- O bot lê `GUILD_ID` do ambiente e ignora eventos de outras guilds
-  (`if (guildId !== env.GUILD_ID) return`) num único middleware; para
-  multi-guild, remove-se o filtro e o cache de config vira `Map<guildId,…>`
-  (já é).
-- O painel tem `guildId` na sessão (fixo hoje); rotas em
-  `/g/[guildId]/...` desde o início para não migrar URLs.
-- Slash commands registrados como **guild commands** (instantâneos) na guild
-  configurada; flag para registro global.
+- O bot lê **`GUILD_IDS`** do ambiente — um ou mais snowflakes separados por
+  vírgula, com `GUILD_ID` singular ainda aceito como lista de um — e ignora
+  eventos de guild fora da lista num único ponto (`lib/interaction.ts`). Estar
+  numa guild não listada é estado válido: o bot fica calado nela.
+- No `ready`, cada guild é preparada por vez: upsert, carga do cache de
+  membros, aquecimento da config e registro dos guild commands (um hash por
+  guild, então acrescentar um servidor não re-registra os outros).
+- Dois recursos são do **processo** e não da guild: o LRU do cache de mensagens
+  e o intervalo de flush das estatísticas. Com várias guilds vale o maior cache
+  e o menor intervalo — a guild mais exigente é atendida e as outras ganham
+  folga.
+- O painel guarda um nível de acesso **por guild** na sessão
+  (`Record<guildId, {level, checkedAt}>`). Um nível único seria furo de
+  permissão: alguém pode ser dono de um servidor e nem estar no outro. Quem
+  decide acesso é sempre a guild da URL (`/g/[guildId]/...`), nunca "a" guild
+  da sessão; guild fora do `GUILD_IDS` é negada antes de consultar o bot.
+- A barra lateral mostra o nome real de cada servidor e oferece a troca quando
+  há mais de um.
+
+**Limite prático.** O `ready` carrega a lista completa de membros de cada guild
+e o cache de membros do discord.js não tem teto configurado, então a RAM cresce
+com a soma dos membros. Com `mem_limit: 384m` isso dá ordem de 10⁵ membros
+somados; o consumo real está no `rssBytes` do `/health`. Passar disso pede um
+teto no `GuildMemberManager` e busca sob demanda — não uma VM maior.
 
 ### 7.2 Performance no free tier
 

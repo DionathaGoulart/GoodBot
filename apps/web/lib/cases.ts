@@ -254,7 +254,7 @@ export async function editCaseReason(formData: FormData): Promise<ActionResult> 
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'case.edit',
     { type: 'case', id: String(caseNumber) },
     { reason: before.reason },
@@ -283,7 +283,7 @@ export async function deleteCase(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'case.delete',
     { type: 'case', id: String(caseNumber) },
     { type: before.type, targetId: before.targetId, reason: before.reason },
@@ -327,7 +327,7 @@ export async function undoCase(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     `case.undo.${detail.undo}`,
     { type: 'case', id: String(caseNumber) },
     { type: detail.kase.type, targetId: detail.kase.targetId },

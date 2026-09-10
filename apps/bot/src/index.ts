@@ -166,6 +166,9 @@ async function main(): Promise<void> {
     deps: { client, db, config, moderation, automod, reactionRoles, tickets, social, commands },
     token: env.INTERNAL_API_TOKEN,
     port: env.INTERNAL_API_PORT,
+    // Sem isto o /health continuaria esperando uma guild só e acusaria
+    // degradação assim que o segundo servidor entrasse.
+    expectedGuilds: env.guildIds.length,
     queues: readQueues,
     backupDir: env.BACKUP_DIR,
     alerts,

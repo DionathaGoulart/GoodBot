@@ -60,7 +60,7 @@ export async function createInvite(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'invite.create',
     { type: 'invite', id: invite.code },
     null,
@@ -99,7 +99,7 @@ export async function deleteInvite(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'invite.delete',
     { type: 'invite', id: code },
     before,

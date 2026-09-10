@@ -69,7 +69,7 @@ export async function saveRole(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     id ? 'role.update' : 'role.create',
     { type: 'role', id: saved.id },
     null,
@@ -92,10 +92,14 @@ export async function removeRole(formData: FormData): Promise<ActionResult> {
     return failure(error, 'O bot não respondeu; o cargo continua lá.');
   }
 
-  await withAudit({ id: session.user.id, tag: session.user.name }, 'role.delete', {
-    type: 'role',
-    id,
-  });
+  await withAudit(
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
+    'role.delete',
+    {
+      type: 'role',
+      id,
+    },
+  );
   revalidatePath(PATH(guildId));
   return { ok: true };
 }
@@ -121,7 +125,7 @@ export async function moveRole(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'role.move',
     { type: 'role', id },
     null,

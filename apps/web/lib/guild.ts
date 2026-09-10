@@ -79,7 +79,7 @@ export async function saveGuildProfile(formData: FormData): Promise<ActionResult
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'guild.update',
     { type: 'guild', id: guildId },
     before && auditable(before),
@@ -135,7 +135,7 @@ export async function unbanUser(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'member.unban',
     { type: 'member', id: userId },
     null,

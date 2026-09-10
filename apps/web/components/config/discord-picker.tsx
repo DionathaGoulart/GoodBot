@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useParams } from 'next/navigation';
 import { GuildChannelSummarySchema, GuildRoleSummarySchema } from '@goodbot/shared';
 import { cn } from 'cn';
 
@@ -37,16 +38,17 @@ const CACHE_TTL_MS = 60_000;
 const cache = new Map<string, { at: number; options: Promise<DiscordOption[]> }>();
 
 async function fetchOptions(
+  guildId: string,
   kind: PickerKind,
   types: number[],
   includeEveryone: boolean,
 ): Promise<DiscordOption[]> {
+  const recurso = kind === 'channel' ? 'channels' : 'roles';
   // `no-store`: quem decide o quanto a lista pode envelhecer é o route
   // handler, não a heurística de cache do browser.
-  const response = await fetch(
-    kind === 'channel' ? '/api/discord/channels' : '/api/discord/roles',
-    { cache: 'no-store' },
-  );
+  const response = await fetch(`/api/discord/${recurso}?guildId=${encodeURIComponent(guildId)}`, {
+    cache: 'no-store',
+  });
   if (!response.ok) throw new Error('O bot não respondeu.');
   const body: unknown = await response.json();
   return kind === 'channel'
@@ -60,8 +62,15 @@ function useDiscordOptions(
   enabled: boolean,
   includeEveryone: boolean,
 ) {
+  // O cache é do módulo, logo compartilhado entre as guilds abertas em abas
+  // diferentes: sem o id na chave, o formulário de um servidor ofereceria os
+  // canais do outro.
+  const { guildId } = useParams<{ guildId: string }>();
   // `includeEveryone` entra na chave: as duas listas de cargo convivem no cache.
-  const key = kind === 'channel' ? `channel:${types.join(',')}` : `role:${includeEveryone}`;
+  const key =
+    kind === 'channel'
+      ? `${guildId}:channel:${types.join(',')}`
+      : `${guildId}:role:${includeEveryone}`;
   // Uma entrada por chave em vez de um `loading` que o efeito precisaria ligar
   // na hora: `loading` vira o simples "abriu e ainda não tem entrada".
   const [loaded, setLoaded] = React.useState<
@@ -75,7 +84,7 @@ function useDiscordOptions(
 
     const hit = cache.get(key);
     const fresh = hit && Date.now() - hit.at < CACHE_TTL_MS ? hit.options : undefined;
-    const pending = fresh ?? fetchOptions(kind, types, includeEveryone);
+    const pending = fresh ?? fetchOptions(guildId, kind, types, includeEveryone);
     if (!fresh) cache.set(key, { at: Date.now(), options: pending });
 
     pending.then(

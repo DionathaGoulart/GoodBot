@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useParams } from 'next/navigation';
 import { GuildMemberSummarySchema } from '@goodbot/shared';
 import { cn } from 'cn';
 
@@ -19,8 +20,15 @@ import type { GuildMemberSummary } from '@goodbot/shared';
 /** Espera antes de perguntar ao bot; digitar rápido não vira uma rajada. */
 const DEBOUNCE_MS = 250;
 
-async function fetchMembers(query: string, signal: AbortSignal): Promise<GuildMemberSummary[]> {
-  const response = await fetch(`/api/discord/members?q=${encodeURIComponent(query)}`, { signal });
+async function fetchMembers(
+  guildId: string,
+  query: string,
+  signal: AbortSignal,
+): Promise<GuildMemberSummary[]> {
+  const response = await fetch(
+    `/api/discord/members?guildId=${encodeURIComponent(guildId)}&q=${encodeURIComponent(query)}`,
+    { signal },
+  );
   if (!response.ok) throw new Error('O bot não respondeu.');
   return GuildMemberSummarySchema.array().parse(await response.json());
 }
@@ -50,6 +58,7 @@ export function MemberPicker({
   const [members, setMembers] = React.useState<GuildMemberSummary[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const { guildId } = useParams<{ guildId: string }>();
 
   React.useEffect(() => {
     if (!open) return;
@@ -58,7 +67,7 @@ export function MemberPicker({
     // dispara uma renderização em cascata a cada tecla.
     const timer = setTimeout(() => {
       setLoading(true);
-      fetchMembers(query, controller.signal).then(
+      fetchMembers(guildId, query, controller.signal).then(
         (rows) => {
           setMembers(rows);
           setError(null);

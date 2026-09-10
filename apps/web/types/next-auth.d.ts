@@ -1,14 +1,15 @@
 import type { DefaultSession } from 'next-auth';
-import type { AccessLevel } from '@/lib/auth/access';
+import type { GuildGrant } from '@/lib/auth/access';
 
 declare module 'next-auth' {
   interface Session extends DefaultSession {
     user: { id: string } & DefaultSession['user'];
-    /** Nível resolvido para `guildId` (PRD §9.2). */
-    level: AccessLevel;
-    guildId: string;
-    /** Epoch ms da última verificação de permissão. */
-    checkedAt: number;
+    /**
+     * Nível confirmado por guild (PRD §9.2). Guild ausente do mapa é guild sem
+     * acesso — a checagem é sempre contra a guild da URL, nunca contra "a"
+     * guild da sessão.
+     */
+    guilds: Record<string, GuildGrant>;
   }
 }
 

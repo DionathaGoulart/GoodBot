@@ -140,7 +140,7 @@ export async function saveTicketType(formData: FormData): Promise<ActionResult> 
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     typeId ? 'tickets.type.update' : 'tickets.type.create',
     { type: 'ticket_type', id: saved.id },
     before,
@@ -161,7 +161,7 @@ export async function removeTicketType(formData: FormData): Promise<ActionResult
   if (!removed) return { ok: false, message: 'Esse tipo não existe mais.' };
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'tickets.type.delete',
     { type: 'ticket_type', id: typeId },
     removed,
@@ -197,7 +197,7 @@ export async function saveTicketPanel(formData: FormData): Promise<ActionResult>
   if (!panel) return { ok: false, message: 'Esse painel não existe mais.' };
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     id ? 'tickets.panel.update' : 'tickets.panel.create',
     { type: 'ticket_panel', id: panel.id },
     before,
@@ -220,10 +220,14 @@ export async function publishTicketPanel(formData: FormData): Promise<ActionResu
     return { ok: false, message: error instanceof Error ? error.message : 'O bot não respondeu.' };
   }
 
-  await withAudit({ id: session.user.id, tag: session.user.name }, 'tickets.panel.publish', {
-    type: 'ticket_panel',
-    id,
-  });
+  await withAudit(
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
+    'tickets.panel.publish',
+    {
+      type: 'ticket_panel',
+      id,
+    },
+  );
   revalidatePath(PATH(guildId));
   return { ok: true, message: 'Painel publicado.' };
 }
@@ -252,7 +256,7 @@ export async function removeTicketPanel(formData: FormData): Promise<ActionResul
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'tickets.panel.delete',
     { type: 'ticket_panel', id },
     before,
@@ -288,10 +292,14 @@ export async function closeTicketAction(formData: FormData): Promise<ActionResul
     return { ok: false, message: error instanceof Error ? error.message : 'O bot não respondeu.' };
   }
 
-  await withAudit({ id: session.user.id, tag: session.user.name }, 'tickets.close', {
-    type: 'ticket',
-    id: String(ticketId),
-  });
+  await withAudit(
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
+    'tickets.close',
+    {
+      type: 'ticket',
+      id: String(ticketId),
+    },
+  );
   revalidatePath(PATH(guildId));
   return { ok: true, message: 'Ticket fechado.' };
 }

@@ -95,10 +95,16 @@ export function resolveAccessLevel(input: AccessInput): AccessLevel {
   return 'none';
 }
 
+/** Nível confirmado numa guild, com o instante da confirmação. */
+export interface GuildGrant {
+  level: AccessLevel;
+  checkedAt: number;
+}
+
 export interface SessionLike {
   user?: { id?: string | null };
-  level?: AccessLevel;
-  guildId?: string;
+  /** Um nível por guild configurada; guild ausente do mapa = sem acesso. */
+  guilds?: Record<string, GuildGrant>;
 }
 
 /**
@@ -111,6 +117,7 @@ export function checkGuildAccess(
   minimum: AccessLevel,
 ): 'ok' | 'unauthenticated' | 'denied' {
   if (!session?.user?.id) return 'unauthenticated';
-  if (session.guildId !== guildId) return 'denied';
-  return hasAccess(session.level ?? 'none', minimum) ? 'ok' : 'denied';
+  // Guild fora do mapa é guild que o painel não gerencia, ou em que este
+  // usuário não tem nível nenhum. Nos dois casos a resposta é a mesma.
+  return hasAccess(session.guilds?.[guildId]?.level ?? 'none', minimum) ? 'ok' : 'denied';
 }

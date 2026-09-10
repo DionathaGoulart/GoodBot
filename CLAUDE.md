@@ -85,8 +85,10 @@ docs/                   guias: primeiros passos, módulos, API, banco, runbook
 - **Três provedores, três cofres de segredo:** VM (`.env`), GitHub Secrets
   (CI) e variáveis do projeto na Vercel. `INTERNAL_API_TOKEN` vive nos três
   e é rotacionado nos três juntos.
-- **Single-server hoje, multi amanhã:** todo query filtra por `guildId`;
-  nunca assumir uma única guild fora de `env.GUILD_ID`.
+- **Multi-guild:** o bot atende as guilds de `GUILD_IDS` (lista separada por
+  vírgula; `GUILD_ID` singular ainda vale). Todo query filtra por `guildId`, e
+  nada pode assumir "a" guild: no painel, quem decide acesso é sempre a guild
+  da URL, e o nível de permissão é **por guild** na sessão.
 
 ## Como rodar localmente
 

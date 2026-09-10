@@ -105,7 +105,7 @@ export async function sendChannelMessage(formData: FormData): Promise<ActionResu
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     input.messageId ? 'message.edit' : 'message.send',
     { type: 'message', id: result.messageId },
     before,
@@ -143,7 +143,7 @@ export async function deleteChannelMessage(formData: FormData): Promise<ActionRe
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'message.delete',
     { type: 'message', id: messageId.data },
     deleted,

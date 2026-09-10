@@ -4,6 +4,7 @@ import { BotStatusBanner, readBotStatus } from '@/components/layout/bot-status';
 import { Topbar } from '@/components/layout/topbar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { requireGuildAccess } from '@/lib/auth/require';
+import { listManagedGuilds } from '@/lib/guilds';
 
 export default async function GuildLayout({ children, params }: LayoutProps<'/g/[guildId]'>) {
   const { guildId } = await params;
@@ -12,13 +13,15 @@ export default async function GuildLayout({ children, params }: LayoutProps<'/g/
   const session = await requireGuildAccess(guildId);
   const status = await readBotStatus();
 
-  // O nome ao vivo do servidor chega na Etapa 16; até lá o id serve de rótulo.
-  const guildName = 'SERVIDOR';
+  // Com mais de um servidor o nome deixa de ser enfeite: sem ele as duas
+  // telas ficam idênticas e não dá para saber onde se está clicando.
+  const guilds = await listManagedGuilds();
+  const guildName = guilds.find((g) => g.id === guildId)?.name ?? 'SERVIDOR';
 
   return (
     <AutoRefreshProvider>
       <SidebarProvider>
-        <AppSidebar guildId={guildId} guildName={guildName} level={session.level} />
+        <AppSidebar guildId={guildId} guildName={guildName} guilds={guilds} level={session.level} />
         <SidebarInset className="min-w-0">
           <Topbar
             guildId={guildId}

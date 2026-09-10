@@ -4,7 +4,7 @@ import Discord from 'next-auth/providers/discord';
 import { env } from '@/lib/env';
 import { isStale, resolveGuildLevel, retryAt } from '@/lib/auth/resolve';
 
-import type { AccessLevel } from '@/lib/auth/access';
+import type { GuildGrant } from '@/lib/auth/access';
 
 /** Campos que o Goodbot guarda no JWT, além dos do Auth.js. */
 interface GoodbotToken {
@@ -18,9 +18,12 @@ interface GoodbotToken {
    * que o painel lê como "sem permissão".
    */
   discordId?: string;
-  level?: AccessLevel;
-  guildId?: string;
-  checkedAt?: number;
+  /**
+   * Um nível por guild. Era um `level` só, o que bastava enquanto havia um
+   * servidor; com mais de um vira furo de permissão, porque alguém pode ser
+   * dono de um e nem estar no outro.
+   */
+  guilds?: Record<string, GuildGrant>;
 }
 
 /**
@@ -61,23 +64,37 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
 
         const userId = goodbot.discordId;
         if (!userId) return token;
-        if (goodbot.guildId === config.GUILD_ID && !isStale(goodbot.checkedAt)) return token;
 
-        // Um `jwt` que lança faz o Auth.js descartar o token inteiro, e o
-        // painel cai em `/login` no meio da sessão. Falar com a API do bot é a
-        // parte que falha: numa rajada de escrita o teto de 60 req/min por IP
-        // devolve 429 (a Vercel sai toda pelo mesmo IP) e a permissão não tem
-        // como ser confirmada. Nesse caso vale o nível que já estava no token.
-        try {
-          goodbot.level = await resolveGuildLevel(userId);
-          goodbot.guildId = config.GUILD_ID;
-          goodbot.checkedAt = Date.now();
-        } catch {
-          // Sem nível anterior desta guild não há o que preservar; segue sem
-          // permissão e tenta de novo na próxima requisição.
-          if (goodbot.guildId !== config.GUILD_ID || !goodbot.level) return token;
-          goodbot.checkedAt = retryAt();
+        const anterior = goodbot.guilds ?? {};
+        const guilds: Record<string, GuildGrant> = {};
+
+        for (const guildId of config.guildIds) {
+          const atual = anterior[guildId];
+          if (atual && !isStale(atual.checkedAt)) {
+            guilds[guildId] = atual;
+            continue;
+          }
+          // Um `jwt` que lança faz o Auth.js descartar o token inteiro, e o
+          // painel cai em `/login` no meio da sessão. Falar com a API do bot é
+          // a parte que falha: numa rajada de escrita o teto por IP devolve 429
+          // (a Vercel sai toda pelo mesmo punhado de IPs) e a permissão não tem
+          // como ser confirmada. Nesse caso vale o nível que já estava no token.
+          try {
+            guilds[guildId] = {
+              level: await resolveGuildLevel(userId, guildId),
+              checkedAt: Date.now(),
+            };
+          } catch {
+            // Sem nível anterior nesta guild não há o que preservar: ela fica
+            // de fora do mapa (= sem acesso) e tenta de novo na requisição
+            // seguinte. Uma guild que falha não derruba as outras.
+            if (atual) guilds[guildId] = { ...atual, checkedAt: retryAt() };
+          }
         }
+
+        // Guild que saiu do `GUILD_IDS` sai do token junto: manter um nível
+        // órfão seria acesso a um servidor que o painel já não gerencia.
+        goodbot.guilds = guilds;
         return token;
       },
       session({ session, token }) {
@@ -85,9 +102,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
         session.user.id = goodbot.discordId ?? '';
         session.user.name = goodbot.name ?? 'desconhecido';
         session.user.image = goodbot.picture ?? null;
-        session.level = goodbot.level ?? 'none';
-        session.guildId = goodbot.guildId ?? config.GUILD_ID;
-        session.checkedAt = goodbot.checkedAt ?? 0;
+        session.guilds = goodbot.guilds ?? {};
         return session;
       },
     },

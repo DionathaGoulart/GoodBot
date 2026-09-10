@@ -131,7 +131,7 @@ export async function saveChannel(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     id ? 'channel.update' : 'channel.create',
     { type: 'channel', id: id ?? undefined },
     null,
@@ -154,10 +154,14 @@ export async function removeChannel(formData: FormData): Promise<ActionResult> {
     return failure(error, 'O bot não respondeu; o canal continua lá.');
   }
 
-  await withAudit({ id: session.user.id, tag: session.user.name }, 'channel.delete', {
-    type: 'channel',
-    id,
-  });
+  await withAudit(
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
+    'channel.delete',
+    {
+      type: 'channel',
+      id,
+    },
+  );
   revalidatePath(PATH(guildId));
   return { ok: true };
 }
@@ -182,7 +186,7 @@ export async function setSlowmode(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'channel.slowmode',
     { type: 'channel', id },
     null,
@@ -214,7 +218,7 @@ export async function toggleChannelLock(formData: FormData): Promise<ActionResul
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     lock ? 'channel.lock' : 'channel.unlock',
     {
       type: 'channel',
@@ -254,7 +258,7 @@ export async function setChannelOverrides(formData: FormData): Promise<ActionRes
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'channel.overrides',
     { type: 'channel', id },
     before?.overrides ?? null,

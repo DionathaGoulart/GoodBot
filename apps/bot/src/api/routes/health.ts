@@ -68,7 +68,7 @@ export async function readBackupHealth(
 export interface HealthRoutesOptions {
   deps: ApiDeps;
   token: string;
-  /** Quantas guilds o bot deveria ter no cache (hoje: `GUILD_ID`). */
+  /** Quantas guilds o bot deveria ter no cache (as de `GUILD_IDS`). */
   expectedGuilds: number;
   startedAt?: number;
   /** Leitor das filas; sem ele o campo `queues` some da resposta. */

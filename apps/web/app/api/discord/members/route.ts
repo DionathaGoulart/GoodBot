@@ -1,12 +1,8 @@
 import { GuildMemberSummarySchema } from '@goodbot/shared';
 import { NextResponse } from 'next/server';
 
-import {
-  defaultGuildId,
-  resolveGuildSession,
-  verdictMessage,
-  verdictStatus,
-} from '@/lib/auth/require';
+import { resolveGuildSession, verdictMessage, verdictStatus } from '@/lib/auth/require';
+import { guildFromQuery } from '@/lib/auth/guild-param';
 import { searchMembers } from '@/lib/members';
 
 /**
@@ -17,7 +13,11 @@ import { searchMembers } from '@/lib/members';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request): Promise<NextResponse> {
-  const guildId = defaultGuildId();
+  const guildId = guildFromQuery(request.url);
+  if (guildId === null) {
+    return NextResponse.json({ error: 'Servidor não configurado.' }, { status: 404 });
+  }
+
   const access = await resolveGuildSession(guildId);
   if ('verdict' in access) {
     return NextResponse.json(

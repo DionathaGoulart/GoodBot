@@ -26,3 +26,23 @@ export function dateToSnowflake(date: Date): string {
   if (ms < 0n) throw new RangeError('Data anterior ao epoch do Discord');
   return (ms << 22n).toString();
 }
+
+/**
+ * Lê uma lista de IDs separados por vírgula, como as variáveis `GUILD_IDS`
+ * trazem. Apara espaço, descarta vazio e remove repetido — a mesma guild duas
+ * vezes faria o boot buscar os membros dela duas vezes.
+ *
+ * Não valida: quem chama passa o resultado por Zod e ganha a mensagem de erro
+ * apontando qual entrada está torta.
+ */
+export function parseIdList(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  return [
+    ...new Set(
+      value
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => id !== ''),
+    ),
+  ];
+}

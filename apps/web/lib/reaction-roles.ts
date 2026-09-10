@@ -110,7 +110,7 @@ export async function savePanel(formData: FormData): Promise<ActionResult> {
   await replacePanelItems(db(), panel.id, input.items);
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     id ? 'reaction_roles.panel.update' : 'reaction_roles.panel.create',
     { type: 'reaction_role_panel', id: panel.id },
     before,
@@ -134,10 +134,14 @@ export async function publishPanel(formData: FormData): Promise<ActionResult> {
     return { ok: false, message: error instanceof Error ? error.message : 'O bot não respondeu.' };
   }
 
-  await withAudit({ id: session.user.id, tag: session.user.name }, 'reaction_roles.panel.publish', {
-    type: 'reaction_role_panel',
-    id,
-  });
+  await withAudit(
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
+    'reaction_roles.panel.publish',
+    {
+      type: 'reaction_role_panel',
+      id,
+    },
+  );
   revalidatePath(PATH(guildId));
   return { ok: true, message: 'Painel publicado.' };
 }
@@ -171,7 +175,7 @@ export async function removePanel(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'reaction_roles.panel.delete',
     { type: 'reaction_role_panel', id },
     before,

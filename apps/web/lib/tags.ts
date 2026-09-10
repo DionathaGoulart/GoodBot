@@ -83,7 +83,7 @@ export async function saveTag(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     isEdit ? 'tag.update' : 'tag.create',
     { type: 'tag', id: name },
     before?.content ?? null,
@@ -106,7 +106,7 @@ export async function removeTag(formData: FormData): Promise<ActionResult> {
   if (!removed) return { ok: false, message: 'Essa tag não existe mais.' };
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'tag.delete',
     { type: 'tag', id: removed.name },
     removed.content,

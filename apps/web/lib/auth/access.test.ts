@@ -10,6 +10,8 @@ import {
   retryAt,
 } from './access';
 
+import type { AccessLevel } from './access';
+
 const GUILD = '111111111111111111';
 const EVERYONE = GUILD; // o cargo `@everyone` tem o id da guild
 const MOD_ROLE = '222222222222222222';
@@ -97,26 +99,41 @@ describe('resolveAccessLevel', () => {
 });
 
 describe('checkGuildAccess', () => {
-  const session = { user: { id: base.userId }, level: 'mod' as const, guildId: GUILD };
+  const OUTRA = '000000000000000000';
+  const em = (guildId: string, level: AccessLevel) => ({
+    user: { id: base.userId },
+    guilds: { [guildId]: { level, checkedAt: Date.now() } },
+  });
+  const session = em(GUILD, 'mod');
 
   it('sem sessão pede login', () => {
     expect(checkGuildAccess(null, GUILD, 'mod')).toBe('unauthenticated');
   });
 
-  it('nega outra guild mesmo com nível alto', () => {
-    expect(checkGuildAccess({ ...session, level: 'owner' }, '000000000000000000', 'mod')).toBe(
-      'denied',
-    );
+  it('nega guild fora do mapa mesmo com nível alto em outra', () => {
+    expect(checkGuildAccess(em(GUILD, 'owner'), OUTRA, 'mod')).toBe('denied');
+  });
+
+  it('o nível de uma guild não vaza para a outra', () => {
+    const duas = {
+      user: { id: base.userId },
+      guilds: {
+        [GUILD]: { level: 'owner' as const, checkedAt: Date.now() },
+        [OUTRA]: { level: 'none' as const, checkedAt: Date.now() },
+      },
+    };
+    expect(checkGuildAccess(duas, GUILD, 'admin')).toBe('ok');
+    expect(checkGuildAccess(duas, OUTRA, 'mod')).toBe('denied');
   });
 
   it('libera quando o nível alcança o mínimo', () => {
     expect(checkGuildAccess(session, GUILD, 'mod')).toBe('ok');
-    expect(checkGuildAccess({ ...session, level: 'admin' }, GUILD, 'mod')).toBe('ok');
+    expect(checkGuildAccess(em(GUILD, 'admin'), GUILD, 'mod')).toBe('ok');
   });
 
   it('nega quando o nível não alcança', () => {
     expect(checkGuildAccess(session, GUILD, 'admin')).toBe('denied');
-    expect(checkGuildAccess({ ...session, level: 'none' }, GUILD, 'mod')).toBe('denied');
+    expect(checkGuildAccess(em(GUILD, 'none'), GUILD, 'mod')).toBe('denied');
   });
 });
 

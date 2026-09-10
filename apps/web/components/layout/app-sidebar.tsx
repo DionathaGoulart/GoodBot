@@ -19,6 +19,7 @@ import {
 import { groupLabelForPath, navGroupsFor } from './nav';
 
 import type { AccessLevel } from '@/lib/auth/access';
+import type { ManagedGuild } from '@/lib/guilds';
 
 /** Grupos fechados, por rótulo. Só isto vai para o `localStorage`. */
 const STORAGE_KEY = 'goodbot-nav-collapsed';
@@ -73,14 +74,18 @@ function writeCollapsed(next: string[]) {
 export function AppSidebar({
   guildId,
   guildName,
+  guilds = [],
   level,
 }: {
   guildId: string;
   guildName: string;
+  /** Todas as guilds configuradas; com uma só, o seletor não aparece. */
+  guilds?: ManagedGuild[];
   level: AccessLevel;
 }) {
   const pathname = usePathname();
   const base = `/g/${guildId}`;
+  const outros = guilds.filter((guild) => guild.id !== guildId);
   // Esconder o item não é a barreira: quem digitar a URL bate no
   // `requireGuildAccess` da própria página (PRD §7.3).
   const groups = navGroupsFor(level);
@@ -109,6 +114,19 @@ export function AppSidebar({
       <SidebarHeader className="gap-1 border-b-2 border-base-300 px-4 py-4">
         <p className="screen-kicker sigil">GOODBOT</p>
         <p className="screen-title text-lg">{guildName}</p>
+        {outros.length > 0 && (
+          <nav aria-label="Trocar de servidor" className="mt-2 flex flex-col gap-1">
+            {outros.map((guild) => (
+              <Link
+                key={guild.id}
+                href={`/g/${guild.id}`}
+                className="screen-kicker truncate border-2 border-base-300 px-2 py-1 text-left hover:bg-base-200"
+              >
+                {guild.name}
+              </Link>
+            ))}
+          </nav>
+        )}
       </SidebarHeader>
       <SidebarContent>
         {groups.map((group) => {

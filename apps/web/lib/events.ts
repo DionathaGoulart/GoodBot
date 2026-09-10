@@ -86,7 +86,7 @@ export async function saveScheduledEvent(formData: FormData): Promise<ActionResu
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     eventId ? 'event.update' : 'event.create',
     { type: 'event', id: saved.id },
     before && auditable(before),
@@ -118,7 +118,7 @@ export async function deleteScheduledEvent(formData: FormData): Promise<ActionRe
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'event.delete',
     { type: 'event', id: eventId },
     before && auditable(before),

@@ -5,7 +5,6 @@ import { InternalApiError } from '@goodbot/shared';
 import { eq } from 'drizzle-orm';
 
 import { db } from '../db';
-import { env } from '../env';
 import { internalApi } from '../internal-api';
 import { resolveAccessLevel, type AccessLevel } from './access';
 
@@ -13,12 +12,13 @@ export { ACCESS_CHECK_TTL_MS, isStale, retryAt } from './access';
 
 /**
  * Pergunta ao bot (cache de membros e cargos ao vivo) e ao banco (cargos
- * configurados) qual o nível do usuário. Bot fora do ar → `none`: sem
- * confirmação de permissão o painel não libera nada.
+ * configurados) qual o nível do usuário **naquela guild**. Bot fora do ar →
+ * `none`: sem confirmação de permissão o painel não libera nada.
+ *
+ * O nível é por guild: alguém pode ser dono de um servidor e nem estar no
+ * outro, então resolver uma vez e reaproveitar seria um furo de permissão.
  */
-export async function resolveGuildLevel(userId: string): Promise<AccessLevel> {
-  const guildId = env().GUILD_ID;
-
+export async function resolveGuildLevel(userId: string, guildId: string): Promise<AccessLevel> {
   let memberRoleIds: string[] | null = null;
   let rolePermissions: Record<string, string> = {};
   try {

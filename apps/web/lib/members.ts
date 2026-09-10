@@ -113,7 +113,7 @@ export async function punishMember(formData: FormData): Promise<ActionResult> {
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     `member.${input.type}`,
     { type: 'member', id: input.targetId },
     null,
@@ -155,7 +155,7 @@ export async function setMemberRoles(formData: FormData): Promise<ActionResult> 
   }
 
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     'member.roles.update',
     { type: 'member', id: userId },
     before?.roleIds ?? null,

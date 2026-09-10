@@ -99,8 +99,10 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
     ctx: BotContext,
     interaction: Interaction,
   ): Promise<void> {
-    // Single-server hoje: um único ponto ignora eventos de outras guilds.
-    if (!interaction.inGuild() || interaction.guildId !== env.GUILD_ID) return;
+    // Um único ponto ignora eventos de guild que não está configurada. O bot
+    // pode estar em servidores que não gerencia (convite antigo, teste), e ali
+    // ele fica calado em vez de responder com config que não existe.
+    if (!interaction.inGuild() || !env.guildIds.includes(interaction.guildId)) return;
 
     if (interaction.isAutocomplete()) {
       const command = ctx.commands.get(interaction.commandName);

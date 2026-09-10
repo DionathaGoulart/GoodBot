@@ -30,20 +30,29 @@ export async function resolveGuildSession(
 
   if (!(await withinWriteBudget(session.user.id))) return { verdict: 'rate-limited' };
 
-  let level = session.level;
-  if (isStale(session.checkedAt)) {
+  // Guild fora do `GUILD_IDS` nem chega a consultar o bot: uma URL inventada
+  // não deve virar tráfego para a API nem revelar se aquele servidor existe.
+  if (!isConfiguredGuild(guildId)) return { verdict: 'denied' };
+
+  const grant = session.guilds?.[guildId];
+  let level = grant?.level ?? 'none';
+  if (!grant || isStale(grant.checkedAt)) {
     // Reconfirmar é melhor esforço: se a API do bot não responde (429 numa
     // rajada de escrita, deploy, rede), vale o nível que veio na sessão em vez
     // de derrubar a página inteira com um erro. Quem nunca teve nível segue
     // em `none` e é barrado logo abaixo.
     try {
-      level = await resolveGuildLevel(session.user.id);
+      level = await resolveGuildLevel(session.user.id, guildId);
     } catch {
-      level = session.level;
+      level = grant?.level ?? 'none';
     }
   }
 
-  const verdict = checkGuildAccess({ ...session, level }, guildId, minimum);
+  const verdict = checkGuildAccess(
+    { ...session, guilds: { ...session.guilds, [guildId]: { level, checkedAt: Date.now() } } },
+    guildId,
+    minimum,
+  );
   if (verdict !== 'ok') return { verdict };
 
   return {
@@ -100,7 +109,23 @@ export function verdictMessage(verdict: DeniedVerdict): string {
     : 'Sem acesso a esta guild.';
 }
 
-/** Guild única hoje (PRD §7.1); a rota já é `/g/[guildId]` para o dia em que não for. */
+/** Todas as guilds que o painel gerencia, na ordem em que foram configuradas. */
+export function configuredGuildIds(): string[] {
+  return env().guildIds;
+}
+
+export function isConfiguredGuild(guildId: string): boolean {
+  return env().guildIds.includes(guildId);
+}
+
+/**
+ * A primeira guild configurada. Serve para o redirect da raiz e para rotas que
+ * ainda não recebem a guild explicitamente — nunca como autorização: quem
+ * decide acesso é sempre a guild da URL.
+ */
 export function defaultGuildId(): string {
-  return env().GUILD_ID;
+  const [first] = env().guildIds;
+  // O schema do ambiente garante ao menos uma; isto é para o compilador.
+  if (!first) throw new Error('GUILD_IDS está vazio');
+  return first;
 }

@@ -83,6 +83,12 @@ há container de injeção de dependência. A ordem importa:
 5. Os **jobs** entram no `Scheduler`
 6. `client.login()`
 
+No `ready`, cada guild de `GUILD_IDS` é preparada por vez (upsert, cache de
+membros, config, guild commands). Guild ausente vira log de erro e não impede
+as outras — convidar o bot é ação manual e pode estar pendente só para a mais
+nova. Os dois recursos do processo (LRU de mensagens, intervalo de flush das
+stats) recebem o maior cache e o menor intervalo entre as guilds.
+
 O `BotContext` (`src/lib/command.ts`) é o objeto que carrega os services e é
 entregue a todo comando e evento. Quem precisa de uma capacidade nova a recebe
 por aí, e não importando o módulo direto.
@@ -377,7 +383,9 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 
 1. **ID do Discord é `string`.** Nunca `Number(snowflake)` — snowflake estoura
    o `Number` com precisão silenciosa.
-2. **Todo query filtra por `guildId`.** Hoje há um servidor só, amanhã não.
+2. **Todo query filtra por `guildId`,** e nada assume "a" guild. O bot atende
+   a lista de `GUILD_IDS`; no painel, quem decide acesso é a guild da URL e o
+   nível de permissão é por guild na sessão.
 3. **Todo input externo passa por Zod de `shared`** — opção de comando, body da
    API, formulário do painel, jsonb de config. Bot e painel importam o mesmo
    schema.

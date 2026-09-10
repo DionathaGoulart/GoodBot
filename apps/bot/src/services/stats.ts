@@ -143,8 +143,10 @@ export class StatsService {
   }
 
   /**
-   * Aplica `stats.flushIntervalSeconds` da guild. Single-server hoje: o valor
-   * é lido uma vez no `ready`, como o LRU do cache de mensagens.
+   * Aplica `stats.flushIntervalSeconds`. O timer é do processo e a config é
+   * por guild, então o `ready` aplica aqui o **menor** intervalo entre as
+   * guilds configuradas — quem pede flush mais frequente é atendido, e as
+   * outras só ganham flushes mais curtos do que pediram.
    */
   setFlushInterval(seconds: number): void {
     const next = seconds * SECOND_MS;

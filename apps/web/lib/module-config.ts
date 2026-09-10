@@ -206,7 +206,7 @@ export async function saveModuleConfig(
   const before = await loadPage(guildId, page);
   await writePage(guildId, page, after, session.user.id);
   await withAudit(
-    { id: session.user.id, tag: session.user.name },
+    { id: session.user.id, tag: session.user.name, guildId: session.guildId },
     `config.${page}.update`,
     { type: 'module', id: CONFIG_PAGES[page].module },
     before,

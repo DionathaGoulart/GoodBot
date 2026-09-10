@@ -37,7 +37,12 @@ const WelcomeTestSchema = z.object({
  * de exemplo (`POST /guilds/:id/messages`).
  */
 export async function sendWelcomeTestAction(formData: FormData): Promise<ActionResult> {
-  const guildId = defaultGuildId();
+  // A guild vem do formulário, não de um padrão: com mais de um servidor, um
+  // padrão mandaria a mensagem de teste para o lugar errado.
+  const informado = formData.get('guildId');
+  const guildId = typeof informado === 'string' && informado !== '' ? informado : defaultGuildId();
+  // `requireGuildAccess` recusa guild fora do GUILD_IDS, então um valor
+  // forjado no formulário não passa daqui.
   await requireGuildAccess(guildId, 'admin');
 
   const raw = formData.get('payload');
