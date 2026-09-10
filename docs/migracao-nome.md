@@ -8,8 +8,9 @@ Boa parte disso é interna e não pede nada de ninguém. Mas **alguns
 identificadores casavam com coisas que vivem fora do repositório**, e essas
 precisam ser migradas à mão. Enquanto não forem, o deploy falha.
 
-> **Leia antes de dar `git push` na `main`.** O workflow de deploy roda a cada
-> push e faz `cd /opt/goodbot` na VM. Esse diretório ainda não existe.
+> **A parte da VM é automática.** O deploy roda a migração sozinho antes de
+> subir a stack (§2). O que sobra para você é o GitHub (§3) e os dashboards
+> (§7) — nada disso bloqueia o deploy.
 
 ---
 
@@ -35,62 +36,69 @@ containers novos não os enxergam.
 
 ---
 
-## 2. Na VM (obrigatório antes do próximo deploy)
+## 2. Na VM — o deploy faz sozinho
+
+Isto era manual e passou a ser automático. O job de deploy roda
+`infra/scripts/migrate-rename.sh` na VM antes de subir a stack, e o script é
+**idempotente**: depois da primeira vez, ele sai em no-op na primeira linha.
+
+O que ele faz, nesta ordem:
+
+1. derruba a stack antiga (enquanto o compose do disco ainda diz `name: cobot`,
+   que é o que sabe quais containers parar)
+2. `mv /opt/cobot /opt/goodbot`, com o `.env` de produção dentro
+3. copia `cobot_caddy_data`, `cobot_caddy_config` e `cobot_backups` para os
+   volumes `goodbot_*` — sem isso o Caddy nasce sem certificado e pede tudo de
+   novo ao Let's Encrypt, que tem limite semanal
+4. reinstala o filtro e a jail do fail2ban com os nomes novos
+
+O que ele **não** faz de propósito: apagar o diretório e os volumes antigos.
+Eles ficam no disco como rede de segurança — a limpeza está no fim desta seção.
+
+### O passo que faltava no deploy
+
+Junto entrou uma correção que não tem a ver com o rename, mas que o rename
+expôs: **o deploy nunca sincronizava o `docker-compose.yml` com a VM.** O
+`bootstrap-server.sh` copiava uma vez, na instalação, e nada depois — então
+qualquer mudança em `infra/` ficava só no repositório, sem efeito nenhum em
+produção, e em silêncio.
+
+Agora há um passo `scp` que envia `docker-compose.yml`, `Caddyfile`, os
+arquivos do fail2ban e os scripts antes do `docker compose up`.
+
+### Se preferir fazer à mão
 
 ```bash
-ssh ubuntu@<ip>
-
-# 1. derrubar a stack antiga
-cd /opt/cobot && docker compose down
-
-# 2. mover o diretório inteiro, .env incluso
-sudo mv /opt/cobot /opt/goodbot
-cd /opt/goodbot
-
-# 3. trazer o compose e o Caddyfile novos
-#    (ou espere o deploy fazer; ele copia do repositório)
-```
-
-### Preservar os certificados do Caddy
-
-Sem isto o Caddy pede certificado novo. Funciona, mas o Let's Encrypt tem
-limite de emissões por semana — se você estiver iterando, vale copiar:
-
-```bash
-docker run --rm \
-  -v cobot_caddy_data:/de -v goodbot_caddy_data:/para \
-  alpine sh -c 'cp -a /de/. /para/'
-
-docker run --rm \
-  -v cobot_backups:/de -v goodbot_backups:/para \
-  alpine sh -c 'cp -a /de/. /para/'
-```
-
-O `docker volume create` do destino acontece sozinho no primeiro `up`; se o
-comando acima reclamar que o volume não existe, rode `docker compose up -d`
-uma vez antes.
-
-### fail2ban
-
-Os nomes do filtro e da jail mudaram, e o `journalmatch` agora aponta para
-`goodbot-caddy`:
-
-```bash
-sudo rm -f /etc/fail2ban/filter.d/cobot-api.conf /etc/fail2ban/jail.d/cobot.local
+ssh <usuário>@<ip-da-vm>
 cd /tmp && git clone <repo> goodbot && cd goodbot
-sudo install -m 644 infra/fail2ban/goodbot-api.conf /etc/fail2ban/filter.d/
-sudo install -m 644 infra/fail2ban/jail.local /etc/fail2ban/jail.d/goodbot.local
-sudo systemctl restart fail2ban
-sudo fail2ban-client status goodbot-api
+bash infra/scripts/migrate-rename.sh
 ```
 
-### Limpeza (só depois de confirmar que tudo subiu)
+### Requisito
+
+O usuário do deploy precisa de **sudo sem senha** — mover `/opt/cobot` exige
+root. Se não tiver, o script para com mensagem explícita e o deploy falha sem
+ter mexido em nada.
+
+### Quando o script para de propósito
+
+Se `/opt/cobot` **e** `/opt/goodbot` existirem os dois, ele aborta em vez de
+escolher. É um estado ambíguo — provavelmente uma migração feita pela metade — e
+adivinhar qual tem o `.env` bom seria pior do que parar. Confira qual é o
+correto, apague o outro e rode de novo.
+
+### Limpeza, só depois de confirmar que subiu
+
+Enquanto o antigo estiver no disco, dá para voltar atrás. Confirme primeiro que
+`curl https://bot.<dominio>/health` responde e que `docker compose ps` mostra
+tudo de pé. Só então:
 
 ```bash
 docker volume rm cobot_caddy_data cobot_caddy_config cobot_backups
+docker image rm ghcr.io/dionathagoulart/cobot-bot:latest
 ```
 
----
+O `/opt/cobot` já não existe depois da migração — ele virou `/opt/goodbot`.
 
 ## 3. No GitHub
 
@@ -160,11 +168,9 @@ convivência — o nome antigo simplesmente deixa de ser publicado.
 
 ## 8. Checklist
 
-- [ ] `/opt/cobot` movido para `/opt/goodbot` na VM
-- [ ] volumes do Caddy e de backups copiados (ou aceito perder os certificados)
-- [ ] fail2ban reinstalado com os nomes novos
+- [ ] deploy rodou e o log mostra "Migração concluída" (ou o no-op)
+- [ ] `/health` responde e `docker compose ps` mostra bot e caddy de pé
 - [ ] repositório renomeado no GitHub e `git remote set-url` feito
 - [ ] pacote `goodbot-bot` acessível no GHCR
-- [ ] deploy rodou até o fim e `curl https://bot.<dominio>/health` responde
 - [ ] dashboards e alertas apontando para `goodbot_*`
-- [ ] volumes e imagem antigos apagados
+- [ ] volumes e imagem antigos apagados (§2, limpeza)

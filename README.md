@@ -167,11 +167,18 @@ Dois pipelines independentes disparam no mesmo `git push origin main`:
        ├──▶ GitHub Actions (.github/workflows/deploy.yml)
        │      1. migrate  → pnpm db:migrate no Supabase (conexão direta)
        │      2. build    → imagem linux/amd64 no ghcr.io/<owner>/goodbot-bot
-       │      3. deploy   → ssh na VM: docker compose pull && up -d
+       │      3. deploy   → scp de infra/ para a VM, depois
+       │                    docker compose pull && up -d
        │
        └──▶ Vercel (integração git, sem Action)
               build do apps/web e publicação em goodbot.<dominio>
 ```
+
+O passo de `scp` existe porque o `docker compose up` da VM lê o compose do
+disco **dela**. Sem ele, mudança em `infra/` ficava só no repositório: o
+`bootstrap-server.sh` copiava uma vez, na instalação, e nada depois — em
+silêncio. O mesmo passo leva o `migrate-rename.sh`, que é idempotente e sai em
+no-op quando não há o que migrar.
 
 `ci.yml` roda em todo push e todo PR (lint, typecheck, testes com um Postgres
 de serviço, build) — é ele que reprova um PR com erro de tipo. `deploy.yml` só

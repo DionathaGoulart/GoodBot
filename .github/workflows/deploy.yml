@@ -104,6 +104,22 @@ jobs:
     needs: build
     environment: production
     steps:
+      - uses: actions/checkout@v7
+
+      # O `docker compose up` da VM lê o compose do disco DELA, não o do
+      # repositório. Sem este passo, mudança em `infra/` nunca chegava lá: o
+      # bootstrap copiava uma vez, na instalação, e nada depois.
+      - name: Enviar infra para a VM
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: infra/docker-compose.yml,infra/Caddyfile,infra/fail2ban/*,infra/scripts/*.sh
+          target: /tmp/goodbot-infra
+          strip_components: 1
+          overwrite: true
+
       - name: docker compose pull && up -d
         uses: appleboy/ssh-action@v1
         env:
@@ -118,10 +134,17 @@ jobs:
           envs: GHCR_USER,GHCR_TOKEN
           script_stop: true
           script: |
+            bash /tmp/goodbot-infra/scripts/migrate-rename.sh
             cd /opt/goodbot
+            install -m 640 /tmp/goodbot-infra/docker-compose.yml ./docker-compose.yml
+            install -m 640 /tmp/goodbot-infra/Caddyfile ./Caddyfile
+            install -d -m 750 ./scripts
+            install -m 755 /tmp/goodbot-infra/scripts/backup.sh ./scripts/backup.sh
+            install -m 755 /tmp/goodbot-infra/scripts/restore.sh ./scripts/restore.sh
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose pull
             docker compose up -d --remove-orphans
             docker image prune -f
             docker logout ghcr.io
+            rm -rf /tmp/goodbot-infra
             docker compose ps
