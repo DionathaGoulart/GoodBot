@@ -156,7 +156,13 @@ jobs:
               fi
             fi
             install -m 640 /tmp/goodbot-infra/docker-compose.yml ./docker-compose.yml
-            install -m 640 /tmp/goodbot-infra/Caddyfile ./Caddyfile
+            # 644, e não 640 como o compose: o Caddyfile é montado DENTRO do
+            # container, que roda com `cap_drop: ALL`. Sem CAP_DAC_OVERRIDE o
+            # root de lá não fura permissão, e um arquivo sem o bit de leitura
+            # para "outros" é ilegível para ele — o Caddy sai com 1 e entra em
+            # loop de restart, derrubando a API inteira. Não há segredo aqui:
+            # domínio e e-mail do ACME chegam por variável de ambiente.
+            install -m 644 /tmp/goodbot-infra/Caddyfile ./Caddyfile
             install -d -m 750 ./scripts
             install -m 755 /tmp/goodbot-infra/scripts/backup.sh ./scripts/backup.sh
             install -m 755 /tmp/goodbot-infra/scripts/restore.sh ./scripts/restore.sh

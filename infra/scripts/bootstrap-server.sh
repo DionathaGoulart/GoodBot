@@ -87,12 +87,18 @@ install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 750 "$APP_DIR/scripts"
 install -o "$SERVICE_USER" -g "$SERVICE_USER" -m 755 "$HERE/scripts/backup.sh" "$APP_DIR/scripts/backup.sh"
 install -o "$SERVICE_USER" -g "$SERVICE_USER" -m 755 "$HERE/scripts/restore.sh" "$APP_DIR/scripts/restore.sh"
 
-for file in docker-compose.yml Caddyfile; do
-  if [[ -f "$HERE/$file" ]]; then
-    install -o "$SERVICE_USER" -g "$SERVICE_USER" -m 640 "$HERE/$file" "$APP_DIR/$file"
-    echo "$file copiado."
+# O Caddyfile vai com 644 porque é montado DENTRO do container, que roda com
+# `cap_drop: ALL`: sem CAP_DAC_OVERRIDE o root de lá não fura permissão, e um
+# arquivo sem leitura para "outros" faz o Caddy sair com 1 em loop. O compose
+# fica em 640 — quem o lê é o Docker no host, com o usuário do deploy.
+for file in docker-compose.yml:640 Caddyfile:644; do
+  name=${file%:*}
+  mode=${file#*:}
+  if [[ -f "$HERE/$name" ]]; then
+    install -o "$SERVICE_USER" -g "$SERVICE_USER" -m "$mode" "$HERE/$name" "$APP_DIR/$name"
+    echo "$name copiado."
   else
-    echo "aviso: $HERE/$file não encontrado — copie manualmente para $APP_DIR." >&2
+    echo "aviso: $HERE/$name não encontrado — copie manualmente para $APP_DIR." >&2
   fi
 done
 install -o "$SERVICE_USER" -g "$SERVICE_USER" -m 750 "$HERE/scripts/deploy.sh" "$APP_DIR/deploy.sh"
