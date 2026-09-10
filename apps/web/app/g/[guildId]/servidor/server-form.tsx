@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import type { GuildProfile } from '@goodbot/shared';
 
@@ -197,6 +198,7 @@ function ImageField({
  */
 export function ServerForm({ profile, readOnly }: { profile: GuildProfile; readOnly: boolean }) {
   const initial = React.useMemo(() => toValues(profile), [profile]);
+  const guildId = useGuildId();
   const [values, setValues] = React.useState<Values>(initial);
   const [icon, setIcon] = React.useState<ImageDraft>(undefined);
   const [banner, setBanner] = React.useState<ImageDraft>(undefined);
@@ -234,7 +236,7 @@ export function ServerForm({ profile, readOnly }: { profile: GuildProfile; readO
           ...(banner === undefined ? {} : { banner }),
         }),
       );
-      const result = await saveGuildProfileAction(formData);
+      const result = await saveGuildProfileAction(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message ?? 'Não foi possível salvar.' });
         return;

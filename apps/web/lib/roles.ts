@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -42,8 +42,7 @@ function roleId(formData: FormData): string | null {
  * Cria ou edita um cargo (PRD §6.3). O painel só monta o payload: quem checa
  * hierarquia e chama o Discord é o bot, com o `actorId` da sessão.
  */
-export async function saveRole(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function saveRole(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('role'));
@@ -79,8 +78,7 @@ export async function saveRole(formData: FormData): Promise<ActionResult> {
   return { ok: true, message: id ? 'Cargo atualizado.' : 'Cargo criado.' };
 }
 
-export async function removeRole(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function removeRole(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = roleId(formData);
@@ -105,8 +103,7 @@ export async function removeRole(formData: FormData): Promise<ActionResult> {
 }
 
 /** `▲`/`▼` da tabela: uma casa por clique. */
-export async function moveRole(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function moveRole(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = roleId(formData);

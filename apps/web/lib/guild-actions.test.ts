@@ -38,7 +38,6 @@ vi.mock('./internal-api', () => ({
   }),
 }));
 vi.mock('./auth/require', () => ({
-  defaultGuildId: () => GUILD_ID,
   /**
    * O `requireGuildAccess` de verdade faz `redirect()` quando o nível não
    * basta, e `redirect` lança. O mock imita isso lançando, que é o que importa:
@@ -94,15 +93,18 @@ describe('nível insuficiente', () => {
   it('mod não cria, não apaga cargo e não mexe em cargos de membro', async () => {
     level = 'mod';
 
-    await expect(saveRole(form({ role: JSON.stringify({ name: 'Mod' }) }))).rejects.toThrow(
-      'NEXT_REDIRECT',
-    );
-    await expect(removeRole(form({ roleId: ROLE }))).rejects.toThrow('NEXT_REDIRECT');
     await expect(
-      setMemberRolesAction(form({ userId: ACTOR, roles: JSON.stringify({ add: [ROLE] }) })),
+      saveRole(GUILD_ID, form({ role: JSON.stringify({ name: 'Mod' }) })),
+    ).rejects.toThrow('NEXT_REDIRECT');
+    await expect(removeRole(GUILD_ID, form({ roleId: ROLE }))).rejects.toThrow('NEXT_REDIRECT');
+    await expect(
+      setMemberRolesAction(
+        GUILD_ID,
+        form({ userId: ACTOR, roles: JSON.stringify({ add: [ROLE] }) }),
+      ),
     ).rejects.toThrow('NEXT_REDIRECT');
     await expect(
-      setOverrides(form({ channelId: CHANNEL, overrides: JSON.stringify([]) })),
+      setOverrides(GUILD_ID, form({ channelId: CHANNEL, overrides: JSON.stringify([]) })),
     ).rejects.toThrow('NEXT_REDIRECT');
 
     expect(createRole).not.toHaveBeenCalled();
@@ -123,6 +125,7 @@ describe('nível insuficiente', () => {
     });
 
     const result = await punishMember(
+      GUILD_ID,
       form({ action: JSON.stringify({ type: 'warn', targetId: ROLE, reason: 'spam' }) }),
     );
 
@@ -134,13 +137,16 @@ describe('nível insuficiente', () => {
 
 describe('payloads', () => {
   it('o actorId vem sempre da sessão, nunca do corpo', async () => {
-    await saveRole(form({ role: JSON.stringify({ name: 'Mod', actorId: '999999999999999999' }) }));
+    await saveRole(
+      GUILD_ID,
+      form({ role: JSON.stringify({ name: 'Mod', actorId: '999999999999999999' }) }),
+    );
 
     expect(createRole).toHaveBeenCalledWith(GUILD_ID, expect.objectContaining({ actorId: ACTOR }));
   });
 
   it('cargo inválido não vira chamada nem auditoria', async () => {
-    const result = await saveRole(form({ role: JSON.stringify({ name: '' }) }));
+    const result = await saveRole(GUILD_ID, form({ role: JSON.stringify({ name: '' }) }));
 
     expect(result.ok).toBe(false);
     expect(result.fieldErrors).toHaveProperty('name');
@@ -150,6 +156,7 @@ describe('payloads', () => {
 
   it('override com estado inventado é recusado antes de sair do painel', async () => {
     const result = await setOverrides(
+      GUILD_ID,
       form({
         channelId: CHANNEL,
         overrides: JSON.stringify([{ roleId: ROLE, view: 'talvez', send: 'inherit' }]),
@@ -165,6 +172,7 @@ describe('payloads', () => {
     const overrides = [{ roleId: ROLE, view: 'deny', send: 'inherit' }];
 
     const result = await setOverrides(
+      GUILD_ID,
       form({ channelId: CHANNEL, overrides: JSON.stringify(overrides) }),
     );
 

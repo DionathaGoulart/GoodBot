@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import type {
   ExpressionOverview,
@@ -98,6 +99,7 @@ export function ExpressionsScreen({
   overview: ExpressionOverview;
   readOnly: boolean;
 }) {
+  const guildId = useGuildId();
   const router = useRouter();
   const emojiFileRef = React.useRef<HTMLInputElement>(null);
   const stickerFileRef = React.useRef<HTMLInputElement>(null);
@@ -177,7 +179,7 @@ export function ExpressionsScreen({
     if (editingEmoji) {
       formData.set('emojiId', editingEmoji.id);
       formData.set('emoji', JSON.stringify({ name: emojiName, roleIds: emojiRoles }));
-      if (await run(() => updateEmojiAction(formData), 'ATUALIZADO')) resetEmoji();
+      if (await run(() => updateEmojiAction(guildId, formData), 'ATUALIZADO')) resetEmoji();
       return;
     }
     if (!emojiImage) return;
@@ -185,7 +187,7 @@ export function ExpressionsScreen({
       'emoji',
       JSON.stringify({ name: emojiName, image: emojiImage, roleIds: emojiRoles }),
     );
-    if (await run(() => createEmojiAction(formData), 'CRIADO')) resetEmoji();
+    if (await run(() => createEmojiAction(guildId, formData), 'CRIADO')) resetEmoji();
   }
 
   async function submitSticker() {
@@ -198,12 +200,12 @@ export function ExpressionsScreen({
     if (editingSticker) {
       formData.set('stickerId', editingSticker.id);
       formData.set('sticker', JSON.stringify(body));
-      if (await run(() => updateStickerAction(formData), 'ATUALIZADO')) resetSticker();
+      if (await run(() => updateStickerAction(guildId, formData), 'ATUALIZADO')) resetSticker();
       return;
     }
     if (!stickerImage) return;
     formData.set('sticker', JSON.stringify({ ...body, image: stickerImage }));
-    if (await run(() => createStickerAction(formData), 'CRIADO')) resetSticker();
+    if (await run(() => createStickerAction(guildId, formData), 'CRIADO')) resetSticker();
   }
 
   async function confirmDelete() {
@@ -211,11 +213,11 @@ export function ExpressionsScreen({
     const formData = new FormData();
     if (target.kind === 'emoji') {
       formData.set('emojiId', target.item.id);
-      if (await run(() => deleteEmojiAction(formData), 'APAGADO')) setTarget(null);
+      if (await run(() => deleteEmojiAction(guildId, formData), 'APAGADO')) setTarget(null);
       return;
     }
     formData.set('stickerId', target.item.id);
-    if (await run(() => deleteStickerAction(formData), 'APAGADO')) setTarget(null);
+    if (await run(() => deleteStickerAction(guildId, formData), 'APAGADO')) setTarget(null);
   }
 
   return (

@@ -10,6 +10,7 @@ import { colorToHex } from '@/components/config/discord-options';
 import { DataTable, type PanelColumnDef } from '@/components/data-table';
 import { Panel } from '@/components/retro/panel';
 import { Tag } from '@/components/retro/tag';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import { EMPTY_ROLE, RoleSheet, type RoleEditing } from './role-sheet';
 
@@ -25,6 +26,7 @@ function withRoleId(id: string, extra: Record<string, string> = {}): FormData {
 }
 
 export function RolesTable({ roles, readOnly }: { roles: GuildRoleSummary[]; readOnly: boolean }) {
+  const guildId = useGuildId();
   const router = useRouter();
   const [editing, setEditing] = React.useState<RoleEditing | null>(null);
   const rows = roles as RoleRow[];
@@ -66,9 +68,7 @@ export function RolesTable({ roles, readOnly }: { roles: GuildRoleSummary[]; rea
         header: 'MEMBROS',
         // Sem contagem confiável o bot omite o campo (servidor grande demais
         // para varrer): "—" é honesto, um zero seria mentira.
-        cell: ({ row }) => (
-          <span className="tabular-nums">{row.original.memberCount ?? '—'}</span>
-        ),
+        cell: ({ row }) => <span className="tabular-nums">{row.original.memberCount ?? '—'}</span>,
       },
       {
         accessorKey: 'position',
@@ -89,14 +89,16 @@ export function RolesTable({ roles, readOnly }: { roles: GuildRoleSummary[]; rea
                     label="▲"
                     busyLabel="_"
                     successTitle="MOVIDO"
-                    action={() => moveRoleAction(withRoleId(role.id, { direction: 'up' }))}
+                    action={() => moveRoleAction(guildId, withRoleId(role.id, { direction: 'up' }))}
                     onDone={() => router.refresh()}
                   />
                   <ActionButton
                     label="▼"
                     busyLabel="_"
                     successTitle="MOVIDO"
-                    action={() => moveRoleAction(withRoleId(role.id, { direction: 'down' }))}
+                    action={() =>
+                      moveRoleAction(guildId, withRoleId(role.id, { direction: 'down' }))
+                    }
                     onDone={() => router.refresh()}
                   />
                 </>
@@ -122,7 +124,7 @@ export function RolesTable({ roles, readOnly }: { roles: GuildRoleSummary[]; rea
               {readOnly || role.managed ? null : (
                 <ConfirmButton
                   label="REMOVER"
-                  action={() => deleteRoleAction(withRoleId(role.id))}
+                  action={() => deleteRoleAction(guildId, withRoleId(role.id))}
                   successMessage="O cargo saiu do servidor."
                   onDone={() => router.refresh()}
                 />
@@ -132,7 +134,7 @@ export function RolesTable({ roles, readOnly }: { roles: GuildRoleSummary[]; rea
         },
       },
     ],
-    [readOnly, router],
+    [guildId, readOnly, router],
   );
 
   return (

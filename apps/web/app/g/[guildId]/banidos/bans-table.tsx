@@ -86,7 +86,7 @@ export function BansTable({
     if (!cursor) return;
     setLoadingMore(true);
     try {
-      const result = await loadMoreBansAction({ q: query, after: cursor });
+      const result = await loadMoreBansAction(guildId, { q: query, after: cursor });
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return;
@@ -108,7 +108,7 @@ export function BansTable({
       const formData = new FormData();
       formData.set('userId', target.user.id);
       formData.set('reason', reason.trim());
-      const result = await unbanUserAction(formData);
+      const result = await unbanUserAction(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return;

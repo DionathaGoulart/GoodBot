@@ -6,6 +6,7 @@ import { setRaidModeAction } from '@/app/actions/modules';
 import { ActionButton } from '@/components/config/confirm-button';
 import { Panel } from '@/components/retro/panel';
 import { Tag } from '@/components/retro/tag';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import type { RaidModeState } from '@goodbot/shared';
 
@@ -15,6 +16,7 @@ import type { RaidModeState } from '@goodbot/shared';
  * desabilitados em vez de mentir sobre o estado.
  */
 export function RaidCard({ state, readOnly }: { state: RaidModeState | null; readOnly: boolean }) {
+  const guildId = useGuildId();
   const router = useRouter();
   const offline = state === null;
   const active = state?.active ?? false;
@@ -53,7 +55,7 @@ export function RaidCard({ state, readOnly }: { state: RaidModeState | null; rea
             action={() => {
               const formData = new FormData();
               formData.set('active', String(!active));
-              return setRaidModeAction(formData);
+              return setRaidModeAction(guildId, formData);
             }}
             onDone={() => router.refresh()}
           />

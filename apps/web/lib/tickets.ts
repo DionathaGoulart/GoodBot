@@ -22,7 +22,7 @@ import {
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { db } from './db';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
@@ -110,8 +110,7 @@ function idFrom(formData: FormData, key: string): string | null {
 
 // ── tipos ───────────────────────────────────────────────────────────────────
 
-export async function saveTicketType(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function saveTicketType(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = TicketTypeInputSchema.safeParse(parseBody(formData.get('type')));
@@ -150,8 +149,7 @@ export async function saveTicketType(formData: FormData): Promise<ActionResult> 
   return { ok: true };
 }
 
-export async function removeTicketType(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function removeTicketType(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const typeId = idFrom(formData, 'typeId');
@@ -173,8 +171,7 @@ export async function removeTicketType(formData: FormData): Promise<ActionResult
 
 // ── painel ──────────────────────────────────────────────────────────────────
 
-export async function saveTicketPanel(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function saveTicketPanel(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = TicketPanelInputSchema.safeParse(parseBody(formData.get('panel')));
@@ -207,8 +204,10 @@ export async function saveTicketPanel(formData: FormData): Promise<ActionResult>
   return { ok: true };
 }
 
-export async function publishTicketPanel(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function publishTicketPanel(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = idFrom(formData, 'panelId');
@@ -232,8 +231,10 @@ export async function publishTicketPanel(formData: FormData): Promise<ActionResu
   return { ok: true, message: 'Painel publicado.' };
 }
 
-export async function removeTicketPanel(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function removeTicketPanel(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = idFrom(formData, 'panelId');
@@ -272,8 +273,10 @@ export async function removeTicketPanel(formData: FormData): Promise<ActionResul
  * `FECHAR` da tabela. Quem fecha é o bot, pelo mesmo caminho do botão dentro
  * do Discord: transcript, log e apagamento do canal saem idênticos.
  */
-export async function closeTicketAction(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function closeTicketAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'mod');
 
   const raw = formData.get('ticketId');

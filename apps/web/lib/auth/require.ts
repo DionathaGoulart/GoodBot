@@ -121,14 +121,3 @@ export async function configuredGuildIds(): Promise<string[]> {
 export async function isConfiguredGuild(guildId: string): Promise<boolean> {
   return (await servedGuildIds()).includes(guildId);
 }
-
-/**
- * A primeira guild atendida. Serve para o redirect da raiz e para rotas que
- * ainda não recebem a guild explicitamente — nunca como autorização: quem
- * decide acesso é sempre a guild da URL.
- */
-export async function defaultGuildId(): Promise<string> {
-  const [first] = await servedGuildIds();
-  if (!first) throw new Error('nenhum servidor aprovado no registro');
-  return first;
-}

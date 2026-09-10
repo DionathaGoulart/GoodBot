@@ -11,7 +11,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -73,9 +73,9 @@ export async function loadChannels(
  * canal para uma informação que só o formulário aberto usa.
  */
 export async function loadChannelDetail(
+  guildId: string,
   channelId: string,
 ): Promise<{ ok: true; detail: GuildChannelDetail } | { ok: false; message: string }> {
-  const guildId = await defaultGuildId();
   await requireGuildAccess(guildId, 'admin');
 
   try {
@@ -100,8 +100,7 @@ function channelId(formData: FormData): string | null {
 }
 
 /** Cria (sem `channelId`) ou edita (com) um canal ou categoria. */
-export async function saveChannel(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function saveChannel(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = channelId(formData);
@@ -141,8 +140,7 @@ export async function saveChannel(formData: FormData): Promise<ActionResult> {
   return { ok: true, message: id ? 'Canal atualizado.' : 'Canal criado.' };
 }
 
-export async function removeChannel(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function removeChannel(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = channelId(formData);
@@ -166,8 +164,7 @@ export async function removeChannel(formData: FormData): Promise<ActionResult> {
   return { ok: true };
 }
 
-export async function setSlowmode(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function setSlowmode(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = channelId(formData);
@@ -200,8 +197,10 @@ export async function setSlowmode(formData: FormData): Promise<ActionResult> {
  * `TRANCAR`/`DESTRANCAR`: mexe só no `SendMessages` do `@everyone`, do mesmo
  * jeito que o `/lock` dentro do Discord — então um desfaz o outro.
  */
-export async function toggleChannelLock(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function toggleChannelLock(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = channelId(formData);
@@ -229,8 +228,10 @@ export async function toggleChannelLock(formData: FormData): Promise<ActionResul
   return { ok: true, message: lock ? 'Canal trancado.' : 'Canal destrancado.' };
 }
 
-export async function setChannelOverrides(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function setChannelOverrides(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = channelId(formData);

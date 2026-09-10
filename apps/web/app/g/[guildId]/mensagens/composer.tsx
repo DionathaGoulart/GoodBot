@@ -177,7 +177,7 @@ export function MessageComposer({
           allowedMentions: mentions,
         }),
       );
-      const result = await sendChannelMessageAction(formData);
+      const result = await sendChannelMessageAction(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return;
@@ -197,7 +197,7 @@ export function MessageComposer({
       const formData = new FormData();
       formData.set('channelId', channelId);
       formData.set('messageId', target.id);
-      const result = await deleteChannelMessageAction(formData);
+      const result = await deleteChannelMessageAction(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return;

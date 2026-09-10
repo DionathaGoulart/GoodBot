@@ -43,6 +43,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 
 import type { TagTone } from '@/components/retro/tag';
+import { useGuildId } from '@/lib/use-guild-id';
 import type {
   EventEntityType,
   GuildScheduledEventList,
@@ -199,6 +200,7 @@ export function EventsScreen({
   list: GuildScheduledEventList;
   readOnly: boolean;
 }) {
+  const guildId = useGuildId();
   const router = useRouter();
   const fileRef = React.useRef<HTMLInputElement>(null);
 
@@ -263,7 +265,7 @@ export function EventsScreen({
           ...(draft.image === undefined ? {} : { image: draft.image }),
         }),
       );
-      const result = await saveScheduledEventAction(formData);
+      const result = await saveScheduledEventAction(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return;
@@ -282,7 +284,7 @@ export function EventsScreen({
     try {
       const formData = new FormData();
       formData.set('eventId', target.id);
-      const result = await deleteScheduledEventAction(formData);
+      const result = await deleteScheduledEventAction(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return;

@@ -21,58 +21,94 @@ import type { ActionResult } from '@/lib/module-config';
 
 // ── automod ─────────────────────────────────────────────────────────────────
 
-export async function saveAutomodRuleAction(formData: FormData): Promise<ActionResult> {
-  return saveAutomodRule(formData);
+export async function saveAutomodRuleAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return saveAutomodRule(guildId, formData);
 }
 
-export async function deleteAutomodRuleAction(formData: FormData): Promise<ActionResult> {
-  return removeAutomodRule(formData);
+export async function deleteAutomodRuleAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return removeAutomodRule(guildId, formData);
 }
 
-export async function reorderAutomodRulesAction(formData: FormData): Promise<ActionResult> {
-  return reorderAutomod(formData);
+export async function reorderAutomodRulesAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return reorderAutomod(guildId, formData);
 }
 
-export async function setRaidModeAction(formData: FormData): Promise<ActionResult> {
-  return setRaidMode(formData);
+export async function setRaidModeAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return setRaidMode(guildId, formData);
 }
 
 // ── reaction roles ──────────────────────────────────────────────────────────
 
-export async function savePanelAction(formData: FormData): Promise<ActionResult> {
-  return savePanel(formData);
+export async function savePanelAction(guildId: string, formData: FormData): Promise<ActionResult> {
+  return savePanel(guildId, formData);
 }
 
-export async function publishPanelAction(formData: FormData): Promise<ActionResult> {
-  return publishPanel(formData);
+export async function publishPanelAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return publishPanel(guildId, formData);
 }
 
-export async function deletePanelAction(formData: FormData): Promise<ActionResult> {
-  return removePanel(formData);
+export async function deletePanelAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return removePanel(guildId, formData);
 }
 
 // ── tickets ─────────────────────────────────────────────────────────────────
 
-export async function saveTicketTypeAction(formData: FormData): Promise<ActionResult> {
-  return saveTicketType(formData);
+export async function saveTicketTypeAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return saveTicketType(guildId, formData);
 }
 
-export async function deleteTicketTypeAction(formData: FormData): Promise<ActionResult> {
-  return removeTicketType(formData);
+export async function deleteTicketTypeAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return removeTicketType(guildId, formData);
 }
 
-export async function saveTicketPanelAction(formData: FormData): Promise<ActionResult> {
-  return saveTicketPanel(formData);
+export async function saveTicketPanelAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return saveTicketPanel(guildId, formData);
 }
 
-export async function publishTicketPanelAction(formData: FormData): Promise<ActionResult> {
-  return publishTicketPanel(formData);
+export async function publishTicketPanelAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return publishTicketPanel(guildId, formData);
 }
 
-export async function deleteTicketPanelAction(formData: FormData): Promise<ActionResult> {
-  return removeTicketPanel(formData);
+export async function deleteTicketPanelAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return removeTicketPanel(guildId, formData);
 }
 
-export async function closeTicketFormAction(formData: FormData): Promise<ActionResult> {
-  return closeTicketAction(formData);
+export async function closeTicketFormAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return closeTicketAction(guildId, formData);
 }

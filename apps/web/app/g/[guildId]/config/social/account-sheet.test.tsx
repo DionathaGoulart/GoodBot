@@ -2,14 +2,18 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TEST_GUILD_ID } from '@/vitest.setup';
+
 import { AccountSheet, EMPTY_ACCOUNT, type AccountEditing } from './account-sheet';
 
 const resolveSocialChannelAction = vi.fn();
 const saveSocialAccountAction = vi.fn();
 
 vi.mock('@/app/actions/social', () => ({
-  resolveSocialChannelAction: (input: string) => resolveSocialChannelAction(input),
-  saveSocialAccountAction: (formData: FormData) => saveSocialAccountAction(formData),
+  resolveSocialChannelAction: (guildId: string, input: string) =>
+    resolveSocialChannelAction(guildId, input),
+  saveSocialAccountAction: (guildId: string, formData: FormData) =>
+    saveSocialAccountAction(guildId, formData),
 }));
 
 const LOFI = {
@@ -54,7 +58,10 @@ describe('AccountSheet — campo do canal', () => {
 
     await waitFor(() => expect(screen.getByText('Lofi Girl')).toBeInTheDocument());
     expect(screen.getByText('@LofiGirl')).toBeInTheDocument();
-    expect(resolveSocialChannelAction).toHaveBeenCalledWith('https://www.youtube.com/@LofiGirl');
+    expect(resolveSocialChannelAction).toHaveBeenCalledWith(
+      TEST_GUILD_ID,
+      'https://www.youtube.com/@LofiGirl',
+    );
     // O `UC…` não é digitado em lugar nenhum: quem preenche é a resolução.
     expect(screen.queryByPlaceholderText('youtube.com/@canal')).toBeNull();
   });

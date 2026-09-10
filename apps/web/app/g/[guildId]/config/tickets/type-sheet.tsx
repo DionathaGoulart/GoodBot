@@ -18,6 +18,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { useGuildId } from '@/lib/use-guild-id';
 
 export const EMPTY_TYPE: TicketTypeInput = {
   name: '',
@@ -45,6 +46,7 @@ export function TypeSheet({
   readOnly: boolean;
   onClose: (changed: boolean) => void;
 }) {
+  const guildId = useGuildId();
   const form = useForm<TicketTypeInput>({
     // `as never`: o schema tem defaults, então a entrada do resolver é mais
     // frouxa que a saída e o RHF não reconcilia os dois genéricos sozinho.
@@ -64,7 +66,7 @@ export function TypeSheet({
       const formData = new FormData();
       formData.set('type', JSON.stringify(values));
       if (editing?.id) formData.set('typeId', editing.id);
-      const result = await saveTicketTypeAction(formData);
+      const result = await saveTicketTypeAction(guildId, formData);
       if (!result.ok) {
         for (const [path, message] of Object.entries(result.fieldErrors ?? {})) {
           form.setError(path as never, { message });

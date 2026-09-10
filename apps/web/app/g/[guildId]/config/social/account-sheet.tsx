@@ -38,6 +38,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { useGuildId } from '@/lib/use-guild-id';
 
 export const EMPTY_ACCOUNT: SocialAccountInput = {
   platform: 'youtube',
@@ -85,6 +86,7 @@ const PREVIEW_MODES: TemplatePreviewMode[] = SOCIAL_KINDS.map((kind) => ({
  * campo do formulário e ele só é preenchido pela resolução.
  */
 function ChannelField({ readOnly }: { readOnly: boolean }) {
+  const guildId = useGuildId();
   const { watch, setValue, setError, clearErrors } = useFormContext<SocialAccountInput>();
   const externalId = watch('externalId');
   const displayName = watch('displayName');
@@ -106,7 +108,7 @@ function ChannelField({ readOnly }: { readOnly: boolean }) {
 
     setSearching(true);
     try {
-      const result = await resolveSocialChannelAction(value);
+      const result = await resolveSocialChannelAction(guildId, value);
       if (!result.ok) {
         setError('externalId', { message: result.message });
         return;
@@ -261,6 +263,7 @@ export function AccountSheet({
   readOnly: boolean;
   onClose: (changed: boolean) => void;
 }) {
+  const guildId = useGuildId();
   const form = useForm<SocialAccountInput>({
     // `as never`: o schema tem defaults, então a entrada do resolver é mais
     // frouxa que a saída e o RHF não reconcilia os dois genéricos sozinho.
@@ -280,7 +283,7 @@ export function AccountSheet({
       const formData = new FormData();
       formData.set('account', JSON.stringify(values));
       if (editing?.id) formData.set('accountId', editing.id);
-      const result = await saveSocialAccountAction(formData);
+      const result = await saveSocialAccountAction(guildId, formData);
       if (!result.ok) {
         for (const [path, message] of Object.entries(result.fieldErrors ?? {})) {
           form.setError(path as never, { message });

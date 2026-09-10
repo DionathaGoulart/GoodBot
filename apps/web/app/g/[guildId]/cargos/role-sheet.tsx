@@ -24,6 +24,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import type { z } from 'zod';
 
@@ -98,6 +99,7 @@ export function RoleSheet({
   readOnly: boolean;
   onClose: (changed: boolean) => void;
 }) {
+  const guildId = useGuildId();
   const form = useForm<RoleFormValues>({
     // `as never`: o schema tem defaults, então a entrada do resolver é mais
     // frouxa que a saída e o RHF não reconcilia os dois genéricos sozinho.
@@ -117,7 +119,7 @@ export function RoleSheet({
       const formData = new FormData();
       formData.set('role', JSON.stringify(values));
       if (editing?.id) formData.set('roleId', editing.id);
-      const result = await saveRoleAction(formData);
+      const result = await saveRoleAction(guildId, formData);
       if (!result.ok) {
         for (const [path, message] of Object.entries(result.fieldErrors ?? {})) {
           form.setError(path as never, { message });

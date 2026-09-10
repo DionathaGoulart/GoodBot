@@ -37,7 +37,9 @@ Node 22 LTS (`.nvmrc`). O `engines` recusa 23+.
 ## 4. As regras que valem em todo lugar
 
 1. **ID do Discord é `string`.** Nunca `Number(snowflake)`.
-2. **Todo query filtra por `guildId`.** Um servidor hoje, vários amanhã.
+2. **Todo query filtra por `guildId`,** e nada assume "a" guild — o bot é
+   público. No painel, action que escreve recebe o `guildId` no primeiro
+   argumento (`useGuildId()` no cliente); rota de `/api/*` o recebe na query.
 3. **Todo input externo passa por Zod de `@goodbot/shared`** — opção de comando,
    corpo da API, formulário do painel, jsonb de config. Bot e painel importam o
    **mesmo** schema; duplicar a validação é como as duas pontas divergem.

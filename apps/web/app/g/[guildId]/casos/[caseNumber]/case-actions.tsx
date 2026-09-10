@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import type { CaseDetail } from '@/lib/cases';
 
@@ -36,6 +37,7 @@ export function CaseActions({
   /** `admin` (PRD §9.2). */
   canDelete: boolean;
 }) {
+  const guildId = useGuildId();
   const router = useRouter();
   const { kase, undo } = detail;
   const [reason, setReason] = React.useState(kase.reason);
@@ -46,7 +48,7 @@ export function CaseActions({
 
   async function run(
     kind: 'edit' | 'undo' | 'delete',
-    action: (formData: FormData) => Promise<{ ok: boolean; message?: string }>,
+    action: (guildId: string, formData: FormData) => Promise<{ ok: boolean; message?: string }>,
     extra: Record<string, string> = {},
   ) {
     setBusy(kind);
@@ -55,7 +57,7 @@ export function CaseActions({
       formData.set('caseNumber', String(kase.caseNumber));
       for (const [key, value] of Object.entries(extra)) formData.set(key, value);
 
-      const result = await action(formData);
+      const result = await action(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return false;

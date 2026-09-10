@@ -28,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import type { TagRow } from '@/lib/tags';
 
@@ -35,6 +36,7 @@ const EMPTY_TAG: TagInput = { name: '', content: { content: '' } };
 
 /** §6.8 — confirmação inline: o botão vira `CONFIRMAR?` por 3s e volta. */
 function DeleteButton({ name, onDeleted }: { name: string; onDeleted: () => void }) {
+  const guildId = useGuildId();
   const [armed, setArmed] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
 
@@ -58,7 +60,7 @@ function DeleteButton({ name, onDeleted }: { name: string; onDeleted: () => void
         try {
           const formData = new FormData();
           formData.set('name', name);
-          const result = await deleteTagAction(formData);
+          const result = await deleteTagAction(guildId, formData);
           if (result.ok) {
             toast.success('APAGADO', { description: `A tag ${name} foi removida.` });
             onDeleted();
@@ -86,6 +88,7 @@ function TagSheet({
   embedColor: number;
   onClose: (changed: boolean) => void;
 }) {
+  const guildId = useGuildId();
   const form = useForm<TagInput>({
     // `as never`: o schema tem defaults, então a entrada do resolver é mais
     // frouxa que a saída e o RHF não reconcilia os dois genéricos sozinho.
@@ -106,7 +109,7 @@ function TagSheet({
       const formData = new FormData();
       formData.set('tag', JSON.stringify(values));
       formData.set('mode', editing?.isEdit ? 'edit' : 'create');
-      const result = await saveTagAction(formData);
+      const result = await saveTagAction(guildId, formData);
       if (!result.ok) {
         for (const [path, message] of Object.entries(result.fieldErrors ?? {})) {
           form.setError(path as keyof TagInput, { message });

@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { useParams } from 'next/navigation';
 import { GuildMemberSummarySchema } from '@goodbot/shared';
 import { cn } from 'cn';
 
@@ -14,6 +13,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import type { GuildMemberSummary } from '@goodbot/shared';
 
@@ -58,7 +58,7 @@ export function MemberPicker({
   const [members, setMembers] = React.useState<GuildMemberSummary[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
-  const { guildId } = useParams<{ guildId: string }>();
+  const guildId = useGuildId();
 
   React.useEffect(() => {
     if (!open) return;
@@ -85,7 +85,7 @@ export function MemberPicker({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [open, query]);
+  }, [guildId, open, query]);
 
   const current = members.find((member) => member.id === value);
   const shown = current?.displayName ?? label ?? value;

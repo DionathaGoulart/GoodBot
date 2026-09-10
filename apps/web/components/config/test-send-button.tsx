@@ -1,11 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import { useParams } from 'next/navigation';
 import { useFormContext } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { sendWelcomeTestAction } from '@/app/actions/config';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import type { MessageTemplate } from '@goodbot/shared';
 
@@ -21,7 +21,7 @@ export function TestSendButton({
   channelPath: string;
   templatePath: string;
 }) {
-  const { guildId } = useParams<{ guildId: string }>();
+  const guildId = useGuildId();
   const { watch, formState } = useFormContext();
   const [sending, setSending] = React.useState(false);
 
@@ -38,9 +38,8 @@ export function TestSendButton({
         setSending(true);
         try {
           const formData = new FormData();
-          formData.set('guildId', guildId);
           formData.set('payload', JSON.stringify({ channelId, template }));
-          const result = await sendWelcomeTestAction(formData);
+          const result = await sendWelcomeTestAction(guildId, formData);
           if (result.ok) toast.success('ENVIADO', { description: result.message });
           else toast.error('ERRO', { description: result.message ?? 'Não foi possível enviar.' });
         } finally {

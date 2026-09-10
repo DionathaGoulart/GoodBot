@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import type { GuildMemberDetail } from '@goodbot/shared';
 
@@ -79,6 +80,7 @@ const ORDER: ActionType[] = ['ban', 'kick', 'timeout', 'warn', 'note'];
  * no audit log dele.
  */
 export function MemberModeration({ member }: { member: GuildMemberDetail }) {
+  const guildId = useGuildId();
   const router = useRouter();
   const [open, setOpen] = React.useState<ActionType | null>(null);
   const [reason, setReason] = React.useState('');
@@ -111,7 +113,7 @@ export function MemberModeration({ member }: { member: GuildMemberDetail }) {
           ...(spec.duration === 'none' ? {} : { durationMs }),
         }),
       );
-      const result = await punishMemberAction(formData);
+      const result = await punishMemberAction(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return;

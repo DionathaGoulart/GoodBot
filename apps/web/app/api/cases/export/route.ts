@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server';
 
-import {
-  defaultGuildId,
-  resolveGuildSession,
-  verdictMessage,
-  verdictStatus,
-} from '@/lib/auth/require';
+import { guildFromQuery } from '@/lib/auth/guild-param';
+import { resolveGuildSession, verdictMessage, verdictStatus } from '@/lib/auth/require';
 import { parseCaseFilters } from '@/lib/case-filters';
 import { exportCasesCsv } from '@/lib/cases';
 
@@ -17,7 +13,11 @@ import { exportCasesCsv } from '@/lib/cases';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request): Promise<NextResponse> {
-  const guildId = await defaultGuildId();
+  const guildId = await guildFromQuery(request.url);
+  if (guildId === null) {
+    return NextResponse.json({ error: 'Servidor não configurado.' }, { status: 404 });
+  }
+
   const access = await resolveGuildSession(guildId);
   if ('verdict' in access) {
     return NextResponse.json(

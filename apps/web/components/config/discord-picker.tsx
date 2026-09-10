@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { useParams } from 'next/navigation';
 import { GuildChannelSummarySchema, GuildRoleSummarySchema } from '@goodbot/shared';
 import { cn } from 'cn';
 
@@ -14,6 +13,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import {
   channelsToOptions,
@@ -65,7 +65,7 @@ function useDiscordOptions(
   // O cache é do módulo, logo compartilhado entre as guilds abertas em abas
   // diferentes: sem o id na chave, o formulário de um servidor ofereceria os
   // canais do outro.
-  const { guildId } = useParams<{ guildId: string }>();
+  const guildId = useGuildId();
   // `includeEveryone` entra na chave: as duas listas de cargo convivem no cache.
   const key =
     kind === 'channel'

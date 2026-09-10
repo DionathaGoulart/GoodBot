@@ -8,6 +8,7 @@ import { ActionButton, ConfirmButton } from '@/components/config/confirm-button'
 import { DataTable, type PanelColumnDef } from '@/components/data-table';
 import { Panel } from '@/components/retro/panel';
 import { Tag } from '@/components/retro/tag';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import { EMPTY_PANEL, PanelSheet, type PanelEditing } from './panel-sheet';
 
@@ -25,6 +26,7 @@ export function PanelsTable({
   embedColor: number;
   readOnly: boolean;
 }) {
+  const guildId = useGuildId();
   const router = useRouter();
   const [editing, setEditing] = React.useState<PanelEditing | null>(null);
 
@@ -100,12 +102,12 @@ export function PanelsTable({
                   label={row.original.messageId ? 'ATUALIZAR' : 'PUBLICAR'}
                   busyLabel="PUBLICANDO_"
                   successTitle="PUBLICADO"
-                  action={() => publishPanelAction(withPanelId(row.original.id))}
+                  action={() => publishPanelAction(guildId, withPanelId(row.original.id))}
                   onDone={() => router.refresh()}
                 />
                 <ConfirmButton
                   label="REMOVER"
-                  action={() => deletePanelAction(withPanelId(row.original.id))}
+                  action={() => deletePanelAction(guildId, withPanelId(row.original.id))}
                   successMessage="O painel e a mensagem saíram do ar."
                   onDone={() => router.refresh()}
                 />
@@ -115,7 +117,7 @@ export function PanelsTable({
         ),
       },
     ],
-    [channelNames, readOnly, router],
+    [guildId, channelNames, readOnly, router],
   );
 
   return (

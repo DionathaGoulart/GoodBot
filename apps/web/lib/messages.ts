@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -67,8 +67,10 @@ export async function loadChannelHistory(
  * fácil de abusar do painel inteiro, então o que foi escrito precisa ter dono
  * e hora.
  */
-export async function sendChannelMessage(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function sendChannelMessage(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = ComposeInputSchema.safeParse(parseBody(formData.get('message')));
@@ -123,8 +125,10 @@ export async function sendChannelMessage(formData: FormData): Promise<ActionResu
 }
 
 /** Apaga uma mensagem pelo painel; a auditoria guarda o que foi apagado. */
-export async function deleteChannelMessage(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function deleteChannelMessage(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const channelId = SnowflakeSchema.safeParse(formData.get('channelId'));

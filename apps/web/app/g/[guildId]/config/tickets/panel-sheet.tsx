@@ -19,6 +19,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import type { TicketTypeRow } from '@/lib/tickets';
 
@@ -93,6 +94,7 @@ export function TicketPanelSheet({
   readOnly: boolean;
   onClose: (changed: boolean) => void;
 }) {
+  const guildId = useGuildId();
   const form = useForm<TicketPanelInput>({
     // `as never`: o schema tem defaults, então a entrada do resolver é mais
     // frouxa que a saída e o RHF não reconcilia os dois genéricos sozinho.
@@ -112,7 +114,7 @@ export function TicketPanelSheet({
       const formData = new FormData();
       formData.set('panel', JSON.stringify(values));
       if (editing?.id) formData.set('panelId', editing.id);
-      const result = await saveTicketPanelAction(formData);
+      const result = await saveTicketPanelAction(guildId, formData);
       if (!result.ok) {
         for (const [path, message] of Object.entries(result.fieldErrors ?? {})) {
           form.setError(path as never, { message });

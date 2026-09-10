@@ -9,6 +9,7 @@ import { MultiSelect } from '@/components/multi-select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { caseFiltersToQuery, EMPTY_CASE_FILTERS, type CaseFilters } from '@/lib/case-filters';
+import { useGuildId } from '@/lib/use-guild-id';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -35,6 +36,7 @@ export function CaseFiltersBar({
   actorLabel?: string;
   targetLabel?: string;
 }) {
+  const guildId = useGuildId();
   const router = useRouter();
   // O rascunho começa no filtro da URL. Quem manda é a URL: a página remonta
   // este componente por `key` quando ela muda, então não há efeito de sync.
@@ -48,7 +50,11 @@ export function CaseFiltersBar({
     router.push(query ? `${basePath}?${query}` : basePath);
   };
 
-  const exportQuery = caseFiltersToQuery({ ...filters, page: 1 }).toString();
+  // O CSV é uma rota de apoio, então a guild vai na query: `/api/*` não tem
+  // `params` da rota para ler e não pode adivinhar de qual servidor se trata.
+  const exportParams = caseFiltersToQuery({ ...filters, page: 1 });
+  exportParams.set('guildId', guildId);
+  const exportQuery = exportParams.toString();
 
   return (
     <form
@@ -130,11 +136,7 @@ export function CaseFiltersBar({
           >
             LIMPAR
           </button>
-          <a
-            className="icon-btn"
-            href={`/api/cases/export${exportQuery ? `?${exportQuery}` : ''}`}
-            download
-          >
+          <a className="icon-btn" href={`/api/cases/export?${exportQuery}`} download>
             CSV
           </a>
         </div>

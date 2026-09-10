@@ -7,7 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { failure } from './action-error';
 import { withAudit } from './audit';
 import { hasAccess } from './auth/access';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { EXPORT_LIMIT, PAGE_SIZE, filterRange, type CaseFilters } from './case-filters';
 import { csvBody, csvHeader } from './csv';
 import { db } from './db';
@@ -228,8 +228,7 @@ function caseNumberFrom(formData: FormData): number | null {
  * Editar o motivo (PRD §6.4). Quem escreve é o bot: a mensagem já publicada no
  * mod-log tem de acompanhar a edição, e só ele fala com o Discord.
  */
-export async function editCaseReason(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function editCaseReason(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'mod');
 
   const caseNumber = caseNumberFrom(formData);
@@ -266,8 +265,7 @@ export async function editCaseReason(formData: FormData): Promise<ActionResult> 
 }
 
 /** Apagar (soft delete). Só `admin` (PRD §9.2); o caso fica no banco. */
-export async function deleteCase(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function deleteCase(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const caseNumber = caseNumberFrom(formData);
@@ -298,8 +296,7 @@ export async function deleteCase(formData: FormData): Promise<ActionResult> {
  * `DESFAZER` — o unban/untimeout correspondente, pelo mesmo caminho de uma
  * punição do painel: vira um caso novo, com mod-log e tudo (PRD §6.4).
  */
-export async function undoCase(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function undoCase(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'mod');
 
   const caseNumber = caseNumberFrom(formData);

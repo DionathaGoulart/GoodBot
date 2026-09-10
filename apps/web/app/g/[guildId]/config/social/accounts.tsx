@@ -10,6 +10,7 @@ import { DataTable, type PanelColumnDef } from '@/components/data-table';
 import { AvatarSq } from '@/components/retro/avatar-sq';
 import { Panel } from '@/components/retro/panel';
 import { Tag } from '@/components/retro/tag';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import { AccountSheet, EMPTY_ACCOUNT, type AccountEditing } from './account-sheet';
 
@@ -97,6 +98,7 @@ export function AccountsTable({
   embedColor: number;
   readOnly: boolean;
 }) {
+  const guildId = useGuildId();
   const router = useRouter();
   const [editing, setEditing] = React.useState<AccountEditing | null>(null);
 
@@ -178,11 +180,11 @@ export function AccountsTable({
                   label="TESTAR"
                   busyLabel="ENVIANDO_"
                   successTitle="ENVIADO"
-                  action={() => testSocialAccountAction(withAccountId(row.original.id))}
+                  action={() => testSocialAccountAction(guildId, withAccountId(row.original.id))}
                 />
                 <ConfirmButton
                   label="REMOVER"
-                  action={() => deleteSocialAccountAction(withAccountId(row.original.id))}
+                  action={() => deleteSocialAccountAction(guildId, withAccountId(row.original.id))}
                   successMessage="O bot parou de observar esse canal."
                   onDone={() => router.refresh()}
                 />
@@ -192,7 +194,7 @@ export function AccountsTable({
         ),
       },
     ],
-    [channelNames, readOnly, router],
+    [guildId, channelNames, readOnly, router],
   );
 
   return (

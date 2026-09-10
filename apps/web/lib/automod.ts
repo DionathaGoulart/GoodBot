@@ -13,7 +13,7 @@ import { AutomodRuleSchema, DAY_MS, type AutomodRule, type RaidModeState } from 
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { db } from './db';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
@@ -88,8 +88,7 @@ async function invalidate(guildId: string): Promise<string | undefined> {
 }
 
 /** Cria ou edita uma regra. `ruleId` no FormData = edição. */
-export async function saveAutomodRule(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function saveAutomodRule(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = AutomodRuleSchema.safeParse(parseBody(formData.get('rule')));
@@ -136,8 +135,10 @@ export async function saveAutomodRule(formData: FormData): Promise<ActionResult>
   return warning ? { ok: true, message: warning } : { ok: true };
 }
 
-export async function removeAutomodRule(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function removeAutomodRule(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const ruleId = formData.get('ruleId');
@@ -164,8 +165,7 @@ export async function removeAutomodRule(formData: FormData): Promise<ActionResul
 }
 
 /** Botões ▲▼: o cliente manda a lista inteira na ordem nova. */
-export async function reorderAutomod(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function reorderAutomod(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const body = parseBody(formData.get('ruleIds'));
@@ -204,8 +204,7 @@ export async function loadRaidState(guildId: string): Promise<RaidModeState | nu
   }
 }
 
-export async function setRaidMode(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function setRaidMode(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
   const active = formData.get('active') === 'true';
 

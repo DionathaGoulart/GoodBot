@@ -14,6 +14,7 @@ import { DataTable, type PanelColumnDef } from '@/components/data-table';
 import { Panel } from '@/components/retro/panel';
 import { Tag } from '@/components/retro/tag';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import { EMPTY_TICKET_PANEL, TicketPanelSheet, type TicketPanelEditing } from './panel-sheet';
 import { EMPTY_TYPE, TypeSheet, type TypeEditing } from './type-sheet';
@@ -51,6 +52,7 @@ export function TicketsTabs({
   /** O formulário do módulo, renderizado no servidor e passado como filho. */
   configSlot: React.ReactNode;
 }) {
+  const guildId = useGuildId();
   const router = useRouter();
   const [editingType, setEditingType] = React.useState<TypeEditing | null>(null);
   const [editingPanel, setEditingPanel] = React.useState<TicketPanelEditing | null>(null);
@@ -116,7 +118,7 @@ export function TicketsTabs({
             </button>
             {readOnly ? null : (
               <ConfirmButton
-                action={() => deleteTicketTypeAction(withId('typeId', row.original.id))}
+                action={() => deleteTicketTypeAction(guildId, withId('typeId', row.original.id))}
                 successMessage={`O tipo ${row.original.name} foi removido.`}
                 onDone={() => router.refresh()}
               />
@@ -125,7 +127,7 @@ export function TicketsTabs({
         ),
       },
     ],
-    [channelNames, readOnly, roleNames, router],
+    [guildId, channelNames, readOnly, roleNames, router],
   );
 
   const panelColumns = React.useMemo<PanelColumnDef<TicketPanelRow>[]>(
@@ -190,12 +192,16 @@ export function TicketsTabs({
                   label={row.original.messageId ? 'ATUALIZAR' : 'PUBLICAR'}
                   busyLabel="PUBLICANDO_"
                   successTitle="PUBLICADO"
-                  action={() => publishTicketPanelAction(withId('panelId', row.original.id))}
+                  action={() =>
+                    publishTicketPanelAction(guildId, withId('panelId', row.original.id))
+                  }
                   onDone={() => router.refresh()}
                 />
                 <ConfirmButton
                   label="REMOVER"
-                  action={() => deleteTicketPanelAction(withId('panelId', row.original.id))}
+                  action={() =>
+                    deleteTicketPanelAction(guildId, withId('panelId', row.original.id))
+                  }
                   onDone={() => router.refresh()}
                 />
               </>
@@ -204,7 +210,7 @@ export function TicketsTabs({
         ),
       },
     ],
-    [channelNames, readOnly, router, typeName],
+    [guildId, channelNames, readOnly, router, typeName],
   );
 
   const ticketColumns = React.useMemo<PanelColumnDef<TicketRow>[]>(
@@ -271,7 +277,9 @@ export function TicketsTabs({
               <ConfirmButton
                 label="FECHAR"
                 successTitle="FECHADO"
-                action={() => closeTicketFormAction(withId('ticketId', String(row.original.id)))}
+                action={() =>
+                  closeTicketFormAction(guildId, withId('ticketId', String(row.original.id)))
+                }
                 onDone={() => router.refresh()}
               />
             ) : null}
@@ -279,7 +287,7 @@ export function TicketsTabs({
         ),
       },
     ],
-    [router, typeName],
+    [guildId, router, typeName],
   );
 
   return (

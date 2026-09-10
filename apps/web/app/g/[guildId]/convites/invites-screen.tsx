@@ -34,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import type { GuildInviteList, GuildInviteSummary } from '@goodbot/shared';
 
@@ -66,6 +67,7 @@ function ExpiryCell({ invite }: { invite: GuildInviteSummary }) {
 }
 
 export function InvitesScreen({ list, readOnly }: { list: GuildInviteList; readOnly: boolean }) {
+  const guildId = useGuildId();
   const router = useRouter();
 
   const [channelId, setChannelId] = React.useState<string[]>([]);
@@ -87,7 +89,7 @@ export function InvitesScreen({ list, readOnly }: { list: GuildInviteList; readO
         'invite',
         JSON.stringify({ channelId: channel, maxAge, maxUses, temporary, unique: true }),
       );
-      const result = await createInviteAction(formData);
+      const result = await createInviteAction(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return;
@@ -105,7 +107,7 @@ export function InvitesScreen({ list, readOnly }: { list: GuildInviteList; readO
     try {
       const formData = new FormData();
       formData.set('code', target.code);
-      const result = await deleteInviteAction(formData);
+      const result = await deleteInviteAction(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return;

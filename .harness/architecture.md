@@ -218,7 +218,8 @@ app/
                 reaction-roles, tickets, tags, social, commands
   convite/      as telas dos links de convite (`invite.` e `demo.`)
   actions/      Server Actions: admin, auth, cases, config, guild, messages,
-                modules, social
+                modules, social — toda escrita de guild recebe o `guildId`
+                como primeiro argumento (ver 5.2)
   api/          auth (Auth.js), invite/{start,callback}, health,
                 cases/export, discord/*
 lib/
@@ -231,6 +232,7 @@ lib/
   auth/owner.ts     a porta do `/admin`: `OWNER_DISCORD_ID`, e só ela
   internal-api.ts   o cliente da API do bot, com o token do servidor
   module-config.ts  ponte entre o form do painel e o schema Zod do módulo
+  use-guild-id.ts   o `guildId` da rota, para o componente cliente (hook)
   auth/             Auth.js com provider Discord + checagem de nível
 components/
   ui/         shadcn, editados no repositório
@@ -279,13 +281,30 @@ por construção. Com o `domain` do host do painel, ele vale também para
 `invite.` e `demo.` — deliberado e pouco, porque esses dois servem só a tela de
 convite, o cookie é `httpOnly` e o CSRF continua sendo o do Auth.js.
 
+### 5.2 A guild vai explícita em toda escrita
+
 O caminho de uma edição no painel:
 
 ```
 form (client) ─▶ Server Action ─▶ lib/internal-api.ts ─▶ API do bot ─▶ Discord
-                       │                                      │
-                       └── grava config no Postgres ──────────┴─▶ invalidate
+   guildId da rota      │                                      │
+                        └── grava config no Postgres ──────────┴─▶ invalidate
 ```
+
+Toda action que escreve numa guild tem a forma `(guildId, formData)`, e o
+`guildId` sai da rota — `useGuildId()` no componente cliente, que é o
+`useParams` de `/g/[guildId]`. Nenhuma delas resolve a guild sozinha.
+
+Isso é **tipo**, não convenção: um call site que esqueça a guild não compila.
+A versão anterior deixava a action escolher "a primeira guild atendida", o que
+funcionava enquanto o bot só atendia um servidor e, com mais de um, escrevia no
+servidor errado sem erro nenhum — editando o servidor B, salvava no A. Quem
+recebe o argumento é o `requireGuildAccess`, então a guild conferida é sempre a
+guild escrita.
+
+As rotas de apoio de `/api/*` não têm `params` para ler e recebem a guild na
+query, pelo `lib/auth/guild-param.ts` (`?guildId=`); sem o parâmetro a rota
+responde 404 em vez de adivinhar.
 
 O `INTERNAL_API_TOKEN` vive **só no servidor** do Next. Nenhum componente
 client vê o token, e o navegador nunca fala com a API do bot diretamente.
@@ -461,8 +480,10 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
    justamente para olhar o conjunto — e ela é fechada por
    `OWNER_DISCORD_ID`. Quem o bot
    atende vem do registro (`guild_registry`, via `RegistryService`), não de uma
-   variável; no painel, quem decide acesso é a guild da URL e o nível de
-   permissão é por guild na sessão. O registro vale nos **dois** caminhos de
+   variável; no painel, quem decide acesso é a guild da URL, o nível de
+   permissão é por guild na sessão, e toda action de escrita recebe o `guildId`
+   no primeiro argumento (§5.2) — nenhuma resolve a guild sozinha. O registro
+   vale nos **dois** caminhos de
    entrada: interação (`lib/interaction.ts`) e evento do gateway
    (`lib/loader.ts`). Handler novo não precisa lembrar de checar — o
    `loadEvents` descarta antes; a exceção é `always: true`, hoje só

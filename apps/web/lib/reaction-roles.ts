@@ -14,7 +14,7 @@ import { ReactionRolePanelInputSchema, type ReactionRolePanelInput } from '@good
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { db } from './db';
 import { internalApi } from './internal-api';
 import { loadModuleConfig, toFieldErrors, type ActionResult } from './module-config';
@@ -66,8 +66,7 @@ function panelId(formData: FormData): string | null {
  * Cria ou edita um painel. Salvar **não** republica: quem já tem a mensagem no
  * ar decide quando atualizar, no botão `ATUALIZAR`.
  */
-export async function savePanel(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function savePanel(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = ReactionRolePanelInputSchema.safeParse(parseBody(formData.get('panel')));
@@ -121,8 +120,7 @@ export async function savePanel(formData: FormData): Promise<ActionResult> {
 }
 
 /** `PUBLICAR` / `ATUALIZAR`: o bot é quem monta e envia a mensagem. */
-export async function publishPanel(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function publishPanel(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = panelId(formData);
@@ -151,8 +149,7 @@ export async function publishPanel(formData: FormData): Promise<ActionResult> {
  * apagar a linha antes deixaria um painel órfão no canal, que ninguém mais
  * conseguiria alcançar pelo dashboard.
  */
-export async function removePanel(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function removePanel(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = panelId(formData);

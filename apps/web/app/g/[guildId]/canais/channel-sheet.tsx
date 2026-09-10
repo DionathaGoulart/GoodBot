@@ -38,6 +38,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
+import { useGuildId } from '@/lib/use-guild-id';
 import { Textarea } from '@/components/ui/textarea';
 
 export interface ChannelEditing {
@@ -135,6 +136,7 @@ function ChannelForm({
   readOnly: boolean;
   onClose: (changed: boolean) => void;
 }) {
+  const guildId = useGuildId();
   const [values, setValues] = React.useState<FormValues>(EMPTY);
   const [overrides, setOverrides] = React.useState<ChannelOverride[]>([]);
   const [loading, setLoading] = React.useState(editing.id !== null);
@@ -147,7 +149,7 @@ function ChannelForm({
     if (!channelId) return;
     let active = true;
 
-    loadChannelDetailAction(channelId)
+    loadChannelDetailAction(guildId, channelId)
       .then((result) => {
         if (!active) return;
         if (!result.ok) {
@@ -171,7 +173,7 @@ function ChannelForm({
     return () => {
       active = false;
     };
-  }, [channelId]);
+  }, [guildId, channelId]);
 
   async function saveChannel() {
     setSaving(true);
@@ -189,7 +191,7 @@ function ChannelForm({
           slowmodeSeconds: textual ? values.slowmodeSeconds : 0,
         }),
       );
-      const result = await saveChannelAction(formData);
+      const result = await saveChannelAction(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return;
@@ -208,7 +210,7 @@ function ChannelForm({
       const formData = new FormData();
       formData.set('channelId', channelId);
       formData.set('overrides', JSON.stringify(overrides));
-      const result = await setChannelOverridesAction(formData);
+      const result = await setChannelOverridesAction(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return;

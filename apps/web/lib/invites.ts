@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -36,8 +36,7 @@ function parseBody(raw: FormDataEntryValue | null): unknown {
   }
 }
 
-export async function createInvite(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function createInvite(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('invite'));
@@ -79,8 +78,7 @@ export async function createInvite(formData: FormData): Promise<ActionResult> {
 }
 
 /** Revogar um convite. O `before` é o que a auditoria guarda: depois some. */
-export async function deleteInvite(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function deleteInvite(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const code = formData.get('code');

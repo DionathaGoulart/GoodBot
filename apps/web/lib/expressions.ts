@@ -11,7 +11,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -47,8 +47,7 @@ function invalid(error: Parameters<typeof toFieldErrors>[0]): ActionResult {
  * nome, o id e a URL do CDN, que é o que alguém precisa para reconhecer o que
  * entrou no servidor.
  */
-export async function createEmoji(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function createEmoji(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('emoji'));
@@ -76,8 +75,7 @@ export async function createEmoji(formData: FormData): Promise<ActionResult> {
   return { ok: true, message: `Emoji :${emoji.name}: criado.` };
 }
 
-export async function updateEmoji(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function updateEmoji(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const emojiId = formData.get('emojiId');
@@ -112,8 +110,7 @@ export async function updateEmoji(formData: FormData): Promise<ActionResult> {
   return { ok: true, message: 'Emoji atualizado.' };
 }
 
-export async function deleteEmoji(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function deleteEmoji(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const emojiId = formData.get('emojiId');
@@ -144,8 +141,7 @@ export async function deleteEmoji(formData: FormData): Promise<ActionResult> {
   return { ok: true, message: 'Emoji apagado.' };
 }
 
-export async function createSticker(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function createSticker(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('sticker'));
@@ -173,8 +169,7 @@ export async function createSticker(formData: FormData): Promise<ActionResult> {
   return { ok: true, message: `Sticker ${sticker.name} criado.` };
 }
 
-export async function updateSticker(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function updateSticker(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const stickerId = formData.get('stickerId');
@@ -210,8 +205,7 @@ export async function updateSticker(formData: FormData): Promise<ActionResult> {
   return { ok: true, message: 'Sticker atualizado.' };
 }
 
-export async function deleteSticker(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function deleteSticker(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const stickerId = formData.get('stickerId');

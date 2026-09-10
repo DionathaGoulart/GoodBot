@@ -10,7 +10,7 @@ import {
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -70,8 +70,10 @@ function toActionResult(error: unknown): ActionResult {
   return { ok: false, message: 'Não foi possível falar com o bot.' };
 }
 
-export async function saveSocialAccount(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function saveSocialAccount(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = SocialAccountInputSchema.safeParse(parseBody(formData.get('account')));
@@ -110,8 +112,10 @@ export async function saveSocialAccount(formData: FormData): Promise<ActionResul
   };
 }
 
-export async function removeSocialAccount(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function removeSocialAccount(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const id = accountId(formData);
@@ -143,8 +147,10 @@ export async function removeSocialAccount(formData: FormData): Promise<ActionRes
 export type ResolveChannelResult =
   { ok: true; channel: SocialResolveResult } | { ok: false; message: string };
 
-export async function resolveSocialChannel(input: string): Promise<ResolveChannelResult> {
-  const guildId = await defaultGuildId();
+export async function resolveSocialChannel(
+  guildId: string,
+  input: string,
+): Promise<ResolveChannelResult> {
   await requireGuildAccess(guildId, 'admin');
 
   try {
@@ -156,8 +162,10 @@ export async function resolveSocialChannel(input: string): Promise<ResolveChanne
 }
 
 /** Botão `TESTAR`: manda um anúncio de mentira no canal configurado da conta. */
-export async function testSocialAccount(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function testSocialAccount(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   await requireGuildAccess(guildId, 'admin');
 
   const id = accountId(formData);

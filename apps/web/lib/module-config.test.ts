@@ -27,7 +27,6 @@ vi.mock('./audit', () => ({ withAudit: (...args: unknown[]) => withAudit(...args
 vi.mock('./internal-api', () => ({ internalApi: () => ({ invalidateConfig }) }));
 vi.mock('next/cache', () => ({ revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
 vi.mock('./auth/require', () => ({
-  defaultGuildId: () => GUILD_ID,
   requireGuildAccess: () =>
     Promise.resolve({
       user: { id: '200000000000000000', name: 'mod#1', image: null },
@@ -60,6 +59,7 @@ beforeEach(() => {
 describe('saveModuleConfig', () => {
   it('recusa payload inválido e não grava nada', async () => {
     const result = await saveModuleConfig(
+      GUILD_ID,
       'moderation',
       body({ ...DEFAULT_MODERATION_CONFIG, banDeleteMessageDaysDefault: 99 }),
     );
@@ -74,13 +74,13 @@ describe('saveModuleConfig', () => {
     const formData = new FormData();
     formData.set('config', '{isso não é json');
 
-    expect((await saveModuleConfig('moderation', formData)).ok).toBe(false);
+    expect((await saveModuleConfig(GUILD_ID, 'moderation', formData)).ok).toBe(false);
     expect(setModuleConfig).not.toHaveBeenCalled();
   });
 
   it('grava, audita com before/after e invalida o cache do bot', async () => {
     const after = { ...DEFAULT_MODERATION_CONFIG, defaultReason: 'porque sim' };
-    const result = await saveModuleConfig('moderation', body(after));
+    const result = await saveModuleConfig(GUILD_ID, 'moderation', body(after));
 
     expect(result.ok).toBe(true);
     expect(setModuleConfig).toHaveBeenCalledWith(
@@ -104,7 +104,7 @@ describe('saveModuleConfig', () => {
   it('bot fora do ar não desfaz o salvamento, só avisa', async () => {
     invalidateConfig.mockRejectedValue(new Error('offline'));
 
-    const result = await saveModuleConfig('moderation', body(DEFAULT_MODERATION_CONFIG));
+    const result = await saveModuleConfig(GUILD_ID, 'moderation', body(DEFAULT_MODERATION_CONFIG));
 
     expect(result.ok).toBe(true);
     expect(result.message).toMatch(/bot não respondeu/i);
@@ -165,6 +165,7 @@ describe('saveModuleConfig', () => {
 
     const kind = { enabled: false, channelId: null, ignoredChannelIds: [], ignoredRoleIds: [] };
     const result = await saveModuleConfig(
+      GUILD_ID,
       'logs',
       body({
         module: DEFAULT_LOGS_CONFIG,
@@ -191,6 +192,7 @@ describe('saveModuleConfig', () => {
   it('canal inválido na grade de logs derruba o salvamento inteiro', async () => {
     const kind = { enabled: false, channelId: null, ignoredChannelIds: [], ignoredRoleIds: [] };
     const result = await saveModuleConfig(
+      GUILD_ID,
       'logs',
       body({
         module: DEFAULT_LOGS_CONFIG,

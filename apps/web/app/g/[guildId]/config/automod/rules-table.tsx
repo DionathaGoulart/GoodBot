@@ -9,6 +9,7 @@ import { ConfirmButton } from '@/components/config/confirm-button';
 import { DataTable, moveRow, type PanelColumnDef } from '@/components/data-table';
 import { Panel } from '@/components/retro/panel';
 import { Tag } from '@/components/retro/tag';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import { emptyRule } from './rule-defaults';
 import { RuleSheet, type RuleEditing } from './rule-sheet';
@@ -22,6 +23,7 @@ export function AutomodRulesTable({
   rules: AutomodRuleRow[];
   readOnly: boolean;
 }) {
+  const guildId = useGuildId();
   const router = useRouter();
   const [editing, setEditing] = React.useState<RuleEditing | null>(null);
   const [reordering, setReordering] = React.useState(false);
@@ -38,7 +40,7 @@ export function AutomodRulesTable({
       try {
         const formData = new FormData();
         formData.set('ruleIds', JSON.stringify(next));
-        const result = await reorderAutomodRulesAction(formData);
+        const result = await reorderAutomodRulesAction(guildId, formData);
         if (result.ok) {
           router.refresh();
         } else {
@@ -48,7 +50,7 @@ export function AutomodRulesTable({
         setReordering(false);
       }
     },
-    [rules, router],
+    [guildId, rules, router],
   );
 
   const columns = React.useMemo<PanelColumnDef<AutomodRuleRow>[]>(
@@ -141,7 +143,7 @@ export function AutomodRulesTable({
                 action={() => {
                   const formData = new FormData();
                   formData.set('ruleId', row.original.id);
-                  return deleteAutomodRuleAction(formData);
+                  return deleteAutomodRuleAction(guildId, formData);
                 }}
                 successMessage={`A regra ${row.original.name} foi removida.`}
                 onDone={() => router.refresh()}
@@ -151,7 +153,7 @@ export function AutomodRulesTable({
         ),
       },
     ],
-    [readOnly, reorder, reordering, router, rules.length],
+    [guildId, readOnly, reorder, reordering, router, rules.length],
   );
 
   return (

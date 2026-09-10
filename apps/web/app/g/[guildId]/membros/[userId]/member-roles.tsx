@@ -8,6 +8,7 @@ import { setMemberRolesAction } from '@/app/actions/guild';
 import { DiscordPicker } from '@/components/config/discord-picker';
 import { Panel } from '@/components/retro/panel';
 import { Tag } from '@/components/retro/tag';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import type { GuildMemberDetail } from '@goodbot/shared';
 
@@ -25,6 +26,7 @@ export function MemberRoles({
   roleNames: Record<string, string>;
   readOnly: boolean;
 }) {
+  const guildId = useGuildId();
   const router = useRouter();
   const current = React.useMemo(
     // O `@everyone` vem no `roleIds` e não é escolhível no picker.
@@ -54,7 +56,7 @@ export function MemberRoles({
       const formData = new FormData();
       formData.set('userId', member.id);
       formData.set('roles', JSON.stringify({ add, remove }));
-      const result = await setMemberRolesAction(formData);
+      const result = await setMemberRolesAction(guildId, formData);
       if (!result.ok) {
         toast.error('ERRO', { description: result.message });
         return;

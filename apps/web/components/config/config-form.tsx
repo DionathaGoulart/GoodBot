@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { saveConfigPageAction } from '@/app/actions/config';
 import { useAutoRefreshPause } from '@/components/layout/auto-refresh';
 import { Form } from '@/components/ui/form';
+import { useGuildId } from '@/lib/use-guild-id';
 import { CONFIG_PAGES, type ConfigPage } from '@/lib/config-pages';
 
 /**
@@ -30,6 +31,7 @@ export function ConfigForm<Values extends FieldValues>({
   readOnly?: boolean;
   children: React.ReactNode;
 }) {
+  const guildId = useGuildId();
   const form = useForm<Values>({
     // O schema é o mesmo do servidor; a página só diz qual é.
     resolver: zodResolver(CONFIG_PAGES[page].schema as never),
@@ -47,7 +49,7 @@ export function ConfigForm<Values extends FieldValues>({
     try {
       const formData = new FormData();
       formData.set('config', JSON.stringify(values));
-      const result = await saveConfigPageAction(page, formData);
+      const result = await saveConfigPageAction(guildId, page, formData);
 
       if (!result.ok) {
         for (const [path, message] of Object.entries(result.fieldErrors ?? {})) {

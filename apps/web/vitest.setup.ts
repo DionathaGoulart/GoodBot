@@ -5,9 +5,11 @@ import { vi } from 'vitest';
 import type * as navigation from 'next/navigation';
 
 /**
- * Os seletores de canal, cargo e membro leem a guild da rota (`/g/[guildId]`)
- * para não oferecerem a lista do servidor errado. Fora de uma rota do Next o
- * `useParams` não existe, então os testes de componente ganham a guild daqui.
+ * Todo componente cliente do painel lê a guild da rota (`/g/[guildId]`), pelo
+ * `useGuildId`: os seletores para não oferecerem a lista do servidor errado, e
+ * quem dispara uma action porque a guild vai explícita na chamada. Fora de uma
+ * rota do Next o `useParams` não existe, então os testes de componente ganham
+ * a guild daqui.
  */
 export const TEST_GUILD_ID = '111111111111111111';
 

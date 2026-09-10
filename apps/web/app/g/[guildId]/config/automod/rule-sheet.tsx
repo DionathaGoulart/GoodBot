@@ -34,6 +34,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import { emptyRule, resetForType } from './rule-defaults';
 
@@ -393,6 +394,7 @@ export function RuleSheet({
   readOnly: boolean;
   onClose: (changed: boolean) => void;
 }) {
+  const guildId = useGuildId();
   const form = useForm<AutomodRule>({
     // `as never`: o schema tem defaults, então a entrada do resolver é mais
     // frouxa que a saída e o RHF não reconcilia os dois genéricos sozinho.
@@ -427,7 +429,7 @@ export function RuleSheet({
       const formData = new FormData();
       formData.set('rule', JSON.stringify(values));
       if (editing?.id) formData.set('ruleId', editing.id);
-      const result = await saveAutomodRuleAction(formData);
+      const result = await saveAutomodRuleAction(guildId, formData);
       if (!result.ok) {
         for (const [path, message] of Object.entries(result.fieldErrors ?? {})) {
           form.setError(path as never, { message });

@@ -9,6 +9,7 @@ import { ActionButton, ConfirmButton } from '@/components/config/confirm-button'
 import { Panel } from '@/components/retro/panel';
 import { EmptyState } from '@/components/retro/states';
 import { Tag } from '@/components/retro/tag';
+import { useGuildId } from '@/lib/use-guild-id';
 
 import { ChannelSheet, type ChannelEditing } from './channel-sheet';
 
@@ -45,6 +46,7 @@ function ChannelRow({
   onEdit: () => void;
   onDone: () => void;
 }) {
+  const guildId = useGuildId();
   return (
     <li className="flex flex-wrap items-center gap-2 border-b-2 border-base-300/30 py-2">
       <span className="font-bold">
@@ -64,7 +66,7 @@ function ChannelRow({
                   busyLabel="TRANCANDO_"
                   successTitle="TRANCADO"
                   action={() =>
-                    toggleChannelLockAction(withChannelId(channel.id, { lock: 'true' }))
+                    toggleChannelLockAction(guildId, withChannelId(channel.id, { lock: 'true' }))
                   }
                   onDone={onDone}
                 />
@@ -73,7 +75,7 @@ function ChannelRow({
                   busyLabel="ABRINDO_"
                   successTitle="DESTRANCADO"
                   action={() =>
-                    toggleChannelLockAction(withChannelId(channel.id, { lock: 'false' }))
+                    toggleChannelLockAction(guildId, withChannelId(channel.id, { lock: 'false' }))
                   }
                   onDone={onDone}
                 />
@@ -81,7 +83,7 @@ function ChannelRow({
             ) : null}
             <ConfirmButton
               label="APAGAR"
-              action={() => deleteChannelAction(withChannelId(channel.id))}
+              action={() => deleteChannelAction(guildId, withChannelId(channel.id))}
               successMessage="O canal saiu do servidor."
               onDone={onDone}
             />
@@ -105,6 +107,7 @@ export function ChannelTree({
   roleNames: Record<string, string>;
   readOnly: boolean;
 }) {
+  const guildId = useGuildId();
   const router = useRouter();
   const [editing, setEditing] = React.useState<ChannelEditing | null>(null);
   const refresh = () => router.refresh();
@@ -162,7 +165,7 @@ export function ChannelTree({
                   </button>
                   <ConfirmButton
                     label="APAGAR"
-                    action={() => deleteChannelAction(withChannelId(branch.id as string))}
+                    action={() => deleteChannelAction(guildId, withChannelId(branch.id as string))}
                     successMessage="A categoria saiu do servidor."
                     onDone={refresh}
                   />

@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { db } from './db';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
@@ -88,8 +88,7 @@ function parseBody(raw: FormDataEntryValue | null): unknown {
  * slash commands, então caso, mod-log, DM e escalada saem idênticos — só o
  * `source` muda para `dashboard`. `mod` basta; a hierarquia é do bot.
  */
-export async function punishMember(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function punishMember(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'mod');
 
   const raw = parseBody(formData.get('action'));
@@ -127,8 +126,7 @@ export async function punishMember(formData: FormData): Promise<ActionResult> {
 }
 
 /** Adicionar/remover cargos de um membro. Só `admin` (PRD §9.2). */
-export async function setMemberRoles(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function setMemberRoles(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const userId = formData.get('userId');

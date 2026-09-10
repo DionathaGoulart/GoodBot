@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -53,8 +53,7 @@ function parseBody(raw: FormDataEntryValue | null): unknown {
  * antes da escrita: trocar o ícone do servidor sem deixar o valor antigo na
  * auditoria seria o pior tipo de poder que o painel pode ter (§6.5).
  */
-export async function saveGuildProfile(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function saveGuildProfile(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('settings'));
@@ -112,8 +111,7 @@ function auditable(profile: GuildProfile) {
  * `/unban`, então caso, mod-log e agendamento cancelado saem idênticos — só o
  * `source` muda para `dashboard`.
  */
-export async function unbanUser(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function unbanUser(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'mod');
 
   const userId = formData.get('userId');
@@ -147,9 +145,9 @@ export async function unbanUser(formData: FormData): Promise<ActionResult> {
 
 /** Uma página a mais de banidos, para o botão "carregar mais" da tabela. */
 export async function loadMoreBans(
+  guildId: string,
   query: Partial<BanListQuery>,
 ): Promise<{ ok: true; page: GuildBanPage } | { ok: false; message: string }> {
-  const guildId = await defaultGuildId();
   await requireGuildAccess(guildId, 'mod');
 
   const parsed = BanListQuerySchema.safeParse(query);

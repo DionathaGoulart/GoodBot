@@ -5,7 +5,7 @@ import { TagInputSchema } from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { db } from './db';
 import { loadModuleConfig, toFieldErrors, type ActionResult } from './module-config';
 
@@ -46,8 +46,7 @@ function parseBody(raw: FormDataEntryValue | null): unknown {
  * próprio. Por isso o nome é imutável na edição: renomear jogaria fora o
  * histórico de `uses` da linha.
  */
-export async function saveTag(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function saveTag(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = TagInputSchema.safeParse(parseBody(formData.get('tag')));
@@ -93,8 +92,7 @@ export async function saveTag(formData: FormData): Promise<ActionResult> {
   return { ok: true };
 }
 
-export async function removeTag(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function removeTag(guildId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const name = formData.get('name');

@@ -9,10 +9,16 @@ import type { ActionResult } from '@/lib/module-config';
  * permissão e auditoria moram lá, junto da escrita.
  */
 
-export async function sendChannelMessageAction(formData: FormData): Promise<ActionResult> {
-  return sendChannelMessage(formData);
+export async function sendChannelMessageAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return sendChannelMessage(guildId, formData);
 }
 
-export async function deleteChannelMessageAction(formData: FormData): Promise<ActionResult> {
-  return deleteChannelMessage(formData);
+export async function deleteChannelMessageAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return deleteChannelMessage(guildId, formData);
 }

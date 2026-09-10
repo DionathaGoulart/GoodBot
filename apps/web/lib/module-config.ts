@@ -22,7 +22,7 @@ import {
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { CONFIG_PAGES, type ConfigPage, type ConfigPageValues } from './config-pages';
 import { db } from './db';
 import { internalApi } from './internal-api';
@@ -187,10 +187,10 @@ async function invalidateBotCache(guildId: string, page: ConfigPage): Promise<st
  * cache dele expira sozinho em minutos — só avisamos no toast.
  */
 export async function saveModuleConfig(
+  guildId: string,
   page: ConfigPage,
   formData: FormData,
 ): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
   const session = await requireGuildAccess(guildId, 'admin');
 
   const parsed = CONFIG_PAGES[page].schema.safeParse(parseBody(formData.get('config')));

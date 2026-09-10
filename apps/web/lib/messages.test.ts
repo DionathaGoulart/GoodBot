@@ -21,7 +21,6 @@ vi.mock('./internal-api', () => ({
   internalApi: () => ({ sendMessage, deleteMessage, channelMessages }),
 }));
 vi.mock('./auth/require', () => ({
-  defaultGuildId: () => GUILD_ID,
   requireGuildAccess: (_guildId: string, minimum: 'mod' | 'admin') => {
     // O `requireGuildAccess` de verdade faz `redirect()`, que lança; o mock
     // imita isso, que é o que importa: a action nunca chega a escrever.
@@ -51,7 +50,7 @@ beforeEach(() => {
 
 describe('sendChannelMessage', () => {
   it('manda sem mencionar ninguém quando o formulário não marcou nada', async () => {
-    const result = await sendChannelMessage(compose({ template: { content: 'olá' } }));
+    const result = await sendChannelMessage(GUILD_ID, compose({ template: { content: 'olá' } }));
 
     expect(result.ok).toBe(true);
     expect(sendMessage).toHaveBeenCalledWith(GUILD_ID, {
@@ -64,7 +63,7 @@ describe('sendChannelMessage', () => {
   });
 
   it('registra na auditoria o conteúdo do que saiu', async () => {
-    await sendChannelMessage(compose({ template: { content: 'olá' } }));
+    await sendChannelMessage(GUILD_ID, compose({ template: { content: 'olá' } }));
 
     expect(withAudit).toHaveBeenCalledWith(
       { id: ACTOR, tag: 'admin#1', guildId: GUILD_ID },
@@ -80,6 +79,7 @@ describe('sendChannelMessage', () => {
 
     await expect(
       sendChannelMessage(
+        GUILD_ID,
         compose({ template: { content: 'ei' }, allowedMentions: { everyone: true } }),
       ),
     ).rejects.toThrow('NEXT_REDIRECT');
@@ -87,7 +87,7 @@ describe('sendChannelMessage', () => {
   });
 
   it('recusa mensagem vazia antes de falar com o bot', async () => {
-    const result = await sendChannelMessage(compose({ template: { content: '  ' } }));
+    const result = await sendChannelMessage(GUILD_ID, compose({ template: { content: '  ' } }));
 
     expect(result.ok).toBe(false);
     expect(sendMessage).not.toHaveBeenCalled();
@@ -96,7 +96,10 @@ describe('sendChannelMessage', () => {
   it('guarda o conteúdo anterior ao editar', async () => {
     channelMessages.mockResolvedValue([{ id: MESSAGE, content: 'antes' }]);
 
-    await sendChannelMessage(compose({ messageId: MESSAGE, template: { content: 'depois' } }));
+    await sendChannelMessage(
+      GUILD_ID,
+      compose({ messageId: MESSAGE, template: { content: 'depois' } }),
+    );
 
     expect(withAudit).toHaveBeenCalledWith(
       { id: ACTOR, tag: 'admin#1', guildId: GUILD_ID },
@@ -115,7 +118,7 @@ describe('deleteChannelMessage', () => {
     formData.set('channelId', CHANNEL);
     formData.set('messageId', MESSAGE);
 
-    const result = await deleteChannelMessage(formData);
+    const result = await deleteChannelMessage(GUILD_ID, formData);
 
     expect(result.ok).toBe(true);
     expect(withAudit).toHaveBeenCalledWith(
@@ -133,7 +136,7 @@ describe('deleteChannelMessage', () => {
     formData.set('channelId', CHANNEL);
     formData.set('messageId', MESSAGE);
 
-    await expect(deleteChannelMessage(formData)).rejects.toThrow('NEXT_REDIRECT');
+    await expect(deleteChannelMessage(GUILD_ID, formData)).rejects.toThrow('NEXT_REDIRECT');
     expect(deleteMessage).not.toHaveBeenCalled();
   });
 });

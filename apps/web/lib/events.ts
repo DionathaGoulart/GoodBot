@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { defaultGuildId, requireGuildAccess } from './auth/require';
+import { requireGuildAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -53,8 +53,10 @@ function auditable(event: GuildScheduledEventSummary) {
 }
 
 /** Cria (sem `eventId`) ou edita (com) um evento agendado (§6.3). */
-export async function saveScheduledEvent(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function saveScheduledEvent(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const eventIdValue = formData.get('eventId');
@@ -97,8 +99,10 @@ export async function saveScheduledEvent(formData: FormData): Promise<ActionResu
   return { ok: true, message: eventId ? 'Evento atualizado.' : 'Evento criado.' };
 }
 
-export async function deleteScheduledEvent(formData: FormData): Promise<ActionResult> {
-  const guildId = await defaultGuildId();
+export async function deleteScheduledEvent(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
 
   const eventId = formData.get('eventId');
