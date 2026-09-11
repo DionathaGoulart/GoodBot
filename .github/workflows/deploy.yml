@@ -69,11 +69,6 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-    # O projeto da Vercel tem `apps/web` como root: é de lá que a CLI lê o
-    # `vercel.json` e resolve o build do monorepo.
-    defaults:
-      run:
-        working-directory: apps/web
     steps:
       - uses: actions/checkout@v7
 
@@ -84,6 +79,11 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      # Tudo daqui roda na **raiz do repositório**, não em `apps/web`. O projeto
+      # da Vercel já tem `apps/web` como Root Directory, e a CLI soma esse
+      # caminho ao diretório atual: rodando de dentro de `apps/web` ela procura
+      # `apps/web/apps/web` e falha na publicação.
+      #
       # `pull` traz as variáveis de ambiente de produção do projeto. Elas nunca
       # entram no repositório: o cofre da Vercel continua sendo o da Vercel.
       - name: Puxar a configuração do projeto
