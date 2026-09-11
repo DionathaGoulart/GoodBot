@@ -34,14 +34,14 @@ export function Pager({
       </p>
       <div className="flex gap-2">
         {page > 1 ? (
-          <Link href={href(page - 1)} className="icon-btn">
+          <Link href={href(page - 1)} prefetch={false} className="icon-btn">
             {'< ANTERIOR'}
           </Link>
         ) : (
           <span className="icon-btn opacity-40">{'< ANTERIOR'}</span>
         )}
         {page < pageCount ? (
-          <Link href={href(page + 1)} className="icon-btn">
+          <Link href={href(page + 1)} prefetch={false} className="icon-btn">
             {'PRÓXIMA >'}
           </Link>
         ) : (

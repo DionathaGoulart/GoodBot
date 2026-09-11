@@ -56,7 +56,7 @@ export default async function CasePage({ params }: PageProps<'/g/[guildId]/casos
         title={`#${kase.caseNumber}`}
         meta={`${kase.type.toUpperCase()} EM ${kase.targetTag}`}
         actions={
-          <Link href={`/g/${guildId}/casos`} className="icon-btn">
+          <Link prefetch={false} href={`/g/${guildId}/casos`} className="icon-btn">
             {'< TODOS OS CASOS'}
           </Link>
         }
@@ -72,13 +72,21 @@ export default async function CasePage({ params }: PageProps<'/g/[guildId]/casos
 
         <dl className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <Row label="ALVO">
-            <Link href={`/g/${guildId}/membros/${kase.targetId}`} className="underline">
+            <Link
+              prefetch={false}
+              href={`/g/${guildId}/membros/${kase.targetId}`}
+              className="underline"
+            >
               {kase.targetTag}
             </Link>
             <span className="screen-meta block select-all">{kase.targetId}</span>
           </Row>
           <Row label="MODERADOR">
-            <Link href={`/g/${guildId}/membros/${kase.actorId}`} className="underline">
+            <Link
+              prefetch={false}
+              href={`/g/${guildId}/membros/${kase.actorId}`}
+              className="underline"
+            >
               {kase.actorTag}
             </Link>
             <span className="screen-meta block select-all">{kase.actorId}</span>

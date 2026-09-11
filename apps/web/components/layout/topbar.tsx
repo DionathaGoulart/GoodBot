@@ -44,6 +44,7 @@ export function Topbar({
         {canSwitch ? (
           <Link
             href="/servidores"
+            prefetch={false}
             title={`${guildName} — trocar de servidor`}
             aria-label="Trocar de servidor"
             className="shrink-0 border-2 border-base-300 p-0.5 hover:bg-base-200"

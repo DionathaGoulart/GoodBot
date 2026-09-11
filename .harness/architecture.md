@@ -347,6 +347,16 @@ paga o preço cheio. O único bloco fora do cache é `loadRecentAudit`: é um
 O contador "ATUALIZADO HÁ 00:07" ficou, e importa mais agora do que antes: é a
 única pista de quão velho está o que se está lendo.
 
+**E a navegação não pré-carrega nada** (`prefetch={false}` em todo `<Link>`).
+O padrão do Next é pré-carregar todo link que entra na viewport, o que é ótimo
+num site de páginas estáticas e péssimo aqui: **toda** tela do painel é
+dinâmica, porque toda uma passa por `auth()`. Cada prefetch é um render
+completo no servidor, não um arquivo de cache. Com os treze itens da sidebar na
+tela, abrir o dashboard disparava treze invocações na Vercel antes de alguém
+clicar em qualquer coisa — e, chegando juntas, parte delas voltava 503. Quem dá
+o retorno imediato do clique é o `loading.tsx` de `/g/[guildId]`, que já
+existia.
+
 ---
 
 ## 6. `packages/db`

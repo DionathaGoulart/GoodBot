@@ -30,7 +30,9 @@ export function Breadcrumbs({ guildId, guildName }: { guildId: string; guildName
       <BreadcrumbList>
         <BreadcrumbItem>
           <BreadcrumbLink asChild>
-            <Link href={`/g/${guildId}`}>{guildName}</Link>
+            <Link href={`/g/${guildId}`} prefetch={false}>
+              {guildName}
+            </Link>
           </BreadcrumbLink>
         </BreadcrumbItem>
         {group ? (

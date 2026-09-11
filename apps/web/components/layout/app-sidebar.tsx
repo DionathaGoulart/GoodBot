@@ -122,6 +122,7 @@ export function AppSidebar({
               <Link
                 key={guild.id}
                 href={`/g/${guild.id}`}
+                prefetch={false}
                 className="flex items-center gap-2 border-2 border-base-300 px-2 py-1 text-left hover:bg-base-200"
               >
                 <AvatarSq src={guild.iconUrl} name={guild.name} size={20} />
@@ -131,6 +132,15 @@ export function AppSidebar({
           </nav>
         )}
       </SidebarHeader>
+      {/*
+        `prefetch={false}` em toda a navegação, e não é detalhe de performance:
+        toda tela do painel é dinâmica (tem `auth()`), então um prefetch é um
+        **render inteiro no servidor**, não um arquivo estático. Com os treze
+        itens da sidebar na tela, abrir o dashboard disparava treze invocações
+        na Vercel antes de alguém clicar em nada — e a Vercel respondia 503
+        quando elas chegavam juntas. Quem dá o retorno imediato do clique é o
+        `loading.tsx` desta rota, que já existe.
+      */}
       <SidebarContent>
         {groups.map((group) => {
           // O grupo da tela aberta nunca some — senão o item ativo fica órfão.
@@ -159,7 +169,7 @@ export function AppSidebar({
                     return (
                       <SidebarMenuItem key={item.label}>
                         <SidebarMenuButton asChild isActive={isActive}>
-                          <Link href={href} onClick={closeOnMobile}>
+                          <Link href={href} prefetch={false} onClick={closeOnMobile}>
                             {item.label}
                           </Link>
                         </SidebarMenuButton>

@@ -156,6 +156,7 @@ function TargetCell({ guildId, row }: { guildId: string; row: AuditRow }) {
   return href ? (
     <Link
       href={href}
+      prefetch={false}
       className="underline decoration-accent decoration-2 underline-offset-2"
       onClick={(event) => event.stopPropagation()}
     >

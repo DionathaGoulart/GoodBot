@@ -71,7 +71,7 @@ export function MemberCases({
       title="CASOS.LOG"
       actions={
         total > limit ? (
-          <Link href={`/g/${guildId}/casos`} className="icon-btn">
+          <Link prefetch={false} href={`/g/${guildId}/casos`} className="icon-btn">
             VER TODOS ({total})
           </Link>
         ) : null

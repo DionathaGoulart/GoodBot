@@ -18,7 +18,7 @@ function when(iso: string): string {
 
 function MoreLink({ href }: { href: string }) {
   return (
-    <Link href={href} className="icon-btn">
+    <Link href={href} prefetch={false} className="icon-btn">
       VER TUDO
     </Link>
   );
@@ -39,6 +39,7 @@ export function RecentCases({ guildId, cases }: { guildId: string; cases: Recent
             <li key={item.caseNumber}>
               <Link
                 href={`/g/${guildId}/casos/${item.caseNumber}`}
+                prefetch={false}
                 className="flex flex-wrap items-center gap-3 py-2 hover:bg-base-300/30"
               >
                 <span className="screen-meta w-14 shrink-0">#{item.caseNumber}</span>
@@ -76,6 +77,7 @@ export function RecentAuditLog({ guildId, entries }: { guildId: string; entries:
           {entries.map((entry) => (
             <li key={entry.id}>
               <Link
+                prefetch={false}
                 href={
                   auditTargetHref(guildId, entry) ??
                   `/g/${guildId}/auditoria?action=${encodeURIComponent(entry.action)}`

@@ -53,6 +53,7 @@ export default async function ServidoresPage() {
             <Link
               key={guild.id}
               href={`/g/${guild.id}`}
+              prefetch={false}
               className="flex items-center gap-3 border-2 border-base-300 bg-base-100 px-3 py-3 text-left transition-colors hover:bg-base-200"
             >
               <AvatarSq src={guild.iconUrl} name={guild.name} size={40} />
@@ -66,8 +67,8 @@ export default async function ServidoresPage() {
         </nav>
       ) : (
         <p className="max-w-prose text-center text-sm opacity-70">
-          Você não administra nenhum servidor que o Goodbot atenda. Se acabou de convidar o bot,
-          ele pode estar esperando aprovação.
+          Você não administra nenhum servidor que o Goodbot atenda. Se acabou de convidar o bot, ele
+          pode estar esperando aprovação.
         </p>
       )}
 

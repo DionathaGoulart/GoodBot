@@ -23,11 +23,13 @@ export function AdminNav() {
     <nav aria-label="Painel do dono" className="flex flex-wrap items-center gap-1">
       {LINKS.map((link) => {
         // `/admin` é prefixo de todas: só ela compara por igualdade.
-        const active = link.href === '/admin' ? pathname === link.href : pathname.startsWith(link.href);
+        const active =
+          link.href === '/admin' ? pathname === link.href : pathname.startsWith(link.href);
         return (
           <Link
             key={link.href}
             href={link.href}
+            prefetch={false}
             aria-current={active ? 'page' : undefined}
             className={cn('icon-btn', active && 'bg-accent text-accent-content')}
           >

@@ -49,6 +49,7 @@ export default async function ConfigIndexPage({ params }: PageProps<'/g/[guildId
                 <Link
                   key={key}
                   href={`/g/${guildId}/config/${key}`}
+                  prefetch={false}
                   className="flex flex-col gap-2 border-2 border-base-300 bg-base-100 p-4 transition-colors hover:bg-base-200"
                 >
                   <span className="flex items-start justify-between gap-2">
