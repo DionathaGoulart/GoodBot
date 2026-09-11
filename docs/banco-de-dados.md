@@ -98,6 +98,12 @@ Em produção há duas porque os dois consumidores são diferentes:
 - **painel** → pooler pgBouncer, porta `6543`. A Vercel é serverless e abriria
   uma conexão por invocação, esgotando o limite do Postgres.
 
+  O teto de conexões do painel **não** pode ser 1. Em modo transação o pooler
+  empresta uma conexão de servidor por transação e não sabe atender duas
+  consultas emendadas na mesma conexão de cliente; com teto 1, um render que
+  dispare duas consultas ao mesmo tempo fica pendurado até a função da Vercel
+  estourar em 504. Ver `apps/web/lib/db.ts`.
+
 Ambas com `?sslmode=require`.
 
 ## 7. Backup
