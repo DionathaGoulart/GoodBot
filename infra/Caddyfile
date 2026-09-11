@@ -30,13 +30,35 @@
 	# Sem CORS de propósito: só o painel (server-side) fala com esta API.
 	reverse_proxy bot:3001 {
 		header_up X-Forwarded-For {remote_host}
-		# Corpo grande é rejeitado antes de chegar ao bot (PRD §7.3).
 		transport http {
 			read_timeout 30s
 		}
 	}
 
-	request_body {
+	# Teto de corpo. O padrão é 256 KB, o mesmo da API (PRD §7.3), mas as rotas
+	# que recebem imagem precisam de 12 MB: 8 MB, o limite do Discord, viram
+	# ~11 MB depois da base64. Sem a exceção aqui, trocar o ícone do servidor ou
+	# a foto do bot pelo painel morria com 413 no Caddy, antes de chegar ao bot.
+	#
+	# Os dois matchers são **exclusivos de propósito**. Dois `request_body` que
+	# casassem no mesmo pedido empilhariam dois limites, e o menor venceria — ou
+	# seja, a exceção não existiria. Por isso o segundo é a negação do primeiro,
+	# e o padrão do Caddy (sem matcher) não é usado.
+	#
+	# Aqui a peneira é grossa e vale pelo caminho: quem decide rota por rota, e
+	# por método, é o `bodyLimit` do Hono (`UPLOAD_ROUTES` em
+	# `apps/bot/src/api/server.ts`). Mexeu lá, mexa aqui.
+	@upload path_regexp ^/guilds/[0-9]{17,20}(/(bot-profile|events(/[0-9]{17,20})?|expressions/(emojis|stickers)))?/?$
+	@resto not path_regexp ^/guilds/[0-9]{17,20}(/(bot-profile|events(/[0-9]{17,20})?|expressions/(emojis|stickers)))?/?$
+
+	request_body @upload {
+		# `MiB` e não `MB`: o Caddy lê `MB` como 10^6, e o teto do bot é
+		# 12 * 1024 * 1024 (`MAX_UPLOAD_BODY_BYTES`). Com `12MB` sobraria uma
+		# faixa em que o Caddy recusa um corpo que o bot aceitaria.
+		max_size 12MiB
+	}
+
+	request_body @resto {
 		max_size 256KB
 	}
 

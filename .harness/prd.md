@@ -702,10 +702,15 @@ level)`. A guild conferida é sempre a que vai ser lida ou escrita, e ela
   rota (memória), body ≤ 256 KB, Zod em toda entrada, sem CORS (nenhum
   `Access-Control-Allow-Origin`), sem listagem de rotas, respostas de erro
   sem stack. O container do bot não publica porta no host: só o Caddy
-  alcança `bot:3001` pela rede do Compose. **Única exceção ao teto de corpo**:
-  `PATCH /guilds/:id` aceita 12 MB, porque ícone e banner do
-  servidor viajam como data URL e 8 MB de imagem (o limite do Discord) viram
-  ~11 MB em base64. Toda outra rota continua em 256 KB.
+  alcança `bot:3001` pela rede do Compose. **Exceção ao teto de corpo**: as
+  rotas que recebem imagem (configurações do servidor, perfil do bot na guild,
+  capa de evento, emoji e sticker) aceitam 12 MB, porque a imagem viaja como
+  data URL e 8 MB (o limite do Discord) viram ~11 MB em base64. Toda outra rota
+  continua em 256 KB. **O teto vale em dois lugares**, e os dois precisam
+  concordar: o `bodyLimit` do Hono decide por rota e método, e o `request_body`
+  do Caddy decide por caminho, antes de o corpo chegar ao container. Caddy com
+  um teto só, como esteve até a v1.4, derruba o upload com 413 sem o bot nunca
+  ver o pedido.
 - **Segredos**: só via `.env` na VM (nunca commitado; `.env.example` sim),
   GitHub Secrets para a CI e variáveis de ambiente do projeto na Vercel. O
   `INTERNAL_API_TOKEN` existe nos três lugares e é rotacionado junto. Desde que
