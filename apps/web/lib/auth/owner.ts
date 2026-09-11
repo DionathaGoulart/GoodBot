@@ -3,7 +3,7 @@ import 'server-only';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { auth } from '@/auth';
+import { currentSession } from './session';
 import { env } from '@/lib/env';
 import { actionLimiter, clientIp } from '@/lib/rate-limit';
 import { siteUrl } from '@/lib/site-url';
@@ -33,7 +33,7 @@ export async function resolveOwnerSession(): Promise<
   const ownerId = env().OWNER_DISCORD_ID;
   if (!ownerId) return { verdict: 'not-configured' };
 
-  const session = await auth();
+  const session = await currentSession();
   if (!session?.user?.id) return { verdict: 'unauthenticated' };
 
   if (!(await withinWriteBudget(session.user.id))) return { verdict: 'rate-limited' };

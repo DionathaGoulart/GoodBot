@@ -3,6 +3,7 @@ import 'server-only';
 import { guildSettings, guilds } from '@goodbot/db';
 import { InternalApiError } from '@goodbot/shared';
 import { eq } from 'drizzle-orm';
+import { cache } from 'react';
 
 import { db } from '../db';
 import { internalApi } from '../internal-api';
@@ -17,8 +18,16 @@ export { ACCESS_CHECK_TTL_MS, isStale, retryAt } from './access';
  *
  * O nível é por guild: alguém pode ser dono de um servidor e nem estar no
  * outro, então resolver uma vez e reaproveitar seria um furo de permissão.
+ *
+ * Memoizado **por requisição** (`cache` do React), e só por ela: `userId` e
+ * `guildId` fazem parte da chave, então continua sendo uma resolução por par.
+ * Sem isto, um render que peça o nível duas vezes paga `members/<id>` e
+ * `roles` duas vezes na VM.
  */
-export async function resolveGuildLevel(userId: string, guildId: string): Promise<AccessLevel> {
+export const resolveGuildLevel = cache(async function resolveGuildLevel(
+  userId: string,
+  guildId: string,
+): Promise<AccessLevel> {
   let memberRoleIds: string[] | null = null;
   let rolePermissions: Record<string, string> = {};
   try {
@@ -48,4 +57,4 @@ export async function resolveGuildLevel(userId: string, guildId: string): Promis
     modRoleIds: settings?.modRoleIds,
     dashboardAccessRoleIds: settings?.dashboardAccessRoleIds,
   });
-}
+});

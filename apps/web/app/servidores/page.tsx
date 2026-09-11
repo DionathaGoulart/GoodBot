@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { AvatarSq } from '@/components/retro/avatar-sq';
 import { Tag } from '@/components/retro/tag';
-import { auth } from '@/auth';
+import { currentSession } from '@/lib/auth/session';
 import { listAccessibleGuilds } from '@/lib/guilds';
 import { siteUrl } from '@/lib/site-url';
 
@@ -28,7 +28,7 @@ const NIVEL: Record<Exclude<AccessLevel, 'none'>, string> = {
  * `listAccessibleGuilds`, filtrada pelo nível por guild da sessão.
  */
 export default async function ServidoresPage() {
-  const session = await auth();
+  const session = await currentSession();
   if (!session?.user?.id) redirect('/login');
 
   const guilds = await listAccessibleGuilds();

@@ -2,7 +2,7 @@ import 'server-only';
 
 import { cache } from 'react';
 
-import { auth } from '@/auth';
+import { currentSession } from './auth/session';
 
 import { cachedInternalApi } from './internal-api';
 import { servedGuildIds } from './registry';
@@ -36,7 +36,7 @@ export interface ManagedGuild {
  * então ela aparece com o próprio ID de rótulo em vez de sumir.
  */
 export const listAccessibleGuilds = cache(async (): Promise<ManagedGuild[]> => {
-  const session = await auth();
+  const session = await currentSession();
   const grants = session?.guilds ?? {};
   const api = cachedInternalApi(60);
 

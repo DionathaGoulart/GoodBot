@@ -11,12 +11,14 @@ export default async function GuildLayout({ children, params }: LayoutProps<'/g/
   // A checagem se repete em cada page/action (PRD §7.3); aqui ela só evita
   // renderizar o casco para quem não deveria vê-lo.
   const session = await requireGuildAccess(guildId);
-  const status = await readBotStatus();
 
+  // Em paralelo de propósito: as duas cruzam a internet até a VM e não
+  // dependem uma da outra. Em série, a latência delas somava (PRD §7.2).
+  //
   // Com mais de um servidor o nome deixa de ser enfeite: sem ele as duas
   // telas ficam idênticas e não dá para saber onde se está clicando. A lista é
   // só a que este usuário pode abrir.
-  const guilds = await listAccessibleGuilds();
+  const [status, guilds] = await Promise.all([readBotStatus(), listAccessibleGuilds()]);
   const atual = guilds.find((g) => g.id === guildId);
   const guildName = atual?.name ?? 'SERVIDOR';
 

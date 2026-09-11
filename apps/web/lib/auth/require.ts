@@ -3,7 +3,7 @@ import 'server-only';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { auth } from '@/auth';
+import { currentSession } from './session';
 import { actionLimiter, clientIp } from '@/lib/rate-limit';
 import { servedGuildIds } from '@/lib/registry';
 
@@ -25,7 +25,7 @@ export async function resolveGuildSession(
   guildId: string,
   minimum: AccessLevel = 'mod',
 ): Promise<{ session: GuildSession } | { verdict: DeniedVerdict }> {
-  const session = await auth();
+  const session = await currentSession();
   if (!session?.user?.id) return { verdict: 'unauthenticated' };
 
   if (!(await withinWriteBudget(session.user.id))) return { verdict: 'rate-limited' };
