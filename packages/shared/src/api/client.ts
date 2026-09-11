@@ -18,6 +18,7 @@ import {
   ChannelOverridesInputSchema,
   ChannelUpdateInputSchema,
   GuildChannelDetailSchema,
+  GuildStateSchema,
   SlowmodeInputSchema,
 } from './channels';
 import { CommandSummarySchema } from './commands';
@@ -104,6 +105,7 @@ import type {
   ChannelOverridesInput,
   ChannelUpdateInput,
   GuildChannelDetail,
+  GuildState,
   SlowmodeInput,
 } from './channels';
 import type { CommandSummary } from './commands';
@@ -498,6 +500,14 @@ export function createInternalClient(options: InternalClientOptions) {
 
     channels: (guildId: string): Promise<GuildChannelSummary[]> =>
       request(GuildChannelSummarySchema.array(), `${guild(guildId)}/channels`),
+
+    /**
+     * O servidor inteiro numa resposta: cargos, canais e o detalhe de cada um.
+     * Substitui o `2 + N` de `roles` + `channels` + um `channel` por canal, que
+     * é o custo de montar o mesmo retrato de fora.
+     */
+    guildState: (guildId: string): Promise<GuildState> =>
+      request(GuildStateSchema, `${guild(guildId)}/state`),
 
     /**
      * Cargos da guild. `counts` pede a contagem de membros por cargo, que

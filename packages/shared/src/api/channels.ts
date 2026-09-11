@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { GuildChannelSummarySchema } from './members';
+import { GuildChannelSummarySchema, GuildRoleSummarySchema } from './members';
 import { PERMISSION_BITS } from './permissions';
 import { actorFields } from './roles';
 import { SnowflakeSchema, emptyToNull } from '../config/common';
@@ -45,6 +45,24 @@ export const GuildChannelDetailSchema = GuildChannelSummarySchema.extend({
   overrides: z.array(ChannelOverrideSchema),
 });
 export type GuildChannelDetail = z.infer<typeof GuildChannelDetailSchema>;
+
+/**
+ * O servidor inteiro numa resposta: cargos, canais e o detalhe de cada canal.
+ *
+ * Existe porque montar isso de fora custa `2 + N` requisições em série — uma
+ * por canal — e quem varre um servidor quer o retrato, não a paginação. Do
+ * lado do bot nada disso toca o Discord: o gateway já mantém tudo em memória,
+ * então responder é percorrer dois caches.
+ *
+ * `details` vem como lista, e não como mapa por ID, porque JSON não tem mapa;
+ * quem consome indexa por `id`.
+ */
+export const GuildStateSchema = z.object({
+  roles: z.array(GuildRoleSummarySchema),
+  channels: z.array(GuildChannelSummarySchema),
+  details: z.array(GuildChannelDetailSchema),
+});
+export type GuildState = z.infer<typeof GuildStateSchema>;
 
 export const ChannelCreateInputSchema = z.object({
   ...actorFields,

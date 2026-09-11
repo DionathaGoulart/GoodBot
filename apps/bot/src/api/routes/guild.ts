@@ -18,6 +18,7 @@ import { requireActor, requireBotMember } from '../actor';
 import { ApiHttpError, forbidden, notFound } from '../errors';
 import {
   toAuditLogEntry,
+  toChannelDetail,
   toChannelSummary,
   toMemberDetail,
   toMemberSummary,
@@ -28,7 +29,17 @@ import { validate } from '../validate';
 
 import type { ApiDeps, ApiEnv } from '../context';
 import type { BanListQuery, GuildBanSummary, GuildProfile } from '@goodbot/shared';
-import type { Guild, GuildBan, GuildMember, GuildVerificationLevel } from 'discord.js';
+import type {
+  Guild,
+  GuildBan,
+  GuildMember,
+  GuildVerificationLevel,
+  NonThreadGuildBasedChannel,
+} from 'discord.js';
+
+/** Ordem em que os canais aparecem no Discord. */
+const byPosition = (a: NonThreadGuildBasedChannel, b: NonThreadGuildBasedChannel): number =>
+  a.position - b.position;
 
 /**
  * Busca de membros.
@@ -299,6 +310,34 @@ export function createGuildRoutes(deps: ApiDeps): Hono<ApiEnv> {
           .map(toChannelSummary)
           .sort((a, b) => a.position - b.position);
         return c.json(channels);
+      })
+
+      /**
+       * O servidor inteiro numa resposta: cargos, canais e o detalhe de cada
+       * canal. É o que a varredura do `guild scan` lê para montar a análise.
+       *
+       * O caminho equivalente de fora — `/roles`, `/channels` e um
+       * `/channels/:id` por canal — custa `2 + N` idas e voltas em série até a
+       * VM, o que num servidor de trinta canais é a diferença entre um segundo
+       * e quinze. Aqui nada toca o Discord: tudo sai do cache do gateway.
+       *
+       * Threads ficam de fora dos dois campos. Elas não são estrutura, são
+       * conteúdo: aparecem e somem sozinhas, e incluí-las só faria a varredura
+       * avisar, canal por canal, que não sabe representá-las.
+       */
+      .get('/state', (c) => {
+        const guild = c.get('guild');
+        const channels = [...guild.channels.cache.values()]
+          .filter((channel): channel is NonThreadGuildBasedChannel => !channel.isThread())
+          .sort(byPosition);
+
+        return c.json({
+          roles: [...guild.roles.cache.values()]
+            .map((role) => toRoleSummary(role))
+            .sort((a, b) => b.position - a.position),
+          channels: channels.map(toChannelSummary),
+          details: channels.map(toChannelDetail),
+        });
       })
 
       .get('/roles', validate('query', RoleListQuerySchema), async (c) => {

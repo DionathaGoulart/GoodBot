@@ -41,6 +41,66 @@ function fakeMember(id: string, options: { mod?: boolean; guild?: unknown } = {}
   };
 }
 
+/**
+ * Canal o bastante para os mappers e para `canBotSend`. `isThread` é o que a
+ * rota `/state` usa para deixar thread de fora.
+ */
+function fakeChannel(
+  o: {
+    id: string;
+    name: string;
+    type: number;
+    parentId?: string | null;
+    position?: number;
+    topic?: string | null;
+    slowmode?: number;
+    thread?: boolean;
+    overwrites?: { id: string; allow: bigint; deny: bigint }[];
+  },
+  guild: unknown,
+) {
+  return {
+    id: o.id,
+    name: o.name,
+    type: o.type,
+    parentId: o.parentId ?? null,
+    position: o.position ?? 0,
+    topic: o.topic ?? null,
+    nsfw: false,
+    rateLimitPerUser: o.slowmode ?? 0,
+    guild,
+    isThread: () => o.thread === true,
+    isTextBased: () => o.type === 0,
+    permissionsFor: () => ({ has: () => true }),
+    permissionOverwrites: {
+      cache: new Collection(
+        (o.overwrites ?? []).map((ow) => [
+          ow.id,
+          {
+            id: ow.id,
+            type: 0,
+            allow: { bitfield: ow.allow },
+            deny: { bitfield: ow.deny },
+          },
+        ]),
+      ),
+    },
+  };
+}
+
+function fakeRole(o: { id: string; name: string; position: number; managed?: boolean }) {
+  return {
+    id: o.id,
+    name: o.name,
+    color: 0,
+    position: o.position,
+    managed: o.managed ?? false,
+    hoist: false,
+    mentionable: false,
+    permissions: { bitfield: 0n },
+  };
+}
+
 interface Fakes {
   deps: ApiDeps;
   warn: ReturnType<typeof vi.fn>;
@@ -66,7 +126,34 @@ function makeDeps(overrides: { warn?: () => unknown } = {}): Fakes {
       list,
       search,
     },
+    channels: { cache: new Collection<string, ReturnType<typeof fakeChannel>>() },
+    roles: { cache: new Collection<string, ReturnType<typeof fakeRole>>() },
   };
+
+  // Uma categoria com um canal dentro, mais uma thread — que a `/state`
+  // precisa ignorar — e o override de `@everyone` no canal.
+  const categoria = fakeChannel({ id: '10', name: 'GERAL', type: 4, position: 0 }, guild);
+  const chat = fakeChannel(
+    {
+      id: '11',
+      name: 'chat',
+      type: 0,
+      parentId: '10',
+      position: 1,
+      topic: 'Papo livre.',
+      slowmode: 5,
+      overwrites: [{ id: GUILD_ID, allow: 0n, deny: PermissionFlagsBits.SendMessages }],
+    },
+    guild,
+  );
+  const thread = fakeChannel(
+    { id: '12', name: 'fio', type: 11, parentId: '11', position: 2, thread: true },
+    guild,
+  );
+  for (const channel of [categoria, chat, thread]) guild.channels.cache.set(channel.id, channel);
+
+  guild.roles.cache.set(GUILD_ID, fakeRole({ id: GUILD_ID, name: '@everyone', position: 0 }));
+  guild.roles.cache.set('5', fakeRole({ id: '5', name: 'Admin', position: 3 }));
   members.set(ACTOR_ID, fakeMember(ACTOR_ID, { mod: true, guild }));
   members.set(TARGET_ID, fakeMember(TARGET_ID, { guild }));
   guild.members.me = fakeMember('400000000000000004', { guild });
@@ -150,6 +237,38 @@ describe('busca de membros', () => {
     expect(await res.json()).toHaveLength(1);
     expect(list).not.toHaveBeenCalled();
     expect(search).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /guilds/:id/state', () => {
+  it('devolve o servidor inteiro numa resposta, sem thread', async () => {
+    const { app } = makeApp();
+    const res = await app.request(`/guilds/${GUILD_ID}/state`, { headers: auth });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      roles: { name: string }[];
+      channels: { id: string; name: string }[];
+      details: { id: string; topic: string | null; overrides: unknown[] }[];
+    };
+
+    // Cargos do topo para a base; `@everyone` entra, quem consome é que filtra.
+    expect(body.roles.map((role) => role.name)).toEqual(['Admin', '@everyone']);
+
+    // A thread fica de fora dos dois campos: é conteúdo, não estrutura.
+    expect(body.channels.map((channel) => channel.id)).toEqual(['10', '11']);
+    expect(body.details.map((detail) => detail.id)).toEqual(['10', '11']);
+
+    // O detalhe vem junto — é o que poupa um GET por canal.
+    const chat = body.details.find((detail) => detail.id === '11');
+    expect(chat?.topic).toBe('Papo livre.');
+    expect(chat?.overrides).toEqual([{ roleId: GUILD_ID, view: 'inherit', send: 'deny' }]);
+  });
+
+  it('exige o Bearer como o resto de /guilds', async () => {
+    const { app } = makeApp();
+    const res = await app.request(`/guilds/${GUILD_ID}/state`);
+    expect(res.status).toBe(401);
   });
 });
 
