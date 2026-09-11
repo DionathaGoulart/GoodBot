@@ -102,19 +102,20 @@ validação Zod) e `retryAfter` quando o 503 veio de rate limit.
 | `commands`    | listar os comandos registrados                                  |
 | `social`      | contas de rede social e teste de anúncio                        |
 | `admin`       | painel do dono: guilds, expulsar, broadcast, manutenção, resync  |
+| `registry`    | o aviso por DM a quem convidou o bot (ciclo de vida do convite)  |
 | `metrics`     | contadores em formato Prometheus                                |
 | `health`      | **sem auth** — estado do gateway, banco e último backup         |
 
 Os schemas de request e response de cada uma estão em
 `packages/shared/src/api/`.
 
-### 4.1 `/admin` é a exceção que confirma a regra
+### 4.1 `/admin` e `/registry` são as exceções que confirmam a regra
 
 Todo o resto da API vive sob `/guilds/:guildId` e é autorizado pelo **nível do
-`actorId` naquele servidor**. As rotas `/admin` não podem ser: a lista de
-servidores existe justamente para mostrar as guilds que o bot **não** atende (a
-fila de aprovação), e um middleware que exigisse guild atendida esconderia
-exatamente o que a tela precisa ver.
+`actorId` naquele servidor**. Estas duas não podem ser: elas existem justamente
+para tratar as guilds que o bot **não** atende — a fila de aprovação e os
+avisos de recusa —, e um middleware que exigisse guild atendida esconderia
+exatamente o que elas precisam ver.
 
 O que muda é só contra o que o `actorId` é conferido — `OWNER_DISCORD_ID`, a
 variável, em vez da hierarquia de cargos de uma guild:
@@ -130,6 +131,33 @@ Sem `OWNER_DISCORD_ID` no ambiente do bot **toda escrita em `/admin` responde
 403** (`OWNER_NOT_CONFIGURED`). Fechado por ausência é a única leitura possível
 de uma variável faltando: o contrário transformaria um `.env` incompleto em
 painel admin aberto para qualquer `actorId` que chegasse com o Bearer certo.
+
+### 4.2 `/registry` não tem `actorId`, e é de propósito
+
+`POST /registry/:guildId/notice` é o que faz o bot mandar a DM de ciclo de vida
+do convite (entrou em demo, demo acabando, entrou na fila, aprovado, recusado).
+Ela não carrega `actorId` porque **não existe ator**: quem convidou já foi
+provado pela troca do `code` no OAuth, e nada na chamada escolhe quem recebe —
+o destinatário é o `invited_by` da linha do registro. O corpo só escolhe qual
+texto de uma lista fechada sai, e o texto mora no bot
+(`apps/bot/src/lib/inviter-dm.ts`).
+
+```bash
+curl -X POST http://localhost:3001/registry/$GUILD_ID/notice \
+  -H "Authorization: Bearer $INTERNAL_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"kind": "queued"}'
+```
+
+Ela existe como rota porque o bot **não sabe por qual link a pessoa veio**: o
+Discord adiciona o bot no clique em "Autorizar", então o `guildCreate` chega
+antes de o painel trocar o `code`. Quem sabe o fluxo é o painel.
+
+A resposta diz se a DM chegou (`delivered`) — `false` é resultado normal, DM
+fechada é comum — e para quem ela foi (`userId`, nulo nas linhas semeadas pelo
+`GUILD_IDS`).
+
+### 4.3 Broadcast
 
 O `POST /admin/broadcast` pede ainda um `confirm: "ENVIAR"` no corpo. A palavra
 é digitada na tela, mas a conferência é aqui: uma trava que só existe no

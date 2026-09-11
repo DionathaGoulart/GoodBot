@@ -1,0 +1,1 @@
+ALTER TYPE "public"."guild_status" ADD VALUE 'expired';

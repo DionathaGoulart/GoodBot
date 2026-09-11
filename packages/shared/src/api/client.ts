@@ -66,6 +66,7 @@ import {
   SendMessageResultSchema,
 } from './messages';
 import { ModerationActionInputSchema, ModerationActionResultSchema } from './moderation';
+import { InviteNoticeInputSchema, InviteNoticeResultSchema } from './registry';
 import {
   ActorInputSchema,
   MemberRolesInputSchema,
@@ -141,6 +142,7 @@ import type {
   SendMessageResult,
 } from './messages';
 import type { ModerationActionInput, ModerationActionResult } from './moderation';
+import type { InviteNoticeInput, InviteNoticeResult } from './registry';
 import type { ActorInput, MemberRolesInput, RoleMoveInput, RoleWriteInput } from './roles';
 import type {
   SocialAccountSummary,
@@ -343,6 +345,17 @@ export function createInternalClient(options: InternalClientOptions) {
       diagnostics: (): Promise<AdminDiagnostics> =>
         request(AdminDiagnosticsSchema, '/admin/diagnostics'),
     },
+
+    /**
+     * O aviso por DM para quem convidou o bot. Também fora de `/guilds`, e
+     * pela mesma razão do `/admin`: metade dos avisos é sobre servidor que o
+     * bot não atende. Sem `actorId` — ver `api/registry.ts`.
+     */
+    inviteNotice: (guildId: string, input: InviteNoticeInput): Promise<InviteNoticeResult> =>
+      request(InviteNoticeResultSchema, `/registry/${encodeURIComponent(guildId)}/notice`, {
+        method: 'POST',
+        body: InviteNoticeInputSchema.parse(input),
+      }),
 
     /** Dados do servidor + o que o bot pode editar nele (PRD §6.3). */
     guildProfile: (guildId: string): Promise<GuildProfile> =>

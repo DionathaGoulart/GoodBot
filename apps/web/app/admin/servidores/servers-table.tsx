@@ -140,7 +140,7 @@ export function ServersTable({ rows }: { rows: readonly AdminGuildRow[] }) {
             <AlertDialogTitle>SAIR DE {alvo?.live?.name ?? alvo?.guildId}?</AlertDialogTitle>
             <AlertDialogDescription>
               O bot sai do servidor. O status no registro continua valendo, então este servidor
-              pode convidá-lo de novo — para impedir isso, bloqueie pela fila. Nada é apagado:
+              pode convidá-lo de novo. Para impedir isso, bloqueie pela fila. Nada é apagado:
               casos, tags, tickets e configuração ficam guardados.
             </AlertDialogDescription>
           </AlertDialogHeader>

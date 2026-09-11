@@ -52,7 +52,7 @@ export default async function AdminPage() {
           role="status"
           className="border-2 border-warning bg-base-200 px-4 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-warning-text"
         >
-          ! MODO MANUTENÇÃO LIGADO — O BOT ESTÁ RECUSANDO INTERAÇÕES
+          ! MODO MANUTENÇÃO LIGADO: O BOT ESTÁ RECUSANDO INTERAÇÕES
         </div>
       ) : null}
 
@@ -77,7 +77,7 @@ export default async function AdminPage() {
               hint={
                 rss === null
                   ? undefined
-                  : `${String(Math.round((rss / CONTAINER_MEMORY_BYTES) * 100))}% de 384 MB${memoriaApertada ? ' — APERTADO' : ''}`
+                  : `${String(Math.round((rss / CONTAINER_MEMORY_BYTES) * 100))}% de 384 MB${memoriaApertada ? ', APERTADO' : ''}`
               }
             />
             <StatTile
@@ -85,7 +85,7 @@ export default async function AdminPage() {
               value={health ? `${String(health.guilds.cached)}/${String(health.guilds.expected)}` : '—'}
               hint={
                 health && health.guilds.cached < health.guilds.expected
-                  ? 'menos do que o registro espera — veja Servidores'
+                  ? 'menos do que o registro espera. Veja Servidores'
                   : 'bate com o registro'
               }
             />

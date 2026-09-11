@@ -1,7 +1,18 @@
 # Goodbot — PRD (Product Requirements Document)
 
-Versão 1.3 · 2026-09-10 · Documento de referência para todas as sessões.
+Versão 1.4 · 2026-09-10 · Documento de referência para todas as sessões.
 Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (UI).
+
+> **v1.4 — o convite fala.** O ciclo de vida do convite deixou de ser mudo para
+> quem convidou: o bot avisa **no privado dessa pessoa** a cada mudança de
+> estado (entrou em demo, demo acabando, demo acabou, entrou na fila, aprovado,
+> recusado). O aviso de 10 minutos da demo saiu do canal do servidor e passou a
+> ser só essa DM. Entrou o status `expired`: convite parado **uma semana** na
+> fila é recusado sozinho, o bot se despede e sai — e, ao contrário de
+> `blocked`, o servidor pode ser convidado de novo. Junto veio a correção de um
+> defeito que anulava a demonstração em produção (§5.10, "a corrida do
+> `guildCreate`"). O que mudou no documento: §5.10 inteira, `guild_registry` na
+> §8 e a §9.3.
 
 > **v1.3 — bot público.** O Goodbot deixou de atender uma lista de servidores
 > no ambiente e passou a atender uma **tabela** (`guild_registry`): quem entra
@@ -381,12 +392,13 @@ Desde a v1.3 o Goodbot é público: qualquer pessoa pode convidá-lo. Quem o bot
 atende **não** é uma variável de ambiente, é a tabela `guild_registry` (§8), e
 todo servidor tem um estado:
 
-| Status     | Como chega                                    | O bot atende?    |
-| ---------- | --------------------------------------------- | ---------------- |
-| `pending`  | convite por `invite.` — espera aprovação      | não, fica calado |
-| `approved` | o dono do bot aprovou no painel dele (§9.3)   | sim, sem prazo   |
-| `demo`     | convite por `demo.` — aprovado na hora        | sim, por 1 hora  |
-| `blocked`  | o dono do bot bloqueou                        | não, e ele sai   |
+| Status     | Como chega                                       | O bot atende?    |
+| ---------- | ------------------------------------------------ | ---------------- |
+| `pending`  | convite por `invite.` — espera aprovação         | não, fica calado |
+| `approved` | o dono do bot aprovou no painel dele (§9.3)      | sim, sem prazo   |
+| `demo`     | convite por `demo.` — aprovado na hora           | sim, por 1 hora  |
+| `blocked`  | o dono do bot bloqueou                           | não, e ele sai   |
+| `expired`  | passou 1 semana em `pending` sem decisão         | não, e ele sai   |
 
 Não atender é **estado válido**: o bot fica na guild e ignora tudo — nem
 interação, nem evento do gateway. Isso é requisito de privacidade, não detalhe
@@ -416,13 +428,64 @@ fluxos foi usado. Exigências:
   Discord ligado, o botão "Add App" do perfil do bot instalaria sem passar por
   nenhum dos dois fluxos, e esse servidor entraria sem classificação.
 
+**A corrida do `guildCreate`.** O Discord adiciona o bot no clique em
+"Autorizar", então o evento do gateway chega ao bot **antes** de o callback
+trocar o `code` — a linha do registro já nasceu `pending` quando o fluxo do
+convite vai gravar. Um upsert que nunca sobrescreve, como era até a v1.4,
+fazia o link da demonstração entregar um servidor `pending`: demo nenhuma,
+nunca. Por isso o convite tem uma escrita própria (`claimInvitedGuild`), que
+**assume** a linha quando ela é `pending`, `expired` ou uma `demo` já gasta, e
+não toca em `approved`, `blocked` nem numa demo em curso. A mesma escrita é o
+que permite reabrir um convite recusado pelo prazo.
+
 **A demonstração** dura 1 hora, é fixa (não é negociável por servidor: seria um
 plano gratuito, que não é o que a demo é) e **não se renova** — quem já teve a
-sua entra na fila de aprovação como qualquer um. Faltando 10 minutos o bot
-avisa no servidor; no fim, se despede com o link do convite normal e sai. O
-aviso e a despedida existem para não deixar a pior versão possível: um bot mudo
-parado no servidor, sem ninguém entender se quebrou, se foi banido ou se a demo
-acabou.
+sua entra na fila de aprovação como qualquer um. O que impede a renovação é o
+`demo_ended_at`, não o status: a linha volta a ser `pending` quando o servidor
+é convidado de novo, mas prazo novo só sai para quem nunca gastou o seu.
+
+**Os avisos a quem convidou.** Toda mudança de estado é dita **no privado de
+quem clicou no convite** (`invited_by`), porque é a única pessoa que a decisão
+afeta e a única que pode agir sobre ela:
+
+| Quando                     | O que o aviso diz                                      |
+| -------------------------- | ------------------------------------------------------ |
+| entrou em demo             | está funcionando, até que horas, que vale uma vez       |
+| faltam 10 min para o fim   | o prazo e o link para pedir a aprovação                 |
+| a demo acabou              | nada foi apagado, e como ficar de vez                   |
+| entrou na fila             | o bot está calado **de propósito**, e o prazo da fila   |
+| aprovado                   | já está atendendo, sem prazo, com o link do painel      |
+| recusado ou bloqueado      | o motivo escrito pelo dono do bot, quando houver        |
+| recusado pelo prazo        | não é bloqueio, e convidar de novo funciona             |
+
+O aviso de 10 minutos é **só** essa DM: uma contagem regressiva no canal do
+servidor é barulho para todo mundo que não decide nada. A despedida da demo
+continua **também** no servidor, porque aí o fato é público — o bot está
+saindo, e quem o viu moderando merece saber por quê.
+
+A entrada não pode ser avisada pelo bot sozinho: quando o `guildCreate` chega,
+ele não sabe por qual link a pessoa veio (a corrida acima). Quem sabe é o
+painel, e é ele que pede o aviso certo ao bot (`POST /registry/:guildId/notice`).
+
+**A recusa por inatividade.** Um convite parado em `pending` por
+`PENDING_EXPIRY_MS` (**1 semana**) é recusado sozinho: o bot avisa no servidor,
+avisa quem convidou, sai, e a linha vira `expired`. A razão é a mesma da
+expiração da demo — bot mudo parado num servidor é a pior versão possível —,
+só que aqui ele é mudo desde o primeiro minuto, e quem convidou não tem como
+distinguir "ainda não aprovaram" de "instalei errado". O prazo transforma
+silêncio indefinido em resposta.
+
+`expired` **não** é `blocked`: a linha continua contando a história na fila do
+painel, mas o mesmo servidor pode ser convidado de novo a qualquer momento, e
+aí o relógio recomeça. Quem está na fila **não** adia a recusa clicando no
+próprio link de novo — o relógio só reinicia para quem estava fora dela.
+
+E a regra que fecha o ciclo: **estar no servidor e estar na fila são a mesma
+coisa.** A reentrada do bot num servidor `expired` já o devolve a `pending`, no
+próprio `guildCreate`, sem depender de o callback do convite chegar ao fim.
+Sem isso um reconvite interrompido no meio deixaria o bot dentro de um servidor
+`expired` — mudo, atendido por ninguém e fora do alcance de todo job, que é
+exatamente o estado que esta seção existe para acabar.
 
 **Teto a manter à vista: 100 servidores.** Acima disso, o Discord exige
 verificação da aplicação para as intents privilegiadas (`GuildMembers` e
@@ -668,13 +731,15 @@ PKs internas como `bigserial` ou `uuid` onde indicado.
 
 ```
 guilds            (id PK text, name, icon, owner_id, joined_at, left_at)
-guild_registry    (guild_id PK text, status enum(pending|approved|demo|blocked),
+guild_registry    (guild_id PK text, status enum(pending|approved|demo|blocked|expired),
                    invited_by, invited_at, approved_at, expires_at (só demo), left_at, note,
                    demo_warned_at, demo_ended_at)
                    idx (status), (expires_at) where expires_at not null
                    -- quem o bot atende (§5.10); `demo_ended_at` fecha a varredura do job,
                    -- e não o status, porque a linha precisa continuar dizendo "este
                    -- servidor já usou a demo dele"
+                   -- `invited_at` é o relógio da fila: `expired` sai dele, e só reinicia
+                   -- quando um convite reabre a linha (nunca para quem já está em pending)
 guild_settings    (guild_id PK/FK, timezone, embed_color, mod_role_ids[], admin_role_ids[],
                    dashboard_access_role_ids[], log_channel_id, dm_on_punish jsonb, updated_at)
 module_configs    (guild_id, module PK(guild_id,module), enabled, config jsonb, version, updated_at, updated_by)
@@ -859,3 +924,7 @@ provedor, documentada em `docs/runbook.md`.
 | **Quem o bot atende é tabela, não variável** (v1.3) | aprovar um servidor não pode exigir deploy nem SSH; e a fila continua funcionando com o bot fora do ar, que é justamente o dia em que se precisa dela. O `GUILD_IDS` sobrou como semente do registro no boot |
 | **Demo com prazo fixo de 1 h, sem renovação** (v1.3) | prazo por servidor viraria um plano gratuito negociável; renovar viraria acesso permanente por reconvite. O prazo curto também é o que segura o teto de 100 servidores das intents privilegiadas |
 | **`state` do convite assinado** (v1.3) | é o `state` que carrega o fluxo (`pending` ou `demo`), então sem HMAC quem cola o link escolhe o próprio status. Assinado no clique, com validade de 15 min |
+| **Convite tem escrita própria, não upsert** (v1.4) | o `guildCreate` cria a linha antes de o callback do OAuth rodar; um upsert que nunca sobrescreve fazia o link da demo entregar um servidor `pending`. Quem assume a linha é o fluxo do convite — só quando ela é `pending`, `expired` ou demo gasta |
+| **Aviso de 10 min da demo só por DM** (v1.4) | quem decide pedir a aprovação é quem convidou; contagem regressiva no canal é barulho para quem não decide nada. A despedida continua pública, porque a saída é um fato do servidor |
+| **Fila expira em 1 semana, como `expired`** (v1.4) | fila sem prazo é depósito, e um bot mudo parado num servidor não distingue "não aprovaram" de "instalei errado". `expired` em vez de `blocked` porque é ausência de decisão, não decisão: convidar de novo funciona |
+| **Avisos de convite pedidos pelo painel** (v1.4) | o bot não sabe por qual link a pessoa veio quando o `guildCreate` chega. Quem sabe é o painel; o bot só escolhe o texto, de uma lista fechada, e o destinatário sai do `invited_by` da linha |

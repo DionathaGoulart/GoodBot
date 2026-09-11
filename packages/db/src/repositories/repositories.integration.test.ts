@@ -22,6 +22,15 @@ import {
   setModuleEnabled,
 } from './configs';
 import {
+  claimInvitedGuild,
+  ensureGuildRegistered,
+  getGuildRegistryEntry,
+  listPendingGuildsToExpire,
+  markDemoEnded,
+  markGuildExpired,
+  setGuildStatus,
+} from './registry';
+import {
   automodByRule,
   commandsUsage,
   dailySeries,
@@ -40,7 +49,7 @@ import {
   type StatsPeriod,
 } from './stats';
 import { guildSettings } from '../schema/configs';
-import { guilds } from '../schema/guilds';
+import { guilds, guildRegistry } from '../schema/guilds';
 
 loadRootEnv();
 const url = process.env.DATABASE_URL;
@@ -49,6 +58,16 @@ const url = process.env.DATABASE_URL;
 const GUILD_ID = `9${String(Date.now()).padStart(17, '0')}`;
 const USER_A = '100000000000000001';
 const USER_B = '100000000000000002';
+
+/** Os IDs de registro usados abaixo; removidos no `afterAll`. */
+const registryIds: string[] = [];
+let proximoId = 0;
+function registryId(): string {
+  proximoId += 1;
+  const id = `8${String(Date.now()).slice(-11)}${String(proximoId).padStart(5, '0')}`;
+  registryIds.push(id);
+  return id;
+}
 
 describe.skipIf(!url)('repositories (integração com Postgres)', () => {
   let db: Db;
@@ -63,6 +82,7 @@ describe.skipIf(!url)('repositories (integração com Postgres)', () => {
 
   afterAll(async () => {
     await db.delete(guilds).where(eq(guilds.id, GUILD_ID));
+    for (const id of registryIds) await db.delete(guildRegistry).where(eq(guildRegistry.guildId, id));
     await end();
   });
 
@@ -511,6 +531,237 @@ describe.skipIf(!url)('repositories (integração com Postgres)', () => {
         { date: '2026-03-10', count: 37 },
         { date: '2026-03-11', count: 3 },
       ]);
+    });
+  });
+  /**
+   * O registro de convite. Esta é a parte do produto em que um erro de SQL não
+   * aparece em teste unitário nenhum: as regras moram todas no `where` e no
+   * `on conflict`, e é uma corrida real (o `guildCreate` chega antes do
+   * callback) que decide qual delas vale.
+   */
+  describe('registry: claimInvitedGuild', () => {
+    it('sem linha: o convite cria com o status do fluxo', async () => {
+      const id = registryId();
+      const expiresAt = new Date(Date.now() + 3_600_000);
+
+      const entry = await claimInvitedGuild(db, {
+        guildId: id,
+        status: 'demo',
+        invitedBy: USER_A,
+        expiresAt,
+      });
+
+      expect(entry.status).toBe('demo');
+      expect(entry.invitedBy).toBe(USER_A);
+      expect(entry.expiresAt?.getTime()).toBe(expiresAt.getTime());
+    });
+
+    it('o `guildCreate` chegou antes: o convite assume a linha `pending`', async () => {
+      const id = registryId();
+      // Exatamente o que o gateway faz milissegundos antes do callback.
+      await ensureGuildRegistered(db, { guildId: id });
+      expect((await getGuildRegistryEntry(db, id))?.status).toBe('pending');
+
+      const expiresAt = new Date(Date.now() + 3_600_000);
+      const entry = await claimInvitedGuild(db, {
+        guildId: id,
+        status: 'demo',
+        invitedBy: USER_A,
+        expiresAt,
+      });
+
+      // Sem isto o link da demonstração entregava um servidor `pending`.
+      expect(entry.status).toBe('demo');
+      expect(entry.expiresAt).not.toBeNull();
+      expect(entry.invitedBy).toBe(USER_A);
+    });
+
+    it('aprovado não volta para a fila nem vira demo', async () => {
+      const id = registryId();
+      await ensureGuildRegistered(db, { guildId: id, status: 'approved' });
+
+      const entry = await claimInvitedGuild(db, {
+        guildId: id,
+        status: 'demo',
+        invitedBy: USER_B,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      });
+
+      expect(entry.status).toBe('approved');
+      expect(entry.expiresAt).toBeNull();
+    });
+
+    it('bloqueado continua bloqueado, use quem usar o link', async () => {
+      const id = registryId();
+      await ensureGuildRegistered(db, { guildId: id });
+      await setGuildStatus(db, id, { status: 'blocked', note: 'spam' });
+
+      const entry = await claimInvitedGuild(db, {
+        guildId: id,
+        status: 'demo',
+        invitedBy: USER_B,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      });
+
+      expect(entry.status).toBe('blocked');
+      expect(entry.note).toBe('spam');
+    });
+
+    it('a demo não se renova: quem já gastou a sua cai na fila', async () => {
+      const id = registryId();
+      await claimInvitedGuild(db, {
+        guildId: id,
+        status: 'demo',
+        invitedBy: USER_A,
+        expiresAt: new Date(Date.now() - 1_000),
+      });
+      await markDemoEnded(db, id);
+      // Depois da demo, alguém convida pelo link normal: volta para a fila.
+      await claimInvitedGuild(db, { guildId: id, status: 'pending', invitedBy: USER_A });
+
+      // E agora tenta a demo de novo pelo link da demo.
+      const entry = await claimInvitedGuild(db, {
+        guildId: id,
+        status: 'demo',
+        invitedBy: USER_A,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      });
+
+      expect(entry.status).toBe('pending');
+      expect(entry.expiresAt).toBeNull();
+      expect(entry.demoEndedAt).not.toBeNull();
+    });
+
+    it('demo em curso não é derrubada por um clique no link normal', async () => {
+      const id = registryId();
+      const expiresAt = new Date(Date.now() + 3_600_000);
+      await claimInvitedGuild(db, { guildId: id, status: 'demo', invitedBy: USER_A, expiresAt });
+
+      const entry = await claimInvitedGuild(db, {
+        guildId: id,
+        status: 'pending',
+        invitedBy: USER_B,
+      });
+
+      expect(entry.status).toBe('demo');
+      expect(entry.expiresAt?.getTime()).toBe(expiresAt.getTime());
+    });
+
+    it('demo gasta e convidada de volta entra na fila, e aí o prazo dela vale', async () => {
+      const id = registryId();
+      await claimInvitedGuild(db, {
+        guildId: id,
+        status: 'demo',
+        invitedBy: USER_A,
+        expiresAt: new Date(Date.now() - 1_000),
+      });
+      await markDemoEnded(db, id);
+
+      const entry = await claimInvitedGuild(db, {
+        guildId: id,
+        status: 'pending',
+        invitedBy: USER_A,
+      });
+
+      // Sem isto ela voltaria ao servidor como `demo` gasta: muda, atendida
+      // por ninguém, e fora do alcance da recusa por inatividade.
+      expect(entry.status).toBe('pending');
+      expect(await listPendingGuildsToExpire(db, new Date(Date.now() + 1_000))).toEqual(
+        expect.arrayContaining([expect.objectContaining({ guildId: id })]),
+      );
+    });
+
+    it('o bot voltar a um servidor recusado já o recoloca na fila', async () => {
+      const id = registryId();
+      await ensureGuildRegistered(db, { guildId: id });
+      await markGuildExpired(db, id, 'recusado sozinho');
+
+      // Só o `guildCreate`: o callback do convite pode nunca chegar ao fim
+      // (aba fechada, painel fora do ar). Mesmo assim o bot não pode ficar
+      // dentro de um servidor `expired`, onde nenhum job o alcança.
+      const entry = await ensureGuildRegistered(db, { guildId: id });
+
+      expect(entry.status).toBe('pending');
+      expect(entry.note).toBeNull();
+      expect(await listPendingGuildsToExpire(db, new Date(Date.now() + 1_000))).toEqual(
+        expect.arrayContaining([expect.objectContaining({ guildId: id })]),
+      );
+    });
+
+    it('a reentrada não mexe em quem já tem status decidido', async () => {
+      for (const status of ['approved', 'blocked'] as const) {
+        const id = registryId();
+        await ensureGuildRegistered(db, { guildId: id });
+        await setGuildStatus(db, id, { status, note: 'decidido' });
+
+        const entry = await ensureGuildRegistered(db, { guildId: id });
+
+        expect(entry.status, status).toBe(status);
+        expect(entry.note, status).toBe('decidido');
+      }
+    });
+
+    it('recusado pelo prazo: convidar de novo reabre e reinicia o relógio', async () => {
+      const id = registryId();
+      const velho = new Date(Date.now() - 30 * 86_400_000);
+      await ensureGuildRegistered(db, { guildId: id });
+      await db.update(guildRegistry).set({ invitedAt: velho }).where(eq(guildRegistry.guildId, id));
+      await markGuildExpired(db, id, 'recusado sozinho');
+
+      const entry = await claimInvitedGuild(db, {
+        guildId: id,
+        status: 'pending',
+        invitedBy: USER_B,
+      });
+
+      expect(entry.status).toBe('pending');
+      expect(entry.invitedBy).toBe(USER_B);
+      // O relógio da fila recomeça, senão a linha nasceria já vencida.
+      expect(entry.invitedAt.getTime()).toBeGreaterThan(velho.getTime());
+      // A nota explicava a recusa que acabou de ser desfeita.
+      expect(entry.note).toBeNull();
+    });
+
+    it('quem já está na fila não adia a recusa clicando no link de novo', async () => {
+      const id = registryId();
+      const velho = new Date(Date.now() - 30 * 86_400_000);
+      await ensureGuildRegistered(db, { guildId: id });
+      await db.update(guildRegistry).set({ invitedAt: velho }).where(eq(guildRegistry.guildId, id));
+
+      const entry = await claimInvitedGuild(db, {
+        guildId: id,
+        status: 'pending',
+        invitedBy: USER_A,
+      });
+
+      expect(entry.invitedAt.getTime()).toBe(velho.getTime());
+    });
+  });
+
+  describe('registry: recusa por inatividade', () => {
+    it('lista só `pending` mais velho que o limite, e `expired` sai da varredura', async () => {
+      const velho = registryId();
+      const novo = registryId();
+      const limite = new Date(Date.now() - 7 * 86_400_000);
+
+      await ensureGuildRegistered(db, { guildId: velho });
+      await db
+        .update(guildRegistry)
+        .set({ invitedAt: new Date(limite.getTime() - 60_000) })
+        .where(eq(guildRegistry.guildId, velho));
+      await ensureGuildRegistered(db, { guildId: novo });
+
+      const antes = await listPendingGuildsToExpire(db, limite);
+      expect(antes.map((row) => row.guildId)).toContain(velho);
+      expect(antes.map((row) => row.guildId)).not.toContain(novo);
+
+      await markGuildExpired(db, velho, 'recusado sozinho após 7 dias na fila');
+
+      const depois = await listPendingGuildsToExpire(db, limite);
+      expect(depois.map((row) => row.guildId)).not.toContain(velho);
+      const entry = await getGuildRegistryEntry(db, velho);
+      expect(entry?.status).toBe('expired');
+      expect(entry?.note).toContain('7 dias');
     });
   });
 });

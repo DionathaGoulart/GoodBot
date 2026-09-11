@@ -51,6 +51,7 @@ function descricaoDo(send: Mock): string {
 
 function makeDeps(overrides: Record<string, unknown> = {}) {
   const send = vi.fn(() => Promise.resolve({ id: 'msg-1' }));
+  const dm = vi.fn(() => Promise.resolve({ id: 'dm-1' }));
   const leave = vi.fn(() => Promise.resolve(undefined));
   const channel = {
     id: '800000000000000000',
@@ -61,16 +62,19 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
   };
   const guild = { id: GUILD_ID, name: 'Servidor de teste', systemChannel: channel, leave };
   const cache = { get: vi.fn((_id: string): unknown => guild) };
+  const fetchUser = vi.fn(() => Promise.resolve({ bot: false, send: dm }));
 
   return {
     send,
+    dm,
     leave,
     guild,
     cache,
+    fetchUser,
     deps: {
       db: {} as never,
-      client: { guilds: { cache } } as never,
-      inviteUrl: 'https://invite.goodbot.example/',
+      client: { guilds: { cache }, users: { fetch: fetchUser } } as never,
+      urls: { invite: 'https://invite.goodbot.example/', panel: 'https://goodbot.example/' },
       now: () => AGORA.getTime(),
       ...overrides,
     },
@@ -86,24 +90,47 @@ beforeEach(() => {
 });
 
 describe('DemoExpiryJob', () => {
-  it('avisa no canal de sistema quando o prazo está acabando', async () => {
-    const { deps, send } = makeDeps();
+  it('avisa no privado de quem convidou, e não no canal do servidor', async () => {
+    const { deps, send, dm, fetchUser } = makeDeps();
     listDemoGuildsToWarn.mockResolvedValue([entry()]);
 
     await new DemoExpiryJob(deps).tick();
 
-    expect(send).toHaveBeenCalledOnce();
-    expect(descricaoDo(send)).toContain('https://invite.goodbot.example/');
+    expect(fetchUser).toHaveBeenCalledWith('700000000000000000');
+    expect(dm).toHaveBeenCalledOnce();
+    expect(descricaoDo(dm)).toContain('https://invite.goodbot.example/');
+    // O servidor inteiro não precisa da contagem regressiva de um bot que
+    // ainda está funcionando: quem decide pedir a aprovação é quem convidou.
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('sem quem convidar (linha semeada), o aviso simplesmente não sai', async () => {
+    const { deps, dm, send } = makeDeps();
+    listDemoGuildsToWarn.mockResolvedValue([entry({ invitedBy: null })]);
+
+    await expect(new DemoExpiryJob(deps).tick()).resolves.toBeUndefined();
+    expect(dm).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(markDemoWarned).toHaveBeenCalledOnce();
+  });
+
+  it('DM fechada não trava a passada', async () => {
+    const { deps, fetchUser } = makeDeps();
+    fetchUser.mockRejectedValue(new Error('Cannot send messages to this user'));
+    listDemoGuildsToWarn.mockResolvedValue([entry()]);
+
+    await expect(new DemoExpiryJob(deps).tick()).resolves.toBeUndefined();
+    expect(markDemoWarned).toHaveBeenCalledOnce();
   });
 
   it('marca o aviso antes de enviar: falhar no envio custa um aviso, não um por minuto', async () => {
-    const { deps, send } = makeDeps();
+    const { deps, dm } = makeDeps();
     listDemoGuildsToWarn.mockResolvedValue([entry()]);
 
     await new DemoExpiryJob(deps).tick();
 
     expect(markDemoWarned.mock.invocationCallOrder[0]).toBeLessThan(
-      send.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+      dm.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
     expect(markDemoWarned).toHaveBeenCalledWith({}, GUILD_ID, AGORA);
   });
@@ -117,13 +144,14 @@ describe('DemoExpiryJob', () => {
     expect(listExpiredDemoGuilds).toHaveBeenCalledWith({}, AGORA);
   });
 
-  it('se despede, sai e marca o fim — nessa ordem', async () => {
-    const { deps, send, leave } = makeDeps();
+  it('se despede no servidor E no privado, sai e marca o fim — nessa ordem', async () => {
+    const { deps, send, dm, leave } = makeDeps();
     listExpiredDemoGuilds.mockResolvedValue([entry({ expiresAt: AGORA })]);
 
     await new DemoExpiryJob(deps).tick();
 
     expect(send).toHaveBeenCalledOnce();
+    expect(dm).toHaveBeenCalledOnce();
     expect(leave).toHaveBeenCalledOnce();
     expect(send.mock.invocationCallOrder[0]).toBeLessThan(leave.mock.invocationCallOrder[0] ?? 0);
     expect(leave.mock.invocationCallOrder[0]).toBeLessThan(
@@ -196,12 +224,12 @@ describe('DemoExpiryJob', () => {
   });
 
   it('sem AUTH_URL o aviso sai sem link, não sai errado', async () => {
-    const { deps, send } = makeDeps({ inviteUrl: null });
+    const { deps, dm } = makeDeps({ urls: { invite: null, panel: null } });
     listDemoGuildsToWarn.mockResolvedValue([entry()]);
 
     await new DemoExpiryJob(deps).tick();
 
-    expect(descricaoDo(send)).toContain('convite normal');
-    expect(descricaoDo(send)).not.toContain('http');
+    expect(descricaoDo(dm)).toContain('convite normal');
+    expect(descricaoDo(dm)).not.toContain('http');
   });
 });

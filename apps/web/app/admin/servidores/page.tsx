@@ -40,7 +40,7 @@ export default async function AdminServidoresPage() {
         <Panel title="ORFAOS.SYS" tone="error">
           <p className="text-sm">
             O bot está em {orphans.length} servidor(es) que não têm linha no registro. Isso não
-            deveria acontecer — o `guildCreate` cria a linha. Reinicie o bot: o `ready` registra
+            deveria acontecer, porque o `guildCreate` cria a linha. Reinicie o bot: o `ready` registra
             quem faltou.
           </p>
           <ul className="flex flex-col gap-1">

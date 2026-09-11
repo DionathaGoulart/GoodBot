@@ -9,6 +9,7 @@ import { commands as commandList } from './commands/index';
 import { env } from './env';
 import { events } from './events/index';
 import { DemoExpiryJob } from './jobs/demo-expiry';
+import { PendingExpiryJob } from './jobs/pending-expiry';
 import { RetentionJob } from './jobs/retention';
 import { SocialJob } from './jobs/social';
 import { StatsRollupJob } from './jobs/stats-rollup';
@@ -153,14 +154,17 @@ async function main(): Promise<void> {
   const social = new YouTubeProvider();
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
-  // O fim da demo: avisa, se despede e sai. O link do convite sai do
-  // `AUTH_URL` pela mesma conta que o painel faz para os subdomínios.
-  const demoExpiry = new DemoExpiryJob({
-    db,
-    client,
-    alerts,
-    inviteUrl: env.AUTH_URL ? subdomainUrl(env.AUTH_URL, 'invite') : null,
-  });
+  // Os links que os avisos de ciclo de vida citam. Saem do `AUTH_URL` pela
+  // mesma conta que o painel faz para os subdomínios — uma regra só, em
+  // `shared`, senão o link do convite deixa de bater com o Developer Portal.
+  const siteUrls = {
+    invite: env.AUTH_URL ? subdomainUrl(env.AUTH_URL, 'invite') : null,
+    panel: env.AUTH_URL ?? null,
+  };
+  // O fim da demo: avisa quem convidou, se despede no servidor e sai.
+  const demoExpiry = new DemoExpiryJob({ db, client, alerts, urls: siteUrls });
+  // A recusa por inatividade: convite parado na fila além do prazo.
+  const pendingExpiry = new PendingExpiryJob({ db, client, alerts, urls: siteUrls });
   const statsRollup = new StatsRollupJob({ db, client, config });
   // As retenções do PRD §8 num job só, porque é ele que alerta na falha.
   const retention = new RetentionJob({
@@ -202,6 +206,7 @@ async function main(): Promise<void> {
     queues: readQueues,
     backupDir: env.BACKUP_DIR,
     alerts,
+    urls: siteUrls,
     admin: {
       ...(env.OWNER_DISCORD_ID ? { ownerId: env.OWNER_DISCORD_ID } : {}),
       discordToken: env.DISCORD_TOKEN,
@@ -253,6 +258,7 @@ async function main(): Promise<void> {
     statsRollup.start();
     socialJob.start();
     demoExpiry.start();
+    pendingExpiry.start();
     retention.start();
     databaseProbe.start();
     alerts.emit({
@@ -290,6 +296,7 @@ async function main(): Promise<void> {
       statsRollup.stop();
       socialJob.stop();
       demoExpiry.stop();
+      pendingExpiry.stop();
       retention.stop();
       databaseProbe.stop();
       autorole.stop();

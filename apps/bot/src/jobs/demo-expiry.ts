@@ -5,10 +5,10 @@ import {
   markDemoWarned,
 } from '@goodbot/db';
 import { DEMO_WARNING_BEFORE_MS, MINUTE_MS } from '@goodbot/shared';
-import { time, TimestampStyles } from 'discord.js';
 
 import { noticeChannel } from '../lib/channels';
-import { infoEmbed, warningEmbed } from '../lib/embeds';
+import { infoEmbed } from '../lib/embeds';
+import { sendInviterDm } from '../lib/inviter-dm';
 import { childLogger } from '../logger';
 
 import type { AlertService } from '../services/alerts';
@@ -26,8 +26,8 @@ export const DEMO_EXPIRY_INTERVAL_MS = MINUTE_MS;
 export interface DemoExpiryJobDeps {
   db: Db;
   client: Client;
-  /** Link do convite normal. Ausente (dev sem `AUTH_URL`) = aviso sem link. */
-  inviteUrl?: string | null;
+  /** Links que os avisos citam. Ausentes (dev sem `AUTH_URL`) = aviso sem link. */
+  urls?: { invite?: string | null; panel?: string | null };
   alerts?: Pick<AlertService, 'emit'>;
   intervalMs?: number;
   warnBeforeMs?: number;
@@ -38,6 +38,13 @@ export interface DemoExpiryJobDeps {
 /**
  * O fim da demonstração: avisa faltando 10 minutos, se despede e sai quando o
  * prazo acaba.
+ *
+ * Os dois avisos têm públicos diferentes de propósito. O de 10 minutos vai
+ * **só no privado de quem convidou**: é a pessoa que decide se pede a
+ * aprovação, e encher o canal do servidor com contagem regressiva de um bot
+ * que ainda está funcionando é barulho para todo mundo que não decide nada. A
+ * despedida continua no servidor, porque aí o fato é público — o bot está
+ * saindo, e quem viu ele moderando merece saber por quê.
  *
  * O job **não** é quem decide se o bot atende — isso é o `isGuildServed`, que
  * conta o prazo na hora. Aqui é só a parte visível: sem esta passada uma demo
@@ -108,21 +115,16 @@ export class DemoExpiryJob {
     if (!expiresAt) return;
     await markDemoWarned(this.deps.db, entry.guildId, at);
 
-    const enviado = await this.announce(entry.guildId, () =>
-      warningEmbed({
-        title: 'A demonstração está acabando',
-        description: [
-          `A demonstração do Goodbot neste servidor acaba ${time(expiresAt, TimestampStyles.RelativeTime)},` +
-            ` às ${time(expiresAt, TimestampStyles.ShortTime)}.`,
-          'Quando o prazo acabar o bot sai sozinho. **A configuração fica guardada**:' +
-            ' se ele voltar aprovado, tudo volta como estava.',
-          this.deps.inviteUrl
-            ? `Para ficar de vez, peça a aprovação: ${this.deps.inviteUrl}`
-            : 'Para ficar de vez, peça a aprovação pelo convite normal.',
-        ].join('\n\n'),
-      }),
+    const enviado = await sendInviterDm(this.deps.client, entry.invitedBy, {
+      kind: 'demo-ending',
+      guildName: this.deps.client.guilds.cache.get(entry.guildId)?.name ?? null,
+      expiresAt,
+      ...(this.deps.urls ? { urls: this.deps.urls } : {}),
+    });
+    log.info(
+      { guildId: entry.guildId, userId: entry.invitedBy, enviado },
+      'aviso de fim de demo tratado',
     );
-    if (enviado) log.info({ guildId: entry.guildId }, 'aviso de fim de demo enviado');
   }
 
   /**
@@ -142,14 +144,23 @@ export class DemoExpiryJob {
             'O prazo da demonstração do Goodbot acabou e ele está saindo deste servidor.' +
               ' **Nada foi apagado**: casos, tags, tickets e a configuração continuam guardados' +
               ' e voltam como estavam se o bot for aprovado.',
-            this.deps.inviteUrl
-              ? `Quer o Goodbot de vez? Peça a aprovação: ${this.deps.inviteUrl}`
+            this.deps.urls?.invite
+              ? `Quer o Goodbot de vez? Peça a aprovação: ${this.deps.urls.invite}`
               : 'Quer o Goodbot de vez? Peça a aprovação pelo convite normal.',
           ].join('\n\n'),
         }),
       );
       await this.leave(guild);
     }
+
+    // A DM sai depois da despedida no canal e antes da marca: quem convidou é
+    // o único que recebe o link do convite normal em algum lugar que não some
+    // junto com o bot.
+    await sendInviterDm(this.deps.client, entry.invitedBy, {
+      kind: 'demo-ended',
+      guildName: guild?.name ?? null,
+      ...(this.deps.urls ? { urls: this.deps.urls } : {}),
+    });
 
     await markDemoEnded(this.deps.db, entry.guildId, at);
     log.info({ guildId: entry.guildId, name: guild?.name }, 'demonstração encerrada');

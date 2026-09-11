@@ -99,8 +99,8 @@ export function MaintenanceForm({ state }: { state: MaintenanceState | null }) {
       <div className="flex flex-col gap-2 border-t-2 border-base-300 pt-4">
         <p className="section-label sigil">RE-REGISTRAR COMANDOS</p>
         <p className="text-sm opacity-70">
-          No boot os slash commands só vão ao Discord quando o manifesto muda. Isto força o envio —
-          é o conserto para quando o hash está certo e o Discord não (comando sumido do cliente,
+          No boot os slash commands só vão ao Discord quando o manifesto muda. Isto força o envio,
+          e é o conserto para quando o hash está certo e o Discord não (comando sumido do cliente,
           servidor que entrou durante uma falha de rede).
         </p>
         <div>

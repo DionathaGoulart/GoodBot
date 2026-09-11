@@ -42,7 +42,7 @@ export default async function AdminFilaPage() {
       {botError !== null ? (
         <ErrorState
           title="BOT FORA"
-          description={`${botError} Aprovar continua funcionando: é uma escrita no registro, e o bot a lê quando voltar. Bloquear também — mas a saída do servidor fica para o próximo boot dele.`}
+          description={`${botError} Aprovar continua funcionando: é uma escrita no registro, e o bot a lê quando voltar. Bloquear também, mas a saída do servidor fica para o próximo boot dele.`}
         />
       ) : null}
 

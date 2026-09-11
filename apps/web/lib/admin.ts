@@ -29,6 +29,7 @@ import type {
   BroadcastResult,
   GuildStatus,
   HealthResponse,
+  InviteNoticeKind,
   MaintenanceState,
   ResyncCommandsResult,
 } from '@goodbot/shared';
@@ -134,7 +135,10 @@ export const loadAdminGuilds = cache(async (): Promise<AdminGuildsView> => {
         invitedAt: entry.invitedAt.toISOString(),
         approvedAt: iso(entry.approvedAt),
         expiresAt: iso(entry.expiresAt),
-        demoSpent: entry.status === 'demo' && entry.demoEndedAt !== null,
+        // Não é mais só `status === 'demo'`: quem gastou a demo e depois foi
+        // convidado pelo link normal volta para a fila como `pending`, e o
+        // `demoEndedAt` é a única memória de que a demo dele já foi.
+        demoSpent: entry.demoEndedAt !== null && entry.status !== 'approved',
         leftAt: iso(entry.leftAt),
         note: entry.note,
         live: live.get(entry.guildId) ?? null,
@@ -158,6 +162,10 @@ export const loadAdminGuilds = cache(async (): Promise<AdminGuildsView> => {
  *
  * As duas coisas são a mesma pergunta com histórias diferentes — "este
  * servidor deve continuar a ser atendido?" —, então elas moram na mesma tela.
+ *
+ * `expired` fica de fora: ele **é** a decisão, tomada pelo prazo. O bot já saiu
+ * de lá e aprovar não traria ninguém de volta — quem quiser o Goodbot convida
+ * de novo, e aí a linha volta para cá como `pending`.
  */
 export function queueOf(rows: readonly AdminGuildRow[]): AdminGuildRow[] {
   return rows.filter((row) => row.status === 'pending' || row.demoSpent);
@@ -225,6 +233,28 @@ function readNote(formData: FormData): string | null {
 }
 
 /**
+ * Pede ao bot o aviso por DM de quem convidou. Nunca lança: o destino destas
+ * ações é o registro no Postgres, e nenhuma delas pode falhar porque uma
+ * mensagem não saiu. O bot decide o texto e para quem vai (o `invited_by` da
+ * linha); daqui vai só o tipo do aviso.
+ */
+async function notifyInviter(
+  guildId: string,
+  kind: InviteNoticeKind,
+  reason?: string | null,
+): Promise<boolean> {
+  try {
+    const result = await internalApi().inviteNotice(guildId, {
+      kind,
+      ...(reason ? { reason } : {}),
+    });
+    return result.delivered;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Aprovar um servidor.
  *
  * É uma escrita no banco e nada mais: o `RegistryService` do bot relê o
@@ -247,7 +277,16 @@ export async function approveGuild(formData: FormData): Promise<ActionResult> {
   if (!entry) return { ok: false, message: 'Servidor não está no registro.' };
 
   revalidateAdmin();
-  return { ok: true, message: 'Aprovado. O bot passa a atender em até um minuto.' };
+  // Quem convidou passou dias esperando sem sinal nenhum; saber a hora em que
+  // começou a funcionar é metade do valor da aprovação. Melhor-esforço: a
+  // aprovação já valeu, e ela não depende de o bot responder.
+  const avisado = await notifyInviter(guildId, 'approved');
+  return {
+    ok: true,
+    message: avisado
+      ? 'Aprovado. O bot passa a atender em até um minuto, e quem convidou foi avisado.'
+      : 'Aprovado. O bot passa a atender em até um minuto.',
+  };
 }
 
 /**
@@ -268,6 +307,10 @@ export async function blockGuild(formData: FormData): Promise<ActionResult> {
   const entry = await setGuildStatus(db(), guildId, { status: 'blocked', note });
   if (!entry) return { ok: false, message: 'Servidor não está no registro.' };
   revalidateAdmin();
+
+  // Antes da saída, não depois: o Discord só deixa um bot abrir DM com quem
+  // divide um servidor com ele. Sair primeiro é abrir mão do aviso.
+  await notifyInviter(guildId, 'blocked', note);
 
   try {
     await internalApi().admin.leaveGuild(guildId, {

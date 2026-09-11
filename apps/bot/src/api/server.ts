@@ -32,6 +32,7 @@ import { createMemberRoutes } from './routes/members';
 import { createMessageRoutes } from './routes/messages';
 import { createMetricsRoutes } from './routes/metrics';
 import { createModerationRoutes } from './routes/moderation';
+import { createRegistryRoutes } from './routes/registry';
 import { createRoleRoutes } from './routes/roles';
 import { createSocialRoutes } from './routes/social';
 
@@ -84,6 +85,8 @@ export interface ApiServerOptions {
   /** Volume de backups montado read-only (`/backups`); ausente em dev. */
   backupDir?: string;
   alerts?: Pick<AlertService, 'emit'>;
+  /** Os links que os avisos de convite citam; derivados do `AUTH_URL`. */
+  urls?: { invite?: string | null; panel?: string | null };
   /**
    * O painel do dono. Sem `ownerId` as rotas continuam montadas e recusam
    * tudo com um motivo legível — melhor do que um 404, que faria parecer bug
@@ -173,6 +176,17 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
   admin.use('*', bearerAuth(token));
   admin.route('/', createAdminRoutes(deps, options.admin));
   app.route('/admin', admin);
+
+  // O ciclo de vida do convite (os avisos por DM a quem convidou). Fora de
+  // `/guilds` pelo mesmo motivo do `/admin`: metade dos avisos é sobre
+  // servidor que o bot não atende — a fila e as recusas.
+  const registry = new Hono<ApiEnv>();
+  registry.use('*', bearerAuth(token));
+  registry.route(
+    '/',
+    createRegistryRoutes(deps, { ...(options.urls ? { urls: options.urls } : {}) }),
+  );
+  app.route('/registry', registry);
 
   // Tudo abaixo de /guilds exige o Bearer e uma guild que o bot conheça.
   const guilds = new Hono<ApiEnv>();

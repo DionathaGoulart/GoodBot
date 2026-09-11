@@ -1,4 +1,4 @@
-import { DEMO_DURATION_MS, formatDuration } from '@goodbot/shared';
+import { DEMO_DURATION_MS, formatDuration, PENDING_EXPIRY_MS } from '@goodbot/shared';
 import { headers } from 'next/headers';
 
 import { inviteFlowOf, siteFromHeaders } from '@/lib/hosts';
@@ -14,8 +14,8 @@ export const dynamic = 'force-dynamic';
 const ERROS: Record<string, string> = {
   cancelado: 'Você cancelou na tela do Discord. Nada foi alterado.',
   state:
-    'O link expirou ou foi alterado no caminho. Comece de novo por esta página — ' +
-    'não guarde a URL do Discord.',
+    'O link expirou ou foi alterado no caminho. Comece de novo por esta página, ' +
+    'sem guardar a URL do Discord.',
   code: 'O Discord não devolveu a autorização. Tente de novo.',
   discord: 'O Discord recusou a autorização. Tente de novo em alguns instantes.',
   guild: 'A resposta do Discord não bateu com o servidor autorizado. Nada foi alterado.',
@@ -28,7 +28,10 @@ const COPY: Record<InviteFlow, { kicker: string; titulo: string; texto: string; 
     titulo: 'ADICIONAR',
     texto:
       'O Goodbot entra no seu servidor e fica em espera até o dono do bot aprovar. ' +
-      'Enquanto isso ele não responde a comandos nem modera nada.',
+      'Enquanto isso ele não responde a comandos nem modera nada. Você recebe uma ' +
+      'mensagem no privado quando entrar na fila e outra quando houver decisão; sem ' +
+      `resposta em ${formatDuration(PENDING_EXPIRY_MS, { style: 'long' })}, o convite é ` +
+      'recusado sozinho e o bot sai.',
     cta: 'ADICIONAR AO SERVIDOR',
   },
   demo: {
@@ -36,7 +39,8 @@ const COPY: Record<InviteFlow, { kicker: string; titulo: string; texto: string; 
     titulo: 'TESTAR',
     texto:
       `O Goodbot entra funcionando e fica por ${formatDuration(DEMO_DURATION_MS, { style: 'long' })}. ` +
-      'Quando o prazo acabar ele avisa no servidor e sai sozinho. ' +
+      'Você recebe os detalhes no privado assim que ele entrar, e um aviso antes de o prazo ' +
+      'acabar. No fim ele se despede no servidor e sai sozinho. ' +
       'A demonstração vale uma vez por servidor.',
     cta: 'COMEÇAR A DEMONSTRAÇÃO',
   },

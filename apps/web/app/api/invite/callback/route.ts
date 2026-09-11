@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { inviteFlowOf, siteFromHeaders } from '@/lib/hosts';
 import { exchangeInviteCode } from '@/lib/invite/discord';
-import { registerInvitedGuild } from '@/lib/invite/register';
+import { notifyInviter, registerInvitedGuild } from '@/lib/invite/register';
 import { verifyInviteState } from '@/lib/invite/state';
 import { siteUrl } from '@/lib/site-url';
 
@@ -56,8 +56,9 @@ export async function GET(request: Request): Promise<NextResponse> {
   const fromQuery = url.searchParams.get('guild_id');
   if (fromQuery && fromQuery !== authorization.guildId) return recusa('guild');
 
+  let entry;
   try {
-    await registerInvitedGuild({
+    entry = await registerInvitedGuild({
       guildId: authorization.guildId,
       flow: state.flow,
       invitedBy: authorization.invitedBy,
@@ -65,6 +66,12 @@ export async function GET(request: Request): Promise<NextResponse> {
   } catch {
     return recusa('registro');
   }
+
+  // O aviso no privado de quem convidou. Só aqui o fluxo é conhecido: o bot
+  // recebeu o `guildCreate` antes disto e, para ele, todo mundo entrou igual.
+  // É melhor-esforço de propósito — o bot fora do ar não pode transformar uma
+  // instalação que funcionou numa tela de erro.
+  await notifyInviter(entry);
 
   const destino = new URL(siteUrl(site, '/convite/pronto'));
   destino.searchParams.set('g', authorization.guildId);

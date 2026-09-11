@@ -1,4 +1,4 @@
-import { formatDuration, isSnowflake } from '@goodbot/shared';
+import { formatDuration, isSnowflake, PENDING_EXPIRY_MS } from '@goodbot/shared';
 
 import { guildOutcome, type InviteOutcome } from '@/lib/invite/register';
 import { siteUrl } from '@/lib/site-url';
@@ -13,6 +13,9 @@ export const dynamic = 'force-dynamic';
  * faz "até 14:35" significar a mesma coisa para quem lê e para quem opera.
  */
 const FUSO = 'America/Sao_Paulo';
+
+/** O prazo da fila, escrito do mesmo jeito em toda a tela. */
+const PRAZO_DA_FILA = formatDuration(PENDING_EXPIRY_MS, { style: 'long' });
 
 function horario(date: Date): string {
   return new Intl.DateTimeFormat('pt-BR', {
@@ -47,7 +50,9 @@ function copyDe(outcome: InviteOutcome, now: Date): Copy {
         titulo: 'AGUARDANDO',
         texto:
           'O Goodbot entrou no servidor e está em espera. Ele não responde a comandos nem ' +
-          'modera nada até o dono do bot aprovar. Pode deixar o bot lá — nada se perde.',
+          'modera nada até o dono do bot aprovar. Pode deixar o bot lá, nada se perde. ' +
+          `Avisamos no seu privado assim que for aprovado; sem decisão em ${PRAZO_DA_FILA}, ` +
+          'o convite é recusado sozinho e dá para convidar de novo.',
       };
     case 'approved':
       return {
@@ -69,9 +74,19 @@ function copyDe(outcome: InviteOutcome, now: Date): Copy {
         kicker: 'DEMONSTRAÇÃO USADA',
         titulo: 'PRAZO ENCERRADO',
         texto:
-          'Este servidor já usou a demonstração, e ela não se renova. ' +
-          'Para continuar, use o convite normal e espere a aprovação.',
-        acao: { label: 'PEDIR APROVAÇÃO', href: siteUrl('invite'), outline: true },
+          'Este servidor já usou a demonstração, e ela não se renova. O convite entrou na ' +
+          'fila de aprovação como qualquer outro, e avisamos no seu privado quando houver ' +
+          'decisão. Pode deixar o bot lá.',
+      };
+    case 'expirado':
+      return {
+        kicker: 'CONVITE RECUSADO',
+        titulo: 'PRAZO DA FILA',
+        texto:
+          `Este convite ficou ${PRAZO_DA_FILA} na fila sem ser aprovado, então foi recusado ` +
+          'sozinho e o bot saiu. Isto não é um bloqueio: convidar de novo funciona, e a fila ' +
+          'recomeça do zero.',
+        acao: { label: 'CONVIDAR DE NOVO', href: siteUrl('invite'), outline: true },
       };
     case 'desconhecido':
       return {

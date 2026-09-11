@@ -15,6 +15,7 @@ export * from './members';
 export * from './messages';
 export * from './moderation';
 export * from './permissions';
+export * from './registry';
 export * from './roles';
 export * from './social';
 export * from './tickets';

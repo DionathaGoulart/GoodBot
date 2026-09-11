@@ -39,7 +39,7 @@ export default async function AdminManutencaoPage() {
       <Panel title="BROADCAST.MSG" tone="error">
         <p className="text-sm opacity-70">
           A mensagem vai para os {atendidos} servidores atendidos agora. É irreversível: o bot não
-          apaga o que publicou. Ensaie antes — o ensaio mostra em que canal ela cairia em cada um,
+          apaga o que publicou. Ensaie antes: o ensaio mostra em que canal ela cairia em cada um,
           sem enviar nada.
         </p>
         <BroadcastForm />

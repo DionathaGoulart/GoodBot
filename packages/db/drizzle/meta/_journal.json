@@ -57,6 +57,13 @@
       "when": 1789059537428,
       "tag": "0007_demo_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789085656227,
+      "tag": "0008_guild_expired",
+      "breakpoints": true
     }
   ]
 }

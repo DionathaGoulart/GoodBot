@@ -253,10 +253,14 @@ conferir de onde eles apontam sem decorar os subdomínios.
 A demo dura **uma hora** e termina sozinha. Quem toca isso é o job
 `apps/bot/src/jobs/demo-expiry.ts`, que passa de minuto em minuto:
 
-1. **faltando 10 minutos**, avisa no canal de sistema do servidor (ou, sem ele,
-   no primeiro canal de texto em que o bot consegue falar), com o link do
-   convite normal;
-2. **no fim do prazo**, manda a despedida e sai (`guild.leave()`).
+1. **faltando 10 minutos**, avisa **no privado de quem convidou** (e só lá),
+   com o link do convite normal;
+2. **no fim do prazo**, manda a despedida no canal do servidor **e** no privado
+   de quem convidou, e sai (`guild.leave()`).
+
+Os públicos são diferentes de propósito: quem decide pedir a aprovação é quem
+convidou, e uma contagem regressiva no canal é barulho para todo mundo que não
+decide nada. A despedida continua pública porque a saída é um fato do servidor.
 
 Nada é apagado: casos, tags, tickets e config continuam no banco e voltam como
 estavam se o servidor for aprovado depois.
@@ -273,7 +277,50 @@ fim — é ele que diz "este servidor já usou a sua" na tela do convite.
 O bot deixa de atender **no instante** do vencimento, mesmo que o job esteja
 atrasado: a conta é do `isGuildServed`, não do job.
 
-## 7.4 O painel do dono (`admin.`)
+## 7.4 A fila expira: recusa por inatividade
+
+Um convite parado em `pending` por **uma semana** é recusado sozinho. Quem faz
+isso é `apps/bot/src/jobs/pending-expiry.ts`, de hora em hora: avisa no
+servidor, avisa no privado de quem convidou, sai e marca a linha como
+`expired`.
+
+A razão é a mesma da expiração da demo — bot mudo parado num servidor é a pior
+versão possível —, só que aqui ele é mudo desde o primeiro minuto: quem
+convidou não tem como distinguir "ainda não aprovaram" de "instalei errado".
+
+**`expired` não é `blocked`.** A linha continua no registro contando a
+história, mas o mesmo servidor pode ser convidado de novo a qualquer momento e
+o relógio recomeça do zero. Quem já está na fila **não** adia a recusa clicando
+no próprio link de novo: o relógio só reinicia para quem estava fora dela.
+
+Na tela de servidores do painel admin ele aparece como `RECUSADO`, e fica fora
+da fila — ele **é** a decisão, tomada pelo prazo.
+
+## 7.5 O que o bot fala no privado de quem convidou
+
+Todo o texto mora num arquivo só: `apps/bot/src/lib/inviter-dm.ts`.
+
+| Quando                   | O que sai                                             |
+| ------------------------ | ----------------------------------------------------- |
+| entrou em demo           | está funcionando, até que horas, que vale uma vez     |
+| faltam 10 min            | o prazo e o link para pedir a aprovação                |
+| a demo acabou            | nada foi apagado, e como ficar de vez                  |
+| entrou na fila           | o bot está calado de propósito, e o prazo da fila     |
+| aprovado                 | já está atendendo, com o link do painel                |
+| recusado ou bloqueado    | o motivo escrito por você na nota, quando houver       |
+| recusado pelo prazo      | não é bloqueio, e convidar de novo funciona            |
+
+Os dois primeiros avisos da tabela (as **entradas**) não podem partir do bot
+sozinho: quando o `guildCreate` chega, ele ainda não sabe por qual link a
+pessoa veio — o Discord adiciona o bot no clique em "Autorizar", antes de o
+painel trocar o `code`. Quem sabe o fluxo é o painel, e ele pede o aviso certo
+em `POST /registry/:guildId/notice`.
+
+DM fechada é resultado normal e não quebra nada: o bot registra que não saiu e
+segue. Linha sem `invited_by` (as semeadas pelo `GUILD_IDS`) não recebe aviso
+nenhum, porque não há a quem avisar.
+
+## 7.6 O painel do dono (`admin.`)
 
 `http://admin.localhost:3000` em dev. Entra quem tem o snowflake em
 `OWNER_DISCORD_ID` — **não** é cargo em servidor nenhum: quem administra um

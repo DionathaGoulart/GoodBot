@@ -8,7 +8,11 @@ import type { TagTone } from '@/components/retro/tag';
  *
  * `demo` sozinho não basta: um `demo` com prazo correndo é um servidor sendo
  * atendido agora, e um `demo` já vencido é alguém esperando decisão. São
- * estados diferentes na mesma coluna, então são etiquetas diferentes.
+ * estados diferentes na mesma coluna, então são etiquetas diferentes — e a
+ * demo gasta continua aparecendo como tal depois de voltar para a fila.
+ *
+ * `RECUSADO` (`expired`) é o convite que venceu na fila: não é bloqueio, e
+ * convidar de novo funciona.
  */
 export function StatusTag({ row }: { row: AdminGuildRow }) {
   const { label, tone } = describeStatus(row);
@@ -18,7 +22,12 @@ export function StatusTag({ row }: { row: AdminGuildRow }) {
 export function describeStatus(row: AdminGuildRow): { label: string; tone: TagTone } {
   if (row.status === 'approved') return { label: 'APROVADO', tone: 'success' };
   if (row.status === 'blocked') return { label: 'BLOQUEADO', tone: 'error' };
-  if (row.status === 'pending') return { label: 'ESPERANDO', tone: 'warning' };
+  if (row.status === 'pending') {
+    return row.demoSpent
+      ? { label: 'DEMO GASTA', tone: 'warning' }
+      : { label: 'ESPERANDO', tone: 'warning' };
+  }
+  if (row.status === 'expired') return { label: 'RECUSADO', tone: 'error' };
   return row.demoSpent
     ? { label: 'DEMO GASTA', tone: 'warning' }
     : { label: 'DEMO', tone: 'info' };

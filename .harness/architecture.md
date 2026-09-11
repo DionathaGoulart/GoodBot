@@ -125,9 +125,12 @@ src/
   automod/        o motor: engine.ts + rules/{spam,links,caps,words,mentions}
   services/       a lógica de verdade; ver abaixo
   jobs/           tarefas periódicas: retention, social, stats-rollup,
-                  demo-expiry (avisa, se despede e sai quando a demo vence)
+                  demo-expiry (avisa quem convidou, se despede e sai quando a
+                  demo vence), pending-expiry (recusa o convite parado uma
+                  semana na fila, avisa, sai e marca `expired`)
   lib/            utilitários sem estado: embeds, template, cooldown, purge,
-                  channels (onde o bot pode falar), guild-setup...
+                  channels (onde o bot pode falar), guild-setup,
+                  inviter-dm (todo o texto dos avisos a quem convidou)...
   api/            a API HTTP (Hono) — ver 4.4
 ```
 
@@ -190,13 +193,21 @@ Três invariantes que valem para **toda** rota nova:
 Há ainda `assertMayGrant`: ninguém concede uma permissão que ele próprio não
 tem. O dono da guild é a única exceção, porque já tem tudo por definição.
 
-O `/admin` é a única rota fora de `/guilds/:guildId`, e a única onde o
-`actorId` não é conferido contra uma guild: ele é comparado ao
-`OWNER_DISCORD_ID` do ambiente. A razão de não ser guild-scoped é que a tela
-existe para mostrar os servidores que o bot **não** atende — a fila de
-aprovação —, e o `withGuild` esconderia justamente esses. Sem a variável no
-ambiente, toda escrita ali responde 403: um `.env` incompleto não pode virar
-painel admin aberto.
+`/admin` e `/registry` são as duas rotas fora de `/guilds/:guildId`, pela mesma
+razão: elas existem para tratar servidores que o bot **não** atende — a fila de
+aprovação e os avisos de recusa —, e o `withGuild` esconderia justamente esses.
+
+No `/admin`, o `actorId` não é conferido contra uma guild: ele é comparado ao
+`OWNER_DISCORD_ID` do ambiente. Sem a variável, toda escrita ali responde 403:
+um `.env` incompleto não pode virar painel admin aberto.
+
+O `/registry` não tem `actorId`, e isso é decisão: **não existe ator**. Quem
+convidou já foi provado pela troca do `code` no OAuth, o destinatário da DM não
+é escolhido pela chamada (é o `invited_by` da linha) e o corpo só escolhe qual
+texto de uma lista fechada sai — o texto mora no bot, em `lib/inviter-dm.ts`.
+Ela existe porque o bot **não sabe por qual link a pessoa veio**: o Discord
+adiciona o bot no clique em "Autorizar", então o `guildCreate` chega antes de o
+painel trocar o `code`. Quem sabe o fluxo é o painel, e é ele que pede o aviso.
 
 ---
 
@@ -476,7 +487,8 @@ invite.<host>/convite ─▶ clique ─▶ GET /api/invite/start
   ─▶ OAuth do Discord (scope bot+identify, redirect_uri do AUTH_URL)
   ─▶ GET /api/invite/callback: state válido? fluxo bate com o host?
   ─▶ lib/invite/discord.ts troca o code ─▶ prova a instalação e quem convidou
-  ─▶ ensureGuildRegistered: linha `pending` ou `demo` (+1 h) — nunca sobrescreve
+  ─▶ claimInvitedGuild: assume a linha que o guildCreate já criou
+  ─▶ POST /registry/:id/notice ─▶ o bot manda a DM certa a quem convidou
   ─▶ /convite/pronto lê o REGISTRO (não a query) e diz o que aconteceu
 ```
 
@@ -491,9 +503,17 @@ Quatro coisas nesse caminho não são gosto:
 - **O `redirect_uri` sai do `AUTH_URL`**, nunca do header `Host` — quem manda
   o header é o cliente, e esse valor tem de bater exatamente com o que está no
   Developer Portal.
-- **`ensureGuildRegistered` não sobrescreve status existente**, e isso resolve
-  três casos numa linha: bloqueado continua bloqueado, aprovado não volta para
-  a fila, e a demo não se renova.
+- **O `guildCreate` ganha do callback, sempre.** O Discord adiciona o bot no
+  clique em "Autorizar", então a linha já nasceu `pending` quando este caminho
+  vai gravar. É por isso que o convite tem escrita própria
+  (`claimInvitedGuild`) em vez do `ensureGuildRegistered`: ela **assume** a
+  linha quando o status é `pending`, `expired` ou uma `demo` já gasta. Sem
+  isso — como era até a v1.4 — o link da demonstração entregava um servidor
+  `pending`: demo nenhuma, nunca.
+- **O que ela nunca toca** resolve o resto numa regra: `approved` não volta
+  para a fila, `blocked` continua bloqueado, e uma demo em curso não é
+  derrubada por um clique no link normal. A demo não se renova porque prazo
+  novo exige `demo_ended_at` nulo — a memória é a coluna, não o status.
 
 ---
 
@@ -538,6 +558,7 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | expor algo novo para o painel     | rota em `apps/bot/src/api/routes/` + schema e método em `shared/api/`    |
 | criar uma tela                    | `apps/web/app/g/[guildId]/` + Server Action em `app/actions/`            |
 | mexer no painel do dono do bot    | `apps/web/app/admin/` + `lib/admin.ts` + rota em `api/routes/admin.ts`   |
+| mudar o texto de um aviso ao dono do servidor | `apps/bot/src/lib/inviter-dm.ts` (todos moram lá)            |
 | adicionar campo de config         | `shared/config/<módulo>.ts` → form em `apps/web/components/config/`      |
 | mexer no banco                    | `packages/db/src/schema/` → `db:generate` → revisar SQL → `db:migrate`   |
 | tarefa periódica                  | `apps/bot/src/jobs/` + registrar no `Scheduler`                          |

@@ -27,9 +27,12 @@ export type Module = (typeof MODULES)[number];
  * · `pending` — entrou pelo convite normal e espera aprovação do dono do bot;
  * · `approved` — aprovado, atendido sem prazo;
  * · `demo` — entrou pelo link de demonstração; atendido até `expiresAt`;
- * · `blocked` — recusado ou bloqueado; o bot sai e não volta a atender.
+ * · `blocked` — recusado ou bloqueado; o bot sai e não volta a atender;
+ * · `expired` — ficou na fila além do prazo (`PENDING_EXPIRY_MS`) sem ser
+ *   aprovado; o bot se despede e sai. Diferente de `blocked`, é o único
+ *   estado que um convite novo reabre.
  */
-export const GUILD_STATUSES = ['pending', 'approved', 'demo', 'blocked'] as const;
+export const GUILD_STATUSES = ['pending', 'approved', 'demo', 'blocked', 'expired'] as const;
 export type GuildStatus = (typeof GUILD_STATUSES)[number];
 
 /**
@@ -240,6 +243,19 @@ export const DEMO_WARNING_BEFORE_MS = 10 * MINUTE_MS;
  * antigo que vaze não serve para nada depois disso.
  */
 export const INVITE_STATE_TTL_MS = 15 * MINUTE_MS;
+
+/**
+ * Quanto tempo um convite fica na fila antes de ser recusado sozinho.
+ *
+ * A fila não pode ser um depósito: um servidor que espera indefinidamente tem
+ * um bot mudo parado dentro dele, e ninguém lá sabe se ele quebrou, se foi
+ * banido ou se só não olharam ainda. Uma semana é folga de sobra para o dono
+ * do bot decidir e curto o bastante para o servidor não desistir calado.
+ *
+ * A recusa não é um bloqueio: o status vira `expired` e o mesmo servidor pode
+ * ser convidado de novo (ver `claimInvitedGuild`).
+ */
+export const PENDING_EXPIRY_MS = WEEK_MS;
 
 /** Timeout nativo do Discord: no máximo 28 dias. */
 export const MAX_TIMEOUT_MS = 28 * DAY_MS;
