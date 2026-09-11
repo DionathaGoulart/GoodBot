@@ -35,7 +35,7 @@ function subscribeMinute(onChange: () => void): () => void {
 
 /**
  * Estado da conta em uma linha (§6.3). O relógio só existe depois da
- * hidratação — `0` no servidor, como no indicador de auto-refresh — para o HTML
+ * hidratação — `0` no servidor, como no indicador de frescor — para o HTML
  * do servidor não discordar do primeiro render do cliente.
  */
 function AccountState({ account }: { account: SocialAccountSummary }) {

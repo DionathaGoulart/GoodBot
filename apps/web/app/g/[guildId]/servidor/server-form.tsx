@@ -15,7 +15,6 @@ import { saveGuildProfileAction } from '@/app/actions/guild';
 import { CHANNEL_TYPES, TEXT_CHANNEL_TYPES } from '@/components/config/discord-options';
 import { DiscordPicker } from '@/components/config/discord-picker';
 import { Blocked, Field, ImageField, type ImageDraft } from '@/components/config/plain-fields';
-import { useAutoRefreshPause } from '@/components/layout/auto-refresh';
 import { Panel } from '@/components/retro/panel';
 import { Input } from '@/components/ui/input';
 import {
@@ -80,7 +79,6 @@ export function ServerForm({ profile, readOnly }: { profile: GuildProfile; readO
     icon !== undefined ||
     banner !== undefined ||
     (Object.keys(initial) as (keyof Values)[]).some((key) => values[key] !== initial[key]);
-  useAutoRefreshPause(dirty);
 
   const set = <K extends keyof Values>(key: K, value: Values[K]) =>
     setValues((current) => ({ ...current, [key]: value }));

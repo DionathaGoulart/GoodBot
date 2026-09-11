@@ -321,6 +321,32 @@ responde 404 em vez de adivinhar.
 O `INTERNAL_API_TOKEN` vive **só no servidor** do Next. Nenhum componente
 client vê o token, e o navegador nunca fala com a API do bot diretamente.
 
+### 5.3 O painel não se atualiza sozinho
+
+Até a Etapa 22 ele revalidava a rota a cada 10 segundos
+(`components/layout/auto-refresh.tsx`). A conta não fechava: uma aba aberta
+custava 360 invocações por hora na Vercel para mostrar números que, num
+servidor de treze pessoas, não mudam nesse ritmo. No celular era pior — um
+`router.refresh()` cujo pedido RSC falha faz o Next recarregar a página
+inteira, e em rede móvel essa recarga também falha: sobrava a tela de erro do
+browser, que parecia bug do painel.
+
+Hoje quem atualiza é o botão da topbar (`components/layout/refresh.tsx`), e
+ele faz duas coisas na ordem:
+
+1. `refreshGuildData` (em `lib/stats.ts`) derruba a tag `stats:<guildId>` com
+   `revalidateTag(..., { expire: 0 })` — sem isso o clique devolveria o mesmo
+   dado cacheado e pareceria um botão quebrado;
+2. o cliente chama `router.refresh()`, e o React troca só o que mudou.
+
+As leituras do dashboard ficam em `unstable_cache` com TTL de 5 minutos e
+todas sob a mesma tag, então **navegar entre telas é barato** e só o clique
+paga o preço cheio. O único bloco fora do cache é `loadRecentAudit`: é um
+`LIMIT 10` num índice e é onde dado velho mais incomoda.
+
+O contador "ATUALIZADO HÁ 00:07" ficou, e importa mais agora do que antes: é a
+única pista de quão velho está o que se está lendo.
+
 ---
 
 ## 6. `packages/db`

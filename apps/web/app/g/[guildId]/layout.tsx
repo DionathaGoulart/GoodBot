@@ -1,5 +1,5 @@
 import { AppSidebar } from '@/components/layout/app-sidebar';
-import { AutoRefreshProvider } from '@/components/layout/auto-refresh';
+import { RefreshProvider } from '@/components/layout/refresh';
 import { BotStatusBanner, readBotStatus } from '@/components/layout/bot-status';
 import { Topbar } from '@/components/layout/topbar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -21,7 +21,7 @@ export default async function GuildLayout({ children, params }: LayoutProps<'/g/
   const guildName = atual?.name ?? 'SERVIDOR';
 
   return (
-    <AutoRefreshProvider>
+    <RefreshProvider>
       <SidebarProvider>
         <AppSidebar guildId={guildId} guildName={guildName} guilds={guilds} level={session.level} />
         <SidebarInset className="min-w-0">
@@ -38,6 +38,6 @@ export default async function GuildLayout({ children, params }: LayoutProps<'/g/
           <div className="screen-pad flex flex-1 flex-col gap-6">{children}</div>
         </SidebarInset>
       </SidebarProvider>
-    </AutoRefreshProvider>
+    </RefreshProvider>
   );
 }

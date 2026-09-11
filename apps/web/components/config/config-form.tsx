@@ -6,7 +6,6 @@ import { useForm, type DefaultValues, type FieldValues, type Path } from 'react-
 import { toast } from 'sonner';
 
 import { saveConfigPageAction } from '@/app/actions/config';
-import { useAutoRefreshPause } from '@/components/layout/auto-refresh';
 import { Form } from '@/components/ui/form';
 import { useGuildId } from '@/lib/use-guild-id';
 import { CONFIG_PAGES, type ConfigPage } from '@/lib/config-pages';
@@ -42,7 +41,6 @@ export function ConfigForm<Values extends FieldValues>({
 
   // Enquanto houver alteração não salva, o painel para de se atualizar sozinho
   // (Etapa 22): um refresh remontaria o formulário e apagaria o que foi digitado.
-  useAutoRefreshPause(form.formState.isDirty);
 
   const onSubmit = form.handleSubmit(async (values) => {
     setSaving(true);

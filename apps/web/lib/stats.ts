@@ -16,8 +16,9 @@ import {
   summary,
   topChannels,
 } from '@goodbot/db';
-import { unstable_cache } from 'next/cache';
+import { revalidateTag, unstable_cache } from 'next/cache';
 
+import { requireGuildAccess } from './auth/require';
 import { db } from './db';
 import { internalApi } from './internal-api';
 import {
@@ -35,15 +36,40 @@ import {
 import type { AuditSource } from '@goodbot/shared';
 
 /**
- * Leituras do dashboard (PRD §6.1). Quase tudo passa por `unstable_cache` de
- * 60s por guild + período: seis blocos batendo no Supabase a cada F5 não valem
- * o frescor de meio minuto. A exceção é `loadRecentAudit` — ver lá por quê. (`use cache` exigiria ligar `cacheComponents`, o que
- * é assunto da Etapa 20.)
+ * Leituras do dashboard (PRD §6.1). Quase tudo passa por `unstable_cache` por
+ * guild + período: seis blocos batendo no Supabase a cada navegação não valem
+ * o frescor de meio minuto. A exceção é `loadRecentAudit` — ver lá por quê.
+ * (`use cache` exigiria ligar `cacheComponents`, que é migração do app
+ * inteiro.)
+ *
+ * O TTL é longo de propósito **porque o painel não se atualiza mais sozinho**:
+ * quem quer dado fresco clica em atualizar, e o botão derruba a tag antes de
+ * revalidar a rota (`refreshGuildData`). Sem o botão, um TTL curto só serviria
+ * para pagar Supabase em troca de um frescor que ninguém pediu.
  *
  * O que sai daqui é sempre serializável — nada de `Date`, que o cache do Next
  * devolveria como string e quebraria o componente.
  */
-const TTL_SECONDS = 60;
+const TTL_SECONDS = 300;
+
+/** A tag única de tudo que é cacheado por guild aqui. */
+export const statsTag = (guildId: string): string => `stats:${guildId}`;
+
+/**
+ * O que o botão de atualizar faz antes de revalidar a rota: joga fora o cache
+ * desta guild. Sem isto o clique devolveria o mesmo dado de até cinco minutos
+ * atrás e pareceria um botão quebrado.
+ *
+ * Passa por `requireGuildAccess` como qualquer action: invalidar cache dos
+ * outros não é escrita, mas também não é assunto de quem não entra na guild.
+ */
+export async function refreshGuildData(guildId: string): Promise<void> {
+  await requireGuildAccess(guildId);
+  // `expire: 0` e não o `'max'` recomendado: com `max` o Next serve o cache
+  // velho enquanto revalida atrás, e quem acabou de clicar em "atualizar"
+  // veria exatamente o número que o fez clicar. Aqui o próximo pedido espera.
+  revalidateTag(statsTag(guildId), { expire: 0 });
+}
 
 function cacheKey(name: string, guildId: string, period: Period): string[] {
   return ['stats', name, guildId, period.value, period.from.toISOString(), period.timezone];
@@ -57,7 +83,7 @@ function cached<T>(
 ): Promise<T> {
   return unstable_cache(load, cacheKey(name, guildId, period), {
     revalidate: TTL_SECONDS,
-    tags: [`stats:${guildId}`],
+    tags: [statsTag(guildId)],
   })();
 }
 
@@ -66,7 +92,7 @@ export async function guildTimezone(guildId: string): Promise<string> {
   const settings = await unstable_cache(
     async () => (await getGuildSettings(db(), guildId))?.timezone ?? null,
     ['stats', 'timezone', guildId],
-    { revalidate: 300, tags: [`stats:${guildId}`] },
+    { revalidate: 300, tags: [statsTag(guildId)] },
   )();
   return settings ?? DEFAULT_TIMEZONE;
 }
@@ -230,7 +256,7 @@ async function channelNames(guildId: string): Promise<Map<string, string>> {
     const channels = await unstable_cache(
       async () => internalApi().channels(guildId),
       ['stats', 'channels', guildId],
-      { revalidate: 300, tags: [`stats:${guildId}`] },
+      { revalidate: 300, tags: [statsTag(guildId)] },
     )();
     return new Map(channels.map((channel) => [channel.id, `#${channel.name}`]));
   } catch {
@@ -301,15 +327,15 @@ export async function loadRecentCases(guildId: string): Promise<RecentCase[]> {
       }));
     },
     ['stats', 'recent-cases', guildId],
-    { revalidate: TTL_SECONDS, tags: [`stats:${guildId}`] },
+    { revalidate: TTL_SECONDS, tags: [statsTag(guildId)] },
   )();
 }
 
 /**
  * Últimas dez ações de **qualquer** origem (PRD §6.1, Etapa 22). Único bloco
- * do dashboard sem `unstable_cache`: é um `LIMIT 10` num índice e é o card que
- * o auto-refresh de 10 s existe para manter vivo — cachear por 60 s aqui
- * anularia o refresh sem economizar nada que importe.
+ * do dashboard sem `unstable_cache`: é um `LIMIT 10` num índice, e é o card
+ * onde dado velho mais incomoda — quem abre a auditoria quer saber o que
+ * acabou de acontecer, não o que acontecia cinco minutos atrás.
  */
 export async function loadRecentAudit(guildId: string): Promise<RecentAudit[]> {
   const rows = await listRecentAudit(db(), guildId, 10);

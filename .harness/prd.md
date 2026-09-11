@@ -511,6 +511,11 @@ Caso contrário → "Acesso negado". Sessão JWT
   canais; casos por tipo (barras empilhadas, 30d); automod por regra.
 - Atividade recente: últimos 10 casos e últimos 10 eventos de auditoria.
 - Seletor de período (7d/30d/90d/custom).
+- **Sem atualização automática.** A tela é carregada quando alguém abre ou
+  clica no botão de atualizar da topbar; não há poll de fundo. O botão invalida
+  o cache da guild antes de revalidar, então clicar sempre traz dado fresco. Os
+  blocos pesados ficam em cache de 5 minutos, o que torna navegar entre telas
+  barato — a exceção é a atividade recente, sempre ao vivo.
 
 ### 6.2 Configuração por módulo
 

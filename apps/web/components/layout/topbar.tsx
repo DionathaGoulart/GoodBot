@@ -5,7 +5,7 @@ import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { signOutAction } from '@/app/actions/auth';
 
-import { AutoRefreshIndicator } from './auto-refresh';
+import { RefreshIndicator } from './refresh';
 import { BotStatusIndicator, type BotStatus } from './bot-status';
 import { Breadcrumbs } from './breadcrumbs';
 import { CommandPalette } from './command-palette';
@@ -52,7 +52,7 @@ export function Topbar({
           </Link>
         ) : null}
         <CommandPalette guildId={guildId} level={level} />
-        <AutoRefreshIndicator />
+        <RefreshIndicator />
         <BotStatusIndicator status={status} />
         <ThemeToggle />
         <UserMenu name={user.name} image={user.image} level={level} onSignOut={signOutAction} />

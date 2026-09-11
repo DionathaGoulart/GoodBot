@@ -22,6 +22,7 @@ import { loadMoreBans, saveGuildProfile, unbanUser } from '@/lib/guild';
 import { createInvite, deleteInvite } from '@/lib/invites';
 import { punishMember, setMemberRoles } from '@/lib/members';
 import { moveRole, removeRole, saveRole } from '@/lib/roles';
+import { refreshGuildData } from '@/lib/stats';
 
 import type { ActionResult } from '@/lib/module-config';
 import type { BanListQuery, GuildBanPage, GuildChannelDetail } from '@goodbot/shared';
@@ -31,6 +32,21 @@ import type { BanListQuery, GuildBanPage, GuildChannelDetail } from '@goodbot/sh
  * correspondente: a checagem de permissão e a auditoria moram lá, junto da
  * escrita, para nenhum caminho novo escapar delas.
  */
+
+// ── atualizar a tela ────────────────────────────────────────────────────────
+
+/**
+ * O botão de atualizar da topbar. Derruba o cache desta guild e devolve o
+ * controle ao cliente, que então revalida a rota. Não escreve nada: é a única
+ * "action" do painel que só joga cache fora.
+ *
+ * Sem `try`/`catch`: o `requireGuildAccess` lá dentro redireciona lançando, e
+ * engolir isso aqui transformaria "sua sessão caiu" em "não foi possível
+ * atualizar". Quem trata falha de rede é o cliente, que já está num `catch`.
+ */
+export async function refreshGuildDataAction(guildId: string): Promise<void> {
+  await refreshGuildData(guildId);
+}
 
 // ── membros ─────────────────────────────────────────────────────────────────
 
