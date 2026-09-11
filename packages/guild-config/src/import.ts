@@ -138,7 +138,8 @@ export function buildSpecFromState(state: CurrentState, guildId: string): Import
   return { doc, warnings };
 }
 
-const CABECALHO = `# Gerado por \`pnpm guild import\`. Retrato do servidor no momento da captura.
+const cabecalho = (origem: string): string =>
+  `# Gerado por \`pnpm guild ${origem}\`. Retrato do servidor no momento da captura.
 #
 # Daqui em diante o arquivo é a fonte: edite, rode \`pnpm guild plan\` para ver a
 # diferença e \`pnpm guild apply\` para escrever.
@@ -146,12 +147,17 @@ const CABECALHO = `# Gerado por \`pnpm guild import\`. Retrato do servidor no mo
 # Não há ID nenhum aqui de propósito — tudo é por nome, resolvido contra a guild
 # durante o apply. Os segredos ficam no .env ao lado, que não é versionado.
 #
-# O que o import NÃO captura, porque o spec não representa: fóruns, palcos,
-# tópicos, emojis, stickers, eventos e webhooks. Eles continuam existindo no
-# servidor; o apply simplesmente não mexe neles.
+# O que a captura NÃO traz, porque o spec não representa: fóruns, palcos,
+# tópicos, threads, emojis, stickers, eventos e webhooks. Eles continuam
+# existindo no servidor; o apply simplesmente não mexe neles.
 `;
 
-export function toYaml(spec: ImportedSpec, nome?: string): string {
+/**
+ * `origem` é o comando que escreveu o arquivo. Vai no cabeçalho porque a
+ * primeira pergunta de quem abre um yaml que não escreveu é como refazê-lo, e
+ * `scan` e `import` não se refazem do mesmo jeito.
+ */
+export function toYaml(spec: ImportedSpec, nome?: string, origem = 'scan'): string {
   const doc = nome === undefined ? spec.doc : { name: nome, ...spec.doc };
-  return `${CABECALHO}\n${stringify(doc, { lineWidth: 0 })}`;
+  return `${cabecalho(origem)}\n${stringify(doc, { lineWidth: 0 })}`;
 }

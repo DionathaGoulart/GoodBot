@@ -21,8 +21,16 @@ export const SERVERS_DIR = join(REPO_ROOT, 'infra', 'discord');
  */
 const ServerEnvSchema = z.object({
   GUILD_ID: SnowflakeSchema,
-  /** Quem assina as mudanças: precisa ser admin (ou dono) da guild. */
-  ACTOR_ID: SnowflakeSchema,
+  /**
+   * Quem assina as mudanças. Opcional: sem ele o `apply` usa o **dono** do
+   * servidor, que o bot já informa em `/admin/guilds`.
+   *
+   * O campo é exigido pela API porque lá ele é uma fronteira real — o painel é
+   * multi-usuário, e o token sozinho não diz quem clicou. Por aqui quem tem o
+   * token é você, então pedir o ID de novo seria burocracia sem ganho. Quem
+   * aparece no audit log do Discord é o `reason`, não este campo.
+   */
+  ACTOR_ID: SnowflakeSchema.optional(),
   INTERNAL_API_URL: z.url(),
   INTERNAL_API_TOKEN: z.string().min(1),
 });
@@ -36,6 +44,16 @@ export interface LoadedServer {
 }
 
 export class ConfigError extends Error {}
+
+/**
+ * A API do bot e nada mais. É o que o `scan` precisa: ele descobre a guild
+ * pelo nome e a pasta do servidor ainda nem existe quando ele roda.
+ */
+const ApiEnvSchema = z.object({
+  INTERNAL_API_URL: z.url(),
+  INTERNAL_API_TOKEN: z.string().min(1),
+});
+export type ApiEnv = z.infer<typeof ApiEnvSchema>;
 
 /** `KEY=valor`, com `#` de comentário e aspas opcionais. Sem dependência. */
 export function parseEnvFile(content: string): Record<string, string> {
@@ -115,7 +133,13 @@ export function loadServerEnv(slug: string): { dir: string; env: ServerEnv } {
 
   const envPath = join(dir, '.env');
   const fromFile = existsSync(envPath) ? parseEnvFile(readFileSync(envPath, 'utf8')) : {};
-  const merged = { ...process.env, ...fromFile };
+  // Chave com valor vazio no arquivo do servidor é "não preenchi", não "apague
+  // o que veio da raiz". Sem esta linha, um `INTERNAL_API_URL=` deixado no
+  // modelo derrubaria a URL boa que o .env da raiz acabou de exportar.
+  const preenchidas = Object.fromEntries(
+    Object.entries(fromFile).filter(([, value]) => value !== ''),
+  );
+  const merged = { ...process.env, ...preenchidas };
 
   const env = ServerEnvSchema.safeParse(merged);
   if (!env.success) {
@@ -130,4 +154,30 @@ export function loadServerEnv(slug: string): { dir: string; env: ServerEnv } {
 export function loadServer(slug: string): LoadedServer {
   const { dir, env } = loadServerEnv(slug);
   return { slug, dir, spec: loadSpec(join(dir, 'guild.yaml')), env };
+}
+
+/**
+ * Carrega o `.env` da raiz no ambiente do processo, sem sobrescrever o que já
+ * estiver exportado no shell.
+ *
+ * O `.env` da raiz é onde `INTERNAL_API_URL` e `INTERNAL_API_TOKEN` já vivem
+ * para o resto do monorepo; repetir os dois em cada `infra/discord/<slug>/.env`
+ * seria copiar um segredo para mais lugares por nenhum motivo.
+ */
+export function loadRootEnv(): void {
+  const path = join(REPO_ROOT, '.env');
+  if (!existsSync(path)) return;
+  for (const [key, value] of Object.entries(parseEnvFile(readFileSync(path, 'utf8')))) {
+    process.env[key] ??= value;
+  }
+}
+
+export function loadApiEnv(): ApiEnv {
+  const parsed = ApiEnvSchema.safeParse(process.env);
+  if (!parsed.success) {
+    throw new ConfigError(
+      `Configuração incompleta. Preencha no .env da raiz:\n${formatIssues(parsed.error)}`,
+    );
+  }
+  return parsed.data;
 }

@@ -158,9 +158,14 @@ describe('buildSpecFromState', () => {
     expect(warnings.some((w) => w.includes('duvidas'))).toBe(true);
   });
 
-  it('o YAML gerado carrega o cabeçalho e nenhum ID', () => {
+  it('o cabeçalho nomeia o comando que escreveu o arquivo', () => {
+    const spec = buildSpecFromState(servidorRealista(), GUILD);
+    expect(toYaml(spec, 'Meu servidor')).toContain('pnpm guild scan');
+    expect(toYaml(spec, 'Meu servidor', 'import')).toContain('pnpm guild import');
+  });
+
+  it('o YAML gerado não carrega nenhum ID', () => {
     const yaml = toYaml(buildSpecFromState(servidorRealista(), GUILD), 'Meu servidor');
-    expect(yaml).toContain('pnpm guild import');
     expect(yaml).not.toContain(GUILD);
     expect(yaml).not.toMatch(/\b\d{17,20}\b/u);
   });
