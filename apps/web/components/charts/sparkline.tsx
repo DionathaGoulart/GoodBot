@@ -19,7 +19,8 @@ export function Sparkline({ values }: { values: readonly number[] }) {
   const menor = Math.min(...values);
   const maior = Math.max(...values);
   // Série constante tem amplitude zero; sem isto a divisão viraria `NaN` e a
-  // linha sumiria. Com 1, ela fica reta no meio, que é o desenho correto.
+  // linha sumiria. Com 1, todo ponto cai na base e ela fica reta lá embaixo —
+  // que é o que um período sem movimento deve parecer.
   const amplitude = maior - menor || 1;
   const util = ALTURA - RESPIRO * 2;
 
