@@ -10,6 +10,12 @@ export interface CreateDbOptions {
   idleTimeout?: number;
   /** Segundos para estabelecer conexão. */
   connectTimeout?: number;
+  /**
+   * Prepared statements. Precisa ser `false` atrás do pooler de transação do
+   * Supabase (porta 6543): lá cada query pode cair numa conexão de servidor
+   * diferente, e um `PREPARE` feito numa não existe na outra.
+   */
+  prepare?: boolean;
 }
 
 /** Cria o client Drizzle sobre `postgres` (postgres-js). */
@@ -18,6 +24,7 @@ export function createDb(url: string, options: CreateDbOptions = {}) {
     max: options.max ?? 5,
     idle_timeout: options.idleTimeout ?? 30,
     connect_timeout: options.connectTimeout ?? 10,
+    prepare: options.prepare ?? true,
     // Snowflakes e contadores viajam como texto/number; sem BigInt implícito.
     transform: { undefined: null },
   });
