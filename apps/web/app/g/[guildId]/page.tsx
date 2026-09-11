@@ -1,13 +1,15 @@
 import { Suspense } from 'react';
 
 import { ActivityHeatmap } from '@/components/charts/activity-heatmap';
-import { AutomodByRule } from '@/components/charts/automod-by-rule';
-import { CasesByType } from '@/components/charts/cases-by-type';
 import { ChartPanel } from '@/components/charts/chart-panel';
-import { MembersGrowth } from '@/components/charts/members-growth';
-import { MessagesPerDay } from '@/components/charts/messages-per-day';
+import {
+  AutomodByRule,
+  CasesByType,
+  MembersGrowth,
+  MessagesPerDay,
+  TopChannels,
+} from '@/components/charts/lazy';
 import { Sparkline } from '@/components/charts/sparkline';
-import { TopChannels } from '@/components/charts/top-channels';
 import { RecentAuditLog, RecentCases } from '@/components/dashboard/recent-activity';
 import { readBotStatus } from '@/components/layout/bot-status';
 import { PeriodPicker } from '@/components/period-picker';
