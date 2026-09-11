@@ -68,7 +68,11 @@ const api = createInternalClient({
   timeoutMs: 30_000, // o padrão é 10s
 });
 
+// Sem contagem de membros por cargo, que é o que quase todo chamador quer.
 const roles = await api.roles(guildId);
+// Com contagem: custa uma varredura por REST no Discord, e o discord.js
+// serializa essa rota, então peça só onde a contagem aparece na tela.
+const comContagem = await api.roles(guildId, { counts: true });
 const canal = await api.createChannel(guildId, {
   actorId,
   name: 'geral',
@@ -90,7 +94,7 @@ validação Zod) e `retryAfter` quando o 503 veio de rate limit.
 | `guild`       | perfil, settings, ícone, banner, audit log                      |
 | `bot-profile` | apelido, foto, capa e bio do bot **neste** servidor              |
 | `channels`    | listar, criar, editar, apagar, lock/unlock, slowmode, overrides |
-| `roles`       | listar, criar, editar, apagar, mover uma casa                   |
+| `roles`       | listar (`?counts=1` conta membros), criar, editar, apagar, mover |
 | `members`     | listar, detalhe, cargos de um membro                            |
 | `messages`    | enviar, histórico, apagar, publicar/despublicar painel          |
 | `moderation`  | ban, unban, listar bans, ações de moderação                     |
