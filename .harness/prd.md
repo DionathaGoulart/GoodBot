@@ -700,7 +700,10 @@ level)`. A guild conferida é sempre a que vai ser lida ou escrita, e ela
   ~11 MB em base64. Toda outra rota continua em 256 KB.
 - **Segredos**: só via `.env` na VM (nunca commitado; `.env.example` sim),
   GitHub Secrets para a CI e variáveis de ambiente do projeto na Vercel. O
-  `INTERNAL_API_TOKEN` existe nos três lugares e é rotacionado junto.
+  `INTERNAL_API_TOKEN` existe nos três lugares e é rotacionado junto. Desde que
+  o painel passou a ser publicado pela CI (§7.5), os Secrets incluem também
+  `VERCEL_TOKEN`, `VERCEL_ORG_ID` e `VERCEL_PROJECT_ID`; as variáveis de
+  ambiente do painel continuam só no cofre da Vercel, de onde o job as puxa.
 - **Web**: CSP restritiva (self + fonts locais), sem `unsafe-inline` exceto
   o script de tema com nonce; CSRF coberto por server actions (origin check)
   e cookie `SameSite`; headers de segurança configurados no `next.config.ts`
@@ -743,6 +746,14 @@ level)`. A guild conferida é sempre a que vai ser lida ou escrita, e ela
   roda **antes** do deploy do bot e do painel; nunca pelo processo do bot no
   boot. Deploy manual usa `pnpm --filter @goodbot/db db:migrate` com a
   `DATABASE_URL` de produção.
+- **O painel também sai pela CI** (v1.4). Até então ele era publicado pela
+  integração git da Vercel, que roda em paralelo com o workflow: num push que
+  mexia no schema, o painel novo ia ao ar enquanto o `migrate` ainda rodava e
+  falava com o banco velho, derrubando toda tela logada até a migration
+  terminar. Agora `apps/web/vercel.json` desliga o deploy automático da `main`
+  (`git.deploymentEnabled`) e o job `painel` publica com a CLI
+  (`vercel pull/build/deploy --prebuilt --prod`) depois do `migrate`. Branch e
+  PR continuam ganhando preview pela integração normal.
 - O painel na Vercel é stateless: qualquer instância pode atender qualquer
   request; nada de estado em memória entre requests.
 - Graceful shutdown: flush de stats, fechar HTTP, destruir client, 10s de

@@ -1,9 +1,16 @@
-# Deploy — só na `main`. Três jobs encadeados: migrations no Postgres
-# gerenciado, build da imagem amd64 do bot no GHCR e `docker compose pull` por
-# SSH na VM da Oracle (PRD §7.5).
+# Deploy — só na `main`. Quatro jobs, todos depois das migrations: migrations
+# no Postgres gerenciado, build da imagem amd64 do bot no GHCR, `docker compose
+# pull` por SSH na VM da Oracle e a publicação do painel na Vercel (PRD §7.5).
 #
-# O painel NÃO está aqui: a Vercel publica sozinha pela integração git, em
-# paralelo com este workflow.
+# O painel entrou aqui na v1.4. Antes ele saía pela integração git da Vercel,
+# **em paralelo** com este workflow, e isso tinha uma janela ruim: num push que
+# mexe no schema, a Vercel publicava o painel novo enquanto o job `migrate`
+# ainda rodava, e o código novo falava com o banco velho. Erro de enum ou de
+# coluna inexistente em toda tela logada, até a migration terminar.
+#
+# Por isso `apps/web/vercel.json` traz `git.deploymentEnabled.main = false`: na
+# `main` quem publica é o job `painel` daqui, e só depois do `migrate`. Branch
+# e PR continuam ganhando preview pela integração normal.
 name: Deploy
 
 on:
@@ -50,7 +57,47 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: pnpm db:migrate
 
-  # 2. Imagem linux/amd64 no GHCR. O runner já é x86: sem QEMU.
+  # 2. O painel. Depende só do `migrate`: pode subir em paralelo com a imagem
+  #    do bot, desde que o schema já esteja no lugar.
+  painel:
+    name: Painel (Vercel)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: migrate
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    # O projeto da Vercel tem `apps/web` como root: é de lá que a CLI lê o
+    # `vercel.json` e resolve o build do monorepo.
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # `pull` traz as variáveis de ambiente de produção do projeto. Elas nunca
+      # entram no repositório: o cofre da Vercel continua sendo o da Vercel.
+      - name: Puxar a configuração do projeto
+        run: npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build
+        run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+
+      # `--prebuilt`: sobe o que este runner já compilou, em vez de mandar a
+      # Vercel compilar de novo.
+      - name: Publicar
+        run: npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+  # 3. Imagem linux/amd64 no GHCR. O runner já é x86: sem QEMU.
   build:
     name: Imagem do bot (GHCR)
     runs-on: ubuntu-latest
@@ -96,7 +143,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # 3. A VM só puxa a imagem: nada é compilado no free tier.
+  # 4. A VM só puxa a imagem: nada é compilado no free tier.
   deploy:
     name: Deploy na Oracle (SSH)
     runs-on: ubuntu-latest
