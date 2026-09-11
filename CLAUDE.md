@@ -61,11 +61,14 @@ docs/                   guias: primeiros passos, módulos, API, banco, runbook
   `pnpm typecheck` devem passar antes de dar uma etapa por concluída.
 - **Testes:** Vitest. Unitários para regras de automod, parsers de duração,
   templates, schemas Zod e helpers de permissão. `pnpm test`.
-- **Commits:** Conventional Commits em pt-BR no corpo, tipo em inglês:
-  `feat(bot): comando /ban com tempban`, `fix(web): tema não persistia`,
-  `chore(infra): ...`. Um commit por tarefa lógica; ao fim de cada etapa um
-  commit `chore(plan): etapa N concluída`. Só commitar quando o usuário pedir
-  ou quando a etapa mandar.
+- **Commits:** Conventional Commits **inteiramente em inglês** — assunto e
+  corpo. Assunto no imperativo, minúsculo, sem ponto final, até 72 caracteres:
+  `feat(bot): add tempban to /ban`, `fix(web): keep the theme across reloads`.
+  O corpo (quebrado em 72 colunas) explica o **porquê** e o que a mudança
+  quebraria se fosse feita de outro jeito; o que ela faz já está no diff.
+  Isto vale só para o Git: prosa, UI e mensagens do bot continuam em pt-BR.
+  Um commit por tarefa lógica. Só commitar quando o usuário pedir ou quando a
+  etapa mandar.
 - **Segredos:** NUNCA commitar `.env*` (exceto `.env.example`). Variáveis
   documentadas em `.env.example` com comentário. Verificar `git status` antes
   de commitar.

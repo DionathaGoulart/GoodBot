@@ -77,19 +77,22 @@ Teste que só confirma que o mock foi chamado não vale o custo de manutenção.
 
 ## 7. Commits
 
-Conventional Commits: **tipo em inglês, corpo em pt-BR**.
+Conventional Commits **inteiramente em inglês**, assunto e corpo. É a única
+parte do projeto que não é em pt-BR: prosa, UI e mensagens do bot continuam
+como estão.
 
 ```
-feat(bot): comando /say para publicar mensagem como o bot
-fix(web): tema não persistia entre navegações
-chore(infra): sobe o limite de corpo das rotas de imagem
-docs: descreve o fluxo de guild como código
+feat(bot): add /say to publish a message as the bot
+fix(web): keep the theme across navigations
+chore(infra): raise the body cap on the image routes
+docs: describe the guild-as-code flow
 ```
 
 Escopos: `bot`, `web`, `db`, `shared`, `guild-config`, `infra`, `ci`.
 
-O corpo responde **por que**, não o que — o diff já diz o que. Um commit por
-tarefa lógica.
+Assunto no imperativo, minúsculo, sem ponto final, até 72 caracteres. O corpo
+vai quebrado em 72 colunas e responde **por que**, não o que — o diff já diz o
+que. Um commit por tarefa lógica.
 
 Só commite quando pedirem.
 
