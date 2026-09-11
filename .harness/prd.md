@@ -280,12 +280,23 @@ trava de verdade.
 
 1. **RSS** `feeds/videos.xml?channel_id=UC…` → as 5 entradas mais novas. É o
    que descobre vídeo e short, e traz título, autor, capa e data.
-2. **Sonda de live** `GET /channel/UC…/live` → se o `<link rel="canonical">`
-   apontar para `watch?v=ID` **e** o HTML tiver `"isLive":true`, `ID` é
-   candidato a live. Canonical apontando para o próprio canal, ou
-   `"isUpcoming":true`, significa "nenhuma live agora". Canonical **ausente**
-   é erro (a página mudou), não "sem live" — assim uma mudança no YouTube
-   desliga a conta com alerta em vez de deixar o módulo mudo.
+2. **Sonda de live** `GET /channel/UC…/live` → o `ID` da transmissão sai do
+   `<link rel="canonical">` quando ele aponta para `watch?v=ID`, e do
+   `currentVideoEndpoint` do `ytInitialData` quando não aponta; com `ID` em
+   mãos, `"isLive":true` no HTML confirma a live. Canonical apontando para o
+   próprio canal, ou `"isUpcoming":true`, significa "nenhuma live agora".
+   Canonical **ausente**, ou qualquer outra forma sem `ID` no JSON, é erro (a
+   página mudou), não "sem live" — assim uma mudança no YouTube desliga a
+   conta com alerta em vez de deixar o módulo mudo.
+
+   A reserva no `ytInitialData` não é preciosismo: em 2026-09-11 o YouTube
+   passou a servir a quem não roda JS um `watch` sem nenhuma tag `og:`, sem
+   `videoDetails` no `ytInitialPlayerResponse` e com
+   `canonical="undefined"` — uma string, não uma tag ausente. A sonda lia
+   aquilo como "não tem live" e o módulo atravessava a transmissão inteira
+   calado, sem erro e sem `failure_count` subindo. Título e autor do anúncio
+   vêm, nesse formato, do `videoPrimaryInfoRenderer` e do
+   `videoOwnerRenderer`.
 3. Para cada ID que ainda **não** está em `social_posts`: `HEAD
    youtube.com/shorts/ID` responde `200` para short e `303` para vídeo comum;
    se não for short, `GET watch?v=ID` separa `"isUpcoming":true` (em espera),

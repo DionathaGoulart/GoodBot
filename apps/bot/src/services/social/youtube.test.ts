@@ -6,18 +6,21 @@ import {
   FEED,
   FEED_COM_LIVE,
   LIVE_EM_ANDAMENTO,
+  LIVE_EM_ANDAMENTO_SEM_METADADOS,
   LIVE_SEM_CANONICAL,
   LIVE_SEM_TRANSMISSAO,
   PAGINA_404,
   WATCH_AGENDADA,
   WATCH_VIDEO,
   WATCH_VIDEO_DO_FEED,
+  WATCH_VIDEO_SEM_METADADOS,
   WATCH_VOD_DE_LIVE,
 } from './__fixtures__/youtube';
 import {
   parseCanonical,
   parseChannelInput,
   parseChannelPage,
+  parseCurrentVideoId,
   parseWatchState,
   parseYouTubeFeed,
   YouTubeProvider,
@@ -142,6 +145,24 @@ describe('parseCanonical', () => {
     expect(parseCanonical(LIVE_SEM_CANONICAL)).toBeNull();
     expect(parseCanonical('')).toBeNull();
   });
+
+  it('a tag existe e o href é a string "undefined" — nem URL, nem ausente', () => {
+    // O caso que quebrou a sonda: `null` teria virado erro e alerta; isto aqui
+    // passou batido como "não tem live".
+    expect(parseCanonical(LIVE_EM_ANDAMENTO_SEM_METADADOS)).toBe('undefined');
+  });
+});
+
+describe('parseCurrentVideoId', () => {
+  it('tira o videoId do currentVideoEndpoint quando o canonical não presta', () => {
+    expect(parseCurrentVideoId(LIVE_EM_ANDAMENTO_SEM_METADADOS)).toBe(LIVE_ID);
+    expect(parseCurrentVideoId(WATCH_VIDEO_SEM_METADADOS)).toBe('aaaaaaaaaaa');
+  });
+
+  it('devolve null onde não há ytInitialData, sem lançar', () => {
+    expect(parseCurrentVideoId(LIVE_EM_ANDAMENTO)).toBeNull();
+    expect(parseCurrentVideoId('')).toBeNull();
+  });
 });
 
 describe('parseWatchState', () => {
@@ -181,6 +202,24 @@ describe('parseWatchState', () => {
     expect(parseWatchState(WATCH_VOD_DE_LIVE)).toMatchObject({
       isLive: false,
       isLiveContent: true,
+    });
+  });
+
+  it('no formato sem metadados, título e autor saem do ytInitialData', () => {
+    const state = parseWatchState(LIVE_EM_ANDAMENTO_SEM_METADADOS);
+
+    // Sem `og:`, com `<meta name="title">` vazio e sem `videoDetails`: o que
+    // resta é o `videoPrimaryInfoRenderer` e o `videoOwnerRenderer`.
+    expect(state).toMatchObject({ isLive: true, isUpcoming: false });
+    expect(state.title).toBe('lofi hip hop radio 📚 beats to relax/study to');
+    expect(state.author).toBe('Lofi Girl');
+    expect(state.thumbnail).toBeNull();
+  });
+
+  it('vídeo comum no formato sem metadados não é live', () => {
+    expect(parseWatchState(WATCH_VIDEO_SEM_METADADOS)).toMatchObject({
+      isLive: false,
+      isUpcoming: false,
     });
   });
 
@@ -324,6 +363,25 @@ describe('YouTubeProvider.probeLive', () => {
     });
   });
 
+  it('canonical "undefined" não é "sem live": o ID vem do ytInitialData', async () => {
+    // A regressão de 2026-09-11: com a live no ar, a sonda lia `href="undefined"`,
+    // não achava `?v=` e devolvia `null` — o módulo passava a transmissão
+    // inteira calado, sem uma linha de erro e sem `failure_count` subir.
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({ live: LIVE_EM_ANDAMENTO_SEM_METADADOS }),
+    });
+    const item = await provider.probeLive(LOFI);
+
+    expect(item).toMatchObject({
+      externalId: LIVE_ID,
+      kind: 'live',
+      title: 'lofi hip hop radio 📚 beats to relax/study to',
+      author: 'Lofi Girl',
+      url: `https://www.youtube.com/watch?v=${LIVE_ID}`,
+      thumbnail: `https://i.ytimg.com/vi/${LIVE_ID}/hqdefault.jpg`,
+    });
+  });
+
   it('canonical apontando para o canal significa: não tem live', async () => {
     const provider = new YouTubeProvider({ fetch: fakeYouTube({ live: LIVE_SEM_TRANSMISSAO }) });
     expect(await provider.probeLive(SEM_LIVE)).toBeNull();
@@ -336,6 +394,17 @@ describe('YouTubeProvider.probeLive', () => {
 
   it('canonical ausente é falha, não "sem live" — a conta precisa alertar', async () => {
     const provider = new YouTubeProvider({ fetch: fakeYouTube({ live: LIVE_SEM_CANONICAL }) });
+    await expect(provider.probeLive(CANAL)).rejects.toThrow(/mudou de formato/);
+  });
+
+  it('canonical que não é nem watch nem canal, e sem ID no JSON, também alerta', async () => {
+    // Só `/channel/UC…` autoriza o silêncio. Qualquer outra forma é página
+    // nova, e ficar quieto aí é justamente o bug que se está consertando.
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({
+        live: LIVE_EM_ANDAMENTO_SEM_METADADOS.replace(/"currentVideoEndpoint":\{[\s\S]*?\}\},/, ''),
+      }),
+    });
     await expect(provider.probeLive(CANAL)).rejects.toThrow(/mudou de formato/);
   });
 

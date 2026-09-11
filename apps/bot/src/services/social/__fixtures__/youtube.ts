@@ -13,6 +13,12 @@
  * · `watch?v=` e a página de canal servem `og:title`/`og:image`;
  * · **`/channel/<id>/live` não serve `og:` nenhum** — ali o título só existe
  *   em `<meta name="title">` e no `videoDetails` do player, e não há capa.
+ *
+ * Os dois recortes com `SEM_METADADOS` no nome foram colhidos depois, em
+ * 2026-09-11, do mesmo jeito: o YouTube passou a servir o `watch` sem `og:`,
+ * sem `videoDetails` e com `canonical="undefined"`. Eles ficam **ao lado** dos
+ * antigos, e não no lugar deles, porque as duas formas seguem no ar e o parser
+ * tem de aguentar as duas.
  */
 
 /**
@@ -97,6 +103,42 @@ export const LIVE_EM_ANDAMENTO = `<!DOCTYPE html><html lang="pt-BR"><head>
 <meta name="description" content="🎼 | Listen on Spotify, Apple music and more→  https://lnk.to/lofi-hiphop-beats-to-r...">
 <title>lofi hip hop radio 📚 beats to relax/study to - YouTube</title>
 <script nonce="Y2Y0Y2M">var ytInitialPlayerResponse = {"responseContext":{},"playabilityStatus":{"status":"OK","playableInEmbed":true},"videoDetails":{"videoId":"rFZHOHl-L8A","title":"lofi hip hop radio 📚 beats to relax/study to","lengthSeconds":"0","isLive":true,"keywords":["lo-fi","lofi","lofi hip hop radio"],"channelId":"UCSJ4gkVC6NrvII8umztf0Ow","isOwnerViewing":false,"shortDescription":"🎼 | Listen on Spotify","isCrawlable":true,"allowRatings":true,"viewCount":"41236","author":"Lofi Girl","isLowLatencyLiveStream":false,"isPrivate":false,"isUnpluggedCorpus":false,"latencyClass":"MDE_STREAM_OPTIMIZATIONS_RENDERER_LATENCY_NORMAL","isLiveContent":true,"isTvfilmVideo":false}};</script>
+</head><body></body></html>`;
+
+/**
+ * A **mesma** rota `/channel/UCSJ4gkVC6NrvII8umztf0Ow/live`, colhida em
+ * 2026-09-11: o formato que o YouTube passou a servir a quem não roda JS.
+ * Recorte real, e o que sumiu é o que importa — nenhuma tag `og:`,
+ * `<meta name="title">` **vazio**, nenhum `videoDetails` no
+ * `ytInitialPlayerResponse` e, sobretudo, `canonical` literalmente
+ * `"undefined"`. Foi esse canonical que fez a sonda ler "não tem live" com a
+ * transmissão no ar.
+ *
+ * O que sobrou, e de onde o parser passa a tirar tudo: o `ytInitialData`, com
+ * `currentVideoEndpoint` (o ID), `videoPrimaryInfoRenderer` (título e o
+ * `"isLive":true` do contador) e `videoOwnerRenderer` (o autor).
+ */
+export const LIVE_EM_ANDAMENTO_SEM_METADADOS = `<!DOCTYPE html><html lang="pt-BR"><head>
+<link rel="canonical" href="undefined">
+<meta name="theme-color" content="rgba(255, 255, 255, 0.98)">
+<meta name="title" content="">
+<meta name="description" content="Aproveite vídeos e músicas que você ama, envie e compartilhe conteúdo original com amigos, parentes e o mundo no YouTube.">
+<title> - YouTube</title>
+<script nonce="Y2Y0Y2M">var ytInitialPlayerResponse = {"responseContext":{"serviceTrackingParams":[{"service":"GFEEDBACK","params":[{"key":"is_viewed_live","value":"True"}]}]}};</script>
+<script nonce="Y2Y0Y2M">var ytInitialData = {"currentVideoEndpoint":{"clickTrackingParams":"CAAQg2ciEwiTlufFn-eWAxWZSt0CHQpkDk_KAQR3bKE2","commandMetadata":{"webCommandMetadata":{"url":"/watch?v=rFZHOHl-L8A","webPageType":"WEB_PAGE_TYPE_WATCH","rootVe":3832}}},"contents":{"twoColumnWatchNextResults":{"results":{"results":{"contents":[{"videoPrimaryInfoRenderer":{"title":{"runs":[{"text":"lofi hip hop radio 📚 beats to relax/study to"}]},"viewCount":{"videoViewCountRenderer":{"viewCount":{"runs":[{"text":"17.924"},{"text":" assistindo agora"}]},"isLive":true,"originalViewCount":"17924"}}}},{"videoSecondaryInfoRenderer":{"owner":{"videoOwnerRenderer":{"thumbnail":{"thumbnails":[{"url":"https://yt3.ggpht.com/_BSh2VVvVMzqBoKyWbQnyC35XFOV-ZbXavf9nfu3ZjpFUGEImQnlWt9ZlpfGQBqWEbGNc4rPWg=s48-c-k-c0x00ffffff-no-rj","width":48,"height":48}]},"title":{"runs":[{"text":"Lofi Girl","navigationEndpoint":{"commandMetadata":{"webCommandMetadata":{"url":"/channel/UCSJ4gkVC6NrvII8umztf0Ow"}}}}]}}}}}]}}}}};</script>
+</head><body></body></html>`;
+
+/**
+ * `GET watch?v=` de um **vídeo comum** no mesmo formato sem metadados, colhido
+ * no mesmo dia. Serve para provar o contrário do de cima: sem transmissão, a
+ * página não tem `"isLive":true` nenhuma vez, e portanto nada aqui pode ser
+ * confundido com uma live.
+ */
+export const WATCH_VIDEO_SEM_METADADOS = `<!DOCTYPE html><html lang="pt-BR"><head>
+<link rel="canonical" href="undefined">
+<meta name="title" content="">
+<title> - YouTube</title>
+<script nonce="Y2Y0Y2M">var ytInitialData = {"currentVideoEndpoint":{"clickTrackingParams":"CAAQg2ciEwjV5rSdn-eWAxXRad0CHRk8Bg4","commandMetadata":{"webCommandMetadata":{"url":"/watch?v=aaaaaaaaaaa","webPageType":"WEB_PAGE_TYPE_WATCH","rootVe":3832}}},"contents":{"twoColumnWatchNextResults":{"results":{"results":{"contents":[{"videoPrimaryInfoRenderer":{"title":{"runs":[{"text":"Café & código: o vídeo nº 3"}]},"viewCount":{"videoViewCountRenderer":{"viewCount":{"simpleText":"1.204 visualizações"},"isLive":false}}}}]}}}}};</script>
 </head><body></body></html>`;
 
 /**

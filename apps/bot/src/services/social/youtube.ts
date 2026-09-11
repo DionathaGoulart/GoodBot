@@ -120,6 +120,33 @@ const CANONICAL_BASE_HANDLE_RE = /"canonicalBaseUrl"\s*:\s*"\/(@[^"\\]+)"/;
 const JSON_AUTHOR_RE = /"author"\s*:\s*"((?:[^"\\]|\\.)*)"/;
 const VIDEO_DETAILS_TITLE_RE = /"videoDetails"\s*:\s*\{[^{}]*?"title"\s*:\s*"((?:[^"\\]|\\.)*)"/;
 
+// ── A página de `watch` sem metadados (verificado em 2026-09-11) ────────────
+//
+// O YouTube passou a servir a quem não roda JS um `watch` (e o
+// `/channel/<id>/live`, que é a mesma página) **sem** nenhuma tag `og:`, com
+// `<meta name="title" content="">` vazio, sem `videoDetails` no
+// `ytInitialPlayerResponse` e — o que quebrou a sonda de live — com
+// `<link rel="canonical" href="undefined">`. O `ytInitialData` continua
+// inteiro, e é de lá que saem o ID, o título e o autor nesse formato.
+
+/** O `videoId` de que a página fala, quando o canonical não serve. */
+const CURRENT_VIDEO_ID_RE =
+  /"currentVideoEndpoint"\s*:\s*\{[\s\S]{0,400}?"url"\s*:\s*"\/watch\?v=([A-Za-z0-9_-]{11})"/;
+/** Título do vídeo principal — o mesmo que o `videoDetails` trazia. */
+const PRIMARY_TITLE_RE =
+  /"videoPrimaryInfoRenderer"\s*:\s*\{\s*"title"\s*:\s*\{\s*"runs"\s*:\s*\[\s*\{\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"/;
+/** Nome do canal, pelo mesmo motivo. É o dono do vídeo, não um da barra. */
+const OWNER_NAME_RE =
+  /"videoOwnerRenderer"\s*:\s*\{[\s\S]{0,1500}?"title"\s*:\s*\{\s*"runs"\s*:\s*\[\s*\{\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"/;
+/**
+ * Marcador de live agendada no `ytInitialData`. Entra como **segunda** fonte
+ * de `isUpcoming` porque nesse formato o `"isUpcoming":true` do player não
+ * existe mais. Não foi colhido de uma página real de estreia (não havia uma à
+ * mão) — está aqui por ser um `ou`: nas páginas reais de live em andamento e
+ * de vídeo comum ele não aparece nenhuma vez.
+ */
+const UPCOMING_EVENT_RE = /"upcomingEventData"\s*:\s*\{/;
+
 /**
  * A capa de qualquer vídeo, deduzida do ID. `hqdefault.jpg` existe para todo
  * vídeo — inclusive transmissão ao vivo — e não vem com os parâmetros de
@@ -135,6 +162,15 @@ export function parseCanonical(html: string): string | null {
   if (!tag) return null;
   const href = HREF_RE.exec(tag)?.[1];
   return href ? decodeXml(href) : null;
+}
+
+/**
+ * De que vídeo a página fala, segundo o `ytInitialData`. É a fonte de reserva
+ * do canonical: desde 2026-09-11 o `watch` chega com `href="undefined"`, e sem
+ * isto a sonda de live lê "não tem live" no meio de uma transmissão.
+ */
+export function parseCurrentVideoId(html: string): string | null {
+  return CURRENT_VIDEO_ID_RE.exec(html)?.[1] ?? null;
 }
 
 function metaContent(html: string, property: string): string | null {
@@ -174,15 +210,17 @@ export interface YouTubeWatchState {
  * das metatags `og:` que o YouTube serve justamente para quem não roda JS.
  */
 export function parseWatchState(html: string): YouTubeWatchState {
-  const author = JSON_AUTHOR_RE.exec(html)?.[1];
-  const jsonTitle = VIDEO_DETAILS_TITLE_RE.exec(html)?.[1];
+  const author = JSON_AUTHOR_RE.exec(html)?.[1] ?? OWNER_NAME_RE.exec(html)?.[1];
+  const jsonTitle = VIDEO_DETAILS_TITLE_RE.exec(html)?.[1] ?? PRIMARY_TITLE_RE.exec(html)?.[1];
   return {
     isLive: /"isLive"\s*:\s*true/.test(html),
-    isUpcoming: /"isUpcoming"\s*:\s*true/.test(html),
+    isUpcoming: /"isUpcoming"\s*:\s*true/.test(html) || UPCOMING_EVENT_RE.test(html),
     isLiveContent: /"isLiveContent"\s*:\s*true/.test(html),
-    // Três fontes porque o YouTube não serve as mesmas em toda rota: um
-    // `watch?v=` traz `og:`, mas a página de `/channel/<id>/live` traz só
-    // `<meta name="title">` e o JSON do player (verificado em 2026-09-08).
+    // Quatro fontes porque o YouTube não serve as mesmas em toda rota nem em
+    // todo formato: um `watch?v=` trazia `og:`, a página de `/channel/<id>/live`
+    // trazia `<meta name="title">` e o `videoDetails` do player, e o formato
+    // sem metadados de 2026-09-11 não traz nenhum dos três — só o
+    // `videoPrimaryInfoRenderer` do `ytInitialData`.
     title:
       metaContent(html, 'og:title') ??
       metaContent(html, 'title') ??
@@ -373,8 +411,21 @@ export class YouTubeProvider implements SocialProvider {
       );
     }
 
-    const videoId = WATCH_ID_RE.exec(canonical)?.[1];
-    if (!videoId) return null;
+    // O canonical primeiro, o `ytInitialData` como reserva: no formato sem
+    // metadados o `href` vem literalmente `"undefined"`, e ler isso como
+    // "não tem live" era o bastante para o módulo passar a transmissão inteira
+    // calado, sem uma linha de erro (o que aconteceu em 2026-09-11).
+    const videoId = WATCH_ID_RE.exec(canonical)?.[1] ?? parseCurrentVideoId(html);
+    if (!videoId) {
+      // Sem live, a página servida é a do próprio canal — e é só o canonical
+      // apontando para `/channel/UC…` que autoriza ficar quieto. Qualquer
+      // outra coisa é formato novo, e aí a conta falha e alerta.
+      if (CHANNEL_ID_URL_RE.test(canonical)) return null;
+      throw new SocialProviderError(
+        'A página de live do canal mudou de formato e não pôde ser lida.',
+        this.platform,
+      );
+    }
 
     const state = parseWatchState(html);
     if (!state.isLive || state.isUpcoming) return null;
