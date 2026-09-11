@@ -88,6 +88,7 @@ function auditable(profile: BotProfile) {
   return {
     nick: profile.nick,
     displayName: profile.displayName,
+    bio: profile.bio,
     avatarUrl: profile.avatarUrl,
     bannerUrl: profile.bannerUrl,
   };

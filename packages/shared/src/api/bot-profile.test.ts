@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { BotProfileInputSchema, MAX_BOT_NICK_LENGTH } from './bot-profile';
+import { BotProfileInputSchema, MAX_BOT_BIO_LENGTH, MAX_BOT_NICK_LENGTH } from './bot-profile';
 
 const ACTOR = '100000000000000001';
 const PNG =
@@ -10,6 +10,17 @@ describe('BotProfileInputSchema', () => {
   it('apelido vazio vira `null` — é assim que o bot volta ao nome global', () => {
     const parsed = BotProfileInputSchema.parse({ actorId: ACTOR, nick: '   ' });
     expect(parsed.nick).toBeNull();
+  });
+
+  it('bio vazia vira `null`, e a que passa do teto é recusada', () => {
+    expect(BotProfileInputSchema.parse({ actorId: ACTOR, nick: 'Bot', bio: '  ' }).bio).toBeNull();
+    expect(
+      BotProfileInputSchema.safeParse({
+        actorId: ACTOR,
+        nick: 'Bot',
+        bio: 'a'.repeat(MAX_BOT_BIO_LENGTH + 1),
+      }).success,
+    ).toBe(false);
   });
 
   it('recusa apelido maior que o teto do Discord', () => {

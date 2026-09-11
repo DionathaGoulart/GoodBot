@@ -199,3 +199,39 @@ export async function setGuildSettings(
       set: { ...input, updatedAt: sql`now()` },
     });
 }
+
+/**
+ * A bio do bot nesta guild (PRD §6.6). É **espelho**, não leitura: o Discord
+ * aceita escrever a bio do membro e não a devolve em endpoint nenhum, então o
+ * que está aqui é o que a rota `bot-profile` mandou por último. Quem editar a
+ * bio por fora do painel deixa os dois fora de sincronia, e não há como o
+ * painel perceber.
+ */
+export async function getBotBio(db: DbExecutor, guildId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ botBio: guildSettings.botBio })
+    .from(guildSettings)
+    .where(eq(guildSettings.guildId, guildId))
+    .limit(1);
+  return row?.botBio ?? null;
+}
+
+/** Grava o espelho. Chamar só **depois** de o Discord aceitar a escrita. */
+export async function setBotBio(
+  db: DbExecutor,
+  guildId: string,
+  bio: string | null,
+): Promise<void> {
+  await db
+    .insert(guilds)
+    .values({ id: guildId, name: '', ownerId: '' })
+    .onConflictDoNothing({ target: guilds.id });
+
+  await db
+    .insert(guildSettings)
+    .values({ guildId, botBio: bio })
+    .onConflictDoUpdate({
+      target: guildSettings.guildId,
+      set: { botBio: bio, updatedAt: sql`now()` },
+    });
+}

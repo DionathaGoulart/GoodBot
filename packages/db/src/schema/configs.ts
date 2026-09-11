@@ -20,6 +20,13 @@ export const guildSettings = pgTable('guild_settings', {
   /** Canal de logs geral; tipos sem canal próprio herdam dele. */
   logChannelId: snowflake('log_channel_id'),
   dmOnPunish: jsonb('dm_on_punish').$type<DmOnPunish>(),
+  /**
+   * Espelho da bio do bot **nesta** guild (PRD §6.6). O Discord aceita
+   * escrever a bio do membro mas não a devolve em lugar nenhum, então sem esta
+   * coluna o painel não teria como mostrar a que está valendo. Quem escreve é
+   * só a rota `bot-profile`, e só depois de o Discord aceitar.
+   */
+  botBio: text('bot_bio'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

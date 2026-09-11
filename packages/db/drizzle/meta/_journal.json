@@ -64,6 +64,13 @@
       "when": 1789085656227,
       "tag": "0008_guild_expired",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789089309190,
+      "tag": "0009_bot_bio",
+      "breakpoints": true
     }
   ]
 }

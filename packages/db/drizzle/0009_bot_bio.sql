@@ -1,0 +1,1 @@
+ALTER TABLE "guild_settings" ADD COLUMN "bot_bio" text;

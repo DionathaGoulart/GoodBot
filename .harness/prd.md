@@ -571,8 +571,8 @@ ator, ação, período, e diff antes/depois em JSON. Imutável (sem delete).
 
 ### 6.6 Perfil do bot por servidor
 
-Cada servidor escolhe como o bot aparece **nele**: apelido, foto de perfil e
-capa. O Discord guarda esses três no *membro* (`PATCH
+Cada servidor escolhe como o bot aparece **nele**: apelido, foto de perfil,
+capa e bio. O Discord guarda os quatro no *membro* (`PATCH
 /guilds/{id}/members/@me`), não na aplicação, então são de fato por servidor, e
 o que ficar vazio cai no perfil global do bot.
 
@@ -585,12 +585,15 @@ o que ficar vazio cai no perfil global do bot.
 - O apelido é o único campo com permissão atrás: sem `CHANGE_NICKNAME` no
   cargo do bot, a rota recusa antes de falar com o Discord e a tela explica o
   porquê. Avatar e capa continuam editáveis nesse caso.
-- **Não há tabela.** A fonte de verdade é o Discord: o bot lê do próprio
-  `GuildMember` e nada é espelhado no Postgres, porque uma cópia só poderia
-  divergir. A auditoria (§6.5) guarda o antes/depois como URL do CDN, nunca a
-  imagem.
-- A bio de membro fica de fora: o Discord aceita escrevê-la mas não a devolve,
-  então o painel não teria como mostrar a que está valendo.
+- **Apelido, foto e capa não têm tabela.** A fonte de verdade é o Discord: o
+  bot lê do próprio `GuildMember`, porque uma cópia só poderia divergir. A
+  auditoria (§6.5) guarda o antes/depois como URL do CDN, nunca a imagem.
+- **A bio é a exceção, e é espelho.** O Discord aceita escrevê-la e não a
+  devolve em endpoint nenhum — não está no objeto de membro. Sem uma cópia o
+  painel não teria como mostrar a que está valendo, então ela mora em
+  `guild_settings.bot_bio`, gravada **depois** de o Discord aceitar. Quem
+  alterar a bio por fora do painel deixa os dois fora de sincronia, e o painel
+  não tem como perceber.
 - Trocar avatar é caro no rate limit do Discord. A escrita só acontece quando
   alguém salva a tela; nada é reaplicado no boot nem ao entrar num servidor.
 
@@ -777,7 +780,9 @@ guild_registry    (guild_id PK text, status enum(pending|approved|demo|blocked|e
                    -- `invited_at` é o relógio da fila: `expired` sai dele, e só reinicia
                    -- quando um convite reabre a linha (nunca para quem já está em pending)
 guild_settings    (guild_id PK/FK, timezone, embed_color, mod_role_ids[], admin_role_ids[],
-                   dashboard_access_role_ids[], log_channel_id, dm_on_punish jsonb, updated_at)
+                   dashboard_access_role_ids[], log_channel_id, dm_on_punish jsonb, bot_bio, updated_at)
+                   -- `bot_bio` é espelho do perfil do bot na guild (§6.6): o Discord aceita
+                   -- escrever a bio do membro e não a devolve, então sem cópia o painel fica cego
 module_configs    (guild_id, module PK(guild_id,module), enabled, config jsonb, version, updated_at, updated_by)
                    -- módulo ∈ moderation|automod|logs|welcome|autorole|reaction_roles|tickets|tags|utilities|stats|social
 cases             (id bigserial PK, guild_id, case_number (seq por guild), type enum,

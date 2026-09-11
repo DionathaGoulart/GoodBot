@@ -1,14 +1,14 @@
 'use client';
 
 import * as React from 'react';
-import { MAX_BOT_NICK_LENGTH } from '@goodbot/shared';
+import { MAX_BOT_BIO_LENGTH, MAX_BOT_NICK_LENGTH } from '@goodbot/shared';
 import { toast } from 'sonner';
 
 import { saveBotProfileAction } from '@/app/actions/guild';
 import { Blocked, Field, ImageField, type ImageDraft } from '@/components/config/plain-fields';
-import { useAutoRefreshPause } from '@/components/layout/auto-refresh';
 import { Panel } from '@/components/retro/panel';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useGuildId } from '@/lib/use-guild-id';
 
 import type { BotProfile } from '@goodbot/shared';
@@ -25,17 +25,20 @@ import type { BotProfile } from '@goodbot/shared';
 export function BotProfileForm({ profile, readOnly }: { profile: BotProfile; readOnly: boolean }) {
   const guildId = useGuildId();
   const initialNick = profile.nick ?? '';
+  const initialBio = profile.bio ?? '';
   const [nick, setNick] = React.useState(initialNick);
+  const [bio, setBio] = React.useState(initialBio);
   const [avatar, setAvatar] = React.useState<ImageDraft>(undefined);
   const [banner, setBanner] = React.useState<ImageDraft>(undefined);
   const [saving, setSaving] = React.useState(false);
 
   const noNickname = !profile.permissions.changeNickname;
-  const dirty = nick !== initialNick || avatar !== undefined || banner !== undefined;
-  useAutoRefreshPause(dirty);
+  const dirty =
+    nick !== initialNick || bio !== initialBio || avatar !== undefined || banner !== undefined;
 
   const reset = () => {
     setNick(initialNick);
+    setBio(initialBio);
     setAvatar(undefined);
     setBanner(undefined);
   };
@@ -49,6 +52,7 @@ export function BotProfileForm({ profile, readOnly }: { profile: BotProfile; rea
         'profile',
         JSON.stringify({
           nick,
+          bio,
           ...(avatar === undefined ? {} : { avatar }),
           ...(banner === undefined ? {} : { banner }),
         }),
@@ -85,6 +89,19 @@ export function BotProfileForm({ profile, readOnly }: { profile: BotProfile; rea
               maxLength={MAX_BOT_NICK_LENGTH}
               disabled={readOnly || noNickname}
               onChange={(event) => setNick(event.target.value)}
+            />
+          </Field>
+
+          <Field
+            label="Bio"
+            hint={`Até ${String(MAX_BOT_BIO_LENGTH)} caracteres. O Discord não devolve a bio de volta, então o painel mostra a última que salvou aqui.`}
+          >
+            <Textarea
+              rows={3}
+              value={bio}
+              maxLength={MAX_BOT_BIO_LENGTH}
+              disabled={readOnly}
+              onChange={(event) => setBio(event.target.value)}
             />
           </Field>
 

@@ -88,7 +88,7 @@ validação Zod) e `retryAfter` quando o 503 veio de rate limit.
 | Grupo         | O que dá                                                        |
 | ------------- | --------------------------------------------------------------- |
 | `guild`       | perfil, settings, ícone, banner, audit log                      |
-| `bot-profile` | apelido, foto e capa do bot **neste** servidor                   |
+| `bot-profile` | apelido, foto, capa e bio do bot **neste** servidor              |
 | `channels`    | listar, criar, editar, apagar, lock/unlock, slowmode, overrides |
 | `roles`       | listar, criar, editar, apagar, mover uma casa                   |
 | `members`     | listar, detalhe, cargos de um membro                            |

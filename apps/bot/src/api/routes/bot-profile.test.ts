@@ -26,7 +26,9 @@ function fakeMember(id: string, options: { owner?: boolean } = {}) {
   };
 }
 
-function makeApp(options: { changeNickname?: boolean; editMe?: () => Promise<unknown> } = {}) {
+function makeApp(
+  options: { changeNickname?: boolean; editMe?: () => Promise<unknown>; bio?: string | null } = {},
+) {
   const changeNickname = options.changeNickname ?? true;
 
   const botMember = {
@@ -61,6 +63,26 @@ function makeApp(options: { changeNickname?: boolean; editMe?: () => Promise<unk
     },
   };
 
+  // `getBotBio` faz um select; `setBotBio` dois inserts. O que foi parar em
+  // `inserted` é o espelho da bio, que os testes conferem.
+  const inserted: unknown[] = [];
+  const db = {
+    select: () => ({
+      from: () => ({
+        where: () => ({ limit: () => Promise.resolve([{ botBio: options.bio ?? null }]) }),
+      }),
+    }),
+    insert: () => ({
+      values: (row: Record<string, unknown>) => {
+        if ('botBio' in row) inserted.push(row);
+        return {
+          onConflictDoNothing: () => Promise.resolve(),
+          onConflictDoUpdate: () => Promise.resolve(),
+        };
+      },
+    }),
+  };
+
   const deps = {
     client: {
       guilds: { cache: new Collection([[GUILD, guild]]) },
@@ -71,6 +93,7 @@ function makeApp(options: { changeNickname?: boolean; editMe?: () => Promise<unk
       },
     },
     config: { getSettings: () => Promise.resolve({ adminRoleIds: [], modRoleIds: [] }) },
+    db,
   } as unknown as ApiDeps;
 
   const app = createApiApp({
@@ -79,18 +102,19 @@ function makeApp(options: { changeNickname?: boolean; editMe?: () => Promise<unk
     port: 0,
     admin: { discordToken: 'token', clientId: '500000000000000005' },
   });
-  return { app, editMe };
+  return { app, editMe, inserted };
 }
 
 const patch = (body: unknown) => ({ method: 'PATCH', headers: auth, body: JSON.stringify(body) });
 
 describe('GET /guilds/:id/bot-profile', () => {
   it('devolve o perfil do servidor com o global ao lado', async () => {
-    const { app } = makeApp();
+    const { app } = makeApp({ bio: 'moderação sem drama' });
     const res = await app.request(`/guilds/${GUILD}/bot-profile`, { headers: auth });
 
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
+      bio: 'moderação sem drama',
       nick: 'Goodbot',
       globalName: 'Goodbot',
       avatarUrl: 'https://cdn.example/guild-avatar.png',
@@ -141,6 +165,40 @@ describe('PATCH /guilds/:id/bot-profile', () => {
     );
 
     expect(editMe.mock.calls[0]?.[0]).toMatchObject({ nick: null, avatar: null });
+  });
+
+  it('grava o espelho da bio só depois de o Discord aceitar', async () => {
+    const { app, editMe, inserted } = makeApp();
+    const res = await app.request(
+      `/guilds/${GUILD}/bot-profile`,
+      patch({ actorId: ADMIN_ID, nick: 'Goodbot', bio: 'moderação sem drama' }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(editMe.mock.calls[0]?.[0]).toMatchObject({ bio: 'moderação sem drama' });
+    expect(inserted).toContainEqual({ guildId: GUILD, botBio: 'moderação sem drama' });
+  });
+
+  it('Discord recusando, o espelho da bio não é gravado', async () => {
+    const { app, inserted } = makeApp({
+      editMe: () =>
+        Promise.reject(
+          new DiscordAPIError(
+            { code: 50035, message: 'Invalid Form Body' },
+            50035,
+            400,
+            'PATCH',
+            'https://discord.com/api/v10/guilds/x/members/@me',
+            { body: undefined, files: undefined },
+          ),
+        ),
+    });
+    await app.request(
+      `/guilds/${GUILD}/bot-profile`,
+      patch({ actorId: ADMIN_ID, nick: 'Goodbot', bio: 'nunca gravada' }),
+    );
+
+    expect(inserted).toHaveLength(0);
   });
 
   it('sem `CHANGE_NICKNAME` recusa antes de falar com o Discord', async () => {
