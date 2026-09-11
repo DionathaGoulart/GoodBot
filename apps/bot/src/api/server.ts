@@ -19,6 +19,7 @@ import {
 } from './middleware/rate-limit';
 import { createAdminRoutes } from './routes/admin';
 import { createAutomodRoutes } from './routes/automod';
+import { createBotProfileRoutes } from './routes/bot-profile';
 import { createCaseRoutes } from './routes/cases';
 import { createChannelRoutes } from './routes/channels';
 import { createCommandRoutes } from './routes/commands';
@@ -55,13 +56,15 @@ export const MAX_BODY_BYTES = 256 * 1024;
 export const MAX_UPLOAD_BODY_BYTES = 12 * 1024 * 1024;
 
 /**
- * Quem recebe data URL: as configurações do servidor (ícone e banner), a capa
- * do evento agendado e o upload de emoji e sticker. Emoji e sticker são bem
- * menores (256 KB e 512 KB), mas já passam do teto padrão depois da base64.
+ * Quem recebe data URL: as configurações do servidor (ícone e banner), o
+ * perfil do bot na guild (avatar e capa), a capa do evento agendado e o upload
+ * de emoji e sticker. Emoji e sticker são bem menores (256 KB e 512 KB), mas
+ * já passam do teto padrão depois da base64.
  */
 const GUILD = String.raw`/guilds/\d{17,20}`;
 const UPLOAD_ROUTES: { method: string; path: RegExp }[] = [
   { method: 'PATCH', path: new RegExp(`^${GUILD}/?$`) },
+  { method: 'PATCH', path: new RegExp(`^${GUILD}/bot-profile/?$`) },
   { method: 'POST', path: new RegExp(`^${GUILD}/events/?$`) },
   { method: 'PATCH', path: new RegExp(String.raw`^${GUILD}/events/\d{17,20}/?$`) },
   { method: 'POST', path: new RegExp(`^${GUILD}/expressions/(emojis|stickers)/?$`) },
@@ -198,6 +201,7 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
   guilds.route('/:guildId/config', createConfigRoutes(deps));
   guilds.route('/:guildId/commands', createCommandRoutes(deps));
   guilds.route('/:guildId/automod', createAutomodRoutes(deps));
+  guilds.route('/:guildId/bot-profile', createBotProfileRoutes(deps));
   guilds.route('/:guildId/roles', createRoleRoutes(deps));
   guilds.route('/:guildId/channels', createChannelRoutes(deps));
   guilds.route('/:guildId/members', createMemberRoutes(deps));

@@ -1,5 +1,6 @@
 'use server';
 
+import { saveBotProfile } from '@/lib/bot-profile';
 import {
   loadChannelDetail,
   removeChannel,
@@ -112,6 +113,13 @@ export async function saveGuildProfileAction(
   formData: FormData,
 ): Promise<ActionResult> {
   return saveGuildProfile(guildId, formData);
+}
+
+export async function saveBotProfileAction(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  return saveBotProfile(guildId, formData);
 }
 
 export async function unbanUserAction(guildId: string, formData: FormData): Promise<ActionResult> {

@@ -569,6 +569,31 @@ Toda mutação feita pelo painel gera `audit_logs(actorId, action, target,
 before, after, ip, userAgent, createdAt)`. Página com tabela filtrável por
 ator, ação, período, e diff antes/depois em JSON. Imutável (sem delete).
 
+### 6.6 Perfil do bot por servidor
+
+Cada servidor escolhe como o bot aparece **nele**: apelido, foto de perfil e
+capa. O Discord guarda esses três no *membro* (`PATCH
+/guilds/{id}/members/@me`), não na aplicação, então são de fato por servidor, e
+o que ficar vazio cai no perfil global do bot.
+
+- Tela `/g/[guildId]/perfil-do-bot`, só `admin`, no grupo SERVIDOR da
+  navegação.
+- Imagens seguem a mesma regra do ícone do servidor (§6.3): PNG, JPEG, GIF ou
+  WEBP, até 8 MB, enviadas como data URL e validadas pelo mesmo schema no
+  painel, na action e na rota do bot. Os três estados valem aqui também —
+  ausente não mexe, `null` remove, data URL troca.
+- O apelido é o único campo com permissão atrás: sem `CHANGE_NICKNAME` no
+  cargo do bot, a rota recusa antes de falar com o Discord e a tela explica o
+  porquê. Avatar e capa continuam editáveis nesse caso.
+- **Não há tabela.** A fonte de verdade é o Discord: o bot lê do próprio
+  `GuildMember` e nada é espelhado no Postgres, porque uma cópia só poderia
+  divergir. A auditoria (§6.5) guarda o antes/depois como URL do CDN, nunca a
+  imagem.
+- A bio de membro fica de fora: o Discord aceita escrevê-la mas não a devolve,
+  então o painel não teria como mostrar a que está valendo.
+- Trocar avatar é caro no rate limit do Discord. A escrita só acontece quando
+  alguém salva a tela; nada é reaplicado no boot nem ao entrar num servidor.
+
 ## 7. Requisitos não funcionais
 
 ### 7.1 Multi-server

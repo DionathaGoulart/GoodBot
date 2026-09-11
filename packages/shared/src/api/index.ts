@@ -1,5 +1,6 @@
 export * from './admin';
 export * from './automod';
+export * from './bot-profile';
 export * from './cases';
 export * from './channels';
 export * from './client';

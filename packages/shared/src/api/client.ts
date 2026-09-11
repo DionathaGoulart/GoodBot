@@ -11,6 +11,7 @@ import {
   ResyncCommandsResultSchema,
 } from './admin';
 import { RaidModeInputSchema, RaidModeStateSchema } from './automod';
+import { BotProfileInputSchema, BotProfileSchema } from './bot-profile';
 import { CaseDeleteInputSchema, CaseEditInputSchema, CaseSummarySchema } from './cases';
 import {
   ChannelCreateInputSchema,
@@ -96,6 +97,7 @@ import type {
   ResyncCommandsResult,
 } from './admin';
 import type { RaidModeInput, RaidModeState } from './automod';
+import type { BotProfile, BotProfileInput } from './bot-profile';
 import type { CaseDeleteInput, CaseEditInput, CaseSummary } from './cases';
 import type {
   ChannelCreateInput,
@@ -365,6 +367,19 @@ export function createInternalClient(options: InternalClientOptions) {
       request(GuildProfileSchema, guild(guildId), {
         method: 'PATCH',
         body: GuildSettingsInputSchema.parse(input),
+      }),
+
+    /**
+     * O perfil do bot neste servidor (PRD §6.6). Não passa pelo banco: quem
+     * guarda apelido, avatar e capa por servidor é o próprio Discord.
+     */
+    botProfile: (guildId: string): Promise<BotProfile> =>
+      request(BotProfileSchema, `${guild(guildId)}/bot-profile`),
+
+    updateBotProfile: (guildId: string, input: BotProfileInput): Promise<BotProfile> =>
+      request(BotProfileSchema, `${guild(guildId)}/bot-profile`, {
+        method: 'PATCH',
+        body: BotProfileInputSchema.parse(input),
       }),
 
     bans: (guildId: string, query: Partial<BanListQuery> = {}): Promise<GuildBanPage> =>

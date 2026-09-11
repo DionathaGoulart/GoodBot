@@ -3,24 +3,21 @@
 import * as React from 'react';
 import {
   AFK_TIMEOUTS,
-  IMAGE_REJECTION_MESSAGE,
   MAX_GUILD_DESCRIPTION_LENGTH,
-  MAX_GUILD_IMAGE_BYTES,
   MAX_GUILD_NAME_LENGTH,
   MIN_GUILD_NAME_LENGTH,
   VERIFICATION_LEVELS,
   guildGates,
-  parseImageDataUrl,
 } from '@goodbot/shared';
 import { toast } from 'sonner';
 
 import { saveGuildProfileAction } from '@/app/actions/guild';
 import { CHANNEL_TYPES, TEXT_CHANNEL_TYPES } from '@/components/config/discord-options';
 import { DiscordPicker } from '@/components/config/discord-picker';
+import { Blocked, Field, ImageField, type ImageDraft } from '@/components/config/plain-fields';
 import { useAutoRefreshPause } from '@/components/layout/auto-refresh';
 import { Panel } from '@/components/retro/panel';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -32,12 +29,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { useGuildId } from '@/lib/use-guild-id';
 
 import type { GuildProfile } from '@goodbot/shared';
-
-/**
- * Uma imagem do formulário tem três estados, e os três precisam existir:
- * `undefined` não mexe, `null` remove no Discord, a data URL troca.
- */
-type ImageDraft = string | null | undefined;
 
 interface Values {
   name: string;
@@ -66,129 +57,6 @@ const AFK_LABEL: Record<number, string> = {
   1800: '30 MINUTOS',
   3600: '1 HORA',
 };
-
-/** Campo bloqueado mostra o porquê onde o campo estaria (§8, §6.8). */
-function Blocked({ reason }: { reason: string }) {
-  return <p className="border-2 border-warning p-3 text-xs text-warning-text">! {reason}</p>;
-}
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <Label>{label}</Label>
-      {hint ? <p className="text-xs opacity-60">{hint}</p> : null}
-      {children}
-    </div>
-  );
-}
-
-/**
- * Ícone e banner: preview com a moldura de 2px do §6.2, e a mesma validação
- * que a rota do bot faz — o arquivo é recusado aqui antes de virar 11 MB de
- * base64 subindo para a Vercel.
- */
-function ImageField({
-  label,
-  hint,
-  currentUrl,
-  draft,
-  onChange,
-  disabled,
-  blocked,
-  className,
-}: {
-  label: string;
-  hint?: string;
-  currentUrl: string | null;
-  draft: ImageDraft;
-  onChange: (next: ImageDraft) => void;
-  disabled: boolean;
-  blocked: string | null;
-  className: string;
-}) {
-  const inputRef = React.useRef<HTMLInputElement>(null);
-  const shown = draft === undefined ? currentUrl : draft;
-
-  const read = (file: File) => {
-    if (file.size > MAX_GUILD_IMAGE_BYTES) {
-      toast.error('ERRO', { description: IMAGE_REJECTION_MESSAGE.size });
-      return;
-    }
-    const reader = new FileReader();
-    reader.addEventListener('load', () => {
-      const url = String(reader.result);
-      const parsed = parseImageDataUrl(url);
-      if (!parsed.ok) {
-        toast.error('ERRO', { description: IMAGE_REJECTION_MESSAGE[parsed.reason] });
-        return;
-      }
-      onChange(url);
-    });
-    reader.readAsDataURL(file);
-  };
-
-  return (
-    <Field label={label} hint={hint}>
-      {blocked ? <Blocked reason={blocked} /> : null}
-      <div className="flex flex-wrap items-start gap-4">
-        <span className={`${className} flex items-center justify-center border-2 border-base-300`}>
-          {shown ? (
-            // Imagens do CDN do Discord e data URLs; `next/image` pediria host
-            // liberado e não ganharia nada num preview.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={shown} alt="" className="size-full object-cover" />
-          ) : (
-            <span className="screen-meta">SEM IMAGEM</span>
-          )}
-        </span>
-
-        <div className="flex flex-col gap-2">
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) read(file);
-              // Zera o input: escolher o mesmo arquivo de novo tem que disparar.
-              event.target.value = '';
-            }}
-          />
-          <button
-            type="button"
-            className="icon-btn"
-            disabled={disabled || blocked !== null}
-            onClick={() => inputRef.current?.click()}
-          >
-            ESCOLHER
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            disabled={disabled || blocked !== null || shown === null}
-            onClick={() => onChange(null)}
-          >
-            REMOVER
-          </button>
-          {draft === undefined ? null : (
-            <button type="button" className="icon-btn" onClick={() => onChange(undefined)}>
-              DESFAZER
-            </button>
-          )}
-        </div>
-      </div>
-    </Field>
-  );
-}
 
 /**
  * §6.3 — editar o servidor pelo painel. Nada aqui decide permissão: o

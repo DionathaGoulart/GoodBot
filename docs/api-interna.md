@@ -88,6 +88,7 @@ validação Zod) e `retryAfter` quando o 503 veio de rate limit.
 | Grupo         | O que dá                                                        |
 | ------------- | --------------------------------------------------------------- |
 | `guild`       | perfil, settings, ícone, banner, audit log                      |
+| `bot-profile` | apelido, foto e capa do bot **neste** servidor                   |
 | `channels`    | listar, criar, editar, apagar, lock/unlock, slowmode, overrides |
 | `roles`       | listar, criar, editar, apagar, mover uma casa                   |
 | `members`     | listar, detalhe, cargos de um membro                            |
@@ -185,9 +186,9 @@ anônimo.
 
 ## 6. Limites de corpo
 
-256 KB por padrão. As rotas que carregam imagem (ícone e banner da guild, capa
-de evento, emoji, sticker) aceitam 12 MB, porque uma imagem de 8 MB — o limite
-do Discord — vira ~11 MB depois da base64.
+256 KB por padrão. As rotas que carregam imagem (ícone e banner da guild, foto
+e capa do bot na guild, capa de evento, emoji, sticker) aceitam 12 MB, porque
+uma imagem de 8 MB — o limite do Discord — vira ~11 MB depois da base64.
 
 ## 7. Adicionar uma rota
 

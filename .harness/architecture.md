@@ -176,9 +176,9 @@ api/
   routes/          uma rota por assunto (16 arquivos)
 ```
 
-Rotas: `guild`, `channels`, `roles`, `members`, `messages`, `moderation`,
-`cases`, `invites`, `events`, `expressions`, `automod`, `config`, `commands`,
-`social`, `metrics`, `health`, `admin`.
+Rotas: `guild`, `bot-profile`, `channels`, `roles`, `members`, `messages`,
+`moderation`, `cases`, `invites`, `events`, `expressions`, `automod`, `config`,
+`commands`, `social`, `metrics`, `health`, `admin`, `registry`.
 
 Três invariantes que valem para **toda** rota nova:
 
@@ -224,8 +224,8 @@ app/
   admin/        o painel do dono do bot: saúde e uso, servidores, fila de
                 aprovação e blocklist, broadcast e manutenção
   g/[guildId]/
-    servidor, canais, cargos, membros, casos, banidos, convites,
-    eventos, emojis, mensagens, auditoria, system
+    servidor, perfil-do-bot, canais, cargos, membros, casos, banidos,
+    convites, eventos, emojis, mensagens, auditoria, system
     config/     general, moderation, automod, logs, welcome, autorole,
                 reaction-roles, tickets, tags, social, commands
   convite/      as telas dos links de convite (`invite.` e `demo.`)

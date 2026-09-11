@@ -56,6 +56,12 @@ export const NAV_GROUPS: NavGroup[] = [
         minimum: 'admin',
         keywords: ['nome', 'ícone', 'banner', 'vanity'],
       },
+      {
+        label: 'Perfil do bot',
+        href: '/perfil-do-bot',
+        minimum: 'admin',
+        keywords: ['apelido', 'nick', 'avatar', 'foto', 'capa', 'aparência'],
+      },
     ],
   },
   {
