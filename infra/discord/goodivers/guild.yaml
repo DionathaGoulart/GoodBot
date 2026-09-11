@@ -1,0 +1,273 @@
+# Gerado por `pnpm guild scan`. Retrato do servidor no momento da captura.
+#
+# Daqui em diante o arquivo é a fonte: edite, rode `pnpm guild plan` para ver a
+# diferença e `pnpm guild apply` para escrever.
+#
+# Não há ID nenhum aqui de propósito — tudo é por nome, resolvido contra a guild
+# durante o apply. Os segredos ficam no .env ao lado, que não é versionado.
+#
+# O que a captura NÃO traz, porque o spec não representa: fóruns, palcos,
+# tópicos, threads, emojis, stickers, eventos e webhooks. Eles continuam
+# existindo no servidor; o apply simplesmente não mexe neles.
+
+name: Goodivers
+roles:
+  - name: admin
+    permissions:
+      - CreateInstantInvite
+      - KickMembers
+      - BanMembers
+      - Administrator
+      - ManageChannels
+      - ManageGuild
+      - AddReactions
+      - ViewAuditLog
+      - PrioritySpeaker
+      - Stream
+      - ViewChannel
+      - SendMessages
+      - SendTTSMessages
+      - ManageMessages
+      - EmbedLinks
+      - AttachFiles
+      - ReadMessageHistory
+      - MentionEveryone
+      - UseExternalEmojis
+      - Connect
+      - Speak
+      - MuteMembers
+      - DeafenMembers
+      - MoveMembers
+      - UseVAD
+      - ChangeNickname
+      - ManageNicknames
+      - ManageRoles
+      - ManageWebhooks
+      - ManageGuildExpressions
+      - UseApplicationCommands
+      - ManageEvents
+      - ManageThreads
+      - CreatePublicThreads
+      - CreatePrivateThreads
+      - UseExternalStickers
+      - SendMessagesInThreads
+      - ModerateMembers
+      - SendPolls
+  - name: moderador
+    permissions:
+      - CreateInstantInvite
+      - KickMembers
+      - ManageChannels
+      - AddReactions
+      - ViewAuditLog
+      - PrioritySpeaker
+      - Stream
+      - ViewChannel
+      - SendMessages
+      - SendTTSMessages
+      - ManageMessages
+      - EmbedLinks
+      - AttachFiles
+      - ReadMessageHistory
+      - MentionEveryone
+      - UseExternalEmojis
+      - Connect
+      - Speak
+      - MuteMembers
+      - DeafenMembers
+      - MoveMembers
+      - UseVAD
+      - ChangeNickname
+      - ManageNicknames
+      - ManageWebhooks
+      - ManageGuildExpressions
+      - UseApplicationCommands
+      - ManageEvents
+      - ManageThreads
+      - CreatePublicThreads
+      - CreatePrivateThreads
+      - UseExternalStickers
+      - SendMessagesInThreads
+      - ModerateMembers
+      - SendPolls
+  - name: General
+    color: "#f1c40f"
+    hoist: true
+  - name: Super Cidadão
+    color: "#dfbf3f"
+    hoist: true
+    permissions:
+      - CreateInstantInvite
+      - AddReactions
+      - PrioritySpeaker
+      - Stream
+      - ViewChannel
+      - SendMessages
+      - SendTTSMessages
+      - EmbedLinks
+      - AttachFiles
+      - ReadMessageHistory
+      - MentionEveryone
+      - UseExternalEmojis
+      - Connect
+      - Speak
+      - MoveMembers
+      - UseVAD
+      - ChangeNickname
+      - CreatePublicThreads
+      - CreatePrivateThreads
+      - UseExternalStickers
+      - SendMessagesInThreads
+      - SendPolls
+  - name: Comandante
+    color: "#ff00c3"
+    hoist: true
+  - name: Almirante
+    color: "#ff0004"
+    hoist: true
+  - name: Marechal
+    color: "#44e6ff"
+    hoist: true
+  - name: Capitão
+    color: "#9b59b6"
+    hoist: true
+  - name: Chefe Espacial
+    color: "#e67e22"
+    hoist: true
+  - name: Sargento
+    color: "#2ecc71"
+    hoist: true
+  - name: Cadete Espacial
+    color: "#3498db"
+    hoist: true
+  - name: Cadete
+    color: "#607d8b"
+    hoist: true
+  - name: Youtube
+    color: "#ff0000"
+    permissions:
+      - AddReactions
+      - Stream
+      - ViewChannel
+      - SendMessages
+      - EmbedLinks
+      - AttachFiles
+      - ReadMessageHistory
+      - UseExternalEmojis
+      - Connect
+      - Speak
+      - UseVAD
+      - ChangeNickname
+      - CreatePublicThreads
+      - UseExternalStickers
+      - SendMessagesInThreads
+  - name: Bots
+    color: "#ff0000"
+    hoist: true
+  - name: 📡 Ordens Superiores
+    color: "#ffd700"
+    mentionable: true
+  - name: 📡 Esquadrão
+    color: "#4aa8ff"
+    mentionable: true
+  - name: Terminídeos
+    color: "#f0a000"
+  - name: Autômatos
+    color: "#c0392b"
+  - name: Iluminados
+    color: "#8e44ad"
+  - name: normal
+    permissions:
+      - CreateInstantInvite
+      - AddReactions
+      - Stream
+      - ViewChannel
+      - SendMessages
+      - EmbedLinks
+      - AttachFiles
+      - ReadMessageHistory
+      - UseExternalEmojis
+      - Connect
+      - Speak
+      - UseVAD
+      - ChangeNickname
+      - CreatePublicThreads
+      - UseExternalStickers
+      - SendMessagesInThreads
+channels:
+  - name: boas-vindas
+    overrides:
+      - role: "@everyone"
+        view: allow
+        send: deny
+  - name: files
+    overrides:
+      - role: Youtube
+        view: allow
+        send: deny
+      - role: normal
+        view: allow
+        send: deny
+      - role: moderador
+        view: allow
+        send: deny
+      - role: "@everyone"
+        view: allow
+        send: deny
+categories:
+  - name: PONTE DE COMANDO
+    channels:
+      - name: protocolo
+        topic: Conduta obrigatória a bordo. Leia antes de descer no planeta.
+        overrides:
+          - role: "@everyone"
+            view: allow
+            send: deny
+      - name: cargos
+        topic: Escolha sua facção e o que quer ser avisado. Painéis do Goodbot.
+        overrides:
+          - role: "@everyone"
+            view: allow
+            send: deny
+  - name: Novidades
+    overrides:
+      - role: "@everyone"
+        view: allow
+        send: deny
+    channels:
+      - name: boletins-oficiais
+        overrides:
+          - role: "@everyone"
+            view: allow
+            send: deny
+      - name: ordens-superiores
+        overrides:
+          - role: "@everyone"
+            view: allow
+            send: deny
+      - name: comunicados-oficiais
+        overrides:
+          - role: "@everyone"
+            view: allow
+            send: deny
+  - name: Área Social
+    channels:
+      - name: Zona de Combate¹
+        type: voice
+      - name: sala-de-comando
+      - name: Zona de Combate²
+        type: voice
+      - name: Comando Secreto
+        type: voice
+        overrides:
+          - role: "@everyone"
+            view: deny
+      - name: Criogenia
+        type: voice
+  - name: GUERRA GALÁCTICA
+    channels:
+      - name: relatorios-de-missao
+        topic: Clipes e prints de missão. Slowmode de 30s para o canal não virar enxurrada.
+        slowmode: 30
+      - name: recrutamento
+        topic: Procurando esquadrão? Chame aqui e marque @📡 Esquadrão.
