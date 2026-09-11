@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MAX_TIMEOUT_MS } from '../constants';
 import { InvalidateInputSchema } from './config';
-import { MemberSearchQuerySchema } from './members';
+import { MemberSearchQuerySchema, RoleListQuerySchema } from './members';
 import { ModerationActionInputSchema } from './moderation';
 
 const ids = { targetId: '123456789012345678', actorId: '223456789012345678' };
@@ -81,5 +81,22 @@ describe('MemberSearchQuerySchema', () => {
       limit: 50,
     });
     expect(MemberSearchQuerySchema.safeParse({ limit: '500' }).success).toBe(false);
+  });
+});
+
+describe('RoleListQuerySchema', () => {
+  it('sem o parâmetro a contagem fica de fora', () => {
+    expect(RoleListQuerySchema.parse({}).counts).toBe(false);
+  });
+
+  it('só `1` e `true` ligam a contagem', () => {
+    expect(RoleListQuerySchema.parse({ counts: '1' }).counts).toBe(true);
+    expect(RoleListQuerySchema.parse({ counts: 'true' }).counts).toBe(true);
+  });
+
+  it('qualquer outro valor não liga a varredura por engano', () => {
+    for (const counts of ['0', 'false', '', 'sim', 'null']) {
+      expect(RoleListQuerySchema.parse({ counts }).counts).toBe(false);
+    }
   });
 });

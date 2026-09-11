@@ -499,8 +499,17 @@ export function createInternalClient(options: InternalClientOptions) {
     channels: (guildId: string): Promise<GuildChannelSummary[]> =>
       request(GuildChannelSummarySchema.array(), `${guild(guildId)}/channels`),
 
-    roles: (guildId: string): Promise<GuildRoleSummary[]> =>
-      request(GuildRoleSummarySchema.array(), `${guild(guildId)}/roles`),
+    /**
+     * Cargos da guild. `counts` pede a contagem de membros por cargo, que
+     * custa uma varredura no Discord — só a tela de cargos precisa dela
+     * (ver `RoleListQuerySchema`). A checagem de permissão chama sem.
+     */
+    roles: (guildId: string, options: { counts?: boolean } = {}): Promise<GuildRoleSummary[]> =>
+      request(
+        GuildRoleSummarySchema.array(),
+        `${guild(guildId)}/roles`,
+        options.counts === true ? { query: { counts: '1' } } : {},
+      ),
 
     members: (
       guildId: string,

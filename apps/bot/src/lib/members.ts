@@ -60,6 +60,33 @@ export async function roleMemberCounts(guild: Guild): Promise<Map<string, number
   return counts;
 }
 
+/**
+ * Varreduras em voo, por guild. Uma varredura é uma sequência de chamadas REST
+ * ao Discord, e o discord.js serializa esse balde: dez pedidos concorrentes da
+ * mesma tela custavam dez varreduras em fila, e a décima esperava dez vezes a
+ * latência da primeira, passando do timeout de quem chamou.
+ *
+ * Aqui não há cache nem prazo de validade: a promessa é compartilhada só
+ * enquanto a varredura está acontecendo e some quando ela termina. Ninguém lê
+ * número velho; o que se evita é contar a mesma coisa N vezes ao mesmo tempo.
+ */
+const emVoo = new Map<string, Promise<Map<string, number> | null>>();
+
+/**
+ * `roleMemberCounts` com as chamadas concorrentes colapsadas numa só.
+ * É o que a API usa; a função pura continua exportada para os testes.
+ */
+export function sharedRoleMemberCounts(guild: Guild): Promise<Map<string, number> | null> {
+  const atual = emVoo.get(guild.id);
+  if (atual) return atual;
+
+  const scan = roleMemberCounts(guild).finally(() => {
+    emVoo.delete(guild.id);
+  });
+  emVoo.set(guild.id, scan);
+  return scan;
+}
+
 function countRoles(members: Iterable<GuildMember>): Map<string, number> {
   const counts = new Map<string, number>();
   for (const member of members) countMember(counts, member.roles.cache.keys());

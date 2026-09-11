@@ -18,7 +18,8 @@ export async function loadRoles(
   guildId: string,
 ): Promise<{ roles: GuildRoleSummary[]; error: string | null }> {
   try {
-    return { roles: await internalApi().roles(guildId), error: null };
+    // A única tela que mostra a contagem por cargo, e a única que a pede.
+    return { roles: await internalApi().roles(guildId, { counts: true }), error: null };
   } catch (error) {
     return { roles: [], error: failure(error).message ?? 'O bot não respondeu.' };
   }

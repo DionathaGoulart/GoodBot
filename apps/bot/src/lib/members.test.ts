@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { MEMBER_LIST_PAGE, ROLE_SCAN_MAX_PAGES, roleMemberCounts } from './members';
+import {
+  MEMBER_LIST_PAGE,
+  ROLE_SCAN_MAX_PAGES,
+  roleMemberCounts,
+  sharedRoleMemberCounts,
+} from './members';
 
 import type { Guild, GuildMember } from 'discord.js';
 
@@ -16,6 +21,7 @@ function guild(input: {
   cached?: GuildMember[];
   pages?: GuildMember[][];
   list?: () => Promise<never>;
+  id?: string;
 }): { guild: Guild; list: ReturnType<typeof vi.fn> } {
   const pages = input.pages ?? [];
   const list = vi.fn((options: { after?: string }) => {
@@ -29,6 +35,7 @@ function guild(input: {
   return {
     list,
     guild: {
+      id: input.id ?? '999999999999999999',
       memberCount: input.memberCount,
       members: { cache: new Map((input.cached ?? []).map((m) => [m.id, m])), list },
     } as unknown as Guild,
@@ -93,5 +100,55 @@ describe('roleMemberCounts', () => {
     const counts = await roleMemberCounts(g);
 
     expect(counts?.has(CARGO)).toBe(false);
+  });
+});
+
+describe('sharedRoleMemberCounts', () => {
+  const cenario = (id?: string) =>
+    guild({
+      memberCount: 3,
+      cached: [member('1', [EVERYONE, CARGO])],
+      pages: [[member('1', [EVERYONE, CARGO]), member('2', [EVERYONE]), member('3', [CARGO])]],
+      ...(id === undefined ? {} : { id }),
+    });
+
+  it('dez pedidos ao mesmo tempo custam uma varredura só', async () => {
+    const { guild: g, list } = cenario();
+
+    const todos = await Promise.all(Array.from({ length: 10 }, () => sharedRoleMemberCounts(g)));
+
+    // Uma varredura é uma página aqui; sem o compartilhamento seriam dez.
+    expect(list).toHaveBeenCalledTimes(1);
+    for (const counts of todos) expect(counts?.get(EVERYONE)).toBe(2);
+  });
+
+  it('não guarda número velho: terminada a varredura, a próxima conta de novo', async () => {
+    const { guild: g, list } = cenario();
+
+    await sharedRoleMemberCounts(g);
+    await sharedRoleMemberCounts(g);
+
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it('guilds diferentes varrem em separado', async () => {
+    const a = cenario('111111111111111110');
+    const b = cenario('222222222222222220');
+
+    await Promise.all([sharedRoleMemberCounts(a.guild), sharedRoleMemberCounts(b.guild)]);
+
+    expect(a.list).toHaveBeenCalledTimes(1);
+    expect(b.list).toHaveBeenCalledTimes(1);
+  });
+
+  it('varredura que falhou não gruda: a próxima tenta de novo', async () => {
+    const { guild: g } = guild({
+      memberCount: 50,
+      cached: [member('1', [EVERYONE])],
+      list: () => Promise.reject(new Error('intent GuildMembers desligada')),
+    });
+
+    await expect(sharedRoleMemberCounts(g)).resolves.toBeNull();
+    await expect(sharedRoleMemberCounts(g)).resolves.toBeNull();
   });
 });

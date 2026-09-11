@@ -62,6 +62,27 @@ export const GuildRoleSummarySchema = z.object({
 });
 export type GuildRoleSummary = z.infer<typeof GuildRoleSummarySchema>;
 
+/**
+ * Query de `GET /guilds/:id/roles`.
+ *
+ * Contar membros por cargo custa uma varredura por REST no Discord, e o
+ * discord.js serializa essa rota num balde só: N chamadas concorrentes viram
+ * N × latência, não uma. A lista de cargos, porém, é servida do cache e é
+ * de graça, e quem mais pede cargos no painel é a **checagem de permissão**,
+ * que só olha o bitfield e nunca usou a contagem.
+ *
+ * Por isso a contagem é opt-in: só a tela de cargos manda `counts=1`. Sem o
+ * parâmetro o campo `memberCount` não vai, e quem mostra escreve "—", que é
+ * o mesmo que já acontecia num servidor grande demais para varrer.
+ */
+export const RoleListQuerySchema = z.object({
+  counts: z
+    .string()
+    .optional()
+    .transform((value) => value === '1' || value === 'true'),
+});
+export type RoleListQuery = z.infer<typeof RoleListQuerySchema>;
+
 export const AuditLogQuerySchema = z.object({
   /** `AuditLogEvent` numérico do Discord. */
   type: z.coerce.number().int().optional(),

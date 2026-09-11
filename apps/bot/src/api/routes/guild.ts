@@ -5,13 +5,14 @@ import {
   GuildSettingsInputSchema,
   MAX_BAN_PAGE,
   MemberSearchQuerySchema,
+  RoleListQuerySchema,
   guildSettingsBlockers,
   isSnowflake,
 } from '@goodbot/shared';
 import { AuditLogEvent, DiscordAPIError, RESTJSONErrorCodes } from 'discord.js';
 import { Hono } from 'hono';
 
-import { roleMemberCounts } from '../../lib/members';
+import { sharedRoleMemberCounts } from '../../lib/members';
 import { fetchMember } from '../../services/moderation';
 import { requireActor, requireBotMember } from '../actor';
 import { ApiHttpError, forbidden, notFound } from '../errors';
@@ -300,11 +301,17 @@ export function createGuildRoutes(deps: ApiDeps): Hono<ApiEnv> {
         return c.json(channels);
       })
 
-      .get('/roles', async (c) => {
+      .get('/roles', validate('query', RoleListQuerySchema), async (c) => {
         const guild = c.get('guild');
+        // A contagem é opt-in porque ela é a **única** parte cara desta rota:
+        // a lista sai do cache em microssegundos, e contar membros varre o
+        // Discord por REST. Quem mais pede cargos é a checagem de permissão do
+        // painel, que só lê o bitfield. Sem o `counts=1` ela deixou de pagar
+        // uma varredura por requisição (ver `RoleListQuerySchema`).
+        //
         // `null` = servidor grande demais para contar sem varrer tudo; aí o
         // campo não vai e a tabela mostra "—" em vez de um zero mentiroso.
-        const counts = await roleMemberCounts(guild);
+        const counts = c.req.valid('query').counts ? await sharedRoleMemberCounts(guild) : null;
         const roles = [...guild.roles.cache.values()]
           .map((role) => toRoleSummary(role, counts ? (counts.get(role.id) ?? 0) : undefined))
           .sort((a, b) => b.position - a.position);
