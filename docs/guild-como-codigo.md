@@ -11,6 +11,39 @@ só o que falta.
 
 ## 1. Começando
 
+Se o servidor **já existe** — o caso comum —, não escreva nada à mão:
+
+```bash
+pnpm guild scan                 # lista os servidores em que o bot está
+pnpm guild scan "Meu servidor"  # varre um deles
+```
+
+O `scan` acha a guild pelo nome (ou pelo ID, ou por um pedaço do nome), lê a
+estrutura inteira e escreve `infra/discord/<slug>/` com três arquivos:
+
+| Arquivo       | Para quê                                                       |
+| ------------- | -------------------------------------------------------------- |
+| `servidor.md` | a análise em prosa: cargos, canais, permissões e o que destoa   |
+| `guild.yaml`  | a mesma estrutura em forma executável; é o que o `plan` compara |
+| `.env`        | só o `GUILD_ID`                                                |
+
+O único pré-requisito são `INTERNAL_API_URL` e `INTERNAL_API_TOKEN` no `.env`
+da **raiz**, que já estão lá para o resto do monorepo. Nada de `ACTOR_ID`: na
+hora do `apply` o autor sai do dono do servidor, que o bot já informa.
+
+O `servidor.md` não é um despejo do yaml em outro formato. Ele existe para a
+metade do trabalho que o yaml não cobre: decidir o que mudar exige entender o
+que há, e oitocentas linhas de YAML descrevem sem explicar. A seção
+**Observações** é o ponto — ela aponta categoria vazia, canal solto, cargo
+duplicado que o yaml não distinguiria, `@everyone` com permissão perigosa e o
+que está fora do alcance do formato.
+
+Varrer de novo depois de mexer no servidor pelo Discord: `--force`.
+
+### 1.0 Do zero
+
+Para um servidor novo, ou para escrever o arquivo à mão:
+
 ```bash
 cp -r infra/discord/exemplo infra/discord/meu-servidor
 $EDITOR infra/discord/meu-servidor/guild.yaml
@@ -30,16 +63,8 @@ O `.env` precisa de quatro coisas:
 Para copiar IDs, ligue **Configurações > Avançado > Modo desenvolvedor** no
 Discord.
 
-Depois, se o servidor **já existe** (o caso comum), capture o estado dele em
-vez de escrever o arquivo à mão:
-
-```bash
-pnpm guild import --server meu-servidor     # escreve o guild.yaml
-pnpm guild plan   --server meu-servidor     # tem de sair vazio
-```
-
-Se for um servidor novo, pule o import e escreva o `guild.yaml` do zero
-partindo do exemplo. O ciclo dali em diante é sempre o mesmo:
+O ciclo dali em diante é sempre o mesmo, tenha o arquivo vindo do `scan` ou da
+sua mão:
 
 ```bash
 pnpm guild list                             # servidores configurados
@@ -47,9 +72,11 @@ pnpm guild plan  --server meu-servidor      # não escreve nada
 pnpm guild apply --server meu-servidor      # executa após confirmar
 ```
 
-## 1.1 Trazendo um servidor que já existe
+## 1.1 `import`: só o yaml, numa pasta que já existe
 
-`pnpm guild import --server <slug>` lê o servidor pela API e escreve o
+`pnpm guild import --server <slug>` faz o que o `scan` faz, menos a análise, e
+exige que a pasta e o `.env` já estejam configurados. Serve para atualizar o
+yaml de um servidor que você já versiona. Lê o servidor pela API e escreve o
 `guild.yaml` que o descreve: cargos na ordem da hierarquia, categorias e canais
 na ordem em que aparecem, e as permissões de canal.
 
@@ -69,7 +96,7 @@ Se sobrar qualquer diferença, ele mostra qual e **sai com erro** — é sinal d
 que o import deixou algo passar, e você não deve confiar no arquivo antes de
 entender o que foi.
 
-### O que o import não traz
+### O que a captura não traz
 
 Ele avisa em cada caso, mas vale saber de antemão:
 
@@ -308,6 +335,7 @@ rodar de novo aplica exatamente o que faltou — nada é feito duas vezes.
 ## 12. Referência do CLI
 
 ```
+pnpm guild scan   [nome | id] [--force]
 pnpm guild list
 pnpm guild import --server <slug> [--force]
 pnpm guild plan   --server <slug> [--allow-delete] [--reorder]
@@ -316,6 +344,7 @@ pnpm guild apply  --server <slug> [--allow-delete] [--reorder] [--yes] [--interv
 
 | Flag             | Efeito                                                         |
 | ---------------- | -------------------------------------------------------------- |
+| `--force`        | sobrescreve arquivos que já existam (no `scan` e no `import`)  |
 | `--allow-delete` | inclui remoções. Sem isto o apply só cria e edita              |
 | `--reorder`      | corrige a ordem dos cargos (uma chamada por casa)              |
 | `--yes`          | pula a confirmação. Remoção continua exigindo digitar `APAGAR` |
@@ -324,3 +353,15 @@ pnpm guild apply  --server <slug> [--allow-delete] [--reorder] [--yes] [--interv
 O padrão de 120 ms existe porque quem apresenta o token cai no teto de 600
 requisições por minuto da API do bot. A folga deixa o painel continuar usável
 enquanto um `apply` longo roda.
+
+## 13. O rastro no Discord
+
+Toda escrita do `apply` chega no audit log do Discord com o motivo
+`Goodbot Reform · <slug>`. É o único rastro de que a mudança veio daqui e não
+de alguém clicando no servidor: o Discord sempre mostra o **bot** como autor,
+porque é o token dele que executa.
+
+A API do bot também exige um `actorId` em cada escrita, mas ele nunca chega ao
+Discord — é a checagem interna que impede o admin de um servidor de mexer em
+outro pelo painel (PRD §9.2). No CLI ele sai do dono da guild automaticamente;
+para assinar com outra pessoa, preencha `ACTOR_ID` no `.env` do servidor.

@@ -76,6 +76,9 @@ docs/                   guias: primeiros passos, módulos, API, banco, runbook
   vive em `infra/discord/<slug>/guild.yaml`, **sem nenhum ID** — tudo por nome.
   Segredo do servidor fica no `.env` ao lado, gitignored. Rode `pnpm guild plan`
   antes de `apply`; nada é apagado sem `--allow-delete`.
+  Para entender um servidor antes de mexer: `pnpm guild scan "<nome>"` escreve
+  `servidor.md` (a análise) ao lado do yaml. A skill `reformar-servidor` tem o
+  fluxo inteiro.
 - **Discord:** IDs sempre `string`; nunca `Number(snowflake)`. Comandos
   registrados como guild commands. Respeitar rate limits (PRD §7.4).
 - **API do bot:** desde a v1.1 ela é exposta na internet (`bot.<dominio>`),

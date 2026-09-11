@@ -51,7 +51,7 @@ validação Zod e rate limit.
 | `apps/web`              | Next.js App Router, Tailwind, shadcn/ui, Auth.js (Discord)      |
 | `packages/db`           | Drizzle: schema, migrations e repositories                      |
 | `packages/shared`       | Zod: contratos entre todo mundo. Não depende de ninguém         |
-| `packages/guild-config` | Guild como código: lê `guild.yaml` e aplica pela API do bot     |
+| `packages/guild-config` | Guild como código: varre, analisa e aplica pela API do bot      |
 
 A regra que mantém isso saudável: **as setas apontam para `shared`, nunca para
 fora dele.**
@@ -427,29 +427,43 @@ emite só as chamadas que faltam.
 
 ```
 infra/discord/<slug>/
+  servidor.md  a análise em prosa, escrita pelo scan — VERSIONADO
   guild.yaml   estrutura desejada — VERSIONADO, sem nenhum ID dentro
-  .env         GUILD_ID, ACTOR_ID, INTERNAL_API_URL/TOKEN — GITIGNORED
+  .env         GUILD_ID (+ ACTOR_ID opcional) — GITIGNORED
+               INTERNAL_API_URL/TOKEN saem do .env da raiz
 
 packages/guild-config/src/
   schema.ts   Zod do guild.yaml
-  load.ts     lê o yaml e o .env do servidor
-  state.ts    lê o estado atual pela API (roles, channels, detalhe de cada um)
+  load.ts     lê o yaml, o .env do servidor e o .env da raiz
+  state.ts    lê o estado atual pela API (uma chamada: GET /guilds/:id/state)
+  scan.ts     acha a guild pelo nome e escreve a análise em servidor.md
   import.ts   o caminho inverso: estado atual -> guild.yaml
   plan.ts     o diff: estado atual x spec = lista de operações
   apply.ts    executa o plano com throttle e resolução nome para ID
   format.ts   imprime o plano; separa as remoções num bloco próprio
-  cli.ts      `plan` e `apply`
+  cli.ts      `scan`, `import`, `plan` e `apply`
 ```
 
 ```bash
+pnpm guild scan                     # lista os servidores em que o bot está
+pnpm guild scan "<nome>"            # varre um: servidor.md + guild.yaml + .env
 pnpm guild list
-pnpm guild import --server <slug>   # captura um servidor existente
+pnpm guild import --server <slug>   # só o yaml, numa pasta já configurada
 pnpm guild plan   --server <slug>   # não escreve nada
 pnpm guild apply  --server <slug>
 ```
 
 Decisões que explicam o código:
 
+- **O retrato vem numa chamada só.** `GET /guilds/:id/state` devolve cargos,
+  canais e o detalhe de cada canal, montados do cache do gateway. O caminho
+  antigo — `/roles`, `/channels` e um `/channels/:id` por canal — custava
+  `2 + N` idas e voltas em série até a VM. `state.ts` mantém aquele caminho só
+  como plano B, para quando o bot publicado ainda não tiver a rota.
+- **`servidor.md` não é o yaml em outro formato.** Ele existe porque decidir o
+  que mudar exige entender o que há, e um yaml longo descreve sem explicar. A
+  seção de observações é o ponto: duplicação, categoria vazia, `@everyone` com
+  permissão perigosa, o que está fora do alcance do formato.
 - **Nenhum ID no yaml.** Tudo é por nome; `apply.ts` mantém um `Registry` que
   nasce do estado atual e cresce a cada criação. É o que torna o arquivo seguro
   num repositório público e aplicável em mais de um servidor.
@@ -509,7 +523,7 @@ messageCreate ─▶ events/automod/messages.ts
 **Um `pnpm guild apply`**
 
 ```
-load.ts lê guild.yaml + .env ─▶ state.ts busca cargos, canais e cada detalhe
+load.ts lê guild.yaml + .env ─▶ state.ts busca o retrato (GET /guilds/:id/state)
   ─▶ plan.ts monta a lista de operações ─▶ format.ts imprime e pede confirmação
   ─▶ apply.ts executa em ordem: cargos, categorias, canais, permissões
      (cada criação alimenta o Registry que a operação seguinte consulta)
@@ -598,6 +612,7 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | adicionar campo de config         | `shared/config/<módulo>.ts` → form em `apps/web/components/config/`      |
 | mexer no banco                    | `packages/db/src/schema/` → `db:generate` → revisar SQL → `db:migrate`   |
 | tarefa periódica                  | `apps/bot/src/jobs/` + registrar no `Scheduler`                          |
+| entender um servidor              | `pnpm guild scan "<nome>"` → `infra/discord/<slug>/servidor.md`          |
 | mudar a estrutura de um servidor  | `infra/discord/<slug>/guild.yaml` → `pnpm guild plan`                    |
 
 ## 12. Armadilhas conhecidas
