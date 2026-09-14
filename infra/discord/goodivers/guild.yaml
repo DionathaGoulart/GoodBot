@@ -340,8 +340,10 @@ categories:
       - name: Hellpod Alfa
         type: voice
       - name: procurar-esquadrão
-        topic: "Monte ou ache esquadrão: diga plataforma, dificuldade e horário. Marque @Democracia pra chamar quem quer jogar."
-        slowmode: 10
+        topic: Aqui só o Goodbot escreve. Clique no botão do jogo na mensagem fixada pra montar seu perfil e achar esquadrão.
+        overrides:
+          - role: "@everyone"
+            send: deny
       - name: Hellpod Bravo
         type: voice
       - name: Hellpod Charlie

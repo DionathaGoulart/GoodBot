@@ -3,7 +3,7 @@
 - **ID** `1316158165645000806`
 - **Membros** 11
 - **Dono** goodivers `270244055483547650`
-- **Varrido em** 14/09/2026, 09:45:39
+- **Varrido em** 14/09/2026, 15:22:44
 
 > Retrato do servidor na hora da varredura, gerado por `pnpm guild scan`.
 > Para reformar, edite o `guild.yaml` ao lado, rode `pnpm guild plan` para
@@ -127,16 +127,18 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
 ### Esquadrões
 
 - **Hellpod Alfa** · voz
-- **#procurar-esquadrão** · texto · slowmode 10s
-  - _Monte ou ache esquadrão: diga plataforma, dificuldade e horário. Marque @Democracia pra chamar quem quer jogar._
+- **#procurar-esquadrão** · texto
+  - _Aqui só o Goodbot escreve. Clique no botão do jogo na mensagem fixada pra montar seu perfil e achar esquadrão._
+  - `@everyone` — não escreve
 - **Hellpod Bravo** · voz
 - **Hellpod Charlie** · voz
 - **Hellpod Delta** · voz
 
 ### Squads
 
-- _(categoria)_ `@everyone` — não vê
 - _(categoria)_ `GoodBot` — vê, escreve
+- _(categoria)_ `@everyone` — não vê
+- _(vazia)_
 
 ### Staff
 
@@ -176,6 +178,7 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
 
 ## Observações
 
+- Categoria vazia: Squads.
 - Cargos sem nenhuma permissão — etiqueta ou alvo de override, sem poder próprio: Impulsionador, Cidadão, PC, PS5, Democracia, General, Comandante, Cadete Espacial, Cadete, Vídeos, Lives, Eventos, Boletins, Files.
 - Fora do alcance do `guild.yaml` — existem no servidor e o apply não os toca: loadouts-e-tier-lists (fórum), sugestões-de-vídeo (fórum), pergunte-ao-goodivers (fórum).
 - Emojis, stickers, eventos, webhooks e threads não entram nesta varredura nem no `guild.yaml`; continuam intactos.
