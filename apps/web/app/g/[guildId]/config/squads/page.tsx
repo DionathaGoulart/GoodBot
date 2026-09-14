@@ -5,7 +5,12 @@ import { requireGuildAccess } from '@/lib/auth/require';
 import { CONFIG_PAGES } from '@/lib/config-pages';
 import { loadChannelNames } from '@/lib/discord';
 import { loadGeneralPage, loadModuleConfig } from '@/lib/module-config';
-import { loadSearchingProfiles, loadSquadGames, loadSquadsOverview } from '@/lib/squads';
+import {
+  loadSearchingCounts,
+  loadSquadGames,
+  loadSquadPlayers,
+  loadSquadsOverview,
+} from '@/lib/squads';
 
 import { SquadsConfigForm } from './form';
 import { SquadsTabs } from './tabs';
@@ -17,28 +22,32 @@ export default async function SquadsConfigPage({
 }: PageProps<'/g/[guildId]/config/squads'>) {
   const { guildId } = await params;
   const session = await requireGuildAccess(guildId);
-  const gamesLoad = loadSquadGames(guildId);
-  const [{ config }, games, searching, overview, general, channelNames] = await Promise.all([
-    loadModuleConfig(guildId, 'squads'),
-    gamesLoad,
-    gamesLoad.then((rows) =>
-      loadSearchingProfiles(
-        guildId,
-        rows.map((row) => row.id),
-      ),
-    ),
-    loadSquadsOverview(guildId),
-    loadGeneralPage(guildId),
-    loadChannelNames(guildId),
-  ]);
   const readOnly = !hasAccess(session.level, 'admin');
+  const gamesLoad = loadSquadGames(guildId);
+  const configLoad = loadModuleConfig(guildId, 'squads');
+  const [{ config }, games, searchingCounts, overview, general, channelNames, players] =
+    await Promise.all([
+      configLoad,
+      gamesLoad,
+      loadSearchingCounts(guildId),
+      loadSquadsOverview(guildId),
+      loadGeneralPage(guildId),
+      loadChannelNames(guildId),
+      // Perfis, respostas e nomes são só de admin: para quem só lê, nem saem do banco.
+      readOnly
+        ? Promise.resolve(null)
+        : Promise.all([gamesLoad, configLoad]).then(([rows, module]) =>
+            loadSquadPlayers(guildId, rows, module.config),
+          ),
+    ]);
+  const searching = Object.values(searchingCounts).reduce((sum, count) => sum + count, 0);
 
   return (
     <>
       <ScreenHeader
         kicker="CONFIGURAÇÃO"
         title={CONFIG_PAGES.squads.title}
-        meta={`${games.length} JOGOS · ${overview.squads.length} SQUADS · ${searching.length} PROCURANDO`}
+        meta={`${games.length} JOGOS · ${overview.squads.length} SQUADS · ${searching} PROCURANDO`}
       />
 
       {overview.error ? (
@@ -54,8 +63,11 @@ export default async function SquadsConfigPage({
       <SquadsTabs
         games={games}
         overview={overview}
-        searching={searching}
+        searchingCounts={searchingCounts}
+        players={players}
         blocks={config.blocks}
+        maxSquadsPerUser={config.maxSquadsPerUser}
+        cooldownDays={config.reproposeCooldownDays}
         searchChannelId={config.searchChannelId}
         searchMessageId={config.searchMessageId}
         channelNames={channelNames}

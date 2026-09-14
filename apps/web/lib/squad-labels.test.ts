@@ -1,18 +1,114 @@
-import { DEFAULT_SQUAD_BLOCKS, SquadFieldKeySchema, toBits } from '@goodbot/shared';
+import {
+  DEFAULT_SQUAD_BLOCKS,
+  MANUAL_MATCH_ISSUE_CODES,
+  SquadFieldKeySchema,
+  toBits,
+  type SquadManualIssue,
+} from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import {
+  describeManualIssue,
   fieldKeyFromLabel,
   formatDate,
   formatDateTime,
   formatMatchResult,
   formatSquadWindow,
   parseOptionLines,
+  SQUAD_PROFILE_STATUS_LABEL,
   summarizeAvailability,
   withFieldKeys,
 } from './squad-labels';
 
 const BLOCKS = DEFAULT_SQUAD_BLOCKS;
+
+describe('SQUAD_PROFILE_STATUS_LABEL', () => {
+  it('dá nome a cada status de perfil', () => {
+    expect(SQUAD_PROFILE_STATUS_LABEL).toEqual({
+      searching: 'PROCURANDO',
+      in_squad: 'EM SQUAD',
+      paused: 'PAUSADO',
+    });
+  });
+});
+
+describe('describeManualIssue', () => {
+  const ANA = '300000000000000001';
+  const BIA = '300000000000000002';
+  const CAIO = '300000000000000003';
+  const NAMES: Record<string, string> = { [ANA]: 'Ana', [BIA]: 'Bia', [CAIO]: 'Caio' };
+  const LABELS: Record<string, string> = { plataforma: 'Plataforma', microfone: 'Microfone' };
+  const ctx = {
+    nameOf: (userId: string) => NAMES[userId] ?? userId,
+    squadSize: 2,
+    maxSquadsPerUser: 3,
+    cooldownDays: 7,
+    fieldLabel: (key: string) => LABELS[key] ?? key,
+    squadOf: (userId: string) => (userId === ANA ? 'Alfa' : null),
+  };
+
+  it.each<[SquadManualIssue['code'], string[], string]>([
+    ['PROFILE_NOT_FOUND', [ANA], 'Ana não tem perfil neste jogo.'],
+    ['NOT_IN_GUILD', [BIA], 'Bia não está mais no servidor.'],
+    [
+      'IN_SQUAD_IN_GAME',
+      [ANA],
+      'Ana já está num squad deste jogo (Alfa). Tire do squad antes de propor.',
+    ],
+    ['IN_OPEN_PROPOSAL', [BIA], 'Bia já está numa proposta aberta deste jogo.'],
+    [
+      'NO_COMMON_CELL',
+      [ANA, BIA],
+      'Ninguém do grupo divide o mesmo horário. Sem isso a proposta fica sem janela.',
+    ],
+    [
+      'GROUP_OVER_SIZE',
+      [ANA, BIA, CAIO],
+      'A turma é maior que o squad (3 de 2): quem aceitar primeiro fica com as vagas.',
+    ],
+    ['NOT_SEARCHING', [CAIO], 'O perfil de Caio está pausado, não procurando.'],
+    [
+      'AT_SQUAD_LIMIT',
+      [BIA],
+      'Bia já está no máximo de squads do servidor (3). Se aceitar, o bot só deixa entrar depois que sair de outro.',
+    ],
+    ['PAIR_COOLDOWN', [ANA, BIA], 'Ana e Bia receberam proposta juntos há menos de 7 dias.'],
+    ['PENDING_JOIN_REQUEST', [CAIO], 'Caio tem um pedido de entrada esperando resposta.'],
+  ])('%s', (code, userIds, text) => {
+    expect(describeManualIssue({ code, userIds }, ctx)).toBe(text);
+  });
+
+  it('não inventa o nome do squad quando o painel não conhece', () => {
+    expect(describeManualIssue({ code: 'IN_SQUAD_IN_GAME', userIds: [BIA] }, ctx)).toBe(
+      'Bia já está num squad deste jogo. Tire do squad antes de propor.',
+    );
+  });
+
+  it('lista os campos que precisam bater e concorda o verbo', () => {
+    const issue = { code: 'HARD_MISMATCH' as const, userIds: [ANA, BIA] };
+
+    expect(describeManualIssue({ ...issue, fieldKeys: ['plataforma'] }, ctx)).toBe(
+      'Ana e Bia responderam diferente em Plataforma, que precisa bater.',
+    );
+    expect(describeManualIssue({ ...issue, fieldKeys: ['plataforma', 'microfone'] }, ctx)).toBe(
+      'Ana e Bia responderam diferente em Plataforma e Microfone, que precisam bater.',
+    );
+  });
+
+  it('fala em dia no singular', () => {
+    expect(
+      describeManualIssue({ code: 'PAIR_COOLDOWN', userIds: [ANA, BIA] }, { ...ctx, cooldownDays: 1 }),
+    ).toBe('Ana e Bia receberam proposta juntos há menos de 1 dia.');
+  });
+
+  it('tem texto para todo código, sem travessão', () => {
+    for (const code of MANUAL_MATCH_ISSUE_CODES) {
+      const text = describeManualIssue({ code, userIds: [ANA, BIA], fieldKeys: ['plataforma'] }, ctx);
+      expect(text.length).toBeGreaterThan(0);
+      expect(text).not.toContain('—');
+    }
+  });
+});
 
 describe('formatSquadWindow', () => {
   it('escreve dia, faixa e horário', () => {

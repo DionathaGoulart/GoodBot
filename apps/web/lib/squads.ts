@@ -1,20 +1,36 @@
 import 'server-only';
 
 import {
+  countSearchingProfilesByGame,
   createSquadGame,
   deleteSquadGame,
-  listSearchingProfiles,
+  getSquadGame,
+  listMembersOfSquads,
+  listOpenSquadProposals,
+  listPendingJoinRequests,
+  listRecentProposalPairs,
   listSquadGames,
+  listSquadProfilesByGame,
   listSquads,
   updateSquadGame,
 } from '@goodbot/db';
 import {
+  DAY_MS,
+  DeleteSquadProfileInputSchema,
+  EditSquadProfileAnswersInputSchema,
   InternalApiError,
+  ProposeSquadManuallyInputSchema,
+  RemoveSquadMemberInputSchema,
+  SetSquadProfileStatusInputSchema,
   SquadGameInputSchema,
+  SquadManualCheckInputSchema,
   SquadNameSchema,
+  validateAnswers,
   type SquadChannelUsage,
   type SquadGameInput,
+  type SquadManualCheck,
   type SquadProposalSummary,
+  type SquadsConfig,
   type SquadSummary,
 } from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
@@ -23,24 +39,18 @@ import { failure } from './action-error';
 import { withAudit, type AuditActor } from './audit';
 import { requireGuildAccess } from './auth/require';
 import { db } from './db';
+import { loadMemberSummaries } from './discord';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 import { formatMatchResult } from './squad-labels';
+
+import type { SquadPlayersData } from './squad-players';
+import type { z } from 'zod';
 
 const PATH = (guildId: string) => `/g/${guildId}/config/squads`;
 
 export type SquadGameRow = SquadGameInput & {
   id: string;
-};
-
-export type SearchingProfileRow = {
-  userId: string;
-  gameId: string;
-  availability: number;
-  /** ISO da última mudança no perfil (respostas, grade ou status). */
-  updatedAt: string;
-  /** ISO da última proposta em que o perfil entrou; `null` = nunca. */
-  lastMatchedAt: string | null;
 };
 
 /** O que vem do bot. Fora do ar, as listas vêm vazias e o motivo sobe. */
@@ -90,28 +100,100 @@ export async function loadSquadsOverview(guildId: string): Promise<SquadsOvervie
   }
 }
 
+/** `gameId → perfis procurando`, direto do banco: cabeçalho e aba JOGOS, em qualquer nível. */
+export async function loadSearchingCounts(guildId: string): Promise<Record<string, number>> {
+  return countSearchingProfilesByGame(db(), guildId);
+}
+
 /**
- * Perfis na fila do match, direto do banco (o retrato do bot só traz a
- * contagem). Uma consulta por jogo: a guild tem poucos, e cada uma usa o
- * índice `(guild, jogo, status)`. Quem espera há mais tempo vem primeiro.
+ * A aba JOGADORES, só para admin: perfis de todos os status, propostas,
+ * squads vivos, pedidos e duplas em cooldown vêm do banco; nome e avatar, do
+ * bot. Uma consulta de perfis e de cooldown por jogo (a guild tem poucos). Com
+ * o bot fora do ar os nomes caem para o ID e o resto continua funcionando.
  */
-export async function loadSearchingProfiles(
+export async function loadSquadPlayers(
   guildId: string,
-  gameIds: readonly string[],
-): Promise<SearchingProfileRow[]> {
-  const perGame = await Promise.all(
-    gameIds.map((gameId) => listSearchingProfiles(db(), guildId, gameId)),
-  );
-  return perGame
-    .flat()
-    .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime())
-    .map((row) => ({
+  games: readonly Pick<SquadGameRow, 'id'>[],
+  config: Pick<SquadsConfig, 'reproposeCooldownDays'>,
+): Promise<SquadPlayersData> {
+  const since = new Date(Date.now() - config.reproposeCooldownDays * DAY_MS);
+  const [perGame, proposals, squads, requests, pairsPerGame] = await Promise.all([
+    Promise.all(games.map((game) => listSquadProfilesByGame(db(), guildId, game.id))),
+    listOpenSquadProposals(db(), guildId),
+    listSquads(db(), guildId, { statuses: ['open', 'full'] }),
+    listPendingJoinRequests(db(), guildId),
+    Promise.all(games.map((game) => listRecentProposalPairs(db(), guildId, game.id, since))),
+  ]);
+  const profiles = perGame.flat();
+  const [members, summaries] = await Promise.all([
+    listMembersOfSquads(
+      db(),
+      guildId,
+      squads.map((squad) => squad.id),
+    ),
+    loadMemberSummaries(
+      guildId,
+      profiles.map((profile) => profile.userId),
+    ),
+  ]);
+
+  const memberIds = new Map<string, string[]>();
+  for (const member of members) {
+    memberIds.set(member.squadId, [...(memberIds.get(member.squadId) ?? []), member.userId]);
+  }
+
+  return {
+    profiles: profiles.map((row) => ({
       userId: row.userId,
       gameId: row.gameId,
+      status: row.status,
       availability: row.availability,
+      answers: row.answers,
+      createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       lastMatchedAt: row.lastMatchedAt?.toISOString() ?? null,
-    }));
+    })),
+    openProposals: proposals.map((row) => ({
+      id: row.id,
+      gameId: row.gameId,
+      userIds: row.userIds,
+      acceptedIds: row.acceptedIds,
+      declinedIds: row.declinedIds,
+      squadId: row.squadId,
+      threadId: row.threadId,
+      expiresAt: row.expiresAt.toISOString(),
+      createdAt: row.createdAt.toISOString(),
+    })),
+    liveSquads: squads.flatMap((row) =>
+      row.status === 'archived'
+        ? []
+        : [
+            {
+              id: row.id,
+              gameId: row.gameId,
+              name: row.name,
+              status: row.status,
+              day: row.day,
+              block: row.block,
+              textChannelId: row.textChannelId,
+              memberIds: memberIds.get(row.id) ?? [],
+            },
+          ],
+    ),
+    pendingRequests: requests.map((row) => ({
+      id: row.id,
+      squadId: row.squadId,
+      userId: row.userId,
+      createdAt: row.createdAt.toISOString(),
+    })),
+    cooldownPairs: Object.fromEntries(
+      games.map((game, index) => [game.id, pairsPerGame[index] ?? []]),
+    ),
+    members: summaries.members,
+    missingMemberIds: summaries.missing,
+    unresolvedMemberIds: summaries.unresolved,
+    membersError: summaries.error,
+  };
 }
 
 function parseBody(raw: FormDataEntryValue | null): unknown {
@@ -227,9 +309,10 @@ export async function removeSquadGame(guildId: string, formData: FormData): Prom
 }
 
 // ── ações que passam pelo bot ───────────────────────────────────────────────
-// Arquivar, renomear e publicar já entram na auditoria pelo bot, com origem
-// `dashboard`; gravar aqui também duplicaria a linha. O match não: o bot não
-// registra, então o painel registra.
+// Arquivar, renomear, publicar, o match manual e a gestão de jogadores já
+// entram na auditoria pelo bot, com origem `dashboard`; gravar aqui também
+// duplicaria a linha. O match automático não: o bot não registra, então o
+// painel registra.
 
 export async function publishSquadSearchMessage(guildId: string): Promise<ActionResult> {
   const session = await requireGuildAccess(guildId, 'admin');
@@ -309,5 +392,243 @@ export async function renameSquad(guildId: string, formData: FormData): Promise<
   return {
     ok: true,
     message: 'Nome trocado. O canal pode levar alguns minutos: o Discord limita renomear canal.',
+  };
+}
+
+// ── jogadores: match manual e gestão ────────────────────────────────────────
+
+/** Resultado das ações que mandam DM: `notified` diz se a pessoa foi avisada. */
+export type PlayerActionResult = ActionResult & { notified?: boolean };
+
+export type ManualCheckResult =
+  | { ok: true; check: SquadManualCheck }
+  | { ok: false; message: string };
+
+/** O corpo das ações de jogador: um JSON no campo `payload`. */
+function payloadOf(formData: FormData): Record<string, unknown> {
+  const raw = parseBody(formData.get('payload'));
+  return typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : {};
+}
+
+const textOf = (value: unknown): string | null =>
+  typeof value === 'string' && value.length > 0 ? value : null;
+
+/** Erro de validação no molde do painel: a primeira mensagem no toast, cada campo marcado. */
+function invalid(error: z.ZodError): ActionResult {
+  return {
+    ok: false,
+    message: error.issues[0]?.message ?? 'Confira os campos marcados.',
+    fieldErrors: toFieldErrors(error),
+  };
+}
+
+/** A frase do toast, no molde de `punishMember`: a ação valeu, com ou sem a DM. */
+function notifiedMessage(done: string, notified: boolean): string {
+  return notified
+    ? `${done} e a pessoa foi avisada por DM.`
+    : `${done}, mas não consegui avisar a pessoa por DM (DM fechada ou fora do servidor).`;
+}
+
+/** Revisão da turma marcada: o bot confere com linhas frescas e quem saiu do servidor. */
+export async function checkManualSquadMatch(
+  guildId: string,
+  formData: FormData,
+): Promise<ManualCheckResult> {
+  const session = await requireGuildAccess(guildId, 'admin');
+
+  const payload = payloadOf(formData);
+  const gameId = textOf(payload.gameId);
+  if (!gameId) return { ok: false, message: 'Jogo inválido.' };
+  const parsed = SquadManualCheckInputSchema.safeParse({
+    actorId: session.user.id,
+    userIds: payload.userIds,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0]?.message ?? 'Seleção inválida.' };
+  }
+
+  try {
+    return { ok: true, check: await internalApi().checkSquadManualMatch(guildId, gameId, parsed.data) };
+  } catch (error) {
+    return { ok: false, message: failure(error).message ?? 'O bot não respondeu.' };
+  }
+}
+
+/**
+ * Abre a proposta com a turma. `stale` quando o bot recalculou e achou aviso
+ * que o admin não confirmou: a situação mudou desde a revisão, e o diálogo
+ * precisa mostrar de novo.
+ */
+export async function proposeManualSquad(
+  guildId: string,
+  formData: FormData,
+): Promise<ActionResult & { stale?: boolean }> {
+  const session = await requireGuildAccess(guildId, 'admin');
+
+  const payload = payloadOf(formData);
+  const gameId = textOf(payload.gameId);
+  if (!gameId) return { ok: false, message: 'Jogo inválido.' };
+  const parsed = ProposeSquadManuallyInputSchema.safeParse({
+    actorId: session.user.id,
+    userIds: payload.userIds,
+    confirmedWarnings: payload.confirmedWarnings,
+  });
+  if (!parsed.success) return invalid(parsed.error);
+
+  try {
+    await internalApi().proposeSquadManually(guildId, gameId, parsed.data);
+  } catch (error) {
+    if (error instanceof InternalApiError && error.code === 'MANUAL_MATCH_UNCONFIRMED') {
+      return { ...failure(error), stale: true };
+    }
+    return failure(error);
+  }
+
+  revalidatePath(PATH(guildId));
+  return {
+    ok: true,
+    message: 'Proposta aberta numa thread privada do canal de busca. Ninguém entra em squad sem aceitar.',
+  };
+}
+
+export async function setPlayerStatus(
+  guildId: string,
+  formData: FormData,
+): Promise<PlayerActionResult> {
+  const session = await requireGuildAccess(guildId, 'admin');
+
+  const payload = payloadOf(formData);
+  const gameId = textOf(payload.gameId);
+  const userId = textOf(payload.userId);
+  if (!gameId || !userId) return { ok: false, message: 'Jogador inválido.' };
+  const parsed = SetSquadProfileStatusInputSchema.safeParse({
+    actorId: session.user.id,
+    status: payload.status,
+    reason: payload.reason,
+  });
+  if (!parsed.success) return invalid(parsed.error);
+
+  let result;
+  try {
+    result = await internalApi().setSquadProfileStatus(guildId, gameId, userId, parsed.data);
+  } catch (error) {
+    return failure(error);
+  }
+
+  revalidatePath(PATH(guildId));
+  const done = parsed.data.status === 'paused' ? 'Busca pausada' : 'Busca retomada';
+  return { ok: true, notified: result.notified, message: notifiedMessage(done, result.notified) };
+}
+
+/** Respostas conferidas aqui contra os campos atuais, para o formulário marcar o campo. */
+export async function editPlayerAnswers(
+  guildId: string,
+  formData: FormData,
+): Promise<PlayerActionResult> {
+  const session = await requireGuildAccess(guildId, 'admin');
+
+  const payload = payloadOf(formData);
+  const gameId = textOf(payload.gameId);
+  const userId = textOf(payload.userId);
+  if (!gameId || !userId) return { ok: false, message: 'Jogador inválido.' };
+  const parsed = EditSquadProfileAnswersInputSchema.safeParse({
+    actorId: session.user.id,
+    answers: payload.answers,
+    reason: payload.reason,
+  });
+  if (!parsed.success) return invalid(parsed.error);
+
+  const game = await getSquadGame(db(), guildId, gameId);
+  if (!game) return { ok: false, message: 'Esse jogo não existe mais.' };
+  const checked = validateAnswers(game.fields, parsed.data.answers);
+  if (!checked.success) {
+    const fieldErrors = Object.fromEntries(
+      Object.entries(toFieldErrors(checked.error)).map(([path, message]) => [
+        path === '' ? 'answers' : `answers.${path}`,
+        message,
+      ]),
+    );
+    return { ok: false, message: 'Confira as respostas marcadas.', fieldErrors };
+  }
+
+  let result;
+  try {
+    result = await internalApi().editSquadProfileAnswers(guildId, gameId, userId, {
+      ...parsed.data,
+      answers: checked.data,
+    });
+  } catch (error) {
+    return failure(error);
+  }
+
+  revalidatePath(PATH(guildId));
+  return {
+    ok: true,
+    notified: result.notified,
+    message: notifiedMessage('Respostas salvas', result.notified),
+  };
+}
+
+export async function deletePlayerProfile(
+  guildId: string,
+  formData: FormData,
+): Promise<PlayerActionResult> {
+  const session = await requireGuildAccess(guildId, 'admin');
+
+  const payload = payloadOf(formData);
+  const gameId = textOf(payload.gameId);
+  const userId = textOf(payload.userId);
+  if (!gameId || !userId) return { ok: false, message: 'Jogador inválido.' };
+  const parsed = DeleteSquadProfileInputSchema.safeParse({
+    actorId: session.user.id,
+    reason: payload.reason,
+  });
+  if (!parsed.success) return invalid(parsed.error);
+
+  let result;
+  try {
+    result = await internalApi().deleteSquadProfile(guildId, gameId, userId, parsed.data);
+  } catch (error) {
+    return failure(error);
+  }
+
+  revalidatePath(PATH(guildId));
+  return {
+    ok: true,
+    notified: result.notified,
+    message: notifiedMessage('Perfil apagado', result.notified),
+  };
+}
+
+export async function removePlayerFromSquad(
+  guildId: string,
+  formData: FormData,
+): Promise<PlayerActionResult> {
+  const session = await requireGuildAccess(guildId, 'admin');
+
+  const payload = payloadOf(formData);
+  const squadId = textOf(payload.squadId);
+  const userId = textOf(payload.userId);
+  if (!squadId || !userId) return { ok: false, message: 'Membro inválido.' };
+  const parsed = RemoveSquadMemberInputSchema.safeParse({
+    actorId: session.user.id,
+    reason: payload.reason,
+  });
+  if (!parsed.success) return invalid(parsed.error);
+
+  let result;
+  try {
+    result = await internalApi().removeSquadMember(guildId, squadId, userId, parsed.data);
+  } catch (error) {
+    return failure(error);
+  }
+
+  revalidatePath(PATH(guildId));
+  return {
+    ok: true,
+    notified: result.notified,
+    message: notifiedMessage('Pessoa tirada do squad', result.notified),
   };
 }

@@ -5,6 +5,8 @@ import {
   type SquadBlockConfig,
   type SquadFieldMatch,
   type SquadFieldType,
+  type SquadManualIssue,
+  type SquadProfileStatus,
   type SquadStatus,
 } from '@goodbot/shared';
 
@@ -38,6 +40,68 @@ export const SQUAD_STATUS_LABEL: Record<SquadStatus, string> = {
   full: 'CHEIO',
   archived: 'ARQUIVADO',
 };
+
+export const SQUAD_PROFILE_STATUS_LABEL: Record<SquadProfileStatus, string> = {
+  searching: 'PROCURANDO',
+  in_squad: 'EM SQUAD',
+  paused: 'PAUSADO',
+};
+
+// ── Match manual ────────────────────────────────────────────────────────────
+
+/** O que o texto de um bloqueio ou aviso precisa saber além da própria issue. */
+export interface ManualIssueContext {
+  nameOf: (userId: string) => string;
+  squadSize: number;
+  maxSquadsPerUser: number;
+  cooldownDays: number;
+  fieldLabel: (key: string) => string;
+  /** O squad deste jogo em que a pessoa está, quando o painel conhece. */
+  squadOf?: (userId: string) => string | null;
+}
+
+/** "a", "a e b", "a, b e c". */
+function listJoin(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} e ${items[items.length - 1] ?? ''}`;
+}
+
+/** Uma frase por bloqueio ou aviso da revisão do match manual, com os nomes. */
+export function describeManualIssue(
+  issue: Pick<SquadManualIssue, 'code' | 'userIds' | 'fieldKeys'>,
+  ctx: ManualIssueContext,
+): string {
+  const [first = '', second = ''] = issue.userIds;
+  const name = ctx.nameOf(first);
+  switch (issue.code) {
+    case 'PROFILE_NOT_FOUND':
+      return `${name} não tem perfil neste jogo.`;
+    case 'NOT_IN_GUILD':
+      return `${name} não está mais no servidor.`;
+    case 'IN_SQUAD_IN_GAME': {
+      const squad = ctx.squadOf?.(first);
+      return `${name} já está num squad deste jogo${squad ? ` (${squad})` : ''}. Tire do squad antes de propor.`;
+    }
+    case 'IN_OPEN_PROPOSAL':
+      return `${name} já está numa proposta aberta deste jogo.`;
+    case 'NO_COMMON_CELL':
+      return 'Ninguém do grupo divide o mesmo horário. Sem isso a proposta fica sem janela.';
+    case 'GROUP_OVER_SIZE':
+      return `A turma é maior que o squad (${String(issue.userIds.length)} de ${String(ctx.squadSize)}): quem aceitar primeiro fica com as vagas.`;
+    case 'NOT_SEARCHING':
+      return `O perfil de ${name} está pausado, não procurando.`;
+    case 'AT_SQUAD_LIMIT':
+      return `${name} já está no máximo de squads do servidor (${String(ctx.maxSquadsPerUser)}). Se aceitar, o bot só deixa entrar depois que sair de outro.`;
+    case 'PAIR_COOLDOWN':
+      return `${name} e ${ctx.nameOf(second)} receberam proposta juntos há menos de ${String(ctx.cooldownDays)} ${ctx.cooldownDays === 1 ? 'dia' : 'dias'}.`;
+    case 'HARD_MISMATCH': {
+      const fields = (issue.fieldKeys ?? []).map(ctx.fieldLabel);
+      return `${name} e ${ctx.nameOf(second)} responderam diferente em ${listJoin(fields)}, que ${fields.length > 1 ? 'precisam' : 'precisa'} bater.`;
+    }
+    case 'PENDING_JOIN_REQUEST':
+      return `${name} tem um pedido de entrada esperando resposta.`;
+  }
+}
 
 function dayShort(day: number): string {
   return SQUAD_DAY_SHORT[((day % SQUAD_DAYS) + SQUAD_DAYS) % SQUAD_DAYS] ?? '?';

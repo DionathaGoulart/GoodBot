@@ -17,10 +17,11 @@ import { useGuildId } from '@/lib/use-guild-id';
 
 import { withId } from './form-data';
 import { EMPTY_GAME, GameSheet, type GameEditing } from './game-sheet';
-import { SearchingTable } from './searching-table';
+import { PlayersTab } from './players-tab';
 import { SquadsTable } from './squads-table';
 
-import type { SearchingProfileRow, SquadGameRow, SquadsOverviewData } from '@/lib/squads';
+import type { SquadPlayersData } from '@/lib/squad-players';
+import type { SquadGameRow, SquadsOverviewData } from '@/lib/squads';
 import type { SquadBlockConfig } from '@goodbot/shared';
 
 /** A mensagem fixa: é por ela que os membros entram no módulo. */
@@ -79,13 +80,16 @@ function SearchMessagePanel({
 /**
  * As quatro faces do módulo numa página só: como ele se comporta
  * (`Configuração`), para que jogos (`Jogos`), quem já joga junto (`Squads`)
- * e quem ainda está na fila do match (`Procurando`).
+ * e quem tem perfil, com o match manual (`Jogadores`).
  */
 export function SquadsTabs({
   games,
   overview,
-  searching,
+  searchingCounts,
+  players,
   blocks,
+  maxSquadsPerUser,
+  cooldownDays,
   searchChannelId,
   searchMessageId,
   channelNames,
@@ -95,8 +99,13 @@ export function SquadsTabs({
 }: {
   games: SquadGameRow[];
   overview: SquadsOverviewData;
-  searching: SearchingProfileRow[];
+  /** `gameId → perfis procurando`. */
+  searchingCounts: Record<string, number>;
+  /** Só para admin; `null` para quem só lê. */
+  players: SquadPlayersData | null;
   blocks: SquadBlockConfig[];
+  maxSquadsPerUser: number;
+  cooldownDays: number;
   searchChannelId: string | null;
   searchMessageId: string | null;
   channelNames: Record<string, string>;
@@ -109,13 +118,10 @@ export function SquadsTabs({
   const guildId = useGuildId();
   const router = useRouter();
   const [editingGame, setEditingGame] = React.useState<GameEditing | null>(null);
-  const searchingByGame = React.useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const profile of searching) {
-      counts.set(profile.gameId, (counts.get(profile.gameId) ?? 0) + 1);
-    }
-    return counts;
-  }, [searching]);
+  const searchingByGame = React.useMemo(
+    () => new Map(Object.entries(searchingCounts)),
+    [searchingCounts],
+  );
 
   const gameColumns = React.useMemo<PanelColumnDef<SquadGameRow>[]>(
     () => [
@@ -219,7 +225,7 @@ export function SquadsTabs({
           <TabsTrigger value="config">CONFIGURAÇÃO</TabsTrigger>
           <TabsTrigger value="games">JOGOS</TabsTrigger>
           <TabsTrigger value="squads">SQUADS</TabsTrigger>
-          <TabsTrigger value="searching">PROCURANDO</TabsTrigger>
+          <TabsTrigger value="players">JOGADORES</TabsTrigger>
         </TabsList>
 
         <TabsContent value="config">
@@ -281,14 +287,15 @@ export function SquadsTabs({
           />
         </TabsContent>
 
-        <TabsContent value="searching">
-          <SearchingTable
-            profiles={searching}
-            proposals={overview.openProposals}
+        <TabsContent value="players">
+          <PlayersTab
             games={games}
+            players={players}
+            proposals={overview.openProposals}
             blocks={blocks}
             timeZone={timeZone}
-            readOnly={readOnly}
+            maxSquadsPerUser={maxSquadsPerUser}
+            cooldownDays={cooldownDays}
           />
         </TabsContent>
       </Tabs>
