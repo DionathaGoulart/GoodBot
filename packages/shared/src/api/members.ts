@@ -21,6 +21,37 @@ export const GuildMemberSummarySchema = z.object({
 });
 export type GuildMemberSummary = z.infer<typeof GuildMemberSummarySchema>;
 
+/** Teto de IDs por consulta em lote: o mesmo de uma busca de membros pelo gateway. */
+export const MAX_MEMBER_LOOKUP_IDS = 100;
+
+/**
+ * Query de `GET /guilds/:id/members/lookup`: IDs separados por vírgula. Espaço
+ * e repetido saem antes de contar, então `a, a` é um ID só.
+ */
+export const MemberLookupQuerySchema = z.object({
+  ids: z
+    .string()
+    .transform((raw) => [
+      ...new Set(
+        raw
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean),
+      ),
+    ])
+    .pipe(z.array(SnowflakeSchema).min(1).max(MAX_MEMBER_LOOKUP_IDS)),
+});
+export type MemberLookupQuery = z.infer<typeof MemberLookupQuerySchema>;
+
+export const MemberLookupResultSchema = z.object({
+  members: z.array(GuildMemberSummarySchema),
+  /** Confirmados fora do servidor. */
+  missing: z.array(SnowflakeSchema),
+  /** Não deu para conferir (o gateway não respondeu a tempo). */
+  unresolved: z.array(SnowflakeSchema),
+});
+export type MemberLookupResult = z.infer<typeof MemberLookupResultSchema>;
+
 export const GuildMemberDetailSchema = GuildMemberSummarySchema.extend({
   createdAt: z.iso.datetime(),
   /** Fim do timeout ativo, se houver. */

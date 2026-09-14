@@ -4,6 +4,7 @@ import {
   BanListQuerySchema,
   GuildSettingsInputSchema,
   MAX_BAN_PAGE,
+  MemberLookupQuerySchema,
   MemberSearchQuerySchema,
   RoleListQuerySchema,
   guildSettingsBlockers,
@@ -28,7 +29,12 @@ import { toModerationResult } from './moderation';
 import { validate } from '../validate';
 
 import type { ApiDeps, ApiEnv } from '../context';
-import type { BanListQuery, GuildBanSummary, GuildProfile } from '@goodbot/shared';
+import type {
+  BanListQuery,
+  GuildBanSummary,
+  GuildProfile,
+  MemberLookupResult,
+} from '@goodbot/shared';
 import type {
   Guild,
   GuildBan,
@@ -76,6 +82,42 @@ export async function searchMembers(
   if (!found) return [];
 
   return [...found.values()].sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'));
+}
+
+/**
+ * Membros por lista de IDs, para as tabelas que mostram nome e avatar de quem
+ * aparece nelas (os jogadores dos squads). Listar a primeira página de membros
+ * não serve num servidor maior, e um `/members/:userId` por pessoa gastaria o
+ * teto da rota.
+ *
+ * Cache primeiro; o resto vai numa busca só pelo gateway, que devolve quem
+ * está no servidor e ignora quem não está. Se o gateway falhar (timeout), os
+ * IDs que faltavam voltam em `unresolved` e a tela mostra o ID no lugar do
+ * nome.
+ */
+export async function lookupMembers(
+  guild: Guild,
+  ids: readonly string[],
+): Promise<MemberLookupResult> {
+  const found: GuildMember[] = [];
+  const pending: string[] = [];
+  for (const id of ids) {
+    const cached = guild.members.cache.get(id);
+    if (cached) found.push(cached);
+    else pending.push(id);
+  }
+
+  const missing: string[] = [];
+  const unresolved: string[] = [];
+  if (pending.length > 0) {
+    const fetched = await guild.members.fetch({ user: pending }).catch(() => null);
+    for (const id of pending) {
+      const member = fetched?.get(id);
+      if (member) found.push(member);
+      else (fetched ? missing : unresolved).push(id);
+    }
+  }
+  return { members: found.map(toMemberSummary), missing, unresolved };
 }
 
 /** O estado atual do servidor + o que o bot consegue mexer nele (PRD §6.3). */
@@ -361,6 +403,12 @@ export function createGuildRoutes(deps: ApiDeps): Hono<ApiEnv> {
         const { q, limit } = c.req.valid('query');
         const members = await searchMembers(c.get('guild'), q, limit);
         return c.json(members.map(toMemberSummary));
+      })
+
+      // Antes de `/members/:userId`, senão "lookup" cairia como um id inválido.
+      .get('/members/lookup', validate('query', MemberLookupQuerySchema), async (c) => {
+        const result = await lookupMembers(c.get('guild'), c.req.valid('query').ids);
+        return c.json(result);
       })
 
       .get('/members/:userId', async (c) => {

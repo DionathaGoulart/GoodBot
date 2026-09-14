@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { MAX_TIMEOUT_MS } from '../constants';
 import { InvalidateInputSchema } from './config';
-import { MemberSearchQuerySchema, RoleListQuerySchema } from './members';
+import {
+  MAX_MEMBER_LOOKUP_IDS,
+  MemberLookupQuerySchema,
+  MemberSearchQuerySchema,
+  RoleListQuerySchema,
+} from './members';
 import { ModerationActionInputSchema } from './moderation';
 
 const ids = { targetId: '123456789012345678', actorId: '223456789012345678' };
@@ -81,6 +86,29 @@ describe('MemberSearchQuerySchema', () => {
       limit: 50,
     });
     expect(MemberSearchQuerySchema.safeParse({ limit: '500' }).success).toBe(false);
+  });
+});
+
+describe('MemberLookupQuerySchema', () => {
+  const [a, b] = ['123456789012345678', '223456789012345678'];
+
+  it('separa por vírgula e tira espaços, vazios e repetidos', () => {
+    expect(MemberLookupQuerySchema.parse({ ids: ` ${a}, ${b},${a},, ` })).toEqual({ ids: [a, b] });
+  });
+
+  it('recusa lista vazia, id que não é snowflake e mais IDs que o teto', () => {
+    expect(MemberLookupQuerySchema.safeParse({}).success).toBe(false);
+    expect(MemberLookupQuerySchema.safeParse({ ids: '' }).success).toBe(false);
+    expect(MemberLookupQuerySchema.safeParse({ ids: ' , ' }).success).toBe(false);
+    expect(MemberLookupQuerySchema.safeParse({ ids: `${a},123` }).success).toBe(false);
+    const ids = (count: number) =>
+      Array.from({ length: count }, (_, index) => String(100000000000000000n + BigInt(index)));
+    expect(MemberLookupQuerySchema.safeParse({ ids: ids(MAX_MEMBER_LOOKUP_IDS).join() }).success).toBe(
+      true,
+    );
+    expect(
+      MemberLookupQuerySchema.safeParse({ ids: ids(MAX_MEMBER_LOOKUP_IDS + 1).join() }).success,
+    ).toBe(false);
   });
 });
 

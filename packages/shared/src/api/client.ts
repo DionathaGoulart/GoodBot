@@ -57,6 +57,7 @@ import {
   GuildMemberDetailSchema,
   GuildMemberSummarySchema,
   GuildRoleSummarySchema,
+  MemberLookupResultSchema,
   MemberSearchQuerySchema,
 } from './members';
 import {
@@ -145,6 +146,7 @@ import type {
   GuildMemberDetail,
   GuildMemberSummary,
   GuildRoleSummary,
+  MemberLookupResult,
   MemberSearchQuery,
 } from './members';
 import type {
@@ -547,6 +549,12 @@ export function createInternalClient(options: InternalClientOptions) {
     ): Promise<GuildMemberSummary[]> =>
       request(GuildMemberSummarySchema.array(), `${guild(guildId)}/members`, {
         query: MemberSearchQuerySchema.parse(query),
+      }),
+
+    /** Nome e avatar de vários membros numa chamada, até `MAX_MEMBER_LOOKUP_IDS`. */
+    lookupMembers: (guildId: string, ids: readonly string[]): Promise<MemberLookupResult> =>
+      request(MemberLookupResultSchema, `${guild(guildId)}/members/lookup`, {
+        query: { ids: ids.join(',') },
       }),
 
     member: (guildId: string, userId: string): Promise<GuildMemberDetail> =>
