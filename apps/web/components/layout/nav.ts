@@ -83,6 +83,11 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Tags', href: '/config/tags', keywords: ['respostas', 'atalhos'] },
       { label: 'Reaction roles', href: '/config/reaction-roles', keywords: ['reação', 'cargo'] },
       { label: 'Tickets', href: '/config/tickets', keywords: ['suporte', 'atendimento'] },
+      {
+        label: 'Squads',
+        href: '/config/squads',
+        keywords: ['esquadrão', 'grupo fixo', 'procurar grupo', 'lfg'],
+      },
       { label: 'Redes sociais', href: '/config/social', keywords: ['youtube', 'live', 'feed'] },
     ],
   },
