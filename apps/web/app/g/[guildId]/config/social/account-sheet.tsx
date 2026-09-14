@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  MAX_SOCIAL_MENTION_ROLES,
   SOCIAL_DEFAULT_TEMPLATE,
   SOCIAL_KIND_HEADLINE,
   SOCIAL_KIND_LABEL,
@@ -49,8 +50,8 @@ export const EMPTY_ACCOUNT: SocialAccountInput = {
   discordChannelId: '',
   kinds: [...SOCIAL_KINDS],
   template: SOCIAL_DEFAULT_TEMPLATE,
-  mentionRoleId: null,
-  liveMentionRoleId: null,
+  mentionRoleIds: [],
+  liveMentionRoleIds: [],
   enabled: true,
 };
 
@@ -324,16 +325,18 @@ export function AccountSheet({
                 />
                 <DiscordField
                   kind="role"
-                  name="mentionRoleId"
-                  label="Cargo mencionado em vídeos e shorts"
-                  description="Único cargo que o anúncio de vídeo ou short pode pingar. Deixe vazio para não mencionar ninguém."
+                  multiple
+                  name="mentionRoleIds"
+                  label="Cargos mencionados em vídeos e shorts"
+                  description={`Até ${String(MAX_SOCIAL_MENTION_ROLES)} cargos. Só eles podem ser pingados no anúncio de vídeo ou short. Vazio: ninguém é mencionado.`}
                   placeholder="Nenhum cargo"
                 />
                 <DiscordField
                   kind="role"
-                  name="liveMentionRoleId"
-                  label="Cargo mencionado em lives"
-                  description="Único cargo que o anúncio de live pode pingar. Não usa o cargo de cima: vazio é live sem menção."
+                  multiple
+                  name="liveMentionRoleIds"
+                  label="Cargos mencionados em lives"
+                  description={`Até ${String(MAX_SOCIAL_MENTION_ROLES)} cargos para o anúncio de live. Não herda os de cima: vazio é live sem menção.`}
                   placeholder="Nenhum cargo"
                 />
                 <KindsField />
@@ -349,7 +352,7 @@ export function AccountSheet({
                 <SwitchField
                   name="enabled"
                   label="Canal ligado"
-                  description="Salvar com isto ligado também zera o contador de falhas."
+                  description="Salvar zera o contador de falhas e tira o canal da pausa automática."
                 />
               </fieldset>
             </div>

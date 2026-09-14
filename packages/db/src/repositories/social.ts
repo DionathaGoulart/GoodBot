@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, isNotNull, or, sql } from 'drizzle-orm';
 
 import { guilds } from '../schema/guilds';
 import { socialAccounts, socialPosts } from '../schema/social';
@@ -16,8 +16,8 @@ export interface SocialAccountInputRow {
   discordChannelId: string;
   kinds: SocialKind[];
   template: MessageTemplate;
-  mentionRoleId: string | null;
-  liveMentionRoleId: string | null;
+  mentionRoleIds: string[];
+  liveMentionRoleIds: string[];
   enabled: boolean;
 }
 
@@ -79,8 +79,10 @@ export async function createSocialAccount(
 }
 
 /**
- * Edição pelo painel ou pelo comando. Reativar uma conta limpa o contador de
- * falhas e o motivo — senão a próxima falha isolada a desligaria na hora.
+ * Edição pelo painel ou pelo comando. Salvar é uma decisão humana, então zera
+ * o contador de falhas, o último erro e a pausa automática: ligada, a conta é
+ * tentada já na próxima passada; desligada, o job nem olha para ela. Sem isto
+ * quem corrige o canal teria de esperar a pausa vencer para ver o resultado.
  */
 export async function updateSocialAccount(
   db: DbExecutor,
@@ -92,7 +94,9 @@ export async function updateSocialAccount(
     .update(socialAccounts)
     .set({
       ...input,
-      ...(input.enabled ? { failureCount: 0, disabledReason: null } : {}),
+      failureCount: 0,
+      disabledReason: null,
+      pausedUntil: null,
       updatedAt: sql`now()`,
     })
     .where(and(eq(socialAccounts.guildId, guildId), eq(socialAccounts.id, id)))
@@ -113,9 +117,10 @@ export async function deleteSocialAccount(
 }
 
 /**
- * Todas as contas ligadas, de todas as guilds. O job percorre a lista inteira a
- * cada passada: com o teto de contas por servidor não existe "conta vencida", e
- * um laço só é mais fácil de entender do que uma query de vencimento.
+ * Todas as contas ligadas, de todas as guilds, inclusive as em pausa. O job
+ * percorre a lista inteira a cada passada e é ele quem pula a pausa: é ele que
+ * tem o relógio (injetável nos testes), e um laço só é mais fácil de entender
+ * do que uma query de vencimento.
  */
 export async function listEnabledSocialAccounts(db: DbExecutor): Promise<SocialAccount[]> {
   return db
@@ -137,34 +142,51 @@ export async function touchSocialAccount(
     .where(eq(socialAccounts.id, id));
 }
 
+/** Primeiro sucesso depois de falhas: zera o contador, o erro e a pausa. */
 export async function resetSocialFailures(db: DbExecutor, id: string): Promise<void> {
   await db
     .update(socialAccounts)
-    .set({ failureCount: 0, disabledReason: null })
-    .where(and(eq(socialAccounts.id, id), sql`${socialAccounts.failureCount} > 0`));
+    .set({ failureCount: 0, disabledReason: null, pausedUntil: null })
+    .where(
+      and(
+        eq(socialAccounts.id, id),
+        or(gt(socialAccounts.failureCount, 0), isNotNull(socialAccounts.pausedUntil)),
+      ),
+    );
 }
 
 /**
- * Soma uma falha e desliga a conta ao bater o teto. Devolve a linha já
- * atualizada para quem chamou decidir se manda alerta.
+ * Soma uma falha e guarda o erro. Nunca desliga a conta: quanto tempo ela fica
+ * em pausa é conta do job (`pauseSocialAccount`), que tem o relógio. Devolve a
+ * linha já atualizada, com o contador novo, para ele decidir.
  */
 export async function recordSocialFailure(
   db: DbExecutor,
   id: string,
-  maxFailures: number,
   reason: string,
 ): Promise<SocialAccount | null> {
   const [row] = await db
     .update(socialAccounts)
     .set({
       failureCount: sql`${socialAccounts.failureCount} + 1`,
-      enabled: sql`case when ${socialAccounts.failureCount} + 1 >= ${maxFailures} then false else ${socialAccounts.enabled} end`,
-      disabledReason: sql`case when ${socialAccounts.failureCount} + 1 >= ${maxFailures} then ${reason} else ${socialAccounts.disabledReason} end`,
+      disabledReason: reason,
       updatedAt: sql`now()`,
     })
     .where(eq(socialAccounts.id, id))
     .returning();
   return row ?? null;
+}
+
+/** Tira a conta das passadas até `until`. `enabled` fica como estava. */
+export async function pauseSocialAccount(
+  db: DbExecutor,
+  id: string,
+  until: Date,
+): Promise<void> {
+  await db
+    .update(socialAccounts)
+    .set({ pausedUntil: until, updatedAt: sql`now()` })
+    .where(eq(socialAccounts.id, id));
 }
 
 export interface NewSocialPostInput {

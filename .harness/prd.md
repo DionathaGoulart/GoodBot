@@ -265,12 +265,18 @@ do bot está exposta na internet e §7.3 proíbe rota sem autenticação além d
 **Um laço, um intervalo.** `social.pollIntervalSeconds` (padrão 180 s, mín.
 60, máx. 1800) vale para a instância inteira: cada passada percorre **todas**
 as contas ligadas em sequência, com 500 ms entre contas. Não há intervalo por
-conta, lote, jitter nem backoff exponencial — com o teto de 20 contas a
-passada inteira cabe folgada dentro do menor intervalo. O intervalo é relido a
-cada passada, então mudá-lo no painel vale na passada seguinte, sem restart.
-Erro numa conta não interrompe as outras: `failure_count` sobe, a décima falha
-seguida desliga a conta com `disabled_reason` e alerta, e o primeiro sucesso
-zera o contador.
+conta, lote nem jitter: com o teto de 20 contas a passada inteira cabe folgada
+dentro do menor intervalo. O intervalo é relido a cada passada, então mudá-lo
+no painel vale na passada seguinte, sem restart.
+Erro numa conta não interrompe as outras: `failure_count` sobe e o último erro
+fica em `disabled_reason`. Na décima falha seguida a conta entra em **pausa
+automática** (`paused_until`): o job a pula por 15 min, e cada falha seguinte
+dobra a espera, até 6 h. O primeiro sucesso zera o contador, limpa a pausa e
+avisa pelo webhook de alertas, que também avisou na entrada da pausa. O bot
+nunca desliga uma conta: `enabled = false` é sempre decisão humana, e salvar a
+conta pelo painel zera falhas e pausa. Até a v2.x a décima falha desligava a
+conta de vez, e um 404 passageiro do YouTube deixava o anúncio parado até
+alguém perceber.
 
 Idempotência é o requisito central: cada publicação vista vira uma linha em
 `social_posts` **antes** do envio. Nada é anunciado duas vezes, mesmo com
@@ -334,12 +340,13 @@ o mesmo pelo Discord. O que fica guardado é sempre o `UC…`.
 
 **Template** por conta, com as variáveis `{title}`, `{url}`, `{author}`,
 `{thumbnail}`, `{platform}`, `{kind}` e `{headline}`; texto ou embed, no mesmo
-motor de templates das boas-vindas (§5.5). Menção opcional a cargo, com
-`allowedMentions` restrito a ele: `mention_role_id` vale para vídeo e short,
-`live_mention_role_id` para live. Não há fallback entre os dois: vazio é não
-pingar naquele tipo, e é isso que deixa quem só quer o aviso da live fora do
-ping de cada short. O anúncio de teste escolhe o cargo pelo tipo testado, com
-a mesma regra. Duas decisões que o desenho não fixava:
+motor de templates das boas-vindas (§5.5). Menção opcional a cargos, com
+`allowedMentions` restrito a eles: `mention_role_ids` (até 5) vale para vídeo e
+short, `live_mention_role_ids` (até 5) para live. Não há fallback entre as duas
+listas: vazia é não pingar naquele tipo, e é isso que deixa quem só quer o aviso
+da live fora do ping de cada short. Um cargo pode estar nas duas (o de quem veio
+pelo canal, por exemplo). O anúncio de teste escolhe os cargos pelo tipo
+testado, com a mesma regra. Duas decisões que o desenho não fixava:
 
 - `{headline}` existe porque um texto só precisa servir aos três tipos:
   "publicou um vídeo novo", "publicou um short", "está ao vivo". Sem ela o
@@ -828,9 +835,9 @@ welcome_configs   (guild_id PK, join_enabled, join_channel_id, join_template jso
 social_accounts   (id PK uuid, guild_id, platform enum(youtube|twitch|instagram|tiktok),
                    external_id (channel_id UC… do YouTube), handle, display_name, avatar_url,
                    discord_channel_id, kinds[] (video|short|live|post), template jsonb,
-                   mention_role_id (vídeo e short), live_mention_role_id (live),
-                   enabled, last_checked_at,
-                   failure_count, disabled_reason, created_at, updated_at)
+                   mention_role_ids[] (vídeo e short), live_mention_role_ids[] (live),
+                   enabled (só humano desliga), last_checked_at, paused_until,
+                   failure_count, disabled_reason (último erro), created_at, updated_at)
                    unique (guild_id, platform, external_id)
                    -- os enums guardam os valores da v1 (remover valor de enum exige recriar
                    -- o tipo), mas desde a v2 só 'youtube' é escrito em platform e só

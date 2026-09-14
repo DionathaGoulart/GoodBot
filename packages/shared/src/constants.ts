@@ -313,8 +313,14 @@ export const SOCIAL_MIN_POLL_SECONDS = 60;
 export const SOCIAL_MAX_POLL_SECONDS = 30 * 60;
 /** Pausa entre duas contas na mesma passada, para não rajar no YouTube. */
 export const SOCIAL_ACCOUNT_DELAY_MS = 500;
-/** Falhas seguidas que desativam uma conta sozinha (PRD §5.8). */
+/** Cargos que um anúncio pode pingar por tipo (vídeo e short, ou live). */
+export const MAX_SOCIAL_MENTION_ROLES = 5;
+/** Falhas seguidas que põem uma conta em pausa automática (PRD §5.8). */
 export const SOCIAL_MAX_FAILURES = 10;
+/** Primeira pausa ao bater o teto de falhas; dobra a cada falha seguinte. */
+export const SOCIAL_PAUSE_BASE_MS = 15 * MINUTE_MS;
+/** Teto da pausa: uma conta quebrada ainda é tentada quatro vezes por dia. */
+export const SOCIAL_PAUSE_MAX_MS = 6 * HOUR_MS;
 
 /**
  * Como cada tipo é chamado na interface. Mora aqui, e não no bot, porque o

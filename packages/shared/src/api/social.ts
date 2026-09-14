@@ -6,7 +6,7 @@ import { MessageTemplateSchema } from '../templates';
 
 /**
  * Uma conta como a API devolve: o que o painel mandou mais o estado que só o
- * bot conhece (última checagem, falhas, motivo da desativação automática).
+ * bot conhece (última checagem, falhas, pausa automática e o último erro).
  */
 export const SocialAccountSummarySchema = z.object({
   id: z.string(),
@@ -18,13 +18,19 @@ export const SocialAccountSummarySchema = z.object({
   discordChannelId: SnowflakeSchema,
   kinds: z.array(SocialKindSchema),
   template: MessageTemplateSchema,
-  mentionRoleId: SnowflakeSchema.nullable(),
-  liveMentionRoleId: SnowflakeSchema.nullable(),
+  mentionRoleIds: z.array(SnowflakeSchema),
+  liveMentionRoleIds: z.array(SnowflakeSchema),
+  /** `false` só por decisão humana; o bot nunca desliga uma conta sozinho. */
   enabled: z.boolean(),
   /** ISO 8601; `null` enquanto o job não passou por ela. */
   lastCheckedAt: z.string().nullable(),
   failureCount: z.number().int(),
-  /** Preenchido quando o bot desligou a conta sozinho. */
+  /**
+   * ISO 8601 de até quando o bot deixou a conta em pausa por falhas seguidas;
+   * `null` = rodando normalmente. Passada a hora, o job tenta de novo.
+   */
+  pausedUntil: z.string().nullable(),
+  /** Último erro da sequência de falhas; some no primeiro sucesso. */
   disabledReason: z.string().nullable(),
   createdAt: z.string(),
 });

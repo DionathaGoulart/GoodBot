@@ -28,6 +28,18 @@ export function sinceLabel(iso: string, now: number): string {
   return `há ${String(Math.floor(hours / 24))} d`;
 }
 
+/** "tenta de novo em 25 min" a partir do ISO do fim da pausa. */
+export function retryLabel(iso: string, now: number): string {
+  const minutes = Math.ceil((new Date(iso).getTime() - now) / MINUTE_MS);
+  if (minutes <= 0) return 'tenta de novo na próxima passada';
+  if (minutes < 60) return `tenta de novo em ${String(minutes)} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0
+    ? `tenta de novo em ${String(hours)} h`
+    : `tenta de novo em ${String(hours)} h ${String(rest)} min`;
+}
+
 function subscribeMinute(onChange: () => void): () => void {
   const timer = setInterval(onChange, MINUTE_MS);
   return () => clearInterval(timer);
@@ -46,13 +58,25 @@ function AccountState({ account }: { account: SocialAccountSummary }) {
   );
 
   if (!account.enabled) {
+    // Só uma pessoa desliga: o bot, no máximo, pausa (logo abaixo).
     return (
       <span className="flex flex-col gap-1">
-        {/* O motivo só existe quando foi o bot que desligou (10 falhas). */}
-        <Tag tone="muted">{account.disabledReason ? 'DESATIVADA' : 'DESLIGADA'}</Tag>
+        <Tag tone="muted">DESLIGADA</Tag>
+      </span>
+    );
+  }
+
+  if (account.pausedUntil) {
+    return (
+      <span className="flex flex-col gap-1">
+        <Tag tone="warning">EM PAUSA · {account.failureCount} FALHAS</Tag>
+        <time dateTime={account.pausedUntil} title={account.pausedUntil} className="screen-meta">
+          {now > 0 ? retryLabel(account.pausedUntil, now) : '—'}
+        </time>
         {account.disabledReason ? (
           <span className="screen-meta">{account.disabledReason}</span>
         ) : null}
+        <span className="screen-meta">volta sozinha quando o YouTube responder</span>
       </span>
     );
   }
@@ -166,8 +190,8 @@ export function AccountsTable({
                     discordChannelId: row.original.discordChannelId,
                     kinds: row.original.kinds,
                     template: row.original.template,
-                    mentionRoleId: row.original.mentionRoleId,
-                    liveMentionRoleId: row.original.liveMentionRoleId,
+                    mentionRoleIds: row.original.mentionRoleIds,
+                    liveMentionRoleIds: row.original.liveMentionRoleIds,
                     enabled: row.original.enabled,
                   },
                 })

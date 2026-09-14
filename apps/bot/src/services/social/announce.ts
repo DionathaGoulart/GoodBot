@@ -27,8 +27,8 @@ export function socialVars(item: SocialItem, platform: SocialPlatform): Template
 
 export interface SocialMessageOptions {
   embedColor?: number;
-  /** Único cargo que a mensagem pode pingar. */
-  mentionRoleId?: string | null;
+  /** Os únicos cargos que a mensagem pode pingar. */
+  mentionRoleIds?: readonly string[];
 }
 
 /**
@@ -37,8 +37,8 @@ export interface SocialMessageOptions {
  *
  * · a capa da publicação vira a **imagem** do embed quando o autor não pôs uma
  *   própria — é o que dá ao anúncio a cara de card do YouTube;
- * · `allowedMentions` fica restrito ao cargo configurado. Nem `@everyone`, nem
- *   outros cargos, nem usuários, mesmo que alguém escreva isso no template
+ * · `allowedMentions` fica restrito aos cargos configurados. Nem `@everyone`,
+ *   nem outros cargos, nem usuários, mesmo que alguém escreva isso no template
  *   pelo painel (PRD §5.8 e §7.3).
  */
 export function buildSocialMessage(
@@ -51,9 +51,10 @@ export function buildSocialMessage(
     ...(options.embedColor === undefined ? {} : { embedColor: options.embedColor }),
   });
 
-  const roleId = options.mentionRoleId ?? null;
-  const content = roleId
-    ? `<@&${roleId}> ${message.content ?? ''}`.trim().slice(0, MAX_MESSAGE_CONTENT_LENGTH)
+  const roleIds = [...new Set(options.mentionRoleIds ?? [])];
+  const pings = roleIds.map((id) => `<@&${id}>`).join(' ');
+  const content = pings
+    ? `${pings} ${message.content ?? ''}`.trim().slice(0, MAX_MESSAGE_CONTENT_LENGTH)
     : message.content;
 
   // `templateToMessage` sempre devolve um `EmbedBuilder`; a capa da publicação
@@ -66,7 +67,7 @@ export function buildSocialMessage(
   return {
     ...message,
     ...(content ? { content } : {}),
-    allowedMentions: { parse: [], roles: roleId ? [roleId] : [] },
+    allowedMentions: { parse: [], roles: roleIds },
   };
 }
 

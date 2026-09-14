@@ -16,6 +16,7 @@ const ITEM: SocialItem = {
 };
 
 const ROLE_ID = '700000000000000000';
+const OTHER_ROLE_ID = '700000000000000001';
 
 describe('socialVars', () => {
   it('neutraliza @everyone vindo do título da publicação', () => {
@@ -66,10 +67,28 @@ describe('buildSocialMessage', () => {
 
   it('menciona só o cargo configurado — nunca @everyone nem usuários', () => {
     const message = buildSocialMessage({ content: '{title}' }, ITEM, 'youtube', {
-      mentionRoleId: ROLE_ID,
+      mentionRoleIds: [ROLE_ID],
     });
 
     expect(message.content?.startsWith(`<@&${ROLE_ID}> `)).toBe(true);
+    expect(message.allowedMentions).toEqual({ parse: [], roles: [ROLE_ID] });
+  });
+
+  it('menciona todos os cargos da lista e libera exatamente esses', () => {
+    const message = buildSocialMessage({ content: '{title}' }, ITEM, 'youtube', {
+      mentionRoleIds: [ROLE_ID, OTHER_ROLE_ID],
+    });
+
+    expect(message.content?.startsWith(`<@&${ROLE_ID}> <@&${OTHER_ROLE_ID}> `)).toBe(true);
+    expect(message.allowedMentions).toEqual({ parse: [], roles: [ROLE_ID, OTHER_ROLE_ID] });
+  });
+
+  it('cargo repetido pinga uma vez só', () => {
+    const message = buildSocialMessage({ content: '{title}' }, ITEM, 'youtube', {
+      mentionRoleIds: [ROLE_ID, ROLE_ID],
+    });
+
+    expect(message.content?.match(/<@&/g)).toHaveLength(1);
     expect(message.allowedMentions).toEqual({ parse: [], roles: [ROLE_ID] });
   });
 

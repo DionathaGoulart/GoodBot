@@ -16,7 +16,7 @@ import { Hono } from 'hono';
 
 import { childLogger } from '../../logger';
 import { buildSocialMessage, sampleSocialItem } from '../../services/social/announce';
-import { mentionRoleFor } from '../../services/social/mention';
+import { mentionRolesFor } from '../../services/social/mention';
 import { SocialProviderError } from '../../services/social/types';
 import { ApiHttpError, notFound } from '../errors';
 import { validate } from '../validate';
@@ -45,11 +45,12 @@ function toSummary(row: SocialAccount): SocialAccountSummary {
     discordChannelId: row.discordChannelId,
     kinds: row.kinds,
     template: row.template,
-    mentionRoleId: row.mentionRoleId,
-    liveMentionRoleId: row.liveMentionRoleId,
+    mentionRoleIds: row.mentionRoleIds,
+    liveMentionRoleIds: row.liveMentionRoleIds,
     enabled: row.enabled,
     lastCheckedAt: row.lastCheckedAt?.toISOString() ?? null,
     failureCount: row.failureCount,
+    pausedUntil: row.pausedUntil?.toISOString() ?? null,
     disabledReason: row.disabledReason,
     createdAt: row.createdAt.toISOString(),
   };
@@ -65,8 +66,8 @@ function toRow(input: SocialAccountInput) {
     discordChannelId: input.discordChannelId,
     kinds: input.kinds,
     template: input.template,
-    mentionRoleId: input.mentionRoleId,
-    liveMentionRoleId: input.liveMentionRoleId,
+    mentionRoleIds: input.mentionRoleIds,
+    liveMentionRoleIds: input.liveMentionRoleIds,
     enabled: input.enabled,
   };
 }
@@ -173,7 +174,7 @@ export function createSocialRoutes(deps: ApiDeps): Hono<ApiEnv> {
         const message = await channel.send(
           buildSocialMessage(account.template, item, account.platform, {
             embedColor: settings.embedColor,
-            mentionRoleId: mentionRoleFor(account, item.kind),
+            mentionRoleIds: mentionRolesFor(account, item.kind),
           }),
         );
 

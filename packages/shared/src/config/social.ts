@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import {
+  MAX_SOCIAL_MENTION_ROLES,
   SOCIAL_DEFAULT_POLL_SECONDS,
   SOCIAL_KINDS,
   SOCIAL_MAX_POLL_SECONDS,
@@ -8,7 +9,7 @@ import {
   SOCIAL_PLATFORM,
 } from '../constants';
 import { MessageTemplateSchema, type MessageTemplate } from '../templates';
-import { emptyToNull, moduleConfigBase, NullableSnowflakeSchema, SnowflakeSchema } from './common';
+import { emptyToNull, moduleConfigBase, SnowflakeSchema } from './common';
 
 /**
  * Uma plataforma só. O enum do Postgres ainda tem quatro valores (v1), mas
@@ -24,6 +25,20 @@ export const SocialKindSchema = z.enum(SOCIAL_KINDS);
  * hora o canal que não existe — por isso o schema aqui só guarda o resultado.
  */
 export const YOUTUBE_CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
+
+/**
+ * Cargos pingados num tipo de anúncio. O teto é baixo de propósito: um aviso
+ * que chama meia dúzia de cargos já é spam, e cada cargo a mais é um `<@&…>` a
+ * mais no começo do texto. Repetido conta uma vez só.
+ */
+const SocialMentionRolesSchema = z
+  .array(SnowflakeSchema)
+  .max(
+    MAX_SOCIAL_MENTION_ROLES,
+    `No máximo ${String(MAX_SOCIAL_MENTION_ROLES)} cargos por tipo de anúncio.`,
+  )
+  .transform((ids) => [...new Set(ids)])
+  .default([]);
 
 /**
  * Template padrão de uma conta nova. `{headline}` existe justamente porque um
@@ -59,12 +74,12 @@ export const SocialAccountInputSchema = z.object({
     .transform((kinds) => [...new Set(kinds)]),
   template: MessageTemplateSchema,
   /**
-   * Um cargo para vídeo e short, outro para live: quem quer ser chamado para a
-   * live nem sempre quer o ping de cada short. Não há fallback entre os dois,
-   * vazio é não pingar naquele tipo.
+   * Cargos para vídeo e short, outros para live: quem quer ser chamado para a
+   * live nem sempre quer o ping de cada short. Não há fallback entre as duas
+   * listas, vazia é não pingar naquele tipo.
    */
-  mentionRoleId: NullableSnowflakeSchema,
-  liveMentionRoleId: NullableSnowflakeSchema,
+  mentionRoleIds: SocialMentionRolesSchema,
+  liveMentionRoleIds: SocialMentionRolesSchema,
   enabled: z.boolean().default(true),
 });
 export type SocialAccountInput = z.infer<typeof SocialAccountInputSchema>;

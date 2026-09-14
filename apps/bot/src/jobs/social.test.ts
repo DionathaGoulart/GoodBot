@@ -1,4 +1,4 @@
-import { DEFAULT_SOCIAL_CONFIG, SOCIAL_DEFAULT_TEMPLATE } from '@goodbot/shared';
+import { DEFAULT_SOCIAL_CONFIG, MINUTE_MS, SOCIAL_DEFAULT_TEMPLATE } from '@goodbot/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SocialAccountRef } from '../services/social/types';
@@ -10,6 +10,7 @@ const {
   claimSocialPost,
   hasSocialPost,
   markSocialPostAnnounced,
+  pauseSocialAccount,
   releaseSocialPost,
   recordSocialFailure,
   resetSocialFailures,
@@ -19,6 +20,7 @@ const {
   claimSocialPost: vi.fn(),
   hasSocialPost: vi.fn(),
   markSocialPostAnnounced: vi.fn(),
+  pauseSocialAccount: vi.fn(),
   releaseSocialPost: vi.fn(),
   recordSocialFailure: vi.fn(),
   resetSocialFailures: vi.fn(),
@@ -30,6 +32,7 @@ vi.mock('@goodbot/db', () => ({
   claimSocialPost,
   hasSocialPost,
   markSocialPostAnnounced,
+  pauseSocialAccount,
   releaseSocialPost,
   recordSocialFailure,
   resetSocialFailures,
@@ -43,6 +46,8 @@ const OTHER_GUILD_ID = '900000000000000001';
 const CHANNEL_ID = '800000000000000000';
 const VIDEO_ROLE_ID = '700000000000000000';
 const LIVE_ROLE_ID = '700000000000000001';
+const YOUTUBE_ROLE_ID = '700000000000000002';
+const NOW = Date.parse('2026-09-14T12:00:00Z');
 
 function fakeAccount(overrides: Partial<SocialAccount> = {}): SocialAccount {
   return {
@@ -56,11 +61,12 @@ function fakeAccount(overrides: Partial<SocialAccount> = {}): SocialAccount {
     discordChannelId: CHANNEL_ID,
     kinds: ['video'],
     template: SOCIAL_DEFAULT_TEMPLATE,
-    mentionRoleId: null,
-    liveMentionRoleId: null,
+    mentionRoleIds: [],
+    liveMentionRoleIds: [],
     enabled: true,
     // `lastCheckedAt` preenchido = a conta já rodou, então nada é backlog.
     lastCheckedAt: new Date('2026-09-01T00:00:00Z'),
+    pausedUntil: null,
     failureCount: 0,
     disabledReason: null,
     createdAt: new Date('2026-09-01T00:00:00Z'),
@@ -102,9 +108,18 @@ function makeDeps(items: ReturnType<typeof fakeItem>[], overrides: Record<string
       } as never,
       provider: { platform: 'youtube' as const, fetchLatest } as never,
       accountDelayMs: 0,
+      now: () => NOW,
       ...overrides,
     },
   };
+}
+
+/** Um provider que sempre falha, para os casos de pausa. */
+function failingProvider(message = 'A plataforma respondeu 404.') {
+  return {
+    platform: 'youtube',
+    fetchLatest: vi.fn(() => Promise.reject(new Error(message))),
+  } as never;
 }
 
 beforeEach(() => {
@@ -155,13 +170,13 @@ describe('SocialJob', () => {
     expect(send).toHaveBeenCalledTimes(2);
   });
 
-  it('live pinga o cargo de lives; vídeo, o cargo de vídeos', async () => {
+  it('live pinga os cargos de lives; vídeo, os cargos de vídeos', async () => {
     const { deps, send } = makeDeps([fakeItem('ao-vivo', 'live'), fakeItem('novo')]);
     listEnabledSocialAccounts.mockResolvedValue([
       fakeAccount({
         kinds: ['video', 'live'],
-        mentionRoleId: VIDEO_ROLE_ID,
-        liveMentionRoleId: LIVE_ROLE_ID,
+        mentionRoleIds: [VIDEO_ROLE_ID, YOUTUBE_ROLE_ID],
+        liveMentionRoleIds: [LIVE_ROLE_ID, YOUTUBE_ROLE_ID],
       }),
     ]);
 
@@ -169,7 +184,10 @@ describe('SocialJob', () => {
 
     // Ordem cronológica: o vídeo (mais antigo) sai antes da live.
     const pingados = send.mock.calls.map(([message]) => message.allowedMentions?.roles);
-    expect(pingados).toEqual([[VIDEO_ROLE_ID], [LIVE_ROLE_ID]]);
+    expect(pingados).toEqual([
+      [VIDEO_ROLE_ID, YOUTUBE_ROLE_ID],
+      [LIVE_ROLE_ID, YOUTUBE_ROLE_ID],
+    ]);
   });
 
   it('na primeira passada só marca o que já existia como visto', async () => {
@@ -215,7 +233,7 @@ describe('SocialJob', () => {
       .fn()
       .mockRejectedValueOnce(new Error('YouTube fora'))
       .mockResolvedValue([fakeItem('novo')]);
-    recordSocialFailure.mockResolvedValue({ ...quebrada, failureCount: 1, enabled: true });
+    recordSocialFailure.mockResolvedValue({ ...quebrada, failureCount: 1 });
 
     const checked = await new SocialJob({
       ...deps,
@@ -225,29 +243,6 @@ describe('SocialJob', () => {
     expect(checked).toBe(2);
     expect(send).toHaveBeenCalledOnce();
     expect(recordSocialFailure).toHaveBeenCalledOnce();
-  });
-
-  it('alerta quando o banco desativa a conta no décimo erro', async () => {
-    const conta = fakeAccount();
-    const emit = vi.fn();
-    const fetchLatest = vi.fn(() => Promise.reject(new Error('a página do canal mudou')));
-    const { deps } = makeDeps([]);
-    listEnabledSocialAccounts.mockResolvedValue([conta]);
-    recordSocialFailure.mockResolvedValue({
-      ...conta,
-      failureCount: 10,
-      enabled: false,
-      disabledReason: 'a página do canal mudou',
-    });
-
-    await new SocialJob({
-      ...deps,
-      alerts: { emit },
-      provider: { platform: 'youtube', fetchLatest } as never,
-    }).tick();
-
-    expect(emit).toHaveBeenCalledOnce();
-    expect(emit.mock.calls[0]?.[0]).toMatchObject({ level: 'danger' });
   });
 
   it('módulo desligado na guild não gasta chamada nem toca a linha', async () => {
@@ -278,5 +273,115 @@ describe('SocialJob', () => {
     await new SocialJob(deps).tick();
 
     expect(get).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('SocialJob · pausa automática', () => {
+  it('abaixo do teto só conta a falha, sem pausa nem alerta', async () => {
+    const conta = fakeAccount();
+    const emit = vi.fn();
+    const { deps } = makeDeps([], { alerts: { emit }, provider: failingProvider() });
+    listEnabledSocialAccounts.mockResolvedValue([conta]);
+    recordSocialFailure.mockResolvedValue({ ...conta, failureCount: 9 });
+
+    await new SocialJob(deps).tick();
+
+    expect(recordSocialFailure).toHaveBeenCalledWith({}, 'conta-1', 'A plataforma respondeu 404.');
+    expect(pauseSocialAccount).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('no décimo erro seguido pausa por 15 min e alerta, sem desligar a conta', async () => {
+    const conta = fakeAccount({ failureCount: 9 });
+    const emit = vi.fn();
+    const { deps } = makeDeps([], { alerts: { emit }, provider: failingProvider() });
+    listEnabledSocialAccounts.mockResolvedValue([conta]);
+    recordSocialFailure.mockResolvedValue({ ...conta, failureCount: 10 });
+
+    await new SocialJob(deps).tick();
+
+    expect(pauseSocialAccount).toHaveBeenCalledWith(
+      {},
+      'conta-1',
+      new Date(NOW + 15 * MINUTE_MS),
+    );
+    expect(emit).toHaveBeenCalledOnce();
+    expect(emit.mock.calls[0]?.[0]).toMatchObject({
+      kind: 'social:conta-1',
+      level: 'warning',
+    });
+  });
+
+  it('as falhas seguintes dobram a pausa sem repetir o alerta', async () => {
+    const conta = fakeAccount({ failureCount: 10, pausedUntil: new Date(NOW - MINUTE_MS) });
+    const emit = vi.fn();
+    const { deps } = makeDeps([], { alerts: { emit }, provider: failingProvider() });
+    listEnabledSocialAccounts.mockResolvedValue([conta]);
+    recordSocialFailure.mockResolvedValue({ ...conta, failureCount: 11 });
+
+    await new SocialJob(deps).tick();
+
+    expect(pauseSocialAccount).toHaveBeenCalledWith(
+      {},
+      'conta-1',
+      new Date(NOW + 30 * MINUTE_MS),
+    );
+    expect(emit).not.toHaveBeenCalled();
+    expect(resetSocialFailures).not.toHaveBeenCalled();
+  });
+
+  it('pula a conta em pausa sem chamar a API nem tocar a linha', async () => {
+    const { deps, fetchLatest } = makeDeps([fakeItem('novo')]);
+    listEnabledSocialAccounts.mockResolvedValue([
+      fakeAccount({ failureCount: 10, pausedUntil: new Date(NOW + MINUTE_MS) }),
+    ]);
+
+    expect(await new SocialJob(deps).tick()).toBe(0);
+    expect(fetchLatest).not.toHaveBeenCalled();
+    expect(touchSocialAccount).not.toHaveBeenCalled();
+  });
+
+  it('pausa vencida tenta de novo; o primeiro sucesso tira a pausa e avisa', async () => {
+    const emit = vi.fn();
+    const { deps, fetchLatest, send } = makeDeps([fakeItem('novo')], { alerts: { emit } });
+    listEnabledSocialAccounts.mockResolvedValue([
+      fakeAccount({
+        failureCount: 12,
+        pausedUntil: new Date(NOW),
+        disabledReason: 'A plataforma respondeu 404.',
+      }),
+    ]);
+
+    expect(await new SocialJob(deps).tick()).toBe(1);
+    expect(fetchLatest).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledOnce();
+    expect(resetSocialFailures).toHaveBeenCalledWith({}, 'conta-1');
+    expect(pauseSocialAccount).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledOnce();
+    expect(emit.mock.calls[0]?.[0]).toMatchObject({
+      kind: 'social:conta-1:retomada',
+      level: 'success',
+    });
+  });
+
+  it('sucesso sem pausa anterior não manda aviso de volta', async () => {
+    const emit = vi.fn();
+    const { deps } = makeDeps([], { alerts: { emit } });
+    listEnabledSocialAccounts.mockResolvedValue([fakeAccount({ failureCount: 3 })]);
+
+    await new SocialJob(deps).tick();
+
+    expect(resetSocialFailures).toHaveBeenCalledWith({}, 'conta-1');
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('conta removida no meio da passada não é pausada', async () => {
+    const { deps } = makeDeps([], { provider: failingProvider() });
+    listEnabledSocialAccounts.mockResolvedValue([fakeAccount({ failureCount: 9 })]);
+    recordSocialFailure.mockResolvedValue(null);
+
+    await new SocialJob(deps).tick();
+
+    expect(pauseSocialAccount).not.toHaveBeenCalled();
   });
 });

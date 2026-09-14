@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  MAX_SOCIAL_MENTION_ROLES,
   SOCIAL_KIND_HEADLINE,
   SOCIAL_KIND_LABEL,
   SOCIAL_KINDS,
@@ -30,8 +31,8 @@ describe('SocialAccountInputSchema', () => {
     const parsed = SocialAccountInputSchema.parse(VALID);
     expect(parsed.platform).toBe('youtube');
     expect(parsed.enabled).toBe(true);
-    expect(parsed.mentionRoleId).toBeNull();
-    expect(parsed.liveMentionRoleId).toBeNull();
+    expect(parsed.mentionRoleIds).toEqual([]);
+    expect(parsed.liveMentionRoleIds).toEqual([]);
     expect(parsed.handle).toBeNull();
     expect(parsed.avatarUrl).toBeNull();
   });
@@ -66,6 +67,34 @@ describe('SocialAccountInputSchema', () => {
     const parsed = SocialAccountInputSchema.parse({ ...VALID, displayName: '', avatarUrl: '' });
     expect(parsed.displayName).toBeNull();
     expect(parsed.avatarUrl).toBeNull();
+  });
+
+  it('aceita vários cargos por tipo e remove os repetidos', () => {
+    const video = '223456789012345678';
+    const channel = '323456789012345678';
+    const parsed = SocialAccountInputSchema.parse({
+      ...VALID,
+      mentionRoleIds: [video, channel, video],
+      liveMentionRoleIds: [channel],
+    });
+    expect(parsed.mentionRoleIds).toEqual([video, channel]);
+    expect(parsed.liveMentionRoleIds).toEqual([channel]);
+  });
+
+  it('recusa mais cargos por tipo do que o teto', () => {
+    const roles = Array.from(
+      { length: MAX_SOCIAL_MENTION_ROLES + 1 },
+      (_, index) => `4234567890123456${String(index).padStart(2, '0')}`,
+    );
+    const result = SocialAccountInputSchema.safeParse({ ...VALID, liveMentionRoleIds: roles });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(['liveMentionRoleIds']);
+  });
+
+  it('recusa cargo que não é um ID do Discord', () => {
+    expect(
+      SocialAccountInputSchema.safeParse({ ...VALID, mentionRoleIds: ['@Vídeos'] }).success,
+    ).toBe(false);
   });
 
   it('recusa avatar que não é https', () => {

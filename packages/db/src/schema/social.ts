@@ -9,7 +9,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { createdAt, snowflake, text, timestamptz, updatedAt } from './_columns';
+import { createdAt, snowflake, snowflakeArray, text, timestamptz, updatedAt } from './_columns';
 import { socialKindEnum, socialPlatformEnum } from './enums';
 import { guilds } from './guilds';
 
@@ -45,15 +45,24 @@ export const socialAccounts = pgTable(
       .$type<SocialKind[]>()
       .default([] as SocialKind[]),
     template: jsonb('template').$type<MessageTemplate>().notNull(),
-    /** Cargo pingado no anúncio de vídeo e de short; `null` = não pinga. */
-    mentionRoleId: snowflake('mention_role_id'),
-    /** Cargo pingado no anúncio de live. Sem fallback para o de cima. */
-    liveMentionRoleId: snowflake('live_mention_role_id'),
+    /** Cargos pingados no anúncio de vídeo e de short; vazio = não pinga. */
+    mentionRoleIds: snowflakeArray('mention_role_ids'),
+    /** Cargos pingados no anúncio de live. Sem fallback para os de cima. */
+    liveMentionRoleIds: snowflakeArray('live_mention_role_ids'),
     enabled: boolean('enabled').notNull().default(true),
     lastCheckedAt: timestamptz('last_checked_at'),
-    /** Falhas seguidas. Zera no primeiro sucesso; em 10 a conta se desliga. */
+    /**
+     * Pausa automática por falhas: até quando o job pula a conta. `null` = a
+     * conta roda normalmente. É o que separa "o bot deu um tempo" de "alguém
+     * desligou" (`enabled = false`), que o job nunca desfaz.
+     */
+    pausedUntil: timestamptz('paused_until'),
+    /** Falhas seguidas. Zera no primeiro sucesso; a partir de 10 a conta pausa. */
     failureCount: integer('failure_count').notNull().default(0),
-    /** Por que o bot desligou a conta sozinho; `null` quando foi um humano. */
+    /**
+     * Último erro da sequência de falhas; `null` depois de um sucesso ou de um
+     * save pelo painel. O nome é da v2, quando a décima falha desligava a conta.
+     */
     disabledReason: text('disabled_reason'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

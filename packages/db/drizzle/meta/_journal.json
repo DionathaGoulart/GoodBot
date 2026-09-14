@@ -78,6 +78,20 @@
       "when": 1789344084681,
       "tag": "0010_live_mention_role",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789388490974,
+      "tag": "0011_social_mention_roles_pause",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789388749920,
+      "tag": "0012_social_drop_single_mention_role",
+      "breakpoints": true
     }
   ]
 }

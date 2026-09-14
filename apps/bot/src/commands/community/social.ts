@@ -20,7 +20,8 @@ import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { defineCommand } from '../../lib/command';
 import { botFooter, code, infoEmbed, successEmbed } from '../../lib/embeds';
 import { buildSocialMessage, sampleSocialItem } from '../../services/social/announce';
-import { mentionRoleFor } from '../../services/social/mention';
+import { mentionRolesFor } from '../../services/social/mention';
+import { isSocialPaused } from '../../services/social/pause';
 import { SocialProviderError } from '../../services/social/types';
 
 import type { CommandContext } from '../../lib/command';
@@ -40,14 +41,21 @@ function nameLine(account: SocialAccount): string {
 
 /**
  * O estado da conta em uma linha, igual ao da tabela do painel: ligada com a
- * hora da última passada, falhando com o contador, ou desligada com o motivo.
+ * hora da última passada, falhando com o contador, em pausa com a hora da
+ * próxima tentativa, ou desligada (o que só uma pessoa faz).
  */
 function stateLine(account: SocialAccount): string {
-  if (!account.enabled) {
-    return `**Desligada** — ${account.disabledReason ?? 'desligada à mão'}`;
+  if (!account.enabled) return '**Desligada** · desligada à mão';
+  if (account.pausedUntil) {
+    const failures = `${String(account.failureCount)} erros seguidos`;
+    const retry = isSocialPaused(account.pausedUntil, Date.now())
+      ? `tenta de novo <t:${String(Math.floor(account.pausedUntil.getTime() / 1000))}:R>`
+      : 'tenta de novo na próxima passada';
+    const reason = account.disabledReason ? ` · ${account.disabledReason.slice(0, 120)}` : '';
+    return `**Em pausa** · ${failures}, ${retry}${reason}`;
   }
   if (account.failureCount > 0) {
-    return `**Falhando** — ${String(account.failureCount)}/${String(SOCIAL_MAX_FAILURES)} erros seguidos`;
+    return `**Falhando** · ${String(account.failureCount)}/${String(SOCIAL_MAX_FAILURES)} erros seguidos`;
   }
   return account.lastCheckedAt
     ? `Ligada · checada <t:${String(Math.floor(account.lastCheckedAt.getTime() / 1000))}:R>`
@@ -100,10 +108,14 @@ export default defineCommand({
           option.setName('destino').setDescription('Onde anunciar').setRequired(true),
         )
         .addRoleOption((option) =>
-          option.setName('cargo').setDescription('Cargo mencionado em vídeos e shorts (opcional)'),
+          option
+            .setName('cargo')
+            .setDescription('Cargo mencionado em vídeos e shorts (opcional; mais cargos pelo painel)'),
         )
         .addRoleOption((option) =>
-          option.setName('cargo-live').setDescription('Cargo mencionado em lives (opcional)'),
+          option
+            .setName('cargo-live')
+            .setDescription('Cargo mencionado em lives (opcional; mais cargos pelo painel)'),
         ),
     )
     .addSubcommand((sub) =>
@@ -221,8 +233,8 @@ export default defineCommand({
         discordChannelId: destination.id,
         kinds: [...SOCIAL_KINDS],
         template: SOCIAL_DEFAULT_TEMPLATE,
-        mentionRoleId: role?.id ?? null,
-        liveMentionRoleId: liveRole?.id ?? null,
+        mentionRoleIds: role ? [role.id] : [],
+        liveMentionRoleIds: liveRole ? [liveRole.id] : [],
         enabled: true,
       });
       if (!parsed.success) {
@@ -247,8 +259,8 @@ export default defineCommand({
         discordChannelId: parsed.data.discordChannelId,
         kinds: parsed.data.kinds,
         template: parsed.data.template,
-        mentionRoleId: parsed.data.mentionRoleId,
-        liveMentionRoleId: parsed.data.liveMentionRoleId,
+        mentionRoleIds: parsed.data.mentionRoleIds,
+        liveMentionRoleIds: parsed.data.liveMentionRoleIds,
         enabled: parsed.data.enabled,
       });
       if (!account) {
@@ -303,7 +315,7 @@ export default defineCommand({
     await channel.send(
       buildSocialMessage(account.template, item, account.platform, {
         embedColor: ctx.settings.embedColor,
-        mentionRoleId: mentionRoleFor(account, item.kind),
+        mentionRoleIds: mentionRolesFor(account, item.kind),
       }),
     );
     await ctx.interaction.editReply({
