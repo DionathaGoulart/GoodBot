@@ -167,6 +167,32 @@ export const impl = {
         .sort(byUserId),
     );
   },
+  async listSquadProfilesByGame(
+    _db: unknown,
+    guildId: string,
+    gameId: string,
+    options: { userIds?: readonly string[] } = {},
+  ) {
+    return copy(
+      store.profiles
+        .filter(
+          (profile) =>
+            profile.guildId === guildId &&
+            profile.gameId === gameId &&
+            (!options.userIds || options.userIds.includes(profile.userId)),
+        )
+        .sort(byUserId),
+    );
+  },
+  async deleteSquadProfile(_db: unknown, guildId: string, userId: string, gameId: string) {
+    const index = store.profiles.findIndex(
+      (profile) =>
+        profile.guildId === guildId && profile.userId === userId && profile.gameId === gameId,
+    );
+    if (index < 0) return null;
+    const [row] = store.profiles.splice(index, 1);
+    return maybe(row);
+  },
   async countSearchingProfilesByGame(_db: unknown, guildId: string) {
     const counts: Record<string, number> = {};
     for (const profile of store.profiles) {

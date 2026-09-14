@@ -19,6 +19,7 @@ import {
   declineSquadJoinRequestBy,
   declineSquadProposal,
   decideSquadJoinRequest,
+  deleteSquadProfile,
   getActiveSessionByVoice,
   getSquad,
   getSquadJoinRequest,
@@ -29,6 +30,7 @@ import {
   listRecentJoinRequestKeys,
   listRecentProposalPairs,
   listSessionsToRelease,
+  listSquadProfilesByGame,
   listSquads,
   listSquadsForUser,
   markSessionReminded,
@@ -122,6 +124,60 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect(await getSquad(db, OTHER_GUILD_ID, squad.id)).toBeNull();
       expect(await acceptSquadProposal(db, OTHER_GUILD_ID, proposal.id, USER_A)).toBeNull();
       expect(await claimProposalSquad(db, OTHER_GUILD_ID, proposal.id, squad.id)).toBeNull();
+    });
+  });
+
+  describe('perfis', () => {
+    /** Jogo próprio por teste: os contadores dos outros blocos olham o jogo principal. */
+    async function profileGame(guildId: string, name: string): Promise<SquadGame> {
+      const created = await createSquadGame(db, { guildId, name, squadSize: 3 });
+      if (!created) throw new Error(`jogo de teste ${name} não foi criado`);
+      return created;
+    }
+
+    const upsert = (
+      guildId: string,
+      gameId: string,
+      userId: string,
+      status: 'searching' | 'in_squad' | 'paused' = 'searching',
+    ) => upsertSquadProfile(db, { guildId, gameId, userId, availability: 1, answers: {}, status });
+
+    it('lista todos os status do jogo, só da guild, e filtra por userIds', async () => {
+      const own = await profileGame(GUILD_ID, 'Perfis');
+      const foreign = await profileGame(OTHER_GUILD_ID, 'Perfis');
+      await upsert(GUILD_ID, own.id, USER_C, 'paused');
+      await upsert(GUILD_ID, own.id, USER_A, 'searching');
+      await upsert(GUILD_ID, own.id, USER_B, 'in_squad');
+      await upsert(OTHER_GUILD_ID, foreign.id, USER_D);
+
+      const all = await listSquadProfilesByGame(db, GUILD_ID, own.id);
+      expect(all.map((profile) => [profile.userId, profile.status])).toEqual([
+        [USER_A, 'searching'],
+        [USER_B, 'in_squad'],
+        [USER_C, 'paused'],
+      ]);
+      expect(await listSquadProfilesByGame(db, OTHER_GUILD_ID, own.id)).toEqual([]);
+      const picked = await listSquadProfilesByGame(db, GUILD_ID, own.id, {
+        userIds: [USER_C, USER_A, USER_E],
+      });
+      expect(picked.map((profile) => profile.userId)).toEqual([USER_A, USER_C]);
+      expect(await listSquadProfilesByGame(db, GUILD_ID, own.id, { userIds: [] })).toEqual([]);
+    });
+
+    it('apagar devolve a linha uma vez e não alcança outra guild', async () => {
+      const own = await profileGame(GUILD_ID, 'Apagar perfil');
+      await upsert(GUILD_ID, own.id, USER_A);
+      await upsert(GUILD_ID, own.id, USER_B);
+
+      expect(await deleteSquadProfile(db, OTHER_GUILD_ID, USER_A, own.id)).toBeNull();
+      expect(await deleteSquadProfile(db, GUILD_ID, USER_A, own.id)).toMatchObject({
+        guildId: GUILD_ID,
+        userId: USER_A,
+        gameId: own.id,
+      });
+      expect(await deleteSquadProfile(db, GUILD_ID, USER_A, own.id)).toBeNull();
+      const left = await listSquadProfilesByGame(db, GUILD_ID, own.id);
+      expect(left.map((profile) => profile.userId)).toEqual([USER_B]);
     });
   });
 

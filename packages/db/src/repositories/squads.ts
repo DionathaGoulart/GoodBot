@@ -230,6 +230,49 @@ export async function listSearchingProfiles(
     .orderBy(asc(squadProfiles.userId));
 }
 
+/**
+ * Perfis de um jogo em qualquer status, em ordem de `user_id`: a lista de
+ * jogadores do painel e a revisão do match manual. Com `userIds`, só esses.
+ */
+export async function listSquadProfilesByGame(
+  db: DbExecutor,
+  guildId: string,
+  gameId: string,
+  options: { userIds?: readonly string[] } = {},
+): Promise<SquadProfile[]> {
+  const filters: SQL[] = [eq(squadProfiles.guildId, guildId), eq(squadProfiles.gameId, gameId)];
+  if (options.userIds) {
+    // `in ()` vazio não é SQL válido, e a resposta já se sabe.
+    if (options.userIds.length === 0) return [];
+    filters.push(inArray(squadProfiles.userId, [...options.userIds]));
+  }
+  return db
+    .select()
+    .from(squadProfiles)
+    .where(and(...filters))
+    .orderBy(asc(squadProfiles.userId));
+}
+
+/** Apaga o perfil. `null` quando não existia (ou outro clique já apagou). */
+export async function deleteSquadProfile(
+  db: DbExecutor,
+  guildId: string,
+  userId: string,
+  gameId: string,
+): Promise<SquadProfile | null> {
+  const [row] = await db
+    .delete(squadProfiles)
+    .where(
+      and(
+        eq(squadProfiles.guildId, guildId),
+        eq(squadProfiles.userId, userId),
+        eq(squadProfiles.gameId, gameId),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
 /** `gameId → perfis searching`, para os contadores do painel. Jogo sem ninguém fica de fora. */
 export async function countSearchingProfilesByGame(
   db: DbExecutor,
