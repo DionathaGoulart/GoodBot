@@ -7,6 +7,7 @@ import { fakeCategory, fakeGuild, fakeSearchChannel, fakeVoice } from './discord
 import { fakeDb, GUILD_ID, resetStore } from './fake-db';
 
 import type { ConfigService } from '../../config';
+import type { SquadParts } from '../context';
 import type { SquadsConfig } from '@goodbot/shared';
 import type { Client, Guild } from 'discord.js';
 
@@ -58,6 +59,8 @@ export function createHarness(overrides: Partial<SquadsConfig> = {}) {
 
   return {
     service,
+    /** As partes por trás da fachada, para testar o que ela não expõe. */
+    parts: (service as unknown as { ctx: { parts: SquadParts } }).ctx.parts,
     client: client as unknown as Client,
     guild,
     /** A mesma guild, com o tipo que o service espera. */

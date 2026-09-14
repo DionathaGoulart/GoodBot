@@ -27,7 +27,7 @@ import {
 } from '@goodbot/shared';
 import { ChannelType, PermissionFlagsBits, ThreadAutoArchiveDuration } from 'discord.js';
 
-import { log } from './context';
+import { log, logFailure } from './context';
 import { proposalMessage } from './embeds';
 import { renderProposalThreadName } from './slots';
 
@@ -41,9 +41,19 @@ import type {
   SquadMatchProfile,
   SquadsConfig,
 } from '@goodbot/shared';
-import type { Guild, TextChannel } from 'discord.js';
+import type { BaseMessageOptions, Guild, TextChannel } from 'discord.js';
 
 export type MatchResult = RunSquadMatchResult;
+
+/** O canal de busca pronto para receber thread privada, ou o motivo de não estar. */
+export type SearchChannelResult =
+  | { ok: true; channel: TextChannel }
+  | { ok: false; reason: 'no-channel' | 'not-text' | 'missing-permissions'; missing: string[] };
+
+export interface OpenProposalOptions {
+  /** Mensagem a mais na thread, enviada depois que a proposta está pronta. */
+  note?: BaseMessageOptions;
+}
 
 /**
  * O que o bot precisa no canal de busca para abrir a thread da proposta. O
@@ -109,6 +119,8 @@ export function rankVacancyCandidates(input: {
 export class MatcherService {
   /** Uma passada por guild e jogo; quem chega no meio espera a que está rodando. */
   private readonly running = new Map<string, Promise<MatchResult>>();
+  /** A última tarefa na fila de cada guild e jogo (ver `withGameLock`). */
+  private readonly tails = new Map<string, Promise<unknown>>();
 
   constructor(private readonly ctx: SquadContext) {}
 
@@ -116,11 +128,58 @@ export class MatcherService {
     const key = `${guildId}:${gameId}`;
     const current = this.running.get(key);
     if (current) return current;
-    const run = this.run(guildId, gameId).finally(() => {
+    const run = this.withGameLock(guildId, gameId, () => this.run(guildId, gameId)).finally(() => {
       this.running.delete(key);
     });
     this.running.set(key, run);
     return run;
+  }
+
+  /**
+   * Roda `task` depois de tudo que já segura esta guild e jogo. Passada do
+   * matcher, match manual e apagar perfil dividem a fila: sem ela, a passada
+   * das 12 h e um clique no painel podiam propor as mesmas duas pessoas.
+   * Tarefa que falha não trava quem vem depois.
+   *
+   * `task` nunca pode esperar `runFor` do mesmo jogo, senão espera a si mesma.
+   * A fila é da memória desta instância: o bot roda num processo só.
+   */
+  withGameLock<T>(guildId: string, gameId: string, task: () => Promise<T>): Promise<T> {
+    const key = `${guildId}:${gameId}`;
+    const previous = this.tails.get(key) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(task);
+    this.tails.set(key, current);
+    const release = () => {
+      if (this.tails.get(key) === current) this.tails.delete(key);
+    };
+    current.then(release, release);
+    return current;
+  }
+
+  /**
+   * O canal de busca, se o bot consegue abrir thread privada nele. A passada
+   * do matcher pula com um log quando não dá (é o que o job quer); o match
+   * manual transforma o motivo num erro para o admin.
+   */
+  async searchChannel(
+    guild: Guild,
+    config: Pick<SquadsConfig, 'searchChannelId'>,
+  ): Promise<SearchChannelResult> {
+    if (!config.searchChannelId) return { ok: false, reason: 'no-channel', missing: [] };
+    const found = await this.ctx.fetchChannel(guild, config.searchChannelId);
+    if (found?.type !== ChannelType.GuildText) return { ok: false, reason: 'not-text', missing: [] };
+    const channel = found as TextChannel;
+
+    const me = guild.members.me;
+    const permissions = me ? channel.permissionsFor(me) : null;
+    if (!permissions?.has(MATCHER_REQUIRED_BITS)) {
+      return {
+        ok: false,
+        reason: 'missing-permissions',
+        missing: permissions?.missing(MATCHER_REQUIRED_BITS) ?? [],
+      };
+    }
+    return { ok: true, channel };
   }
 
   private async run(guildId: string, gameId: string): Promise<MatchResult> {
@@ -134,26 +193,18 @@ export class MatcherService {
 
     const guild = client.guilds.cache.get(guildId);
     if (!guild) return this.skip(guildId, gameId, 'guild fora do cache');
-    const found = await this.ctx.fetchChannel(guild, config.searchChannelId);
-    if (found?.type !== ChannelType.GuildText) {
-      return this.skip(guildId, gameId, 'canal de busca não é um canal de texto');
-    }
-    const channel = found as TextChannel;
-
-    const me = guild.members.me;
-    const permissions = me ? channel.permissionsFor(me) : null;
-    if (!permissions?.has(MATCHER_REQUIRED_BITS)) {
+    const search = await this.searchChannel(guild, config);
+    if (!search.ok) {
+      if (search.reason !== 'missing-permissions') {
+        return this.skip(guildId, gameId, 'canal de busca não é um canal de texto');
+      }
       log.warn(
-        {
-          guildId,
-          gameId,
-          channelId: channel.id,
-          missing: permissions?.missing(MATCHER_REQUIRED_BITS) ?? [],
-        },
+        { guildId, gameId, channelId: config.searchChannelId, missing: search.missing },
         'match de squads pulado: faltam permissões para abrir thread privada no canal de busca',
       );
       return noMatch();
     }
+    const { channel } = search;
 
     const pool = await this.candidates(guildId, game, config);
     if (pool.size === 0) return noMatch();
@@ -285,14 +336,21 @@ export class MatcherService {
     return created;
   }
 
-  private async openProposal(
+  /**
+   * Abre a proposta de um grupo e marca os perfis. `null` quando menos de duas
+   * pessoas couberam na thread. O match manual chama direto, com a turma que o
+   * admin escolheu: consentimento, prazo e cooldown ficam iguais aos do
+   * automático porque o caminho é o mesmo.
+   */
+  async openProposal(
     guild: Guild,
     channel: TextChannel,
     game: SquadGame,
     config: SquadsConfig,
     group: SquadGroupProposal,
+    options: OpenProposalOptions = {},
   ): Promise<SquadProposal | null> {
-    const opened = await this.sendProposal(guild, channel, game, config, group);
+    const opened = await this.sendProposal(guild, channel, game, config, group, options);
     if (opened) {
       await markProfilesMatched(this.ctx.db, guild.id, game.id, opened.userIds, this.ctx.date());
     }
@@ -303,7 +361,8 @@ export class MatcherService {
    * Thread primeiro (`thread_id` é obrigatório), depois a mensagem com as
    * menções, depois a linha, e só então os botões: o `custom_id` leva o id da
    * proposta. Qualquer falha no meio apaga a thread, para ninguém ficar com
-   * uma proposta sem botão.
+   * uma proposta sem botão. A nota vem por último e é opcional: se ela falhar,
+   * a proposta já está de pé e só o log fica sabendo.
    */
   private async sendProposal(
     guild: Guild,
@@ -311,6 +370,7 @@ export class MatcherService {
     game: SquadGame,
     config: SquadsConfig,
     group: SquadGroupProposal,
+    options: OpenProposalOptions,
   ): Promise<SquadProposal | null> {
     const { db } = this.ctx;
     const thread = await channel.threads.create({
@@ -369,7 +429,17 @@ export class MatcherService {
         expiresAt,
       });
       await message.edit(proposalMessage({ ...view, proposal }));
-      return (await setSquadProposalMessage(db, guild.id, proposal.id, message.id)) ?? proposal;
+      const saved =
+        (await setSquadProposalMessage(db, guild.id, proposal.id, message.id)) ?? proposal;
+      if (options.note) {
+        await thread.send(options.note).catch(
+          logFailure('não foi possível mandar a nota na thread da proposta', {
+            guildId: guild.id,
+            proposalId: proposal.id,
+          }),
+        );
+      }
+      return saved;
     } catch (error) {
       if (proposal) {
         await closeSquadProposal(db, guild.id, proposal.id, this.ctx.date()).catch(() => null);
