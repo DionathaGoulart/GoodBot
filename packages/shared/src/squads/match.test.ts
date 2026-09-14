@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { toBits } from './availability';
 import {
+  hardConflicts,
   isCompatiblePair,
   pairKey,
   proposeGroups,
@@ -112,6 +113,42 @@ describe('scoreProfiles', () => {
     const pair = scoreProfiles(FIELDS, profile(A, FRIDAY_EVENING), profile(B, SATURDAY_EVENING));
     expect(pair).toEqual({ score: 0, hardOk: true, commonCells: 0 });
     expect(isCompatiblePair(pair)).toBe(false);
+  });
+});
+
+describe('hardConflicts', () => {
+  it('lista os campos hard que não batem, na ordem dos campos', () => {
+    const a = profile(A, SATURDAY_EVENING, { platform: 'PC', modes: ['Farm'], difficulty: '7' });
+    const b = profile(B, SATURDAY_EVENING, { platform: 'PS5', modes: ['PvE'], difficulty: '9' });
+    expect(hardConflicts(FIELDS, a, b)).toEqual(['platform', 'modes']);
+  });
+
+  it('resposta ausente não conflita; texto livre e campo sem peso ficam de fora', () => {
+    const fields: SquadMatchField[] = [
+      { key: 'platform', type: 'select', match: 'hard' },
+      { key: 'note', type: 'text', match: 'hard' },
+      { key: 'mic', type: 'select', match: 'none' },
+    ];
+    const a = profile(A, SATURDAY_EVENING, { note: 'manhã', mic: 'Sim' });
+    const b = profile(B, SATURDAY_EVENING, { platform: 'PC', note: 'noite', mic: 'Não' });
+    expect(hardConflicts(fields, a, b)).toEqual([]);
+  });
+
+  it('concorda com o hardOk de scoreProfiles', () => {
+    const answers: SquadMatchProfile['answers'][] = [
+      {},
+      { platform: 'PC' },
+      { platform: 'PS5' },
+      { modes: ['PvE'] },
+      { platform: 'PC', modes: ['Farm', 'Speedrun'] },
+    ];
+    for (const left of answers) {
+      for (const right of answers) {
+        const a = profile(A, SATURDAY_EVENING, left);
+        const b = profile(B, SATURDAY_EVENING, right);
+        expect(hardConflicts(FIELDS, a, b).length === 0).toBe(scoreProfiles(FIELDS, a, b).hardOk);
+      }
+    }
   });
 });
 

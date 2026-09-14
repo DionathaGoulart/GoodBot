@@ -84,6 +84,26 @@ export function scoreProfiles(
   };
 }
 
+/**
+ * Chaves dos campos `hard` respondidos pelos dois e sem valor em comum, na
+ * ordem dos campos. É a mesma regra do `hardOk` de `scoreProfiles`, só que diz
+ * quais campos barram a dupla: o painel precisa mostrar o motivo.
+ */
+export function hardConflicts(
+  fields: readonly SquadMatchField[],
+  a: SquadMatchProfile,
+  b: SquadMatchProfile,
+): string[] {
+  const conflicts: string[] = [];
+  for (const field of fields) {
+    if (field.match !== 'hard' || field.type === 'text') continue;
+    if (answersMatch(answerOf(a, field.key), answerOf(b, field.key)) === false) {
+      conflicts.push(field.key);
+    }
+  }
+  return conflicts;
+}
+
 /** Uma dupla pode jogar junta: nenhum campo hard contra e ao menos uma faixa em comum. */
 export function isCompatiblePair(pair: SquadPairScore): boolean {
   return pair.hardOk && pair.commonCells >= 1;
