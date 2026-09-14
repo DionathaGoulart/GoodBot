@@ -57,9 +57,24 @@ const DEFAULT_OPENING: MessageTemplate = {
 };
 
 /**
+ * Um texto qualquer como nome de canal que o Discord aceita: minúsculo, sem
+ * acento, sem caractere que ele recusaria e com no máximo 100 caracteres.
+ * Pode devolver vazio; quem chama escolhe o nome de reserva.
+ */
+export function slugifyChannelName(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, MAX_CHANNEL_NAME_LENGTH);
+}
+
+/**
  * Nome de canal a partir do `naming_pattern`. Aceita `{number}`, `{user}` e
- * `{type}` (PRD §5.5) e devolve algo que o Discord aceita: minúsculo, sem
- * acento e sem caractere que ele recusaria.
+ * `{type}` (PRD §5.5), saneado por `slugifyChannelName`.
  */
 export function renderChannelName(
   pattern: string,
@@ -70,16 +85,7 @@ export function renderChannelName(
     .replaceAll('{user}', vars.user)
     .replaceAll('{type}', vars.type);
 
-  const slug = filled
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9-_]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, MAX_CHANNEL_NAME_LENGTH);
-
-  return slug || `ticket-${vars.number}`;
+  return slugifyChannelName(filled) || `ticket-${vars.number}`;
 }
 
 /** Limite efetivo do tipo, com o default da config como fallback. */

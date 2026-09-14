@@ -2,8 +2,14 @@ import { deleteChannelLock, getChannelLock, listChannelLocks, saveChannelLock } 
 import { OverwriteType, PermissionFlagsBits } from 'discord.js';
 
 import { botFooter, infoEmbed, warningEmbed } from '../lib/embeds';
+import {
+  currentOverwrites,
+  denyOverwriteBits,
+  restoreOverwrites,
+  snapshotOverwrites,
+} from '../lib/overwrites';
 
-import type { ChannelLock, Db, LockOverwrite } from '@goodbot/db';
+import type { ChannelLock, Db } from '@goodbot/db';
 import type { AnyThreadChannel, GuildBasedChannel } from 'discord.js';
 
 /**
@@ -21,43 +27,6 @@ export function isLockable(
   channel: GuildBasedChannel | null | undefined,
 ): channel is LockableChannel {
   return Boolean(channel && !channel.isThread());
-}
-
-/** Snapshot dos overwrites atuais dos ids afetados (só eles). */
-function snapshot(channel: LockableChannel, ids: readonly string[]): LockOverwrite[] {
-  const kept: LockOverwrite[] = [];
-  for (const id of ids) {
-    const overwrite = channel.permissionOverwrites.cache.get(id);
-    if (!overwrite) continue;
-    kept.push({
-      id,
-      type: overwrite.type,
-      allow: overwrite.allow.bitfield.toString(),
-      deny: overwrite.deny.bitfield.toString(),
-    });
-  }
-  return kept;
-}
-
-/**
- * Overwrite com `id` já estreitado para `string`. O `OverwriteData` do
- * discord.js aceita `Role`/`User` no `id`, o que impediria indexar por id.
- */
-interface ExactOverwrite {
-  id: string;
-  type: OverwriteType;
-  allow: bigint;
-  deny: bigint;
-}
-
-/** Lista completa atual, para poder reescrevê-la com um único `set`. */
-function currentOverwrites(channel: LockableChannel): ExactOverwrite[] {
-  return channel.permissionOverwrites.cache.map((overwrite) => ({
-    id: overwrite.id,
-    type: overwrite.type,
-    allow: overwrite.allow.bitfield,
-    deny: overwrite.deny.bitfield,
-  }));
 }
 
 export interface LockInput {
@@ -96,21 +65,19 @@ export class LockService {
       guildId: input.guildId,
       channelId: channel.id,
       roleIds: [...roleIds],
-      overwrites: snapshot(channel, roleIds),
+      overwrites: snapshotOverwrites(channel, roleIds),
       lockedBy: input.actorId,
       reason: input.reason,
     });
     if (!saved) return 'already-locked';
 
-    const next = currentOverwrites(channel);
+    let next = currentOverwrites(channel);
     for (const roleId of roleIds) {
-      const existing = next.find((overwrite) => overwrite.id === roleId);
-      if (existing) {
-        existing.allow &= ~LOCK_PERMISSIONS;
-        existing.deny |= LOCK_PERMISSIONS;
-      } else {
-        next.push({ id: roleId, type: OverwriteType.Role, allow: 0n, deny: LOCK_PERMISSIONS });
-      }
+      next = denyOverwriteBits(next, {
+        id: roleId,
+        type: OverwriteType.Role,
+        bits: LOCK_PERMISSIONS,
+      });
     }
 
     try {
@@ -132,27 +99,9 @@ export class LockService {
     const lock = await deleteChannelLock(this.db, input.guildId, input.channel.id);
     if (!lock) return 'not-locked';
 
-    const affected = new Set(lock.roleIds);
-    const previous = new Map(lock.overwrites.map((overwrite) => [overwrite.id, overwrite]));
-    const next: ExactOverwrite[] = [];
-    for (const overwrite of currentOverwrites(input.channel)) {
-      // Id que o lock não tocou: fica exatamente como está.
-      if (!affected.has(overwrite.id)) {
-        next.push(overwrite);
-        continue;
-      }
-      const saved = previous.get(overwrite.id);
-      // Sem snapshot o id não tinha overwrite antes do lock — omiti-lo aqui é
-      // o que apaga o overwrite que o próprio lock criou.
-      if (!saved) continue;
-      next.push({
-        id: saved.id,
-        type: saved.type as OverwriteType,
-        allow: BigInt(saved.allow),
-        deny: BigInt(saved.deny),
-      });
-    }
-
+    // Id sem snapshot não tinha overwrite antes do lock: o restore o omite, e
+    // é isso que apaga o overwrite que o próprio lock criou.
+    const next = restoreOverwrites(currentOverwrites(input.channel), lock.roleIds, lock.overwrites);
     await input.channel.permissionOverwrites.set(next, input.reason);
     return 'unlocked';
   }

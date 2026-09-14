@@ -915,7 +915,8 @@ export async function declineSquadJoinRequestBy(
 }
 
 export interface DecideSquadJoinRequestInput {
-  status: 'accepted' | 'declined';
+  /** `expired` = encerrado pelo bot (squad encheu ou foi arquivado), não por um membro. */
+  status: 'accepted' | 'declined' | 'expired';
   decidedBy: string | null;
   at: Date;
 }

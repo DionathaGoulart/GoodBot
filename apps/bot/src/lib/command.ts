@@ -14,6 +14,7 @@ import type { PollService } from '../services/polls';
 import type { ReactionRoleService } from '../services/reaction-roles';
 import type { RegistryService } from '../services/registry';
 import type { YouTubeProvider } from '../services/social/index';
+import type { SquadService } from '../services/squads/index';
 import type { StatsService } from '../services/stats';
 import type { TicketService } from '../services/tickets';
 import type { WelcomeService } from '../services/welcome';
@@ -64,6 +65,8 @@ export interface BotContext {
   tickets: TicketService;
   /** Provider das notificações de rede social (§5.8). */
   social: YouTubeProvider;
+  /** Squads fixos: perfis, match por agenda, propostas, pedidos e sessões. */
+  squads: SquadService;
   messageCache: MessageCacheService;
   /** Agregador de estatísticas (§5.6); nunca lança. */
   stats: StatsService;

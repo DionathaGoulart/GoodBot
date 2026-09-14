@@ -33,6 +33,7 @@ import { ReactionRoleService } from './services/reaction-roles';
 import { RegistryService } from './services/registry';
 import { Scheduler } from './services/scheduler';
 import { YouTubeProvider } from './services/social/index';
+import { SquadService } from './services/squads/index';
 import { StatsService } from './services/stats';
 import { TicketService } from './services/tickets';
 import { WelcomeService } from './services/welcome';
@@ -152,6 +153,8 @@ async function main(): Promise<void> {
     },
   });
   const social = new YouTubeProvider();
+  // Squads fixos: o job e os botões chegam nas etapas seguintes; aqui só a composição.
+  const squads = new SquadService({ db, client, config, audit });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
   // Os links que os avisos de ciclo de vida citam. Saem do `AUTH_URL` pela
@@ -234,6 +237,7 @@ async function main(): Promise<void> {
     reactionRoles,
     tickets,
     social,
+    squads,
     messageCache,
     stats,
     audit,
