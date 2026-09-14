@@ -1,23 +1,41 @@
+import { countCells } from '@goodbot/shared';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
 import {
+  confirmLeaveButtonId,
+  joinButtonId,
   keepButtonId,
   leaveButtonId,
+  profileStartButtonId,
   proposalButtonId,
   requestButtonId,
   sessionButtonId,
+  statusButtonId,
 } from './ids';
 import { formatSlot } from './slots';
 import { botFooter, infoEmbed } from '../../lib/embeds';
 
-import type { Squad, SquadGame, SquadJoinRequest, SquadProposal, SquadSession } from '@goodbot/db';
-import type { SquadAnswers, SquadBlockConfig } from '@goodbot/shared';
+import type {
+  Squad,
+  SquadGame,
+  SquadJoinRequest,
+  SquadProfile,
+  SquadProposal,
+  SquadSession,
+} from '@goodbot/db';
+import type {
+  SquadAnswers,
+  SquadBlockConfig,
+  SquadProfileStatus,
+  SquadRequestStatus,
+} from '@goodbot/shared';
 import type { APIEmbedField, BaseMessageOptions } from 'discord.js';
 
 /**
  * Todo texto que o módulo mostra no Discord mora aqui: embeds, botões e as
- * frases curtas que os services devolvem para a resposta efêmera. Copy em
- * pt-BR, curta, sem travessão.
+ * frases curtas das respostas efêmeras. A exceção são os dois formulários do
+ * perfil (modal e grade), que moram em `forms.ts` junto dos componentes.
+ * Copy em pt-BR, curta, sem travessão.
  */
 
 export const SQUADS_FOOTER = botFooter('SQUADS');
@@ -439,5 +457,267 @@ export function inactivityWarningMessage(view: {
         .setStyle(ButtonStyle.Success),
     ),
     allowedMentions: { users: [...view.memberIds] },
+  };
+}
+
+// ── mensagem fixa e perfil ──────────────────────────────────────────────────
+
+/** Teto de botões numa mensagem: cinco linhas de cinco. */
+const MAX_MESSAGE_BUTTONS = 25;
+const BUTTONS_PER_ROW = 5;
+/** Teto do Discord para o rótulo de um botão. */
+const MAX_BUTTON_LABEL = 80;
+
+function buttonRows(list: readonly ButtonBuilder[]): ActionRowBuilder<ButtonBuilder>[] {
+  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+  for (let start = 0; start < list.length; start += BUTTONS_PER_ROW) {
+    rows.push(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        list.slice(start, start + BUTTONS_PER_ROW),
+      ),
+    );
+  }
+  return rows;
+}
+
+export interface SearchMessageView {
+  games: readonly Pick<SquadGame, 'id' | 'name'>[];
+  pingRoleId: string | null;
+  embedColor: number;
+}
+
+/**
+ * A mensagem fixa do canal de busca, com um botão por jogo. O cargo de ping
+ * vai no conteúdo e só notifica no primeiro envio: editar a mensagem não
+ * chama ninguém de novo.
+ */
+export function searchMessage(view: SearchMessageView): BaseMessageOptions {
+  const games = view.games.slice(0, MAX_MESSAGE_BUTTONS);
+  const embed = infoEmbed(
+    {
+      title: 'Procurar squad',
+      description: [
+        'Quer jogar sempre com o mesmo grupo, no mesmo horário, toda semana? Monte seu perfil no botão do jogo: responda as perguntas e marque os horários em que você costuma jogar.',
+        'Eu cruzo as agendas e chamo, numa conversa privada, quem joga nos mesmos horários que você. O primeiro que aceitar cria o squad, com canal próprio e sala reservada na hora de jogar.',
+      ].join('\n\n'),
+      fields: [
+        {
+          name: 'Comandos',
+          value: [
+            '`/squad perfil` edita o seu perfil',
+            '`/squad status` pausa ou retoma a busca',
+            '`/squad procurar` mostra squads com vaga nos seus horários',
+          ].join('\n'),
+        },
+      ],
+      footer: SQUADS_FOOTER,
+    },
+    view.embedColor,
+  );
+  return {
+    ...(view.pingRoleId ? { content: `<@&${view.pingRoleId}>` } : {}),
+    embeds: [embed],
+    components: buttonRows(
+      games.map((game) =>
+        new ButtonBuilder()
+          .setCustomId(profileStartButtonId(game.id))
+          .setLabel(`MONTAR PERFIL: ${game.name.toUpperCase()}`.slice(0, MAX_BUTTON_LABEL))
+          .setStyle(ButtonStyle.Primary),
+      ),
+    ),
+    allowedMentions: { parse: [], roles: view.pingRoleId ? [view.pingRoleId] : [] },
+  };
+}
+
+const PROFILE_STATUS_TEXT: Record<SquadProfileStatus, string> = {
+  searching:
+    'Você está procurando squad. Quando aparecer gente que joga nos mesmos horários, eu chamo você numa conversa privada no canal de busca.',
+  paused: 'Sua busca está pausada: você não recebe propostas novas até voltar a procurar.',
+  in_squad:
+    'Você já está num squad deste jogo, então fica fora das propostas novas. Se sair do squad, a busca fica pausada até você retomar.',
+};
+
+export interface ProfileSavedView {
+  game: Pick<SquadGame, 'id' | 'name'>;
+  profile: Pick<SquadProfile, 'status' | 'availability'>;
+  embedColor: number;
+}
+
+/** Resposta de quem salvou a grade: o que vale agora e o botão de pausar ou retomar. */
+export function profileSavedMessage(view: ProfileSavedView): BaseMessageOptions {
+  const { game, profile } = view;
+  const cells = countCells(profile.availability);
+  const embed = infoEmbed(
+    {
+      title: 'Perfil salvo',
+      description: `Seu perfil de **${game.name}** está salvo. ${PROFILE_STATUS_TEXT[profile.status]}`,
+      fields: [
+        {
+          name: 'Horários',
+          value:
+            cells === 1 ? '1 faixa marcada na semana' : `${String(cells)} faixas marcadas na semana`,
+        },
+      ],
+      footer: SQUADS_FOOTER,
+    },
+    view.embedColor,
+  );
+  const toggle =
+    profile.status === 'searching'
+      ? new ButtonBuilder()
+          .setCustomId(statusButtonId('paused', game.id))
+          .setLabel('PAUSAR BUSCA')
+          .setStyle(ButtonStyle.Secondary)
+      : profile.status === 'paused'
+        ? new ButtonBuilder()
+            .setCustomId(statusButtonId('searching', game.id))
+            .setLabel('VOLTAR A PROCURAR')
+            .setStyle(ButtonStyle.Success)
+        : null;
+  return { embeds: [embed], components: toggle ? buttons(toggle) : [] };
+}
+
+export function statusChangedText(status: SquadProfileStatus): string {
+  switch (status) {
+    case 'searching':
+      return 'Busca retomada. Quando aparecer gente com horário parecido, eu chamo você.';
+    case 'paused':
+      return 'Busca pausada. Para voltar, use /squad status procurando.';
+    case 'in_squad':
+      return 'Você está num squad deste jogo, então continua fora das propostas novas.';
+  }
+}
+
+/** Quantos squads o `/squad procurar` lista: um botão por squad, numa linha só. */
+export const MAX_JOINABLE_LISTED = 5;
+
+export interface JoinableView {
+  game: Pick<SquadGame, 'name' | 'squadSize'>;
+  entries: readonly {
+    squad: Pick<Squad, 'id' | 'name' | 'day' | 'block'>;
+    memberCount: number;
+  }[];
+  blocks: readonly SquadBlockConfig[];
+  embedColor: number;
+}
+
+export function joinableSquadsMessage(view: JoinableView): BaseMessageOptions {
+  const entries = view.entries.slice(0, MAX_JOINABLE_LISTED);
+  if (entries.length === 0) {
+    return {
+      embeds: [
+        infoEmbed(
+          {
+            title: 'Squads com vaga',
+            description: `Nenhum squad de **${view.game.name}** tem vaga nos seus horários agora. Se você está procurando, eu mando seu perfil para um squad assim que abrir uma vaga que combine.`,
+            footer: SQUADS_FOOTER,
+          },
+          view.embedColor,
+        ),
+      ],
+      components: [],
+    };
+  }
+  return {
+    embeds: [
+      infoEmbed(
+        {
+          title: 'Squads com vaga',
+          description:
+            'Estes squads têm vaga e jogam num horário que você marcou. O pedido vai para o canal do squad, e basta alguém de lá aceitar.',
+          fields: entries.map((entry, index) => ({
+            name: `${String(index + 1)}. ${entry.squad.name}`,
+            value: `${formatSlot(entry.squad.day, entry.squad.block, view.blocks)}\n${String(entry.memberCount)} de ${String(view.game.squadSize)} jogadores`,
+          })),
+          footer: SQUADS_FOOTER,
+        },
+        view.embedColor,
+      ),
+    ],
+    components: buttons(
+      ...entries.map((entry, index) =>
+        new ButtonBuilder()
+          .setCustomId(joinButtonId(entry.squad.id))
+          .setLabel(`PEDIR VAGA NO ${String(index + 1)}`)
+          .setStyle(ButtonStyle.Primary),
+      ),
+    ),
+  };
+}
+
+// ── respostas efêmeras ──────────────────────────────────────────────────────
+
+const channelOf = (squad: Pick<Squad, 'textChannelId'> | null) =>
+  squad?.textChannelId ? `<#${squad.textChannelId}>` : null;
+
+export function proposalAcceptedText(result: {
+  outcome: 'created' | 'joined' | 'already';
+  squad: Pick<Squad, 'name' | 'textChannelId'> | null;
+}): string {
+  const where = channelOf(result.squad);
+  switch (result.outcome) {
+    case 'created':
+      return where ? `Squad criado! A casa de vocês é ${where}.` : 'Squad criado!';
+    case 'joined': {
+      const name = result.squad ? `**${result.squad.name}**` : 'squad';
+      return where ? `Você entrou no ${name}: ${where}.` : `Você entrou no ${name}.`;
+    }
+    case 'already':
+      return where
+        ? `Você já tinha aceitado. O squad está em ${where}.`
+        : 'Você já tinha aceitado esta proposta.';
+  }
+}
+
+export function proposalDeclinedText(outcome: 'declined' | 'already'): string {
+  return outcome === 'declined'
+    ? 'Anotado: você passou nesta proposta. Seu perfil continua procurando.'
+    : 'Você já tinha passado nesta proposta.';
+}
+
+export function joinRequestDecisionText(
+  decision:
+    | { outcome: 'accepted' | 'declined' | 'recorded' }
+    | { outcome: 'already'; status: SquadRequestStatus },
+): string {
+  switch (decision.outcome) {
+    case 'accepted':
+      return 'Pedido aceito. A pessoa já está no squad.';
+    case 'declined':
+      return 'Pedido recusado.';
+    case 'recorded':
+      return 'Sua recusa foi anotada. O pedido segue aberto para o resto do squad.';
+    case 'already':
+      if (decision.status === 'accepted') return 'Este pedido já foi aceito.';
+      if (decision.status === 'declined') return 'Este pedido já foi recusado.';
+      return 'Este pedido já foi encerrado.';
+  }
+}
+
+export function voteText(going: boolean): string {
+  return going ? 'Presença confirmada. Bom jogo!' : 'Anotado: você não vai desta vez.';
+}
+
+export const KEEP_ALIVE_TEXT = 'Anotado! O squad continua ativo.';
+
+export function joinRequestSentText(squad: Pick<Squad, 'name'>): string {
+  return `Pedido enviado ao **${squad.name}**. Se alguém de lá aceitar, você entra e é chamado no canal do squad.`;
+}
+
+export function searchMessagePublishedText(channelId: string): string {
+  return `Mensagem de busca publicada em <#${channelId}>.`;
+}
+
+/** O passo de confirmação do botão de sair. */
+export function leaveConfirmMessage(squadId: string): BaseMessageOptions {
+  return {
+    content:
+      'Sair deste squad? Sua vaga volta para a busca e, se você for o último, o squad é arquivado.',
+    components: buttons(
+      new ButtonBuilder()
+        .setCustomId(confirmLeaveButtonId(squadId))
+        .setLabel('SAIR DO SQUAD')
+        .setStyle(ButtonStyle.Danger),
+    ),
   };
 }

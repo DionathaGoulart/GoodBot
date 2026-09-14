@@ -1,4 +1,5 @@
 import {
+  joinRequestKey,
   pairKey,
   type SquadAnswers,
   type SquadGameField,
@@ -11,6 +12,7 @@ import {
   count,
   eq,
   getTableColumns,
+  gt,
   gte,
   inArray,
   isNotNull,
@@ -962,6 +964,24 @@ export async function listPendingJoinRequests(
     .orderBy(asc(squadJoinRequests.createdAt));
 }
 
+/**
+ * `joinRequestKey` de todo pedido de entrada da guild criado em `since` ou
+ * depois, em qualquer status, sem repetição. É o cooldown do pedido: um
+ * candidato que o squad recusou (ou cujo pedido expirou) não é perguntado de
+ * novo a cada passada do matcher. Quem chama calcula `since`.
+ */
+export async function listRecentJoinRequestKeys(
+  db: DbExecutor,
+  guildId: string,
+  since: Date,
+): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ squadId: squadJoinRequests.squadId, userId: squadJoinRequests.userId })
+    .from(squadJoinRequests)
+    .where(and(eq(squadJoinRequests.guildId, guildId), gte(squadJoinRequests.createdAt, since)));
+  return rows.map((row) => joinRequestKey(row.squadId, row.userId));
+}
+
 /** Expira os pendentes criados antes de `before` e devolve as linhas (para editar as mensagens). */
 export async function expireSquadJoinRequestsBefore(
   db: DbExecutor,
@@ -1190,6 +1210,38 @@ export async function releaseSessionVoice(
       ),
     )
     .returning();
+  return row ?? null;
+}
+
+/** Antecedência com que o voice reservado já conta como "da sessão" (a reserva sai no lembrete). */
+const ACTIVE_SESSION_LEAD_MS = 60 * 60_000;
+
+/**
+ * A sessão com reserva viva neste voice em `now`: reservada, não liberada e
+ * com `starts_at - 60 min <= now < ends_at`. É o que o evento de voz consulta
+ * para saber se quem entrou ou saiu mexe numa sessão de squad.
+ */
+export async function getActiveSessionByVoice(
+  db: DbExecutor,
+  guildId: string,
+  voiceChannelId: string,
+  now: Date,
+): Promise<SquadSession | null> {
+  const [row] = await db
+    .select()
+    .from(squadSessions)
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.voiceChannelId, voiceChannelId),
+        isNotNull(squadSessions.voiceReservedAt),
+        isNull(squadSessions.voiceReleasedAt),
+        lte(squadSessions.startsAt, new Date(now.getTime() + ACTIVE_SESSION_LEAD_MS)),
+        gt(squadSessions.endsAt, now),
+      ),
+    )
+    .orderBy(asc(squadSessions.startsAt))
+    .limit(1);
   return row ?? null;
 }
 

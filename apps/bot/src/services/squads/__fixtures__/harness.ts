@@ -42,6 +42,8 @@ export function createHarness(overrides: Partial<SquadsConfig> = {}) {
   const configService = {
     get: vi.fn(async () => config),
     getSettings: vi.fn(async () => ({ timezone: 'America/Sao_Paulo', embedColor: 0xdc143c })),
+    invalidate: vi.fn(),
+    publishInvalidate: vi.fn(),
   };
   const audit = { record: vi.fn() };
   const client = { guilds: { cache: new Collection([[GUILD_ID, guild]]) } };
@@ -63,6 +65,7 @@ export function createHarness(overrides: Partial<SquadsConfig> = {}) {
     search,
     voices,
     audit,
+    configService,
     clock,
     setConfig(next: Partial<SquadsConfig>): void {
       config = { ...config, ...next };

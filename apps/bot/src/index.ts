@@ -153,7 +153,7 @@ async function main(): Promise<void> {
     },
   });
   const social = new YouTubeProvider();
-  // Squads fixos: o job e os botões chegam nas etapas seguintes; aqui só a composição.
+  // Squads fixos: comandos, botões e o evento de voz usam pelo `ctx`; o job chega depois.
   const squads = new SquadService({ db, client, config, audit });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });

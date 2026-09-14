@@ -9,6 +9,7 @@ import type { MatcherService } from './matcher';
 import type { ProfileService } from './profiles';
 import type { ProposalService } from './proposals';
 import type { JoinRequestService } from './requests';
+import type { SearchService } from './search';
 import type { SessionService } from './sessions';
 import type { SquadLifecycleService } from './squads';
 import type { Db, Squad } from '@goodbot/db';
@@ -35,6 +36,7 @@ export interface SquadParts {
   squads: SquadLifecycleService;
   requests: JoinRequestService;
   sessions: SessionService;
+  search: SearchService;
 }
 
 /**

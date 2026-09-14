@@ -1,17 +1,25 @@
+import { SQUAD_AVAILABILITY_MAX } from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import {
+  confirmLeaveButtonId,
+  gridSaveButtonId,
+  gridSelectId,
+  joinButtonId,
   keepButtonId,
   leaveButtonId,
   MAX_CUSTOM_ID_LENGTH,
   parseSquadCustomId,
+  profileModalId,
   profileStartButtonId,
   proposalButtonId,
   requestButtonId,
   sessionButtonId,
+  statusButtonId,
 } from './ids';
 
 const UUID = '0b6f4c1e-2d3a-4b5c-8d9e-0f1a2b3c4d5e';
+const FULL = SQUAD_AVAILABILITY_MAX;
 
 describe('custom_id de squads', () => {
   it.each([
@@ -23,7 +31,15 @@ describe('custom_id de squads', () => {
     [sessionButtonId('notgoing', 7), { kind: 'session', action: 'notgoing', sessionId: 7 }],
     [keepButtonId(UUID), { kind: 'keep', squadId: UUID }],
     [leaveButtonId(UUID), { kind: 'leave', squadId: UUID }],
+    [confirmLeaveButtonId(UUID), { kind: 'leave-confirm', squadId: UUID }],
+    [joinButtonId(UUID), { kind: 'join', squadId: UUID }],
     [profileStartButtonId(UUID), { kind: 'profile-start', gameId: UUID }],
+    [profileModalId(UUID), { kind: 'profile-modal', gameId: UUID }],
+    [gridSelectId(UUID, 0, 0), { kind: 'grid-set', gameId: UUID, block: 0, mask: 0 }],
+    [gridSelectId(UUID, 3, FULL), { kind: 'grid-set', gameId: UUID, block: 3, mask: FULL }],
+    [gridSaveButtonId(UUID, 1234), { kind: 'grid-save', gameId: UUID, mask: 1234 }],
+    [statusButtonId('searching', UUID), { kind: 'status', status: 'searching', gameId: UUID }],
+    [statusButtonId('paused', UUID), { kind: 'status', status: 'paused', gameId: UUID }],
   ])('%s vai e volta', (id, parsed) => {
     expect(id.length).toBeLessThanOrEqual(MAX_CUSTOM_ID_LENGTH);
     expect(parseSquadCustomId(id)).toEqual(parsed);
@@ -43,17 +59,35 @@ describe('custom_id de squads', () => {
     'squad:session:going:12345678901234567',
     `squad:keep:${UUID}:extra`,
     'squad:leave:',
+    `squad:quit:${UUID}:extra`,
+    'squad:join:nao-e-uuid',
     `squad:profile:stop:${UUID}`,
+    `squad:profile:modal:${UUID}:extra`,
+    `squad:grid:set:4:${UUID}:1`,
+    `squad:grid:set:1:${UUID}:${String(FULL + 1)}`,
+    `squad:grid:set:1:${UUID}:01`,
+    `squad:grid:set:1:${UUID}`,
+    `squad:grid:set:x:${UUID}:1`,
+    `squad:grid:save:${UUID}`,
+    `squad:grid:save:${UUID}:-1`,
+    `squad:grid:save:${UUID}:1:extra`,
+    `squad:grid:clear:${UUID}:1`,
+    `squad:status:done:${UUID}`,
+    `squad:status:in_squad:${UUID}`,
     `squad:unknown:${UUID}`,
     `squad:proposal:accept:${'a'.repeat(120)}`,
   ])('recusa %j', (id) => {
     expect(parseSquadCustomId(id)).toBeNull();
   });
 
-  it('os builders recusam id que não é uuid nem sessão válida', () => {
+  it('os builders recusam id, faixa ou máscara fora do formato', () => {
     expect(() => proposalButtonId('accept', 'x')).toThrow(RangeError);
     expect(() => keepButtonId('')).toThrow(RangeError);
     expect(() => sessionButtonId('going', 0)).toThrow(RangeError);
     expect(() => sessionButtonId('going', 1.5)).toThrow(RangeError);
+    expect(() => gridSelectId(UUID, 4, 0)).toThrow(RangeError);
+    expect(() => gridSaveButtonId(UUID, -1)).toThrow(RangeError);
+    expect(() => gridSaveButtonId(UUID, FULL + 1)).toThrow(RangeError);
+    expect(() => statusButtonId('paused', 'x')).toThrow(RangeError);
   });
 });

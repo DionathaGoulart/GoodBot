@@ -175,6 +175,8 @@ export function fakeVoice(
     isThread: () => false,
     permissionsFor: vi.fn(() => new PermissionsBitField(options.permissions ?? ALL_BUT_ADMIN)),
     permissionOverwrites: fakeOverwriteManager(options.overwrites),
+    /** Quem está conectado agora. */
+    members: new Collection<string, { id: string; user: { bot: boolean } }>(),
   };
 }
 export type FakeVoice = ReturnType<typeof fakeVoice>;

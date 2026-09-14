@@ -7,6 +7,7 @@ import {
   listOpenSquadProposals,
   listOpenSquadsByGame,
   listPendingJoinRequests,
+  listRecentJoinRequestKeys,
   listRecentProposalPairs,
   listSearchingProfiles,
   listSquadMembers,
@@ -18,6 +19,7 @@ import {
   cellBit,
   DAY_MS,
   HOUR_MS,
+  joinRequestKey,
   MIN_SQUAD_SIZE,
   pairKey,
   proposeGroups,
@@ -55,7 +57,7 @@ export const MATCHER_REQUIRED_BITS =
 
 const noMatch = (): MatchResult => ({ proposals: 0, joinRequests: 0 });
 
-function toMatchProfile(profile: SquadProfile): SquadMatchProfile {
+export function toMatchProfile(profile: SquadProfile): SquadMatchProfile {
   return { userId: profile.userId, availability: profile.availability, answers: profile.answers };
 }
 
@@ -158,8 +160,11 @@ export class MatcherService {
 
     const since = new Date(this.ctx.now() - config.reproposeCooldownDays * DAY_MS);
     const blockedPairs = new Set(await listRecentProposalPairs(db, guildId, gameId, since));
+    // Pedido recusado (ou expirado) no mesmo squad dentro do cooldown: o
+    // candidato não é oferecido de novo a cada passada.
+    const recentRequests = new Set(await listRecentJoinRequestKeys(db, guildId, since));
 
-    const joinRequests = await this.fillVacancies(guild, game, pool, blockedPairs);
+    const joinRequests = await this.fillVacancies(guild, game, pool, blockedPairs, recentRequests);
     const groups = proposeGroups(
       { squadSize: game.squadSize, fields: game.fields },
       [...pool.values()].map(toMatchProfile),
@@ -231,6 +236,7 @@ export class MatcherService {
     game: SquadGame,
     pool: Map<string, SquadProfile>,
     blockedPairs: ReadonlySet<string>,
+    recentRequests: ReadonlySet<string>,
   ): Promise<number> {
     const { db } = this.ctx;
     const squads = await listOpenSquadsByGame(db, guild.id, game.id);
@@ -258,7 +264,9 @@ export class MatcherService {
         fields: game.fields,
         memberIds: members.map((member) => member.userId),
         memberProfiles: memberProfiles.map(toMatchProfile),
-        candidates: [...pool.values()].map(toMatchProfile),
+        candidates: [...pool.values()]
+          .filter((profile) => !recentRequests.has(joinRequestKey(squad.id, profile.userId)))
+          .map(toMatchProfile),
         blockedPairs,
       });
 

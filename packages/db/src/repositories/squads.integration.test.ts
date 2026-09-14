@@ -1,4 +1,4 @@
-import { pairKey } from '@goodbot/shared';
+import { joinRequestKey, pairKey } from '@goodbot/shared';
 import { eq, inArray, TransactionRollbackError } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -18,11 +18,13 @@ import {
   declineSquadJoinRequestBy,
   declineSquadProposal,
   decideSquadJoinRequest,
+  getActiveSessionByVoice,
   getSquad,
   getSquadJoinRequest,
   getSquadProposal,
   listInactiveSquads,
   listPendingJoinRequests,
+  listRecentJoinRequestKeys,
   listRecentProposalPairs,
   listSessionsToRelease,
   listSquads,
@@ -38,7 +40,7 @@ import {
   voteSquadSession,
 } from './squads';
 import { guilds } from '../schema/guilds';
-import { squadProposals, squads } from '../schema/squads';
+import { squadJoinRequests, squadProposals, squads } from '../schema/squads';
 
 import type { LockOverwrite } from '../schema/misc';
 import type { SquadGame } from '../types';
@@ -177,6 +179,37 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       });
       expect(await declineSquadJoinRequestBy(db, GUILD_ID, id, USER_C)).toBeNull();
       expect((await getSquadJoinRequest(db, GUILD_ID, id))?.declinedIds).toEqual([USER_A, USER_B]);
+    });
+
+    it('listRecentJoinRequestKeys: qualquer status desde since, sem repetir, só da guild', async () => {
+      const squad = await newSquad('Chaves');
+      const first = await createSquadJoinRequest(db, {
+        guildId: GUILD_ID,
+        squadId: squad.id,
+        userId: USER_C,
+      });
+      await decideSquadJoinRequest(db, GUILD_ID, first!.id, {
+        status: 'declined',
+        decidedBy: USER_A,
+        at: new Date(),
+      });
+      await createSquadJoinRequest(db, { guildId: GUILD_ID, squadId: squad.id, userId: USER_C });
+      const old = await createSquadJoinRequest(db, {
+        guildId: GUILD_ID,
+        squadId: squad.id,
+        userId: USER_E,
+      });
+      await db
+        .update(squadJoinRequests)
+        .set({ createdAt: new Date(Date.now() - 30 * DAY) })
+        .where(eq(squadJoinRequests.id, old!.id));
+
+      const since = new Date(Date.now() - 14 * DAY);
+      const keys = await listRecentJoinRequestKeys(db, GUILD_ID, since);
+      expect(keys.filter((key) => key.startsWith(squad.id))).toEqual([
+        joinRequestKey(squad.id, USER_C),
+      ]);
+      expect(await listRecentJoinRequestKeys(db, OTHER_GUILD_ID, since)).toEqual([]);
     });
   });
 
@@ -388,6 +421,35 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect(
         (await listSessionsToRelease(db, GUILD_ID, afterEnd)).map((row) => row.id),
       ).not.toContain(session.id);
+    });
+
+    it('getActiveSessionByVoice: reserva viva, de 60 min antes do início até o fim', async () => {
+      const session = await newSession('Voice ativo');
+      const voiceId = '400000000000000009';
+      const at = (offset: number) => new Date(session.startsAt.getTime() + offset);
+
+      expect(await getActiveSessionByVoice(db, GUILD_ID, voiceId, at(HOUR))).toBeNull();
+      await reserveSessionVoice(db, GUILD_ID, session.id, {
+        voiceChannelId: voiceId,
+        overwrites: [],
+        at: new Date(),
+      });
+
+      expect(await getActiveSessionByVoice(db, GUILD_ID, voiceId, at(-2 * HOUR))).toBeNull();
+      expect((await getActiveSessionByVoice(db, GUILD_ID, voiceId, at(-HOUR / 2)))?.id).toBe(
+        session.id,
+      );
+      expect((await getActiveSessionByVoice(db, GUILD_ID, voiceId, at(HOUR)))?.id).toBe(
+        session.id,
+      );
+      expect(await getActiveSessionByVoice(db, GUILD_ID, voiceId, session.endsAt)).toBeNull();
+      expect(await getActiveSessionByVoice(db, OTHER_GUILD_ID, voiceId, at(HOUR))).toBeNull();
+      expect(
+        await getActiveSessionByVoice(db, GUILD_ID, '400000000000000010', at(HOUR)),
+      ).toBeNull();
+
+      await releaseSessionVoice(db, GUILD_ID, session.id, at(HOUR));
+      expect(await getActiveSessionByVoice(db, GUILD_ID, voiceId, at(HOUR))).toBeNull();
     });
   });
 

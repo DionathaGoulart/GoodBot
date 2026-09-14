@@ -1,5 +1,6 @@
 import {
   clearSquadWarned,
+  getActiveSessionByVoice,
   getSquad,
   getSquadSession,
   listInactiveSquads,
@@ -361,6 +362,41 @@ export class SessionService {
       );
       return 'retry';
     }
+  }
+
+  /**
+   * Alguém entrou num voice. Se é o voice reservado de uma sessão viva e a
+   * pessoa é do squad, é a prova mais forte de que o squad joga: vale como
+   * confirmação e desfaz o aviso de inatividade. `true` quando contou.
+   */
+  async confirmPresence(guild: Guild, voiceChannelId: string, userId: string): Promise<boolean> {
+    const { db } = this.ctx;
+    const session = await getActiveSessionByVoice(db, guild.id, voiceChannelId, this.ctx.date());
+    if (!session) return false;
+    const members = await listSquadMembers(db, guild.id, session.squadId);
+    if (!members.some((member) => member.userId === userId)) return false;
+    await touchSquadConfirmed(db, guild.id, session.squadId, this.ctx.date());
+    await clearSquadWarned(db, guild.id, session.squadId);
+    return true;
+  }
+
+  /**
+   * O voice reservado esvaziou. Depois do início da sessão, a reserva sai
+   * antes do fim da faixa, para a sala voltar ao servidor; antes do início
+   * não, porque o squad ainda está chegando. `true` quando liberou.
+   */
+  async releaseIfEmpty(guild: Guild, voiceChannelId: string): Promise<boolean> {
+    const session = await getActiveSessionByVoice(
+      this.ctx.db,
+      guild.id,
+      voiceChannelId,
+      this.ctx.date(),
+    );
+    if (!session || session.startsAt.getTime() > this.ctx.now()) return false;
+    const voice = guild.channels.cache.get(voiceChannelId);
+    if (voice?.type !== ChannelType.GuildVoice) return false;
+    if ((voice as VoiceChannel).members.some((member) => !member.user.bot)) return false;
+    return this.release(guild, session);
   }
 
   /** Libera toda reserva viva de um squad (arquivamento). Nunca lança. */

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { HOUR_MS, MINUTE_MS, pairKey } from '@goodbot/shared';
+import { HOUR_MS, joinRequestKey, MINUTE_MS, pairKey } from '@goodbot/shared';
 import { TransactionRollbackError } from 'drizzle-orm';
 import { vi } from 'vitest';
 
@@ -88,7 +88,19 @@ const byUserId = (a: { userId: string }, b: { userId: string }) =>
   a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0;
 
 export const impl = {
+  // ── config (só a escrita da mensagem fixa; a leitura é o ConfigService falso)
+  async setModuleConfig(_db: unknown, _guildId: string, _module: string, input: unknown) {
+    return copy(input);
+  },
+
   // ── jogos
+  async listSquadGames(_db: unknown, guildId: string) {
+    return copy(
+      store.games
+        .filter((game) => game.guildId === guildId)
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+    );
+  },
   async getSquadGame(_db: unknown, guildId: string, gameId: string) {
     return maybe(store.games.find((game) => game.guildId === guildId && game.id === gameId));
   },
@@ -504,6 +516,15 @@ export const impl = {
       ),
     );
   },
+  async listRecentJoinRequestKeys(_db: unknown, guildId: string, since: Date) {
+    const keys = new Set<string>();
+    for (const r of store.requests) {
+      if (r.guildId === guildId && r.createdAt.getTime() >= since.getTime()) {
+        keys.add(joinRequestKey(r.squadId, r.userId));
+      }
+    }
+    return [...keys];
+  },
   async expireSquadJoinRequestsBefore(_db: unknown, guildId: string, before: Date) {
     const expired = store.requests.filter(
       (r) =>
@@ -605,6 +626,25 @@ export const impl = {
     if (!row || !row.voiceReservedAt || row.voiceReleasedAt) return null;
     row.voiceReleasedAt = at;
     return copy(row);
+  },
+  async getActiveSessionByVoice(
+    _db: unknown,
+    guildId: string,
+    voiceChannelId: string,
+    now: Date,
+  ) {
+    const found = store.sessions
+      .filter(
+        (s) =>
+          s.guildId === guildId &&
+          s.voiceChannelId === voiceChannelId &&
+          s.voiceReservedAt &&
+          !s.voiceReleasedAt &&
+          s.startsAt.getTime() - HOUR_MS <= now.getTime() &&
+          now.getTime() < s.endsAt.getTime(),
+      )
+      .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+    return maybe(found[0]);
   },
   async listSessionsToRelease(_db: unknown, guildId: string, now: Date) {
     return copy(

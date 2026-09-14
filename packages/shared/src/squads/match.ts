@@ -97,6 +97,14 @@ export function pairKey(a: string, b: string): string {
   return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
 
+/**
+ * Chave de um pedido de entrada: squad e candidato. É o que o cooldown de
+ * "squad que recusou não é perguntado de novo" guarda e consulta.
+ */
+export function joinRequestKey(squadId: string, userId: string): string {
+  return `${squadId}:${userId}`;
+}
+
 const compareIds = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
