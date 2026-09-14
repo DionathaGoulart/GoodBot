@@ -359,6 +359,13 @@ categories:
         type: voice
       - name: Hellpod Delta
         type: voice
+  - name: Squads
+    overrides:
+      - role: GoodBot
+        view: allow
+        send: allow
+      - role: "@everyone"
+        view: deny
   - name: Staff
     overrides:
       - role: "@everyone"
