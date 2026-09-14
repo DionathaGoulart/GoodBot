@@ -64,6 +64,15 @@ export interface RemoveMemberResult {
   notice: string;
 }
 
+export interface RemoveMemberOptions {
+  source?: AuditSource;
+  actorId?: string;
+  /** Painel: dispensa o módulo ligado, como `rename`. */
+  force?: boolean;
+  /** Quem tirou a pessoa pelo painel; o canal só fica sabendo que foi a staff. */
+  removedBy?: string;
+}
+
 export interface ArchiveOptions {
   actorId?: string;
   reason: string | null;
@@ -306,11 +315,11 @@ export class SquadLifecycleService {
     squadId: string,
     userId: string,
     reason: string | null,
-    options: { source?: AuditSource; actorId?: string } = {},
+    options: RemoveMemberOptions = {},
   ): Promise<RemoveMemberResult> {
     const { db } = this.ctx;
     const guildId = guild.id;
-    await this.ctx.requireConfig(guildId);
+    if (!options.force) await this.ctx.requireConfig(guildId);
 
     const squad = await getSquad(db, guildId, squadId);
     if (!squad) throw new UserFacingError('Squad não encontrado.', { code: 'SQUAD_NOT_FOUND' });
@@ -337,6 +346,7 @@ export class SquadLifecycleService {
               memberCount: remaining.length,
               squadSize: game?.squadSize ?? remaining.length,
               embedColor: await this.ctx.embedColor(guildId),
+              byStaff: options.removedBy !== undefined,
             }),
           )
           .catch(logFailure('não foi possível avisar a saída do squad', { guildId, squadId }));

@@ -240,13 +240,23 @@ export function memberJoinedMessage(view: MembershipView & { ping: boolean }): B
   };
 }
 
-export function memberLeftMessage(view: MembershipView): BaseMessageOptions {
+/**
+ * "Saiu". Quando a staff tirou a pessoa pelo painel, o canal fica sabendo que
+ * foi a staff, mas nunca o motivo nem quem clicou: o canal é dos outros
+ * membros, e o motivo é só da pessoa (por DM) e da auditoria.
+ */
+export function memberLeftMessage(
+  view: MembershipView & { byStaff?: boolean },
+): BaseMessageOptions {
+  const who = view.byStaff
+    ? `A staff tirou ${mention(view.userId)} do squad pelo painel.`
+    : `${mention(view.userId)} saiu do squad.`;
   return {
     embeds: [
       infoEmbed(
         {
           title: 'Alguém saiu',
-          description: `${mention(view.userId)} saiu do squad. Agora são ${String(view.memberCount)} de ${String(view.squadSize)}, e a vaga volta para a busca.`,
+          description: `${who} Agora são ${String(view.memberCount)} de ${String(view.squadSize)}, e a vaga volta para a busca.`,
           footer: SQUADS_FOOTER,
         },
         view.embedColor,
@@ -290,6 +300,86 @@ export function manualProposalNote(actorId: string): BaseMessageOptions {
   return {
     content: `Esta turma foi escolhida por ${mention(actorId)} no painel. Vale o de sempre: **Aceito** para jogar junto, **Passo** para ficar de fora.`,
     allowedMentions: { users: [] },
+  };
+}
+
+export type AdminDmKind = 'paused' | 'resumed' | 'answers' | 'deleted' | 'removed';
+
+export interface AdminDmView {
+  kind: AdminDmKind;
+  guildName: string;
+  game: Pick<SquadGame, 'name'>;
+  /** Só em `removed`. */
+  squad?: Pick<Squad, 'name'>;
+  /** Só em `removed`: o status do perfil depois da saída. */
+  profileStatus?: SquadProfileStatus | null;
+  /** Já validado pelo `SquadAdminReasonSchema`. */
+  reason: string;
+  embedColor: number;
+}
+
+const ADMIN_DM_TITLE: Record<AdminDmKind, string> = {
+  paused: 'Sua busca de squad foi pausada',
+  resumed: 'Sua busca de squad voltou',
+  answers: 'Suas respostas de squad mudaram',
+  deleted: 'Seu perfil de squad foi apagado',
+  removed: 'Você saiu de um squad',
+};
+
+/** O que aconteceu e, num parágrafo à parte, o que fazer a seguir. */
+function adminDmDescription(view: AdminDmView): string {
+  const staff = `A staff de **${view.guildName}**`;
+  const game = `**${view.game.name}**`;
+  switch (view.kind) {
+    case 'paused':
+      return [
+        `${staff} pausou sua busca de squad em ${game}. Enquanto ela estiver pausada, você não recebe propostas novas.`,
+        'Para voltar a procurar, use /squad status procurando no servidor.',
+      ].join('\n\n');
+    case 'resumed':
+      return [
+        `${staff} retomou sua busca de squad em ${game}. Quando aparecer gente com horário parecido, eu chamo você.`,
+        'Se não quiser procurar agora, use /squad status pausado no servidor.',
+      ].join('\n\n');
+    case 'answers':
+      return [
+        `${staff} editou as respostas do seu perfil de squad em ${game}. Seus horários continuam os mesmos.`,
+        'Para conferir ou corrigir, use /squad perfil no servidor.',
+      ].join('\n\n');
+    case 'deleted':
+      return [
+        `${staff} apagou seu perfil de squad em ${game}, com respostas e horários. Você saiu da busca desse jogo.`,
+        'Se quiser voltar, monte o perfil de novo com /squad perfil no servidor.',
+      ].join('\n\n');
+    case 'removed':
+      return [
+        `${staff} tirou você do squad **${view.squad?.name ?? 'sem nome'}** de ${game}, e você não vê mais o canal dele.`,
+        view.profileStatus === 'paused'
+          ? 'Seu perfil ficou pausado. Para voltar a procurar, use /squad status procurando.'
+          : 'Para achar um squad com vaga, use /squad procurar.',
+      ].join('\n\n');
+  }
+}
+
+/**
+ * A DM de quem sofreu uma ação de admin pelo painel. Diz "a staff" e nunca o
+ * nome de quem clicou (a auditoria guarda); o motivo vai como o admin
+ * escreveu, e ninguém é mencionado.
+ */
+export function adminActionDm(view: AdminDmView): BaseMessageOptions {
+  return {
+    embeds: [
+      infoEmbed(
+        {
+          title: ADMIN_DM_TITLE[view.kind],
+          description: adminDmDescription(view),
+          fields: [{ name: 'Motivo', value: view.reason.slice(0, MAX_FIELD_VALUE) }],
+          footer: SQUADS_FOOTER,
+        },
+        view.embedColor,
+      ),
+    ],
+    allowedMentions: { parse: [] },
   };
 }
 

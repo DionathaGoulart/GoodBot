@@ -1,13 +1,20 @@
 import { z } from 'zod';
 
 import { SnowflakeSchema } from '../config/common';
-import { SquadAvailabilitySchema, SquadGameFieldSchema, SquadNameSchema } from '../config/squads';
+import {
+  SquadAnswersSchema,
+  SquadAvailabilitySchema,
+  SquadGameFieldSchema,
+  SquadNameSchema,
+  SquadProfileInputStatusSchema,
+} from '../config/squads';
 import {
   MAX_REASON_LENGTH,
   MAX_SQUAD_SIZE,
   MIN_SQUAD_SIZE,
   SQUAD_BLOCKS,
   SQUAD_DAYS,
+  SQUAD_PROFILE_STATUSES,
   SQUAD_STATUSES,
 } from '../constants';
 import { MANUAL_MATCH_ISSUE_CODES } from '../squads/manual';
@@ -153,6 +160,30 @@ export const SquadCellSchema = z.object({
     .max(SQUAD_BLOCKS.length - 1),
 });
 
+/** Parâmetros das rotas de um perfil: o jogo e a pessoa. */
+export const SquadProfileParamSchema = z.object({ gameId: z.uuid(), userId: SnowflakeSchema });
+export type SquadProfileParam = z.infer<typeof SquadProfileParamSchema>;
+
+/** Parâmetros das rotas de um membro de squad. */
+export const SquadMemberParamSchema = z.object({ squadId: z.uuid(), userId: SnowflakeSchema });
+export type SquadMemberParam = z.infer<typeof SquadMemberParamSchema>;
+
+/**
+ * Perfil como a API devolve. `answers` fica frouxo de propósito: resposta
+ * gravada antes de o admin mudar os campos do jogo não pode quebrar a leitura.
+ */
+export const SquadProfileSummarySchema = z.object({
+  userId: SnowflakeSchema,
+  gameId: z.string(),
+  status: z.enum(SQUAD_PROFILE_STATUSES),
+  availability: SquadAvailabilitySchema,
+  answers: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+  lastMatchedAt: z.iso.datetime().nullable(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type SquadProfileSummary = z.infer<typeof SquadProfileSummarySchema>;
+
 const uniqueIds = (ids: readonly string[]) => new Set(ids).size === ids.length;
 
 /** A turma escolhida pelo admin, sem repetição. */
@@ -164,6 +195,13 @@ export const PickedUserIdsSchema = z
 
 /** As `key`s dos avisos que o admin leu e aceitou. */
 export const ConfirmedWarningsSchema = z.array(z.string().max(200)).max(200).default([]);
+
+/** Motivo das ações de gestão: obrigatório porque vai na DM da pessoa e na auditoria. */
+export const SquadAdminReasonSchema = z
+  .string()
+  .trim()
+  .min(1, 'Escreva o motivo. Ele vai na DM da pessoa.')
+  .max(MAX_REASON_LENGTH, `O motivo tem no máximo ${String(MAX_REASON_LENGTH)} caracteres.`);
 
 export const SquadManualIssueSchema = z.object({
   /** Estável entre revisões; é o que `confirmedWarnings` devolve. */
@@ -220,3 +258,61 @@ export const SquadManualProposalResultSchema = z.object({
   check: SquadManualCheckSchema,
 });
 export type SquadManualProposalResult = z.infer<typeof SquadManualProposalResultSchema>;
+
+/** A DM com o motivo chegou. `false` não é erro: a ação já valeu. */
+const NotifiedSchema = z.boolean();
+
+/** `POST /guilds/:id/squads/:squadId/members/:userId/remove`. Só admin; vale com o módulo desligado. */
+export const RemoveSquadMemberInputSchema = z.object({
+  actorId: SnowflakeSchema,
+  reason: SquadAdminReasonSchema,
+});
+export type RemoveSquadMemberInput = z.infer<typeof RemoveSquadMemberInputSchema>;
+
+export const RemoveSquadMemberResultSchema = z.object({
+  squad: SquadSummarySchema,
+  archived: z.boolean(),
+  profileStatus: z.enum(SQUAD_PROFILE_STATUSES).nullable(),
+  notified: NotifiedSchema,
+});
+export type RemoveSquadMemberResult = z.infer<typeof RemoveSquadMemberResultSchema>;
+
+/** `POST /guilds/:id/squads/games/:gameId/profiles/:userId/status`: pausar ou retomar. Só admin. */
+export const SetSquadProfileStatusInputSchema = z.object({
+  actorId: SnowflakeSchema,
+  status: SquadProfileInputStatusSchema,
+  reason: SquadAdminReasonSchema,
+});
+export type SetSquadProfileStatusInput = z.infer<typeof SetSquadProfileStatusInputSchema>;
+
+export const SquadProfileStatusResultSchema = z.object({
+  profile: SquadProfileSummarySchema,
+  /** O match que retomar dispara; `null` ao pausar ou quando ele falhou. */
+  match: RunSquadMatchResultSchema.nullable(),
+  notified: NotifiedSchema,
+});
+export type SquadProfileStatusResult = z.infer<typeof SquadProfileStatusResultSchema>;
+
+/** `POST /guilds/:id/squads/games/:gameId/profiles/:userId/answers`. Só admin. */
+export const EditSquadProfileAnswersInputSchema = z.object({
+  actorId: SnowflakeSchema,
+  answers: SquadAnswersSchema,
+  reason: SquadAdminReasonSchema,
+});
+export type EditSquadProfileAnswersInput = z.infer<typeof EditSquadProfileAnswersInputSchema>;
+
+export const SquadProfileAnswersResultSchema = z.object({
+  profile: SquadProfileSummarySchema,
+  notified: NotifiedSchema,
+});
+export type SquadProfileAnswersResult = z.infer<typeof SquadProfileAnswersResultSchema>;
+
+/** `POST /guilds/:id/squads/games/:gameId/profiles/:userId/delete`. Só admin. */
+export const DeleteSquadProfileInputSchema = RemoveSquadMemberInputSchema;
+export type DeleteSquadProfileInput = z.infer<typeof DeleteSquadProfileInputSchema>;
+
+export const DeleteSquadProfileResultSchema = z.object({
+  deleted: SquadProfileSummarySchema,
+  notified: NotifiedSchema,
+});
+export type DeleteSquadProfileResult = z.infer<typeof DeleteSquadProfileResultSchema>;

@@ -202,6 +202,7 @@ export function fakeGuild() {
   const left = new Set<string>();
   const guild = {
     id: GUILD_ID,
+    name: 'Servidor Teste',
     roles: { everyone: { id: GUILD_ID } },
     members: {
       me: { id: BOT_ID },
@@ -259,6 +260,44 @@ export function fakeGuild() {
   return guild;
 }
 export type FakeGuild = ReturnType<typeof fakeGuild>;
+
+/**
+ * `client.users` com DM gravada por pessoa. `closeDms` faz o `send` recusar
+ * como o Discord recusa DM fechada (50007), levando o corpo da mensagem no
+ * erro como o `DiscordAPIError` leva; `unknownUser` faz o `fetch` falhar.
+ */
+export function fakeUsers() {
+  const dms = new Map<string, Record<string, unknown>[]>();
+  const closed = new Set<string>();
+  const unknown = new Set<string>();
+  return {
+    fetch: vi.fn(async (userId: string) => {
+      if (unknown.has(userId)) throw discordError('Unknown User', 10013);
+      return {
+        id: userId,
+        bot: false,
+        send: vi.fn(async (payload: Record<string, unknown>) => {
+          if (closed.has(userId)) {
+            throw discordError('Cannot send messages to this user', 50007, {
+              requestBody: { json: payload },
+            });
+          }
+          dms.set(userId, [...(dms.get(userId) ?? []), payload]);
+          return { id: snowflake() };
+        }),
+      };
+    }),
+    /** As DMs que a pessoa recebeu, na ordem. */
+    dmsOf: (userId: string): Record<string, unknown>[] => dms.get(userId) ?? [],
+    closeDms(userId: string): void {
+      closed.add(userId);
+    },
+    unknownUser(userId: string): void {
+      unknown.add(userId);
+    },
+  };
+}
+export type FakeUsers = ReturnType<typeof fakeUsers>;
 
 export function fakeSearchChannel(guild: FakeGuild, permissions: bigint = ALL_BUT_ADMIN) {
   const created: FakeThread[] = [];

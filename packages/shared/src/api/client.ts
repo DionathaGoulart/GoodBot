@@ -85,16 +85,24 @@ import {
 } from './social';
 import {
   ArchiveSquadInputSchema,
+  DeleteSquadProfileInputSchema,
+  DeleteSquadProfileResultSchema,
+  EditSquadProfileAnswersInputSchema,
   PostSquadSearchMessageInputSchema,
   PostSquadSearchMessageResultSchema,
   ProposeSquadManuallyInputSchema,
+  RemoveSquadMemberInputSchema,
+  RemoveSquadMemberResultSchema,
   RenameSquadInputSchema,
   RunSquadMatchInputSchema,
   RunSquadMatchResultSchema,
+  SetSquadProfileStatusInputSchema,
   SquadManualCheckInputSchema,
   SquadManualCheckSchema,
   SquadManualProposalResultSchema,
   SquadOverviewSchema,
+  SquadProfileAnswersResultSchema,
+  SquadProfileStatusResultSchema,
   SquadSummarySchema,
 } from './squads';
 import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
@@ -172,16 +180,24 @@ import type {
 } from './social';
 import type {
   ArchiveSquadInput,
+  DeleteSquadProfileInput,
+  DeleteSquadProfileResult,
+  EditSquadProfileAnswersInput,
   PostSquadSearchMessageInput,
   PostSquadSearchMessageResult,
   ProposeSquadManuallyInput,
+  RemoveSquadMemberInput,
+  RemoveSquadMemberResult,
   RenameSquadInput,
   RunSquadMatchInput,
   RunSquadMatchResult,
+  SetSquadProfileStatusInput,
   SquadManualCheck,
   SquadManualCheckInput,
   SquadManualProposalResult,
   SquadOverview,
+  SquadProfileAnswersResult,
+  SquadProfileStatusResult,
   SquadSummary,
 } from './squads';
 import type { CloseTicketInput, CloseTicketResult } from './tickets';
@@ -949,6 +965,58 @@ export function createInternalClient(options: InternalClientOptions) {
         SquadManualProposalResultSchema,
         `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/manual/propose`,
         { method: 'POST', body: ProposeSquadManuallyInputSchema.parse(input) },
+      ),
+
+    /** Tira alguém do squad pelo painel e avisa a pessoa por DM com o motivo. Só admin. */
+    removeSquadMember: (
+      guildId: string,
+      squadId: string,
+      userId: string,
+      input: RemoveSquadMemberInput,
+    ): Promise<RemoveSquadMemberResult> =>
+      request(
+        RemoveSquadMemberResultSchema,
+        `${guild(guildId)}/squads/${encodeURIComponent(squadId)}/members/${encodeURIComponent(userId)}/remove`,
+        { method: 'POST', body: RemoveSquadMemberInputSchema.parse(input) },
+      ),
+
+    /** Pausa ou retoma a busca de outra pessoa, com DM do motivo. Só admin. */
+    setSquadProfileStatus: (
+      guildId: string,
+      gameId: string,
+      userId: string,
+      input: SetSquadProfileStatusInput,
+    ): Promise<SquadProfileStatusResult> =>
+      request(
+        SquadProfileStatusResultSchema,
+        `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/profiles/${encodeURIComponent(userId)}/status`,
+        { method: 'POST', body: SetSquadProfileStatusInputSchema.parse(input) },
+      ),
+
+    /** Edita as respostas de outra pessoa, com DM do motivo. Só admin. */
+    editSquadProfileAnswers: (
+      guildId: string,
+      gameId: string,
+      userId: string,
+      input: EditSquadProfileAnswersInput,
+    ): Promise<SquadProfileAnswersResult> =>
+      request(
+        SquadProfileAnswersResultSchema,
+        `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/profiles/${encodeURIComponent(userId)}/answers`,
+        { method: 'POST', body: EditSquadProfileAnswersInputSchema.parse(input) },
+      ),
+
+    /** Apaga o perfil de outra pessoa, com DM do motivo. Só admin. */
+    deleteSquadProfile: (
+      guildId: string,
+      gameId: string,
+      userId: string,
+      input: DeleteSquadProfileInput,
+    ): Promise<DeleteSquadProfileResult> =>
+      request(
+        DeleteSquadProfileResultSchema,
+        `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/profiles/${encodeURIComponent(userId)}/delete`,
+        { method: 'POST', body: DeleteSquadProfileInputSchema.parse(input) },
       ),
   };
 }

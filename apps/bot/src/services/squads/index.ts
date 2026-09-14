@@ -3,6 +3,7 @@ import { listSquadsForUser } from '@goodbot/db';
 import { SquadContext } from './context';
 import { ManualMatchService } from './manual';
 import { MatcherService } from './matcher';
+import { PlayerAdminService } from './players';
 import { ProfileService } from './profiles';
 import { ProposalService } from './proposals';
 import { JoinRequestService } from './requests';
@@ -13,6 +14,7 @@ import { SquadLifecycleService } from './squads';
 import type { SquadServiceDeps } from './context';
 import type { ManualOutcome } from './manual';
 import type { MatchResult } from './matcher';
+import type { Notified } from './players';
 import type { AvailabilityResult, ProfileDraft, ProfileForm, ProfileResult } from './profiles';
 import type { ProposalAcceptResult, ProposalDeclineResult } from './proposals';
 import type { JoinRequestDecision, JoinRequestSource } from './requests';
@@ -33,8 +35,12 @@ import type {
   SquadSession,
 } from '@goodbot/db';
 import type {
+  DeleteSquadProfileInput,
+  EditSquadProfileAnswersInput,
   ManualMatchEvaluation,
   ProposeSquadManuallyInput,
+  RemoveSquadMemberInput,
+  SetSquadProfileStatusInput,
   SquadAnswers,
   SquadManualCheckInput,
   SquadsConfig,
@@ -44,6 +50,7 @@ import type { BaseMessageOptions, Guild } from 'discord.js';
 export type { SquadServiceDeps } from './context';
 export type { ManualOutcome } from './manual';
 export type { MatchResult } from './matcher';
+export type { Notified } from './players';
 export type { AvailabilityResult, ProfileDraft, ProfileForm, ProfileResult } from './profiles';
 export type { ProposalAcceptResult, ProposalDeclineResult } from './proposals';
 export type { JoinRequestDecision, JoinRequestSource } from './requests';
@@ -80,6 +87,7 @@ export class SquadService {
       sessions: new SessionService(this.ctx),
       search: new SearchService(this.ctx),
       manual: new ManualMatchService(this.ctx),
+      players: new PlayerAdminService(this.ctx),
     };
   }
 
@@ -198,6 +206,44 @@ export class SquadService {
     input: ProposeSquadManuallyInput,
   ): Promise<ManualOutcome<{ proposal: SquadProposal }>> {
     return this.ctx.parts.manual.propose(guild, gameId, input);
+  }
+
+  // ── gestão de jogadores pelo painel ───────────────────────────────────────
+
+  setProfileStatusAsAdmin(
+    guild: Guild,
+    gameId: string,
+    userId: string,
+    input: SetSquadProfileStatusInput,
+  ): Promise<ProfileResult & Notified> {
+    return this.ctx.parts.players.setStatus(guild, gameId, userId, input);
+  }
+
+  editProfileAnswersAsAdmin(
+    guild: Guild,
+    gameId: string,
+    userId: string,
+    input: EditSquadProfileAnswersInput,
+  ): Promise<{ profile: SquadProfile } & Notified> {
+    return this.ctx.parts.players.editAnswers(guild, gameId, userId, input);
+  }
+
+  deleteProfileAsAdmin(
+    guild: Guild,
+    gameId: string,
+    userId: string,
+    input: DeleteSquadProfileInput,
+  ): Promise<{ deleted: SquadProfile } & Notified> {
+    return this.ctx.parts.players.deleteProfile(guild, gameId, userId, input);
+  }
+
+  removeMemberAsAdmin(
+    guild: Guild,
+    squadId: string,
+    userId: string,
+    input: RemoveSquadMemberInput,
+  ): Promise<RemoveMemberResult & Notified> {
+    return this.ctx.parts.players.removeFromSquad(guild, squadId, userId, input);
   }
 
   // ── propostas ─────────────────────────────────────────────────────────────

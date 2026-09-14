@@ -1,7 +1,11 @@
 import {
+  DeleteSquadProfileResultSchema,
+  RemoveSquadMemberResultSchema,
   SquadManualCheckSchema,
   SquadManualProposalResultSchema,
   SquadOverviewSchema,
+  SquadProfileAnswersResultSchema,
+  SquadProfileStatusResultSchema,
   SquadSummarySchema,
   toBits,
 } from '@goodbot/shared';
@@ -10,7 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_SETTINGS } from '../../services/config';
 import { fakeTextChannel, fakeThread } from '../../services/squads/__fixtures__/discord';
-import { A, B, C, createHarness } from '../../services/squads/__fixtures__/harness';
+import { A, B, C, createHarness, D } from '../../services/squads/__fixtures__/harness';
 import { createApiApp } from '../server';
 
 import type { ApiDeps } from '../context';
@@ -417,5 +421,143 @@ describe('POST /guilds/:id/squads/games/:gameId/manual/propose', () => {
 
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: 'SQUADS_NO_SEARCH_CHANNEL' } });
+  });
+});
+
+describe('rotas de gestão de jogadores', () => {
+  const REASON = 'Sumiu das sessões há três semanas.';
+
+  /** A e B no squad; A com perfil `in_squad`, C procurando; jogo e squad de outra guild. */
+  function setup() {
+    const s = apiScenario();
+    const { game, squad, channel } = withSquad(s);
+    seedProfile({ userId: A, gameId: game.id, availability: SATURDAY_NIGHT, status: 'in_squad' });
+    seedProfile({ userId: C, gameId: game.id, availability: SATURDAY_NIGHT });
+    const foreignGame = seedGame({ guildId: OTHER_GUILD });
+    const foreignSquad = seedSquad({ gameId: foreignGame.id, guildId: OTHER_GUILD });
+    return { ...s, game, squad, channel, foreignGame, foreignSquad };
+  }
+  type Setup = ReturnType<typeof setup>;
+
+  interface RouteCase {
+    name: string;
+    url: (x: Setup, userId?: string) => string;
+    foreignUrl: (x: Setup) => string;
+    foreignCode: string;
+    body: Record<string, unknown>;
+    schema: { parse: (value: unknown) => { notified: boolean } };
+    target: string;
+  }
+
+  const profileUrl = (gameId: string, userId: string, action: string) =>
+    `/guilds/${GUILD_ID}/squads/games/${gameId}/profiles/${userId}/${action}`;
+
+  const routes: RouteCase[] = [
+    {
+      name: 'status',
+      url: (x, userId = C) => profileUrl(x.game.id, userId, 'status'),
+      foreignUrl: (x) => profileUrl(x.foreignGame.id, C, 'status'),
+      foreignCode: 'GAME_NOT_FOUND',
+      body: { status: 'paused' },
+      schema: SquadProfileStatusResultSchema,
+      target: C,
+    },
+    {
+      name: 'answers',
+      url: (x, userId = C) => profileUrl(x.game.id, userId, 'answers'),
+      foreignUrl: (x) => profileUrl(x.foreignGame.id, C, 'answers'),
+      foreignCode: 'GAME_NOT_FOUND',
+      body: { answers: { platform: 'PS5' } },
+      schema: SquadProfileAnswersResultSchema,
+      target: C,
+    },
+    {
+      name: 'delete',
+      url: (x, userId = C) => profileUrl(x.game.id, userId, 'delete'),
+      foreignUrl: (x) => profileUrl(x.foreignGame.id, C, 'delete'),
+      foreignCode: 'GAME_NOT_FOUND',
+      body: {},
+      schema: DeleteSquadProfileResultSchema,
+      target: C,
+    },
+    {
+      name: 'remove',
+      url: (x, userId = A) => squadUrl(x.squad.id, `members/${userId}/remove`),
+      foreignUrl: (x) => squadUrl(x.foreignSquad.id, `members/${A}/remove`),
+      foreignCode: 'SQUAD_NOT_FOUND',
+      body: {},
+      schema: RemoveSquadMemberResultSchema,
+      target: A,
+    },
+  ];
+
+  describe.each(routes)('POST $name', (route) => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('só admin, recurso de outra guild é 404 e userId inválido é 400', async () => {
+      const x = setup();
+      const body = (actorId: string) => post({ ...route.body, actorId, reason: REASON });
+
+      const asMod = await x.app.request(route.url(x), body(MOD));
+      expect(asMod.status).toBe(403);
+      expect(await asMod.json()).toMatchObject({ error: { code: 'ACTOR_NOT_ADMIN' } });
+
+      const foreign = await x.app.request(route.foreignUrl(x), body(ADMIN));
+      expect(foreign.status).toBe(404);
+      expect(await foreign.json()).toMatchObject({ error: { code: route.foreignCode } });
+
+      const invalid = await x.app.request(route.url(x, 'abc'), body(ADMIN));
+      expect(invalid.status).toBe(400);
+      expect(await invalid.json()).toMatchObject({ error: { code: 'VALIDATION' } });
+      expect(x.users.fetch).not.toHaveBeenCalled();
+    });
+
+    it('sem motivo ou com motivo em branco é 400', async () => {
+      const x = setup();
+
+      for (const reason of [undefined, '', '   ']) {
+        const res = await x.app.request(
+          route.url(x),
+          post({ ...route.body, actorId: ADMIN, ...(reason === undefined ? {} : { reason }) }),
+        );
+        expect(res.status).toBe(400);
+        expect(await res.json()).toMatchObject({ error: { code: 'VALIDATION' } });
+      }
+      expect(x.users.fetch).not.toHaveBeenCalled();
+    });
+
+    it('admin recebe 200 com notified true; com a DM fechada, notified false', async () => {
+      const x = setup();
+      const ok = await x.app.request(
+        route.url(x),
+        post({ ...route.body, actorId: ADMIN, reason: REASON }),
+      );
+      expect(ok.status).toBe(200);
+      expect(route.schema.parse(await ok.json())).toMatchObject({ notified: true });
+      expect(x.users.dmsOf(route.target)).toHaveLength(1);
+
+      const y = setup();
+      y.users.closeDms(route.target);
+      const closed = await y.app.request(
+        route.url(y),
+        post({ ...route.body, actorId: ADMIN, reason: REASON }),
+      );
+      expect(closed.status).toBe(200);
+      expect(route.schema.parse(await closed.json())).toMatchObject({ notified: false });
+    });
+  });
+
+  it('perfil que não existe é 404', async () => {
+    const x = setup();
+
+    const res = await x.app.request(
+      profileUrl(x.game.id, D, 'status'),
+      post({ actorId: ADMIN, status: 'paused', reason: REASON }),
+    );
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'PROFILE_NOT_FOUND' } });
   });
 });

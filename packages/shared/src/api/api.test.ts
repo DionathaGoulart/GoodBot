@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_TIMEOUT_MS } from '../constants';
+import { MAX_REASON_LENGTH, MAX_TIMEOUT_MS } from '../constants';
 import { InvalidateInputSchema } from './config';
 import {
   MAX_MEMBER_LOOKUP_IDS,
@@ -9,7 +9,14 @@ import {
   RoleListQuerySchema,
 } from './members';
 import { ModerationActionInputSchema } from './moderation';
-import { ProposeSquadManuallyInputSchema, SquadManualCheckInputSchema } from './squads';
+import {
+  DeleteSquadProfileInputSchema,
+  EditSquadProfileAnswersInputSchema,
+  ProposeSquadManuallyInputSchema,
+  RemoveSquadMemberInputSchema,
+  SetSquadProfileStatusInputSchema,
+  SquadManualCheckInputSchema,
+} from './squads';
 
 const ids = { targetId: '123456789012345678', actorId: '223456789012345678' };
 
@@ -110,6 +117,28 @@ describe('MemberLookupQuerySchema', () => {
     expect(
       MemberLookupQuerySchema.safeParse({ ids: ids(MAX_MEMBER_LOOKUP_IDS + 1).join() }).success,
     ).toBe(false);
+  });
+});
+
+describe('gestão de jogadores de squad: motivo obrigatório', () => {
+  const actorId = '223456789012345678';
+  const inputs = [
+    { name: 'status', schema: SetSquadProfileStatusInputSchema, rest: { status: 'paused' } },
+    { name: 'respostas', schema: EditSquadProfileAnswersInputSchema, rest: { answers: {} } },
+    { name: 'apagar perfil', schema: DeleteSquadProfileInputSchema, rest: {} },
+    { name: 'tirar do squad', schema: RemoveSquadMemberInputSchema, rest: {} },
+  ];
+
+  it.each(inputs)('$name: motivo ausente, vazio, só espaços ou longo demais é recusado', (input) => {
+    for (const reason of [undefined, '', '   ', 'x'.repeat(MAX_REASON_LENGTH + 1)]) {
+      const body = { actorId, ...input.rest, ...(reason === undefined ? {} : { reason }) };
+      expect(input.schema.safeParse(body).success).toBe(false);
+    }
+  });
+
+  it.each(inputs)('$name: espaços das pontas saem do motivo', (input) => {
+    const parsed = input.schema.parse({ actorId, ...input.rest, reason: '  Sumiu das sessões. ' });
+    expect(parsed.reason).toBe('Sumiu das sessões.');
   });
 });
 

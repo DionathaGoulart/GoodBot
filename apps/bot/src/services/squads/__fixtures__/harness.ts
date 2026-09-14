@@ -3,7 +3,7 @@ import { Collection } from 'discord.js';
 import { vi } from 'vitest';
 
 import { SquadService } from '../index';
-import { fakeCategory, fakeGuild, fakeSearchChannel, fakeVoice } from './discord';
+import { fakeCategory, fakeGuild, fakeSearchChannel, fakeUsers, fakeVoice } from './discord';
 import { fakeDb, GUILD_ID, resetStore } from './fake-db';
 
 import type { ConfigService } from '../../config';
@@ -47,7 +47,8 @@ export function createHarness(overrides: Partial<SquadsConfig> = {}) {
     publishInvalidate: vi.fn(),
   };
   const audit = { record: vi.fn() };
-  const client = { guilds: { cache: new Collection([[GUILD_ID, guild]]) } };
+  const users = fakeUsers();
+  const client = { guilds: { cache: new Collection([[GUILD_ID, guild]]) }, users };
 
   const service = new SquadService({
     db: fakeDb,
@@ -68,6 +69,7 @@ export function createHarness(overrides: Partial<SquadsConfig> = {}) {
     category,
     search,
     voices,
+    users,
     audit,
     configService,
     clock,

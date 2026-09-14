@@ -2,6 +2,7 @@ import {
   countSearchingProfilesByGame,
   getSquad,
   getSquadGame,
+  getSquadProfile,
   listMembersOfSquads,
   listOpenSquadProposals,
   listSquadGames,
@@ -10,14 +11,20 @@ import {
 } from '@goodbot/db';
 import {
   ArchiveSquadInputSchema,
+  DeleteSquadProfileInputSchema,
+  EditSquadProfileAnswersInputSchema,
   MAX_GUILD_CHANNELS,
   PostSquadSearchMessageInputSchema,
   ProposeSquadManuallyInputSchema,
+  RemoveSquadMemberInputSchema,
   RenameSquadInputSchema,
   RunSquadMatchInputSchema,
+  SetSquadProfileStatusInputSchema,
   SquadGameIdParamSchema,
   SquadIdParamSchema,
   SquadManualCheckInputSchema,
+  SquadMemberParamSchema,
+  SquadProfileParamSchema,
   UserFacingError,
 } from '@goodbot/shared';
 import { Hono } from 'hono';
@@ -33,15 +40,20 @@ import { validate } from '../validate';
 
 import type { ManualOutcome } from '../../services/squads';
 import type { ApiDeps, ApiEnv } from '../context';
-import type { Squad, SquadGame, SquadProposal } from '@goodbot/db';
+import type { Squad, SquadGame, SquadProfile, SquadProposal } from '@goodbot/db';
 import type {
+  DeleteSquadProfileResult,
   ManualMatchEvaluation,
   PostSquadSearchMessageResult,
+  RemoveSquadMemberResult,
   RunSquadMatchResult,
   SquadGameSummary,
   SquadManualCheck,
   SquadManualProposalResult,
   SquadOverview,
+  SquadProfileAnswersResult,
+  SquadProfileStatusResult,
+  SquadProfileSummary,
   SquadProposalSummary,
   SquadSummary,
 } from '@goodbot/shared';
@@ -95,6 +107,19 @@ function toProposalSummary(row: SquadProposal): SquadProposalSummary {
   };
 }
 
+function toProfileSummary(row: SquadProfile): SquadProfileSummary {
+  return {
+    userId: row.userId,
+    gameId: row.gameId,
+    status: row.status,
+    availability: row.availability,
+    answers: row.answers,
+    lastMatchedAt: row.lastMatchedAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 function toCheck(evaluation: ManualMatchEvaluation, gameId: string): SquadManualCheck {
   return { gameId, ...evaluation };
 }
@@ -142,6 +167,17 @@ async function requireGame(deps: ApiDeps, guildId: string, gameId: string): Prom
   return game;
 }
 
+async function requireProfile(
+  deps: ApiDeps,
+  guildId: string,
+  userId: string,
+  gameId: string,
+): Promise<SquadProfile> {
+  const profile = await getSquadProfile(deps.db, guildId, userId, gameId);
+  if (!profile) throw notFound('Esta pessoa não tem perfil neste jogo.', 'PROFILE_NOT_FOUND');
+  return profile;
+}
+
 async function summaryOf(deps: ApiDeps, guildId: string, squad: Squad): Promise<SquadSummary> {
   const members = await listSquadMembers(deps.db, guildId, squad.id);
   return toSquadSummary(
@@ -155,14 +191,15 @@ async function summaryOf(deps: ApiDeps, guildId: string, squad: Squad): Promise<
  * que precisam do Discord. Jogos e config o painel grava direto no banco e
  * avisa pelo `/config/invalidate`, como nos outros módulos.
  *
- * Toda escrita traz `actorId`: publicar a mensagem fixa, rodar o match e o
- * match manual são de admin; arquivar e renomear, de moderador, e funcionam
- * com o módulo desligado, porque limpar squad antigo é justamente o que se faz depois de
+ * Toda escrita traz `actorId`: publicar a mensagem fixa, rodar o match, o
+ * match manual e a gestão de jogadores são de admin; arquivar e renomear, de
+ * moderador. Arquivar, renomear e tirar alguém do squad funcionam com o módulo
+ * desligado, porque limpar squad antigo é justamente o que se faz depois de
  * desligar.
  */
 export function createSquadRoutes(deps: ApiDeps): Hono<ApiEnv> {
-  // Toda escrita daqui manda mensagem, abre thread ou mexe em canal: mesmo
-  // balde apertado por guild das mensagens do painel (PRD §7.4).
+  // Toda escrita daqui manda mensagem, abre thread, mexe em canal ou manda DM:
+  // mesmo balde apertado por guild das mensagens do painel (PRD §7.4).
   const writeLimit = guildRateLimit(createRateLimiter({ limit: MESSAGE_LIMIT_PER_MINUTE }));
   const checkLimit = guildRateLimit(createRateLimiter({ limit: MANUAL_CHECK_LIMIT_PER_MINUTE }));
 
@@ -348,6 +385,99 @@ export function createSquadRoutes(deps: ApiDeps): Hono<ApiEnv> {
           const result: SquadManualProposalResult = {
             proposal: toProposalSummary(done.proposal),
             check: toCheck(done.check, gameId),
+          };
+          return c.json(result);
+        },
+      )
+
+      .post(
+        '/:squadId/members/:userId/remove',
+        writeLimit,
+        validate('param', SquadMemberParamSchema),
+        validate('json', RemoveSquadMemberInputSchema),
+        async (c) => {
+          const { squadId, userId } = c.req.valid('param');
+          const input = c.req.valid('json');
+          const guild = c.get('guild');
+          await requireActor(deps, guild, input.actorId, 'admin');
+
+          await requireSquad(deps, guild.id, squadId);
+          const removed = await deps.squads.removeMemberAsAdmin(guild, squadId, userId, input);
+          const result: RemoveSquadMemberResult = {
+            squad: await summaryOf(deps, guild.id, removed.squad),
+            archived: removed.archived,
+            profileStatus: removed.profileStatus,
+            notified: removed.notified,
+          };
+          return c.json(result);
+        },
+      )
+
+      .post(
+        '/games/:gameId/profiles/:userId/status',
+        writeLimit,
+        validate('param', SquadProfileParamSchema),
+        validate('json', SetSquadProfileStatusInputSchema),
+        async (c) => {
+          const { gameId, userId } = c.req.valid('param');
+          const input = c.req.valid('json');
+          const guild = c.get('guild');
+          await requireActor(deps, guild, input.actorId, 'admin');
+
+          await deps.squads.requireConfig(guild.id);
+          await requireGame(deps, guild.id, gameId);
+          await requireProfile(deps, guild.id, userId, gameId);
+          const changed = await deps.squads.setProfileStatusAsAdmin(guild, gameId, userId, input);
+          const result: SquadProfileStatusResult = {
+            profile: toProfileSummary(changed.profile),
+            match: changed.match,
+            notified: changed.notified,
+          };
+          return c.json(result);
+        },
+      )
+
+      .post(
+        '/games/:gameId/profiles/:userId/answers',
+        writeLimit,
+        validate('param', SquadProfileParamSchema),
+        validate('json', EditSquadProfileAnswersInputSchema),
+        async (c) => {
+          const { gameId, userId } = c.req.valid('param');
+          const input = c.req.valid('json');
+          const guild = c.get('guild');
+          await requireActor(deps, guild, input.actorId, 'admin');
+
+          await deps.squads.requireConfig(guild.id);
+          await requireGame(deps, guild.id, gameId);
+          await requireProfile(deps, guild.id, userId, gameId);
+          const edited = await deps.squads.editProfileAnswersAsAdmin(guild, gameId, userId, input);
+          const result: SquadProfileAnswersResult = {
+            profile: toProfileSummary(edited.profile),
+            notified: edited.notified,
+          };
+          return c.json(result);
+        },
+      )
+
+      .post(
+        '/games/:gameId/profiles/:userId/delete',
+        writeLimit,
+        validate('param', SquadProfileParamSchema),
+        validate('json', DeleteSquadProfileInputSchema),
+        async (c) => {
+          const { gameId, userId } = c.req.valid('param');
+          const input = c.req.valid('json');
+          const guild = c.get('guild');
+          await requireActor(deps, guild, input.actorId, 'admin');
+
+          await deps.squads.requireConfig(guild.id);
+          await requireGame(deps, guild.id, gameId);
+          await requireProfile(deps, guild.id, userId, gameId);
+          const removed = await deps.squads.deleteProfileAsAdmin(guild, gameId, userId, input);
+          const result: DeleteSquadProfileResult = {
+            deleted: toProfileSummary(removed.deleted),
+            notified: removed.notified,
           };
           return c.json(result);
         },

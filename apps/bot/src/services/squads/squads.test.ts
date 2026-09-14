@@ -67,6 +67,50 @@ describe('SquadService: ciclo de vida', () => {
     expect(store.profiles.find((profile) => profile.userId === B)?.status).toBe('paused');
   });
 
+  it('admin tira alguém com o módulo desligado: aviso da staff, vaga reaberta e perfil pausado', async () => {
+    const s = scenario({ size: 2, members: [A, B], status: 'full' });
+    s.setConfig({ enabled: false });
+
+    const result = await s.service.removeMember(s.discordGuild, s.squad.id, B, 'motivo privado', {
+      source: 'dashboard',
+      actorId: C,
+      force: true,
+      removedBy: C,
+    });
+
+    expect(row(s.squad.id).status).toBe('open');
+    expect(result).toMatchObject({ archived: false, profileStatus: 'paused' });
+    const notice = embedOf(s.channel.sent[0])?.description ?? '';
+    expect(notice).toContain(`A staff tirou <@${B}> do squad pelo painel.`);
+    expect(notice).not.toContain(C);
+    expect(notice).not.toContain('motivo privado');
+  });
+
+  it('sem force, o módulo desligado recusa a saída', async () => {
+    const s = scenario({ size: 2, members: [A, B] });
+    s.setConfig({ enabled: false });
+
+    await expect(
+      s.service.removeMember(s.discordGuild, s.squad.id, B, null),
+    ).rejects.toMatchObject({ code: 'MODULE_DISABLED' });
+    expect(store.members).toHaveLength(2);
+  });
+
+  it('admin tirando o último membro arquiva o squad', async () => {
+    const s = scenario({ size: 3, members: [A] });
+    s.setConfig({ enabled: false });
+
+    const result = await s.service.removeMember(s.discordGuild, s.squad.id, A, 'limpeza', {
+      source: 'dashboard',
+      actorId: C,
+      force: true,
+      removedBy: C,
+    });
+
+    expect(result.archived).toBe(true);
+    expect(row(s.squad.id).status).toBe('archived');
+  });
+
   it('o último a sair arquiva o squad e tranca o canal', async () => {
     const s = scenario({ size: 3, members: [A] });
 

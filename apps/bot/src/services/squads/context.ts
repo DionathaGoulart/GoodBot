@@ -5,8 +5,10 @@ import { childLogger } from '../../logger';
 
 import type { AuditEntry, AuditService } from '../audit';
 import type { ConfigService } from '../config';
+import type { AdminDmKind } from './embeds';
 import type { ManualMatchService } from './manual';
 import type { MatcherService } from './matcher';
+import type { PlayerAdminService } from './players';
 import type { ProfileService } from './profiles';
 import type { ProposalService } from './proposals';
 import type { JoinRequestService } from './requests';
@@ -15,7 +17,13 @@ import type { SessionService } from './sessions';
 import type { SquadLifecycleService } from './squads';
 import type { Db, Squad } from '@goodbot/db';
 import type { SquadsConfig } from '@goodbot/shared';
-import type { Client, Guild, GuildBasedChannel, TextChannel } from 'discord.js';
+import type {
+  BaseMessageOptions,
+  Client,
+  Guild,
+  GuildBasedChannel,
+  TextChannel,
+} from 'discord.js';
 
 export const log = childLogger('squads');
 
@@ -42,6 +50,7 @@ export interface SquadParts {
   sessions: SessionService;
   search: SearchService;
   manual: ManualMatchService;
+  players: PlayerAdminService;
 }
 
 /**
@@ -123,6 +132,32 @@ export class SquadContext {
     }
   }
 
+  /**
+   * Avisa por DM quem sofreu uma ação de admin pelo painel. Nunca lança: DM
+   * fechada, bot bloqueado e pessoa sem servidor em comum são situações
+   * normais, e a ação já valeu. Não tenta de novo: repetir DM recusada atrai
+   * rate limit. O erro fica fora do log de propósito: o `DiscordAPIError` leva
+   * o corpo da requisição, com o texto da DM e o motivo.
+   */
+  async sendDm(
+    userId: string,
+    message: BaseMessageOptions,
+    bindings: { guildId: string; action: AdminDmKind },
+  ): Promise<boolean> {
+    try {
+      const user = await this.client.users.fetch(userId);
+      if (user.bot) return false;
+      await user.send(message);
+      log.info({ ...bindings, userId }, 'aviso de admin enviado por DM');
+      return true;
+    } catch (error) {
+      log.warn(
+        { ...bindings, userId, code: discordErrorCode(error) },
+        'não foi possível avisar a pessoa por DM',
+      );
+      return false;
+    }
+  }
 }
 
 /** Handler de `.catch` que só registra: falha do Discord que não é culpa de quem clicou. */
