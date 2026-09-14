@@ -17,6 +17,15 @@ import { guildSettings, logConfigs, moduleConfigs } from './configs';
 import { guilds } from './guilds';
 import { messageCache } from './messages';
 import { channelLocks, polls, reminders } from './misc';
+import {
+  squadGames,
+  squadJoinRequests,
+  squadMembers,
+  squadProfiles,
+  squadProposals,
+  squads,
+  squadSessions,
+} from './squads';
 import { statBuckets } from './stats';
 
 export const guildsRelations = relations(guilds, ({ one, many }) => ({
@@ -46,6 +55,13 @@ export const guildsRelations = relations(guilds, ({ one, many }) => ({
   statBuckets: many(statBuckets),
   channelLocks: many(channelLocks),
   auditLogs: many(auditLogs),
+  squadGames: many(squadGames),
+  squadProfiles: many(squadProfiles),
+  squads: many(squads),
+  squadMembers: many(squadMembers),
+  squadProposals: many(squadProposals),
+  squadJoinRequests: many(squadJoinRequests),
+  squadSessions: many(squadSessions),
 }));
 
 export const guildSettingsRelations = relations(guildSettings, ({ one }) => ({
@@ -117,4 +133,46 @@ export const pollsRelations = relations(polls, ({ one }) => ({
 
 export const channelLocksRelations = relations(channelLocks, ({ one }) => ({
   guild: one(guilds, { fields: [channelLocks.guildId], references: [guilds.id] }),
+}));
+
+export const squadGamesRelations = relations(squadGames, ({ one, many }) => ({
+  guild: one(guilds, { fields: [squadGames.guildId], references: [guilds.id] }),
+  profiles: many(squadProfiles),
+  squads: many(squads),
+  proposals: many(squadProposals),
+}));
+
+export const squadProfilesRelations = relations(squadProfiles, ({ one }) => ({
+  guild: one(guilds, { fields: [squadProfiles.guildId], references: [guilds.id] }),
+  game: one(squadGames, { fields: [squadProfiles.gameId], references: [squadGames.id] }),
+}));
+
+export const squadsRelations = relations(squads, ({ one, many }) => ({
+  guild: one(guilds, { fields: [squads.guildId], references: [guilds.id] }),
+  game: one(squadGames, { fields: [squads.gameId], references: [squadGames.id] }),
+  members: many(squadMembers),
+  proposals: many(squadProposals),
+  joinRequests: many(squadJoinRequests),
+  sessions: many(squadSessions),
+}));
+
+export const squadMembersRelations = relations(squadMembers, ({ one }) => ({
+  guild: one(guilds, { fields: [squadMembers.guildId], references: [guilds.id] }),
+  squad: one(squads, { fields: [squadMembers.squadId], references: [squads.id] }),
+}));
+
+export const squadProposalsRelations = relations(squadProposals, ({ one }) => ({
+  guild: one(guilds, { fields: [squadProposals.guildId], references: [guilds.id] }),
+  game: one(squadGames, { fields: [squadProposals.gameId], references: [squadGames.id] }),
+  squad: one(squads, { fields: [squadProposals.squadId], references: [squads.id] }),
+}));
+
+export const squadJoinRequestsRelations = relations(squadJoinRequests, ({ one }) => ({
+  guild: one(guilds, { fields: [squadJoinRequests.guildId], references: [guilds.id] }),
+  squad: one(squads, { fields: [squadJoinRequests.squadId], references: [squads.id] }),
+}));
+
+export const squadSessionsRelations = relations(squadSessions, ({ one }) => ({
+  guild: one(guilds, { fields: [squadSessions.guildId], references: [guilds.id] }),
+  squad: one(squads, { fields: [squadSessions.squadId], references: [squads.id] }),
 }));

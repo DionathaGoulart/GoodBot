@@ -1,0 +1,242 @@
+import { sql } from 'drizzle-orm';
+import {
+  bigserial,
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  smallint,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+
+import { createdAt, snowflake, snowflakeArray, text, timestamptz, updatedAt } from './_columns';
+import { squadProfileStatusEnum, squadRequestStatusEnum, squadStatusEnum } from './enums';
+import { guilds } from './guilds';
+
+import type { LockOverwrite } from './misc';
+import type { SquadAnswers, SquadGameField } from '@goodbot/shared';
+
+/**
+ * Toda tabela do módulo tem `guild_id`, inclusive as filhas que já chegam à
+ * guild pelo squad (PRD §7.1): assim todo query filtra pela guild sem join, e
+ * um uuid vindo de `custom_id` ou da URL nunca alcança o squad de outro
+ * servidor.
+ */
+const guildRef = () =>
+  snowflake('guild_id')
+    .notNull()
+    .references(() => guilds.id, { onDelete: 'cascade' });
+
+/** Um jogo do módulo `squads`, com as perguntas do perfil definidas no painel. */
+export const squadGames = pgTable(
+  'squad_games',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    guildId: guildRef(),
+    name: text('name').notNull(),
+    /** Jogadores por squad; a faixa válida é a do `SquadGameInputSchema`. */
+    squadSize: integer('squad_size').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    /** Perguntas do perfil (no máximo 5, o que cabe num modal). */
+    fields: jsonb('fields').$type<SquadGameField[]>().notNull().default([]),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('squad_games_guild_name_uidx').on(t.guildId, t.name)],
+);
+
+/** Perfil de um jogador, um por jogo. */
+export const squadProfiles = pgTable(
+  'squad_profiles',
+  {
+    guildId: guildRef(),
+    userId: snowflake('user_id').notNull(),
+    gameId: uuid('game_id')
+      .notNull()
+      .references(() => squadGames.id, { onDelete: 'cascade' }),
+    /**
+     * Grade semanal, bit `dia * 4 + faixa` (dia 0 = domingo). São 28 bits
+     * (`SQUAD_AVAILABILITY_MAX`): `integer`, porque `smallint` não comporta.
+     */
+    availability: integer('availability').notNull().default(0),
+    /** `{ chave do campo: resposta }`, conferido por `validateAnswers`. */
+    answers: jsonb('answers').$type<SquadAnswers>().notNull().default({}),
+    status: squadProfileStatusEnum('status').notNull().default('searching'),
+    /** Última vez que o perfil entrou numa proposta. */
+    lastMatchedAt: timestamptz('last_matched_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.guildId, t.userId, t.gameId] }),
+    index('squad_profiles_guild_game_status_idx').on(t.guildId, t.gameId, t.status),
+  ],
+);
+
+/** Um squad fixo: mesmo grupo, mesma janela semanal. */
+export const squads = pgTable(
+  'squads',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    guildId: guildRef(),
+    gameId: uuid('game_id')
+      .notNull()
+      .references(() => squadGames.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /**
+     * Canal de texto privado. `null` enquanto o canal está sendo criado ou
+     * quando a criação falhou: a linha nasce antes do canal, na mesma
+     * transação que reivindica a proposta, para dois aceites simultâneos não
+     * criarem dois canais.
+     */
+    textChannelId: snowflake('text_channel_id'),
+    /** Voice preferido do pool; `null` = o pool estava cheio. */
+    voiceChannelId: snowflake('voice_channel_id'),
+    /** Janela semanal fixa: dia (0 = domingo) e índice da faixa. */
+    day: smallint('day').notNull(),
+    block: smallint('block').notNull(),
+    status: squadStatusEnum('status').notNull().default('open'),
+    /** Último "vou" ou presença no voice; é o relógio da inatividade. */
+    lastConfirmedAt: timestamptz('last_confirmed_at'),
+    /** Quando o squad foi questionado por inatividade; `null` = não foi. */
+    warnedAt: timestamptz('warned_at'),
+    archivedAt: timestamptz('archived_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('squads_guild_game_status_idx').on(t.guildId, t.gameId, t.status)],
+);
+
+export const squadMembers = pgTable(
+  'squad_members',
+  {
+    guildId: guildRef(),
+    squadId: uuid('squad_id')
+      .notNull()
+      .references(() => squads.id, { onDelete: 'cascade' }),
+    userId: snowflake('user_id').notNull(),
+    joinedAt: timestamptz('joined_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.squadId, t.userId] }),
+    index('squad_members_guild_user_idx').on(t.guildId, t.userId),
+  ],
+);
+
+/**
+ * Uma proposta enviada a toda a turma compatível ao mesmo tempo. `user_ids` é
+ * a turma: é o que o cooldown "mesma dupla não é reproposta" consulta.
+ */
+export const squadProposals = pgTable(
+  'squad_proposals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    guildId: guildRef(),
+    gameId: uuid('game_id')
+      .notNull()
+      .references(() => squadGames.id, { onDelete: 'cascade' }),
+    userIds: snowflakeArray('user_ids'),
+    /** Thread privada da proposta. */
+    threadId: snowflake('thread_id').notNull(),
+    /** Mensagem com os botões; `null` até ser enviada. */
+    messageId: snowflake('message_id'),
+    acceptedIds: snowflakeArray('accepted_ids'),
+    declinedIds: snowflakeArray('declined_ids'),
+    /**
+     * Preenchido no primeiro aceite. `set null`, e não cascade: a proposta
+     * continua valendo para o cooldown de dupla mesmo sem o squad.
+     */
+    squadId: uuid('squad_id').references(() => squads.id, { onDelete: 'set null' }),
+    expiresAt: timestamptz('expires_at').notNull(),
+    closedAt: timestamptz('closed_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('squad_proposals_open_idx')
+      .on(t.guildId, t.expiresAt)
+      .where(sql`${t.closedAt} is null`),
+    index('squad_proposals_guild_game_created_idx').on(t.guildId, t.gameId, t.createdAt),
+    uniqueIndex('squad_proposals_thread_uidx').on(t.guildId, t.threadId),
+  ],
+);
+
+/** Pedido para entrar num squad existente: vai a todos os membros, basta um aceite. */
+export const squadJoinRequests = pgTable(
+  'squad_join_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    guildId: guildRef(),
+    squadId: uuid('squad_id')
+      .notNull()
+      .references(() => squads.id, { onDelete: 'cascade' }),
+    userId: snowflake('user_id').notNull(),
+    /** Mensagem com os botões no canal do squad; `null` até ser enviada. */
+    messageId: snowflake('message_id'),
+    status: squadRequestStatusEnum('status').notNull().default('pending'),
+    /**
+     * Membros que recusaram. Uma recusa é só um voto: o pedido só é recusado
+     * quando todos os membros atuais recusaram, e um aceite basta.
+     */
+    declinedIds: snowflakeArray('declined_ids'),
+    decidedBy: snowflake('decided_by'),
+    createdAt: createdAt(),
+    decidedAt: timestamptz('decided_at'),
+  },
+  (t) => [
+    // Um pedido pendente por pessoa e squad; depois de decidido, pode pedir de novo.
+    uniqueIndex('squad_join_requests_pending_uidx')
+      .on(t.squadId, t.userId)
+      .where(sql`${t.status} = 'pending'`),
+    index('squad_join_requests_guild_status_idx').on(t.guildId, t.status),
+  ],
+);
+
+/**
+ * Uma sessão semanal de um squad. Alimenta o lembrete com Vou / Não vou e a
+ * reserva do voice do pool.
+ *
+ * O snapshot dos overwrites do voice mora aqui, e não em `channel_locks`:
+ * aquela tabela é do `/lock` (um lock por canal), e um `/lock` num Hellpod
+ * reservado colidiria com a reserva, e o `/unlock` restauraria o snapshot
+ * errado.
+ */
+export const squadSessions = pgTable(
+  'squad_sessions',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    guildId: guildRef(),
+    squadId: uuid('squad_id')
+      .notNull()
+      .references(() => squads.id, { onDelete: 'cascade' }),
+    startsAt: timestamptz('starts_at').notNull(),
+    /** Fim da janela: é quando o job libera o voice. */
+    endsAt: timestamptz('ends_at').notNull(),
+    remindedAt: timestamptz('reminded_at'),
+    /** Mensagem do lembrete; os votos editam a contagem dela. */
+    reminderMessageId: snowflake('reminder_message_id'),
+    /** Quando o bot moveu os membros para o voice; trava contra mover duas vezes. */
+    startedAt: timestamptz('started_at'),
+    goingIds: snowflakeArray('going_ids'),
+    notGoingIds: snowflakeArray('not_going_ids'),
+    /** O voice do pool reservado para esta sessão; `null` = nada reservado. */
+    voiceChannelId: snowflake('voice_channel_id'),
+    /**
+     * Overwrites que o voice tinha antes da reserva, para a liberação
+     * restaurar exatamente o que existia. `null` = nada reservado.
+     */
+    voiceOverwrites: jsonb('voice_overwrites').$type<LockOverwrite[]>(),
+    voiceReservedAt: timestamptz('voice_reserved_at'),
+    voiceReleasedAt: timestamptz('voice_released_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('squad_sessions_squad_starts_uidx').on(t.squadId, t.startsAt),
+    index('squad_sessions_to_release_idx')
+      .on(t.guildId, t.endsAt)
+      .where(sql`${t.voiceReservedAt} is not null and ${t.voiceReleasedAt} is null`),
+    index('squad_sessions_guild_starts_idx').on(t.guildId, t.startsAt),
+  ],
+);

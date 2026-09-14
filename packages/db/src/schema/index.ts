@@ -8,5 +8,6 @@ export * from './community';
 export * from './misc';
 export * from './stats';
 export * from './social';
+export * from './squads';
 export * from './audit';
 export * from './relations';

@@ -42,7 +42,8 @@ export const SquadSummarySchema = z.object({
     .min(0)
     .max(SQUAD_BLOCKS.length - 1),
   status: z.enum(SQUAD_STATUSES),
-  textChannelId: SnowflakeSchema,
+  /** `null` = o canal ainda está sendo criado ou a criação falhou. */
+  textChannelId: SnowflakeSchema.nullable(),
   /** `null` = o pool estava cheio e o squad está sem sala reservada. */
   voiceChannelId: SnowflakeSchema.nullable(),
   /** ISO 8601 da última sessão com alguém presente ou com "vou"; `null` = nunca. */
