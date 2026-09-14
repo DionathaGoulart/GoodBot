@@ -604,7 +604,8 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       }
 
       expect((await countSearchingProfilesByGame(db, GUILD_ID))[other.id]).toBe(2);
-      expect(await countSearchingProfilesByGame(db, OTHER_GUILD_ID)).toEqual({});
+      // A outra guild tem perfis de outros blocos; o que importa é não ver este jogo.
+      expect(await countSearchingProfilesByGame(db, OTHER_GUILD_ID)).not.toHaveProperty(other.id);
     });
   });
 });
