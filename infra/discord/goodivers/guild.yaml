@@ -12,7 +12,8 @@
 
 name: Goodivers
 roles:
-  - name: admin
+  - name: Goodivers
+    color: "#d4af37"
     permissions:
       - CreateInstantInvite
       - KickMembers
@@ -53,7 +54,8 @@ roles:
       - SendMessagesInThreads
       - ModerateMembers
       - SendPolls
-  - name: moderador
+  - name: Ministro
+    color: "#e03c31"
     permissions:
       - CreateInstantInvite
       - KickMembers
@@ -90,11 +92,8 @@ roles:
       - SendMessagesInThreads
       - ModerateMembers
       - SendPolls
-  - name: General
-    color: "#f1c40f"
-    hoist: true
   - name: Super Cidadão
-    color: "#dfbf3f"
+    color: "#f1c40f"
     hoist: true
     permissions:
       - CreateInstantInvite
@@ -107,11 +106,9 @@ roles:
       - EmbedLinks
       - AttachFiles
       - ReadMessageHistory
-      - MentionEveryone
       - UseExternalEmojis
       - Connect
       - Speak
-      - MoveMembers
       - UseVAD
       - ChangeNickname
       - CreatePublicThreads
@@ -119,23 +116,40 @@ roles:
       - UseExternalStickers
       - SendMessagesInThreads
       - SendPolls
+  - name: Veterano
+    color: "#3498db"
+    permissions:
+      - MoveMembers
+  - name: Helldiver
+    color: "#2ecc71"
+    permissions:
+      - CreateInstantInvite
+      - AddReactions
+      - Stream
+      - ViewChannel
+      - SendMessages
+      - EmbedLinks
+      - AttachFiles
+      - ReadMessageHistory
+      - UseExternalEmojis
+      - Connect
+      - Speak
+      - UseVAD
+      - ChangeNickname
+      - CreatePublicThreads
+      - UseExternalStickers
+      - SendMessagesInThreads
+  - name: Cidadão
+    color: "#95a5a6"
+  - name: PC
+  - name: PS5
+  - name: Democracia
+    mentionable: true
+  - name: General
+    color: "#f1c40f"
+    hoist: true
   - name: Comandante
     color: "#ff00c3"
-    hoist: true
-  - name: Almirante
-    color: "#ff0004"
-    hoist: true
-  - name: Marechal
-    color: "#44e6ff"
-    hoist: true
-  - name: Capitão
-    color: "#9b59b6"
-    hoist: true
-  - name: Chefe Espacial
-    color: "#e67e22"
-    hoist: true
-  - name: Sargento
-    color: "#2ecc71"
     hoist: true
   - name: Cadete Espacial
     color: "#3498db"
@@ -161,95 +175,119 @@ roles:
       - CreatePublicThreads
       - UseExternalStickers
       - SendMessagesInThreads
-  - name: Bots
-    color: "#ff0000"
-    hoist: true
-  - name: 📡 Ordens Superiores
-    color: "#ffd700"
+  - name: Vídeos
     mentionable: true
-  - name: 📡 Esquadrão
-    color: "#4aa8ff"
+  - name: Lives
     mentionable: true
-  - name: Terminídeos
-    color: "#f0a000"
-  - name: Autômatos
-    color: "#c0392b"
-  - name: Iluminados
-    color: "#8e44ad"
-  - name: normal
-    permissions:
-      - CreateInstantInvite
-      - AddReactions
-      - Stream
-      - ViewChannel
-      - SendMessages
-      - EmbedLinks
-      - AttachFiles
-      - ReadMessageHistory
-      - UseExternalEmojis
-      - Connect
-      - Speak
-      - UseVAD
-      - ChangeNickname
-      - CreatePublicThreads
-      - UseExternalStickers
-      - SendMessagesInThreads
+  - name: Eventos
+    mentionable: true
 channels:
-  - name: boas-vindas
-    overrides:
-      - role: "@everyone"
-        view: allow
-        send: deny
   - name: files
     overrides:
       - role: Youtube
         view: allow
         send: deny
-      - role: normal
+      - role: Helldiver
         view: allow
         send: deny
-      - role: moderador
+      - role: Ministro
         view: allow
         send: deny
       - role: "@everyone"
         view: allow
         send: deny
 categories:
-  - name: PONTE DE COMANDO
+  - name: Quartel-General
     channels:
-      - name: protocolo
-        topic: Conduta obrigatória a bordo. Leia antes de descer no planeta.
+      - name: transmissão-super-terra
+        type: announcement
         overrides:
+          - role: GoodBot
+            view: allow
+            send: allow
+          - role: Ministro
+            send: allow
+          - role: "@everyone"
+            send: deny
+      - name: protocolos
+        overrides:
+          - role: GoodBot
+            view: allow
+            send: allow
+          - role: Ministro
+            send: allow
           - role: "@everyone"
             view: allow
             send: deny
-      - name: cargos
-        topic: Escolha sua facção e o que quer ser avisado. Painéis do Goodbot.
+      - name: alistamento
         overrides:
+          - role: GoodBot
+            view: allow
+            send: allow
+          - role: Ministro
+            send: allow
           - role: "@everyone"
             view: allow
-            send: deny
-  - name: Novidades
+            send: allow
+      - name: alto-comando
+        overrides:
+          - role: GoodBot
+            view: allow
+          - role: Ministro
+            view: allow
+          - role: "@everyone"
+            view: deny
+  - name: Super Terra
     overrides:
+      - role: Ministro
+        send: allow
       - role: "@everyone"
-        view: allow
         send: deny
     channels:
       - name: boletins-oficiais
         overrides:
+          - role: Ministro
+            send: allow
           - role: "@everyone"
-            view: allow
             send: deny
       - name: ordens-superiores
         overrides:
+          - role: Ministro
+            send: allow
           - role: "@everyone"
-            view: allow
             send: deny
       - name: comunicados-oficiais
         overrides:
+          - role: Ministro
+            send: allow
           - role: "@everyone"
-            view: allow
             send: deny
+  - name: Canal Goodivers
+    channels:
+      - name: debate-dos-vídeos
+      - name: enquetes
+        overrides:
+          - role: Ministro
+            send: allow
+          - role: "@everyone"
+            send: deny
+      - name: super-cidadãos
+        overrides:
+          - role: Ministro
+            view: allow
+            send: allow
+          - role: Super Cidadão
+            view: allow
+            send: allow
+          - role: "@everyone"
+            view: deny
+  - name: Briefing
+    channels:
+      - name: guias-de-farm
+      - name: arquivos-do-ministério
+        topic: Lore e teorias. Spoiler de Ordem em andamento só com ||barras de spoiler||.
+      - name: clipes-e-prints
+        slowmode: 30
   - name: Área Social
     channels:
       - name: Zona de Combate¹
@@ -257,17 +295,25 @@ categories:
       - name: sala-de-comando
       - name: Zona de Combate²
         type: voice
+      - name: off-topic
       - name: Comando Secreto
         type: voice
         overrides:
+          - role: Ministro
+            view: allow
           - role: "@everyone"
             view: deny
       - name: Criogenia
         type: voice
-  - name: GUERRA GALÁCTICA
+  - name: Esquadrões
     channels:
-      - name: relatorios-de-missao
-        topic: Clipes e prints de missão. Slowmode de 30s para o canal não virar enxurrada.
-        slowmode: 30
-      - name: recrutamento
-        topic: Procurando esquadrão? Chame aqui e marque @📡 Esquadrão.
+      - name: procurar-esquadrão
+        slowmode: 10
+      - name: Hellpod Alfa
+        type: voice
+      - name: Hellpod Bravo
+        type: voice
+      - name: Hellpod Charlie
+        type: voice
+      - name: Hellpod Delta
+        type: voice
