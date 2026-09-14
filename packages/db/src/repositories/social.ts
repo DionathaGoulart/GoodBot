@@ -17,6 +17,7 @@ export interface SocialAccountInputRow {
   kinds: SocialKind[];
   template: MessageTemplate;
   mentionRoleId: string | null;
+  liveMentionRoleId: string | null;
   enabled: boolean;
 }
 

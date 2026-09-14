@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SocialAccountRef } from '../services/social/types';
 import type { SocialAccount } from '@goodbot/db';
+import type { SocialKind } from '@goodbot/shared';
 
 const {
   listEnabledSocialAccounts,
@@ -40,6 +41,8 @@ const { SocialJob } = await import('./social');
 const GUILD_ID = '900000000000000000';
 const OTHER_GUILD_ID = '900000000000000001';
 const CHANNEL_ID = '800000000000000000';
+const VIDEO_ROLE_ID = '700000000000000000';
+const LIVE_ROLE_ID = '700000000000000001';
 
 function fakeAccount(overrides: Partial<SocialAccount> = {}): SocialAccount {
   return {
@@ -54,6 +57,7 @@ function fakeAccount(overrides: Partial<SocialAccount> = {}): SocialAccount {
     kinds: ['video'],
     template: SOCIAL_DEFAULT_TEMPLATE,
     mentionRoleId: null,
+    liveMentionRoleId: null,
     enabled: true,
     // `lastCheckedAt` preenchido = a conta já rodou, então nada é backlog.
     lastCheckedAt: new Date('2026-09-01T00:00:00Z'),
@@ -65,10 +69,10 @@ function fakeAccount(overrides: Partial<SocialAccount> = {}): SocialAccount {
   };
 }
 
-function fakeItem(externalId: string) {
+function fakeItem(externalId: string, kind: SocialKind = 'video') {
   return {
     externalId,
-    kind: 'video' as const,
+    kind,
     headline: 'publicou um vídeo novo',
     title: 'Vídeo novo',
     url: `https://www.youtube.com/watch?v=${externalId}`,
@@ -79,7 +83,9 @@ function fakeItem(externalId: string) {
 }
 
 function makeDeps(items: ReturnType<typeof fakeItem>[], overrides: Record<string, unknown> = {}) {
-  const send = vi.fn(() => Promise.resolve({ id: 'msg-1' }));
+  const send = vi.fn((_message: { allowedMentions?: { roles?: string[] } }) =>
+    Promise.resolve({ id: 'msg-1' }),
+  );
   const channel = { isTextBased: () => true, isDMBased: () => false, send };
   const guild = { channels: { fetch: vi.fn(() => Promise.resolve(channel)) } };
   const fetchLatest = vi.fn((_account: SocialAccountRef) => Promise.resolve(items));
@@ -147,6 +153,23 @@ describe('SocialJob', () => {
     );
     expect(enviados).toEqual(['velho', 'novo']);
     expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('live pinga o cargo de lives; vídeo, o cargo de vídeos', async () => {
+    const { deps, send } = makeDeps([fakeItem('ao-vivo', 'live'), fakeItem('novo')]);
+    listEnabledSocialAccounts.mockResolvedValue([
+      fakeAccount({
+        kinds: ['video', 'live'],
+        mentionRoleId: VIDEO_ROLE_ID,
+        liveMentionRoleId: LIVE_ROLE_ID,
+      }),
+    ]);
+
+    await new SocialJob(deps).tick();
+
+    // Ordem cronológica: o vídeo (mais antigo) sai antes da live.
+    const pingados = send.mock.calls.map(([message]) => message.allowedMentions?.roles);
+    expect(pingados).toEqual([[VIDEO_ROLE_ID], [LIVE_ROLE_ID]]);
   });
 
   it('na primeira passada só marca o que já existia como visto', async () => {

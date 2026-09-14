@@ -71,6 +71,13 @@
       "when": 1789089309190,
       "tag": "0009_bot_bio",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789344084681,
+      "tag": "0010_live_mention_role",
+      "breakpoints": true
     }
   ]
 }

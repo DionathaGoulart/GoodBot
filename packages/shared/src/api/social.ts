@@ -19,6 +19,7 @@ export const SocialAccountSummarySchema = z.object({
   kinds: z.array(SocialKindSchema),
   template: MessageTemplateSchema,
   mentionRoleId: SnowflakeSchema.nullable(),
+  liveMentionRoleId: SnowflakeSchema.nullable(),
   enabled: z.boolean(),
   /** ISO 8601; `null` enquanto o job não passou por ela. */
   lastCheckedAt: z.string().nullable(),

@@ -45,7 +45,10 @@ export const socialAccounts = pgTable(
       .$type<SocialKind[]>()
       .default([] as SocialKind[]),
     template: jsonb('template').$type<MessageTemplate>().notNull(),
+    /** Cargo pingado no anúncio de vídeo e de short; `null` = não pinga. */
     mentionRoleId: snowflake('mention_role_id'),
+    /** Cargo pingado no anúncio de live. Sem fallback para o de cima. */
+    liveMentionRoleId: snowflake('live_mention_role_id'),
     enabled: boolean('enabled').notNull().default(true),
     lastCheckedAt: timestamptz('last_checked_at'),
     /** Falhas seguidas. Zera no primeiro sucesso; em 10 a conta se desliga. */

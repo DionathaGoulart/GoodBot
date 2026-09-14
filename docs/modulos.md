@@ -164,6 +164,10 @@ os três e mostra o cartão com avatar e nome antes de salvar. Pelo Discord é
 `/social add`; `/social list` mostra o estado e `/social test` manda um anúncio
 de exemplo.
 
+Cada conta tem dois cargos opcionais para mencionar: um nos anúncios de vídeo e
+short, outro nos de live (no `/social add`, as opções `cargo` e `cargo-live`).
+Um não substitui o outro: deixar o de lives vazio significa live sem ping.
+
 > A primeira passada de uma conta nova **não anuncia nada**: ela marca o que já
 > estava no feed e passa a avisar do próximo post em diante. Sem isso, cadastrar
 > um canal despejaria os últimos 15 vídeos de uma vez.

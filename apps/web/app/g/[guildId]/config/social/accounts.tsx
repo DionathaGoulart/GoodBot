@@ -167,6 +167,7 @@ export function AccountsTable({
                     kinds: row.original.kinds,
                     template: row.original.template,
                     mentionRoleId: row.original.mentionRoleId,
+                    liveMentionRoleId: row.original.liveMentionRoleId,
                     enabled: row.original.enabled,
                   },
                 })

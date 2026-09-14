@@ -16,6 +16,7 @@ import { Hono } from 'hono';
 
 import { childLogger } from '../../logger';
 import { buildSocialMessage, sampleSocialItem } from '../../services/social/announce';
+import { mentionRoleFor } from '../../services/social/mention';
 import { SocialProviderError } from '../../services/social/types';
 import { ApiHttpError, notFound } from '../errors';
 import { validate } from '../validate';
@@ -45,6 +46,7 @@ function toSummary(row: SocialAccount): SocialAccountSummary {
     kinds: row.kinds,
     template: row.template,
     mentionRoleId: row.mentionRoleId,
+    liveMentionRoleId: row.liveMentionRoleId,
     enabled: row.enabled,
     lastCheckedAt: row.lastCheckedAt?.toISOString() ?? null,
     failureCount: row.failureCount,
@@ -64,6 +66,7 @@ function toRow(input: SocialAccountInput) {
     kinds: input.kinds,
     template: input.template,
     mentionRoleId: input.mentionRoleId,
+    liveMentionRoleId: input.liveMentionRoleId,
     enabled: input.enabled,
   };
 }
@@ -170,7 +173,7 @@ export function createSocialRoutes(deps: ApiDeps): Hono<ApiEnv> {
         const message = await channel.send(
           buildSocialMessage(account.template, item, account.platform, {
             embedColor: settings.embedColor,
-            mentionRoleId: account.mentionRoleId,
+            mentionRoleId: mentionRoleFor(account, item.kind),
           }),
         );
 

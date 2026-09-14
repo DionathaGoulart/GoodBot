@@ -50,6 +50,7 @@ export const EMPTY_ACCOUNT: SocialAccountInput = {
   kinds: [...SOCIAL_KINDS],
   template: SOCIAL_DEFAULT_TEMPLATE,
   mentionRoleId: null,
+  liveMentionRoleId: null,
   enabled: true,
 };
 
@@ -324,8 +325,15 @@ export function AccountSheet({
                 <DiscordField
                   kind="role"
                   name="mentionRoleId"
-                  label="Cargo mencionado"
-                  description="Único cargo que a mensagem pode pingar. Deixe vazio para não mencionar ninguém."
+                  label="Cargo mencionado em vídeos e shorts"
+                  description="Único cargo que o anúncio de vídeo ou short pode pingar. Deixe vazio para não mencionar ninguém."
+                  placeholder="Nenhum cargo"
+                />
+                <DiscordField
+                  kind="role"
+                  name="liveMentionRoleId"
+                  label="Cargo mencionado em lives"
+                  description="Único cargo que o anúncio de live pode pingar. Não usa o cargo de cima: vazio é live sem menção."
                   placeholder="Nenhum cargo"
                 />
                 <KindsField />

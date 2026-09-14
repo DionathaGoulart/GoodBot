@@ -31,6 +31,7 @@ describe('SocialAccountInputSchema', () => {
     expect(parsed.platform).toBe('youtube');
     expect(parsed.enabled).toBe(true);
     expect(parsed.mentionRoleId).toBeNull();
+    expect(parsed.liveMentionRoleId).toBeNull();
     expect(parsed.handle).toBeNull();
     expect(parsed.avatarUrl).toBeNull();
   });

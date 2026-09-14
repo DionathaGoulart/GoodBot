@@ -20,6 +20,7 @@ import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { defineCommand } from '../../lib/command';
 import { botFooter, code, infoEmbed, successEmbed } from '../../lib/embeds';
 import { buildSocialMessage, sampleSocialItem } from '../../services/social/announce';
+import { mentionRoleFor } from '../../services/social/mention';
 import { SocialProviderError } from '../../services/social/types';
 
 import type { CommandContext } from '../../lib/command';
@@ -99,7 +100,10 @@ export default defineCommand({
           option.setName('destino').setDescription('Onde anunciar').setRequired(true),
         )
         .addRoleOption((option) =>
-          option.setName('cargo').setDescription('Cargo mencionado no anúncio (opcional)'),
+          option.setName('cargo').setDescription('Cargo mencionado em vídeos e shorts (opcional)'),
+        )
+        .addRoleOption((option) =>
+          option.setName('cargo-live').setDescription('Cargo mencionado em lives (opcional)'),
         ),
     )
     .addSubcommand((sub) =>
@@ -192,6 +196,7 @@ export default defineCommand({
       const input = ctx.interaction.options.getString('canal', true).trim();
       const destination = ctx.interaction.options.getChannel('destino', true);
       const role = ctx.interaction.options.getRole('cargo');
+      const liveRole = ctx.interaction.options.getRole('cargo-live');
 
       // URL, @handle ou UC…: quem traduz é o provider, que também confirma que
       // o canal existe antes de a conta ir para o banco.
@@ -217,6 +222,7 @@ export default defineCommand({
         kinds: [...SOCIAL_KINDS],
         template: SOCIAL_DEFAULT_TEMPLATE,
         mentionRoleId: role?.id ?? null,
+        liveMentionRoleId: liveRole?.id ?? null,
         enabled: true,
       });
       if (!parsed.success) {
@@ -242,6 +248,7 @@ export default defineCommand({
         kinds: parsed.data.kinds,
         template: parsed.data.template,
         mentionRoleId: parsed.data.mentionRoleId,
+        liveMentionRoleId: parsed.data.liveMentionRoleId,
         enabled: parsed.data.enabled,
       });
       if (!account) {
@@ -296,7 +303,7 @@ export default defineCommand({
     await channel.send(
       buildSocialMessage(account.template, item, account.platform, {
         embedColor: ctx.settings.embedColor,
-        mentionRoleId: account.mentionRoleId,
+        mentionRoleId: mentionRoleFor(account, item.kind),
       }),
     );
     await ctx.interaction.editReply({

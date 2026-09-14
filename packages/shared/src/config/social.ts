@@ -58,7 +58,13 @@ export const SocialAccountInputSchema = z.object({
     .min(1, 'Escolha ao menos um tipo de publicação')
     .transform((kinds) => [...new Set(kinds)]),
   template: MessageTemplateSchema,
+  /**
+   * Um cargo para vídeo e short, outro para live: quem quer ser chamado para a
+   * live nem sempre quer o ping de cada short. Não há fallback entre os dois,
+   * vazio é não pingar naquele tipo.
+   */
   mentionRoleId: NullableSnowflakeSchema,
+  liveMentionRoleId: NullableSnowflakeSchema,
   enabled: z.boolean().default(true),
 });
 export type SocialAccountInput = z.infer<typeof SocialAccountInputSchema>;

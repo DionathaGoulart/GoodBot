@@ -18,6 +18,7 @@ import {
 
 import { childLogger } from '../logger';
 import { buildSocialMessage } from '../services/social/announce';
+import { mentionRoleFor } from '../services/social/mention';
 
 import type { AlertService } from '../services/alerts';
 import type { AuditService } from '../services/audit';
@@ -208,7 +209,7 @@ export class SocialJob {
       const message = await channel.send(
         buildSocialMessage(account.template, item, account.platform, {
           embedColor: settings.embedColor,
-          mentionRoleId: account.mentionRoleId,
+          mentionRoleId: mentionRoleFor(account, item.kind),
         }),
       );
       await markSocialPostAnnounced(this.deps.db, post.id, message.id);

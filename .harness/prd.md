@@ -250,7 +250,8 @@ ou Redis pub/sub depois sem tocar nos módulos.
 Avisa num canal do Discord quando o canal do YouTube configurado publica um
 **vídeo**, um **short** ou abre uma **live**. Uma **conta** = canal do YouTube
 + canal de destino no Discord + tipos escolhidos + template. Várias contas por
-servidor (teto de 20), cada uma com seu canal e sua menção opcional.
+servidor (teto de 20), cada uma com seu canal e duas menções opcionais: um
+cargo para vídeo e short, outro para live.
 
 Desde a v2 o módulo é **só YouTube e sem credencial nenhuma**: nada de API
 key, de cota, de projeto no Google Cloud. Os três sinais saem de páginas
@@ -333,8 +334,12 @@ o mesmo pelo Discord. O que fica guardado é sempre o `UC…`.
 
 **Template** por conta, com as variáveis `{title}`, `{url}`, `{author}`,
 `{thumbnail}`, `{platform}`, `{kind}` e `{headline}`; texto ou embed, no mesmo
-motor de templates das boas-vindas (§5.5). Menção opcional a um cargo, com
-`allowedMentions` restrito a ele. Duas decisões que o desenho não fixava:
+motor de templates das boas-vindas (§5.5). Menção opcional a cargo, com
+`allowedMentions` restrito a ele: `mention_role_id` vale para vídeo e short,
+`live_mention_role_id` para live. Não há fallback entre os dois: vazio é não
+pingar naquele tipo, e é isso que deixa quem só quer o aviso da live fora do
+ping de cada short. O anúncio de teste escolhe o cargo pelo tipo testado, com
+a mesma regra. Duas decisões que o desenho não fixava:
 
 - `{headline}` existe porque um texto só precisa servir aos três tipos:
   "publicou um vídeo novo", "publicou um short", "está ao vivo". Sem ela o
@@ -823,7 +828,8 @@ welcome_configs   (guild_id PK, join_enabled, join_channel_id, join_template jso
 social_accounts   (id PK uuid, guild_id, platform enum(youtube|twitch|instagram|tiktok),
                    external_id (channel_id UC… do YouTube), handle, display_name, avatar_url,
                    discord_channel_id, kinds[] (video|short|live|post), template jsonb,
-                   mention_role_id, enabled, last_checked_at,
+                   mention_role_id (vídeo e short), live_mention_role_id (live),
+                   enabled, last_checked_at,
                    failure_count, disabled_reason, created_at, updated_at)
                    unique (guild_id, platform, external_id)
                    -- os enums guardam os valores da v1 (remover valor de enum exige recriar
