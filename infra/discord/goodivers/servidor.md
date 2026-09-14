@@ -3,13 +3,13 @@
 - **ID** `1316158165645000806`
 - **Membros** 11
 - **Dono** goodivers `270244055483547650`
-- **Varrido em** 13/09/2026, 21:04:46
+- **Varrido em** 13/09/2026, 23:38:23
 
 > Retrato do servidor na hora da varredura, gerado por `pnpm guild scan`.
 > Para reformar, edite o `guild.yaml` ao lado, rode `pnpm guild plan` para
 > ver a diferença e `pnpm guild apply` para escrever.
 
-## Cargos (17)
+## Cargos (19)
 
 Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
 `guild.yaml`, e é ela que decide quem manda em quem.
@@ -19,99 +19,102 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
 | 1 | Goodivers | `#d4af37` | não | não | **Administrator** (tudo) |
 | 2 | Ministro | `#e03c31` | não | não | ManageChannels, ManageMessages, ManageWebhooks, ManageNicknames, ManageEvents, KickMembers, ModerateMembers, MentionEveryone, ViewAuditLog |
 | 3 | Super Cidadão | `#f1c40f` | sim | não | 20 básicas |
-| 4 | Veterano | `#3498db` | não | não | 1 básicas |
-| 5 | Helldiver | `#2ecc71` | não | não | 16 básicas |
-| 6 | Cidadão | `#95a5a6` | não | não | — |
-| 7 | PC | — | não | não | — |
-| 8 | PS5 | — | não | não | — |
-| 9 | Democracia | — | não | sim | — |
-| 10 | General | `#f1c40f` | sim | não | — |
-| 11 | Comandante | `#ff00c3` | sim | não | — |
-| 12 | Cadete Espacial | `#3498db` | sim | não | — |
-| 13 | Cadete | `#607d8b` | sim | não | — |
-| 14 | Youtube | `#ff0000` | não | não | 15 básicas |
-| 15 | Vídeos | — | não | sim | — |
-| 16 | Lives | — | não | sim | — |
-| 17 | Eventos | — | não | sim | — |
+| 4 | Impulsionador | `#f47fff` | sim | não | — |
+| 5 | Veterano | `#3498db` | não | não | 1 básicas |
+| 6 | Helldiver | `#2ecc71` | não | não | 16 básicas |
+| 7 | Cidadão | `#95a5a6` | não | não | — |
+| 8 | PC | — | não | não | — |
+| 9 | PS5 | — | não | não | — |
+| 10 | Democracia | — | não | sim | — |
+| 11 | General | `#f1c40f` | sim | não | — |
+| 12 | Comandante | `#ff00c3` | sim | não | — |
+| 13 | Cadete Espacial | `#3498db` | sim | não | — |
+| 14 | Cadete | `#607d8b` | sim | não | — |
+| 15 | Youtube | `#ff0000` | não | não | 15 básicas |
+| 16 | Vídeos | — | não | sim | — |
+| 17 | Lives | — | não | sim | — |
+| 18 | Eventos | — | não | sim | — |
+| 19 | Boletins | — | não | não | — |
 
 `@everyone`: 2 básicas
 
 **Cargos de bot** (o Discord não deixa editar): GoodBot
 
-## Canais (6 categorias, 28 canais)
-
-### Sem categoria
-
-- **#files** · texto
-  - `Youtube` — vê, não escreve
-  - `Helldiver` — vê, não escreve
-  - `Ministro` — vê, não escreve
-  - `@everyone` — vê, não escreve
+## Canais (6 categorias, 30 canais)
 
 ### Quartel-General
 
-- **#transmissão-super-terra** · anúncio
+- **#bem-vindos** · texto
+  - _Chegadas e impulsos da Super Terra._
   - `GoodBot` — vê, escreve
   - `Ministro` — escreve
-  - `@everyone` — não escreve
+  - `@everyone` — vê, não escreve
 - **#protocolos** · texto
   - `GoodBot` — vê, escreve
   - `Ministro` — escreve
   - `@everyone` — vê, não escreve
 - **#alistamento** · texto
+  - _Toque num cargo para pegar. Toque de novo para largar._
   - `GoodBot` — vê, escreve
   - `Ministro` — escreve
+  - `@everyone` — vê, não escreve
+- **#recrutas** · texto · slowmode 5s
+  - _Recém-chegado? Diga oi e tire suas dúvidas por aqui._
   - `@everyone` — vê, escreve
-- **#alto-comando** · texto
-  - `GoodBot` — vê
-  - `Ministro` — vê
-  - `@everyone` — não vê
+- **#files** · texto
+  - `Boletins` — vê
+  - `GoodBot` — vê, escreve
+  - `Youtube` — não escreve
+  - `Helldiver` — não escreve
+  - `Ministro` — vê, escreve
+  - `@everyone` — não vê, não escreve
 
 ### Super Terra
 
-- _(categoria)_ `Ministro` — escreve
-- _(categoria)_ `@everyone` — não escreve
-- **#boletins-oficiais** · texto
-  - `Ministro` — escreve
-  - `@everyone` — não escreve
+- _(categoria)_ `@everyone` — não vê, não escreve
+- _(categoria)_ `GoodBot` — vê, escreve
+- _(categoria)_ `Ministro` — vê, escreve
+- _(categoria)_ `Boletins` — vê
+- **#transmissões** · anúncio
+  - `@everyone` — não vê, não escreve
+  - `GoodBot` — vê, escreve
+  - `Vídeos` — vê
+  - `Ministro` — vê, escreve
+  - `Lives` — vê
+  - `Boletins` — vê
+- **#patch-notes** · texto
+  - `@everyone` — não vê, não escreve
+  - `GoodBot` — vê, escreve
+  - `Ministro` — vê, escreve
+  - `Boletins` — vê
 - **#ordens-superiores** · texto
-  - `Ministro` — escreve
-  - `@everyone` — não escreve
+  - `@everyone` — não vê, não escreve
+  - `GoodBot` — vê, escreve
+  - `Ministro` — vê, escreve
+  - `Boletins` — vê
 - **#comunicados-oficiais** · texto
-  - `Ministro` — escreve
-  - `@everyone` — não escreve
+  - `@everyone` — não vê, não escreve
+  - `GoodBot` — vê, escreve
+  - `Ministro` — vê, escreve
+  - `Boletins` — vê
 
 ### Canal Goodivers
 
 - **sugestões-de-vídeo** · fórum
 - **pergunte-ao-goodivers** · fórum
-- **#debate-dos-vídeos** · texto
-- **#enquetes** · texto
-  - `Ministro` — escreve
-  - `@everyone` — não escreve
-- **#super-cidadãos** · texto
-  - `Ministro` — vê, escreve
-  - `Super Cidadão` — vê, escreve
-  - `@everyone` — não vê
-
-### Briefing
-
-- **loadouts-e-tier-lists** · fórum
-- **#guias-de-farm** · texto
-- **#arquivos-do-ministério** · texto
-  - _Lore e teorias. Spoiler de Ordem em andamento só com ||barras de spoiler||._
-- **#clipes-e-prints** · texto · slowmode 30s
 
 ### Área Social
 
 - **Zona de Combate¹** · voz
-- **#sala-de-comando** · texto
+- **loadouts-e-tier-lists** · fórum
 - **Zona de Combate²** · voz
-- **#off-topic** · texto
+- **#clipes-e-prints** · texto · slowmode 30s
 - **Comando Secreto** · voz
   - `Ministro` — vê
   - `@everyone` — não vê
+- **#sala-de-comando** · texto
 - **Criogenia** · voz
+- **#off-topic** · texto
 
 ### Esquadrões
 
@@ -121,9 +124,38 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
 - **Hellpod Charlie** · voz
 - **Hellpod Delta** · voz
 
+### Staff
+
+- _(categoria)_ `@everyone` — não vê
+- _(categoria)_ `Ministro` — vê
+- _(categoria)_ `GoodBot` — vê, escreve
+- **#alto-comando** · texto
+  - `GoodBot` — vê
+  - `Ministro` — vê
+  - `@everyone` — não vê
+- **#log-moderação** · texto
+  - `GoodBot` — vê, escreve
+  - `Ministro` — vê
+  - `@everyone` — não vê
+- **#log-mensagens** · texto
+  - `GoodBot` — vê, escreve
+  - `Ministro` — vê
+  - `@everyone` — não vê
+- **#log-membros** · texto
+  - `GoodBot` — vê, escreve
+  - `Ministro` — vê
+  - `@everyone` — não vê
+- **#log-servidor** · texto
+  - `GoodBot` — vê, escreve
+  - `Ministro` — vê
+  - `@everyone` — não vê
+- **#log-voz** · texto
+  - `GoodBot` — vê, escreve
+  - `Ministro` — vê
+  - `@everyone` — não vê
+
 ## Observações
 
-- 1 canal fora de qualquer categoria: #files.
-- Cargos sem nenhuma permissão — etiqueta ou alvo de override, sem poder próprio: Cidadão, PC, PS5, Democracia, General, Comandante, Cadete Espacial, Cadete, Vídeos, Lives, Eventos.
+- Cargos sem nenhuma permissão — etiqueta ou alvo de override, sem poder próprio: Impulsionador, Cidadão, PC, PS5, Democracia, General, Comandante, Cadete Espacial, Cadete, Vídeos, Lives, Eventos, Boletins.
 - Fora do alcance do `guild.yaml` — existem no servidor e o apply não os toca: sugestões-de-vídeo (fórum), loadouts-e-tier-lists (fórum), pergunte-ao-goodivers (fórum).
 - Emojis, stickers, eventos, webhooks e threads não entram nesta varredura nem no `guild.yaml`; continuam intactos.

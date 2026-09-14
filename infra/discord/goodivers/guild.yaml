@@ -116,6 +116,9 @@ roles:
       - UseExternalStickers
       - SendMessagesInThreads
       - SendPolls
+  - name: Impulsionador
+    color: "#f47fff"
+    hoist: true
   - name: Veterano
     color: "#3498db"
     permissions:
@@ -181,26 +184,12 @@ roles:
     mentionable: true
   - name: Eventos
     mentionable: true
-channels:
-  - name: files
-    overrides:
-      - role: Youtube
-        view: allow
-        send: deny
-      - role: Helldiver
-        view: allow
-        send: deny
-      - role: Ministro
-        view: allow
-        send: deny
-      - role: "@everyone"
-        view: allow
-        send: deny
+  - name: Boletins
 categories:
   - name: Quartel-General
     channels:
-      - name: transmissão-super-terra
-        type: announcement
+      - name: bem-vindos
+        topic: Chegadas e impulsos da Super Terra.
         overrides:
           - role: GoodBot
             view: allow
@@ -208,6 +197,7 @@ categories:
           - role: Ministro
             send: allow
           - role: "@everyone"
+            view: allow
             send: deny
       - name: protocolos
         overrides:
@@ -220,6 +210,7 @@ categories:
             view: allow
             send: deny
       - name: alistamento
+        topic: Toque num cargo para pegar. Toque de novo para largar.
         overrides:
           - role: GoodBot
             view: allow
@@ -228,74 +219,111 @@ categories:
             send: allow
           - role: "@everyone"
             view: allow
-            send: allow
-      - name: alto-comando
+            send: deny
+      - name: recrutas
+        topic: Recém-chegado? Diga oi e tire suas dúvidas por aqui.
+        slowmode: 5
         overrides:
+          - role: "@everyone"
+            view: allow
+            send: allow
+      - name: files
+        overrides:
+          - role: Boletins
+            view: allow
           - role: GoodBot
             view: allow
+            send: allow
+          - role: Youtube
+            send: deny
+          - role: Helldiver
+            send: deny
           - role: Ministro
             view: allow
+            send: allow
           - role: "@everyone"
             view: deny
+            send: deny
   - name: Super Terra
     overrides:
-      - role: Ministro
-        send: allow
       - role: "@everyone"
+        view: deny
         send: deny
+      - role: GoodBot
+        view: allow
+        send: allow
+      - role: Ministro
+        view: allow
+        send: allow
+      - role: Boletins
+        view: allow
     channels:
-      - name: boletins-oficiais
+      - name: transmissões
+        type: announcement
         overrides:
-          - role: Ministro
-            send: allow
-          - role: "@everyone"
-            send: deny
-      - name: ordens-superiores
-        overrides:
-          - role: Ministro
-            send: allow
-          - role: "@everyone"
-            send: deny
-      - name: comunicados-oficiais
-        overrides:
-          - role: Ministro
-            send: allow
-          - role: "@everyone"
-            send: deny
-  - name: Canal Goodivers
-    channels:
-      - name: debate-dos-vídeos
-      - name: enquetes
-        overrides:
-          - role: Ministro
-            send: allow
-          - role: "@everyone"
-            send: deny
-      - name: super-cidadãos
-        overrides:
-          - role: Ministro
-            view: allow
-            send: allow
-          - role: Super Cidadão
-            view: allow
-            send: allow
           - role: "@everyone"
             view: deny
-  - name: Briefing
-    channels:
-      - name: guias-de-farm
-      - name: arquivos-do-ministério
-        topic: Lore e teorias. Spoiler de Ordem em andamento só com ||barras de spoiler||.
-      - name: clipes-e-prints
-        slowmode: 30
+            send: deny
+          - role: GoodBot
+            view: allow
+            send: allow
+          - role: Vídeos
+            view: allow
+          - role: Ministro
+            view: allow
+            send: allow
+          - role: Lives
+            view: allow
+          - role: Boletins
+            view: allow
+      - name: patch-notes
+        overrides:
+          - role: "@everyone"
+            view: deny
+            send: deny
+          - role: GoodBot
+            view: allow
+            send: allow
+          - role: Ministro
+            view: allow
+            send: allow
+          - role: Boletins
+            view: allow
+      - name: ordens-superiores
+        overrides:
+          - role: "@everyone"
+            view: deny
+            send: deny
+          - role: GoodBot
+            view: allow
+            send: allow
+          - role: Ministro
+            view: allow
+            send: allow
+          - role: Boletins
+            view: allow
+      - name: comunicados-oficiais
+        overrides:
+          - role: "@everyone"
+            view: deny
+            send: deny
+          - role: GoodBot
+            view: allow
+            send: allow
+          - role: Ministro
+            view: allow
+            send: allow
+          - role: Boletins
+            view: allow
+  - name: Canal Goodivers
   - name: Área Social
     channels:
       - name: Zona de Combate¹
         type: voice
-      - name: sala-de-comando
       - name: Zona de Combate²
         type: voice
-      - name: off-topic
+      - name: clipes-e-prints
+        slowmode: 30
       - name: Comando Secreto
         type: voice
         overrides:
@@ -303,8 +331,10 @@ categories:
             view: allow
           - role: "@everyone"
             view: deny
+      - name: sala-de-comando
       - name: Criogenia
         type: voice
+      - name: off-topic
   - name: Esquadrões
     channels:
       - name: procurar-esquadrão
@@ -317,3 +347,66 @@ categories:
         type: voice
       - name: Hellpod Delta
         type: voice
+  - name: Staff
+    overrides:
+      - role: "@everyone"
+        view: deny
+      - role: Ministro
+        view: allow
+      - role: GoodBot
+        view: allow
+        send: allow
+    channels:
+      - name: alto-comando
+        overrides:
+          - role: GoodBot
+            view: allow
+          - role: Ministro
+            view: allow
+          - role: "@everyone"
+            view: deny
+      - name: log-moderação
+        overrides:
+          - role: GoodBot
+            view: allow
+            send: allow
+          - role: Ministro
+            view: allow
+          - role: "@everyone"
+            view: deny
+      - name: log-mensagens
+        overrides:
+          - role: GoodBot
+            view: allow
+            send: allow
+          - role: Ministro
+            view: allow
+          - role: "@everyone"
+            view: deny
+      - name: log-membros
+        overrides:
+          - role: GoodBot
+            view: allow
+            send: allow
+          - role: Ministro
+            view: allow
+          - role: "@everyone"
+            view: deny
+      - name: log-servidor
+        overrides:
+          - role: GoodBot
+            view: allow
+            send: allow
+          - role: Ministro
+            view: allow
+          - role: "@everyone"
+            view: deny
+      - name: log-voz
+        overrides:
+          - role: GoodBot
+            view: allow
+            send: allow
+          - role: Ministro
+            view: allow
+          - role: "@everyone"
+            view: deny
