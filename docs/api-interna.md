@@ -89,27 +89,28 @@ validação Zod) e `retryAfter` quando o 503 veio de rate limit.
 
 ## 4. Rotas
 
-| Grupo         | O que dá                                                        |
-| ------------- | --------------------------------------------------------------- |
-| `guild`       | perfil, settings, ícone, banner, audit log                      |
+| Grupo         | O que dá                                                         |
+| ------------- | ---------------------------------------------------------------- |
+| `guild`       | perfil, settings, ícone, banner, audit log                       |
 | `bot-profile` | apelido, foto, capa e bio do bot **neste** servidor              |
-| `channels`    | listar, criar, editar, apagar, lock/unlock, slowmode, overrides |
+| `channels`    | listar, criar, editar, apagar, lock/unlock, slowmode, overrides  |
 | `roles`       | listar (`?counts=1` conta membros), criar, editar, apagar, mover |
-| `members`     | listar, detalhe, cargos de um membro                            |
-| `messages`    | enviar, histórico, apagar, publicar/despublicar painel          |
-| `moderation`  | ban, unban, listar bans, ações de moderação                     |
-| `cases`       | listar, editar e apagar caso                                    |
-| `invites`     | listar, criar, revogar                                          |
-| `events`      | eventos agendados: listar, criar, editar, apagar                |
-| `expressions` | emojis e stickers: criar, editar, apagar                        |
-| `automod`     | estado e ativação do modo anti-raid                             |
-| `config`      | invalidar o cache de config de um módulo                        |
-| `commands`    | listar os comandos registrados                                  |
-| `social`      | contas de rede social e teste de anúncio                        |
+| `members`     | listar, detalhe, cargos de um membro                             |
+| `messages`    | enviar, histórico, apagar, publicar/despublicar painel           |
+| `moderation`  | ban, unban, listar bans, ações de moderação                      |
+| `cases`       | listar, editar e apagar caso                                     |
+| `invites`     | listar, criar, revogar                                           |
+| `events`      | eventos agendados: listar, criar, editar, apagar                 |
+| `expressions` | emojis e stickers: criar, editar, apagar                         |
+| `automod`     | estado e ativação do modo anti-raid                              |
+| `config`      | invalidar o cache de config de um módulo                         |
+| `commands`    | listar os comandos registrados                                   |
+| `social`      | contas de rede social e teste de anúncio                         |
+| `squads`      | retrato do módulo, mensagem fixa, match, arquivar e renomear     |
 | `admin`       | painel do dono: guilds, expulsar, broadcast, manutenção, resync  |
 | `registry`    | o aviso por DM a quem convidou o bot (ciclo de vida do convite)  |
-| `metrics`     | contadores em formato Prometheus                                |
-| `health`      | **sem auth** — estado do gateway, banco e último backup         |
+| `metrics`     | contadores em formato Prometheus                                 |
+| `health`      | **sem auth** — estado do gateway, banco e último backup          |
 
 Os schemas de request e response de cada uma estão em
 `packages/shared/src/api/`.

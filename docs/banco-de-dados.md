@@ -11,8 +11,8 @@ packages/db/
     client.ts       createDb(url)
     migrate.ts      aplica as migrations
     env.ts          Zod sobre a DATABASE_URL
-    schema/         a definição das tabelas (14 arquivos)
-    repositories/   uma função por consulta (16 arquivos)
+    schema/         a definição das tabelas (15 arquivos)
+    repositories/   uma função por consulta (18 arquivos)
   drizzle/          as migrations SQL, versionadas
 ```
 
@@ -21,11 +21,11 @@ comandos, eventos e rotas chamam uma função de repository, nunca montam query.
 
 ## 2. As tabelas
 
-25 no total.
+33 no total.
 
 | Grupo         | Tabelas                                                                                                                                  |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Servidor      | `guilds`, `guild_settings`, `module_configs`, `meta`                                                                                     |
+| Servidor      | `guilds`, `guild_registry`, `guild_settings`, `module_configs`, `meta`                                                                   |
 | Moderação     | `cases`, `scheduled_actions`, `channel_locks`                                                                                            |
 | Automod       | `automod_rules`, `automod_hits`                                                                                                          |
 | Logs          | `log_configs`, `audit_logs`, `message_cache`                                                                                             |
@@ -33,6 +33,7 @@ comandos, eventos e rotas chamam uma função de repository, nunca montam query.
 | Utilidades    | `polls`, `reminders`                                                                                                                     |
 | Estatísticas  | `stat_buckets`                                                                                                                           |
 | Redes sociais | `social_accounts`, `social_posts`                                                                                                        |
+| Squads        | `squad_games`, `squad_profiles`, `squads`, `squad_members`, `squad_proposals`, `squad_join_requests`, `squad_sessions`                   |
 
 Duas convenções que valem em todas:
 

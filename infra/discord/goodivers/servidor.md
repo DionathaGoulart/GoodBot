@@ -41,7 +41,7 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
 
 **Cargos de bot** (o Discord não deixa editar): GoodBot
 
-## Canais (6 categorias, 30 canais)
+## Canais (7 categorias, 30 canais)
 
 ### Quartel-General
 
@@ -137,6 +137,11 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
 - **Hellpod Bravo** · voz
 - **Hellpod Charlie** · voz
 - **Hellpod Delta** · voz
+
+### Squads
+
+- _(categoria)_ `@everyone` — não vê
+- _(categoria)_ `GoodBot` — vê, escreve
 
 ### Staff
 

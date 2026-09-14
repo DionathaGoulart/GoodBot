@@ -1,7 +1,16 @@
 # Goodbot — PRD (Product Requirements Document)
 
-Versão 1.4 · 2026-09-10 · Documento de referência para todas as sessões.
+Versão 1.5 · 2026-09-14 · Documento de referência para todas as sessões.
 Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (UI).
+
+> **v1.5: squads fixos.** Entrou o módulo `squads` (§5.11): perfil de jogador
+> com a agenda da semana, match por horário, proposta sem líder, canal privado
+> por squad e voice do pool reservado só na hora da sessão. É o primeiro módulo
+> que mexe em voice e abre thread privada, e por isso o convite passou a pedir
+> `Connect`, `Speak` e `CreatePrivateThreads`. O que mudou no documento: §5.11
+> inteira, a página na §6.2, as sete tabelas na §8, os comandos na §9.1, a §10
+> e dois riscos na §11. O que **não** mudou: os outros módulos, a hospedagem e
+> o ciclo de vida do convite.
 
 > **v1.4 — o convite fala.** O ciclo de vida do convite deixou de ser mudo para
 > quem convidou: o bot avisa **no privado dessa pessoa** a cada mudança de
@@ -515,6 +524,132 @@ verificação da aplicação para as intents privilegiadas (`GuildMembers` e
 `MessageContent`), das quais automod e logs dependem (§7.3, §10). O modelo com
 aprovação é o que segura isso — e a demo que expira sozinha também.
 
+### 5.11 Squads fixos
+
+Quem quer jogar sempre com o mesmo grupo, no mesmo horário, não tinha como
+achar gente com a mesma agenda: o pedido no canal de busca sumia no chat. O
+módulo `squads` guarda a agenda de cada jogador, cruza os perfis e monta o
+squad sem precisar de líder. Ele serve a qualquer jogo, porque o jogo e as
+perguntas do perfil são cadastro do painel (§6.2).
+
+**Perfil.** Um por pessoa e por jogo, com três partes:
+
+- **grade semanal** de 7 dias × 4 faixas (manhã, tarde, noite, madrugada),
+  guardada como máscara de 28 bits (`dia * 4 + faixa`, domingo = 0). Faixa, e
+  não hora exata, porque a interseção de agendas hora a hora quase nunca fecha.
+  As faixas são editáveis no painel, mas não atravessam a meia-noite:
+  "madrugada" é o começo do dia, então a madrugada de sábado é a noite de sexta
+  para sábado, e a UI diz isso;
+- **respostas** às perguntas do jogo, no máximo 5 (o teto de componentes de um
+  modal do Discord). Cada pergunta é `select`, `tags` ou `text` e diz como pesa
+  no match: `hard` (precisa bater), `soft` (soma pontos) ou `none`. Texto livre
+  nunca entra no match. As respostas são conferidas contra as perguntas do jogo
+  ao salvar, e resposta para pergunta que o jogo não tem é recusada;
+- **status** `searching | in_squad | paused`. `in_squad` só o bot põe; sair do
+  squad ou vê-lo arquivado deixa o perfil `paused`, e voltar à busca é decisão
+  da pessoa (`/squad status`).
+
+O perfil abre pelo botão da mensagem fixa do canal de busca ou por
+`/squad perfil`, em dois passos: o modal grava só as respostas (perfil novo
+nasce `paused`, com a grade vazia) e a grade vem depois, numa mensagem efêmera
+com um select de dias por faixa. **Salvar a grade é o pedido para procurar**:
+só aí o perfil vira `searching` e o match roda. Sem essa regra, quem fechasse a
+grade ficaria no match com a agenda vazia. A grade em edição não tem estado no
+servidor: a máscara viaja no `custom_id` de cada componente, e um restart nunca
+perde uma grade pela metade.
+
+**Match.** Por jogo, só entre perfis `searching`, fora de proposta aberta e
+abaixo do teto de squads por pessoa (`maxSquadsPerUser`, padrão 1). Cada célula
+em comum vale 1 ponto e cada resposta igual em campo `soft` vale 3; campo
+`hard` diferente impede a dupla. Um grupo precisa dividir **pelo menos uma
+célula como grupo**, porque sobreposição dupla a dupla não garante uma janela
+comum. O resultado é determinístico: os mesmos perfis, em qualquer ordem,
+formam os mesmos grupos. A mesma dupla não é reproposta no mesmo jogo antes de
+`reproposeCooldownDays` (14). Antes de propor grupo novo, o matcher preenche as
+vagas dos squads `open` com pedidos de entrada (abaixo). Ele roda ao salvar a
+grade, uma vez por dia pelo job e sob demanda pelo painel.
+
+**Proposta sem líder.** Cada grupo recebe uma thread **privada** no canal de
+busca, que menciona só os jogadores: menção de cargo numa thread privada puxa o
+cargo inteiro para dentro dela, e por isso o cargo de ping (`pingRoleId`) é só
+da mensagem fixa pública, e só no primeiro envio. A mensagem tem **Aceito /
+Passo**:
+
+- o **primeiro aceite cria o squad**, com a janela semanal na célula com mais
+  gente entre quem não passou;
+- cada aceite seguinte ocupa uma vaga, e quem passou fica de fora; cheio, o
+  squad vira `full`;
+- a proposta fecha quando todos decidiram, quando o squad enche ou em
+  `proposalTtlHours` (72) sem aceite, e a thread é trancada e arquivada.
+
+Dois aceites no mesmo instante não criam dois squads: a linha do squad e a
+reivindicação da proposta vão na mesma transação, e quem perde entra no squad
+de quem ganhou. A linha nasce antes do canal (`text_channel_id` nulo) pelo
+mesmo motivo: criar o canal primeiro deixaria um canal órfão a cada corrida
+perdida.
+
+**Pedido de entrada.** Vaga de squad `open` continua pesquisável.
+`/squad procurar` lista os squads em que a pessoa cabe (vaga livre, janela
+marcada na grade dela, nenhum `hard` batendo de frente com um membro) e oferece
+o pedido. O pedido aparece no canal privado do squad com **Aceitar /
+Recusar**: **basta um aceite**, e ele só é recusado quando todos os membros
+recusaram. O pedido que o matcher cria sozinho é silencioso para o candidato até
+ser aceito. Pedido vence no mesmo prazo da proposta, e pedido recusado ou
+vencido não volta a ser feito para o mesmo squad dentro do cooldown.
+
+**A casa do squad.** Um canal de texto privado na categoria configurada
+(`channelNaming`, padrão `squad-{name}`) e um voice **emprestado** de um pool
+(`voicePoolIds`). Pool, e não um voice por squad, por causa de dois limites do
+Discord: canal só pode ser renomeado duas vezes a cada dez minutos, e o servidor
+tem teto de 500 canais (o painel mostra o contador). O nome do squad vai no
+canal de texto e nos embeds; voice do pool **nunca** é renomeado.
+
+**Sessão semanal.** O job agenda a sessão da semana de cada squad `open|full`
+no fuso da guild (`guild_settings.timezone`), atravessando virada de semana e
+horário de verão. `reminderMinutesBefore` (30) antes do início:
+
+1. **reserva** um voice livre do pool (o preferido do squad, quando livre):
+   grava o snapshot dos overwrites e só então nega `Connect` ao `@everyone` e
+   libera os membros e o próprio bot. O snapshot mora na sessão, e não em
+   `channel_locks`, porque um `/lock` no mesmo voice trocaria o que a liberação
+   restaura. Com o pool todo ocupado a sessão fica sem sala, e o lembrete diz;
+2. manda o **lembrete** com **Vou / Não vou** no canal do squad, mencionando os
+   membros.
+
+Na hora, o bot **move** para o voice reservado quem já está em outro voice da
+guild e chama, numa mensagem só, quem não está em nenhum (o Discord só deixa
+mover quem já está em voice); quem votou "Não vou" fica em paz. No fim da
+faixa, ou quando o voice reservado esvazia depois do início, a reserva é
+**liberada**: os overwrites voltam exatamente ao snapshot. O restore vem antes
+de marcar a sessão como liberada, para uma falha passageira do Discord ser
+tentada de novo na passada seguinte em vez de deixar o voice fechado de vez.
+
+**Ciclo de vida.** Contam como sinal de vida: "Vou", a presença de um membro
+no voice reservado (de uma hora antes do início até o fim da faixa) e o botão
+**Ainda jogamos**. Squad sem sinal por `inactiveWeeks` (4) semanas recebe um
+aviso; sem resposta em mais 7 dias, é **arquivado**: canal só leitura, voice
+liberado, pedidos e propostas encerrados, perfis pausados. Sair do squad reabre
+a vaga (`full` volta a `open`); o último a sair arquiva.
+
+**O relógio.** Um job a cada 5 minutos, por guild atendida com o módulo ligado,
+na ordem: expira propostas e pedidos, agenda as sessões, lembra (e reserva),
+começa (e move) e libera o voice das faixas encerradas. O passo diário
+(inatividade e um match novo) roda uma vez por dia **depois das 12 h locais**,
+porque aviso e proposta chamam gente pelo nome. O dia fica marcado em `meta`
+antes do trabalho: falha espera o dia seguinte em vez de se repetir a cada 5
+minutos. Cada passo é isolado e cada trava é uma `UPDATE` condicional, então
+uma passada repetida não repete nada.
+
+**Permissões.** O módulo depende de `CreatePrivateThreads` (thread da
+proposta), `Connect` e `Speak` (reserva do voice), além de `ManageChannels`,
+`ManageRoles` e `MoveMembers`, que o convite já pedia. Sem elas ele não quebra:
+o match e a reserva conferem antes e pulam com aviso no log (§10).
+
+Fora do escopo desta versão: voice criado e apagado por squad, lobby "jogar
+agora", mais de um horário por squad, match entre jogos diferentes, DM aos
+membros e estatísticas em `stat_buckets` (os contadores do painel saem direto
+das tabelas).
+
 ## 6. Requisitos funcionais — Painel
 
 Acesso: login com Discord OAuth2 (Auth.js). Após login, o painel verifica, na
@@ -566,6 +701,20 @@ grava, escreve auditoria (§6.5), chama `invalidate` no bot, toast.
   abertura, limite), painel (canal, embed, botões), transcript on/off, canal
   de log; lista de tickets abertos/fechados com link de transcript.
 - **Tags**: tabela CRUD com editor (texto/embed), permissão de criação.
+- **Squads** (§5.11), em quatro abas. `CONFIGURAÇÃO`: canal de busca, cargo de
+  ping, categoria, nome do canal, voices do pool, prazos e as 4 faixas da
+  grade, com o painel da mensagem fixa (publicar ou atualizar) no topo.
+  `JOGOS`: CRUD de jogo (nome, 2 a 10 jogadores por squad, ligado) com as até 5
+  perguntas do perfil, e o botão de rodar o match agora; apagar jogo é recusado
+  enquanto ele tiver squad `open|full`, porque a cascata apagaria as linhas e
+  deixaria os canais no Discord. `SQUADS`: os squads vivos com membros, janela,
+  voice e última confirmação, o contador de canais do servidor (teto de 500) e
+  as ações de renomear e arquivar. `PROCURANDO`: os perfis `searching` por jogo
+  e as propostas abertas. Jogos são gravados direto no banco, sem `invalidate`,
+  porque o bot os lê sem cache; publicar, match, arquivar e renomear passam pela
+  API do bot. Salvar o config preserva o `searchMessageId`, que é do bot: um
+  formulário aberto antes de uma publicação levaria o id velho, e a publicação
+  seguinte mandaria uma segunda mensagem em vez de editar a primeira.
 - **Comandos**: por comando: ativo, cargos permitidos, canais permitidos/
   negados (override de permissão do Discord via API de permissões de
   comando quando possível; senão checagem no handler).
@@ -817,7 +966,7 @@ guild_settings    (guild_id PK/FK, timezone, embed_color, mod_role_ids[], admin_
                    -- `bot_bio` é espelho do perfil do bot na guild (§6.6): o Discord aceita
                    -- escrever a bio do membro e não a devolve, então sem cópia o painel fica cego
 module_configs    (guild_id, module PK(guild_id,module), enabled, config jsonb, version, updated_at, updated_by)
-                   -- módulo ∈ moderation|automod|logs|welcome|autorole|reaction_roles|tickets|tags|utilities|stats|social
+                   -- módulo ∈ moderation|automod|logs|welcome|autorole|reaction_roles|tickets|tags|utilities|stats|social|squads
 cases             (id bigserial PK, guild_id, case_number (seq por guild), type enum,
                    target_id, target_tag, actor_id, actor_tag, reason, duration_ms, expires_at,
                    source enum(command|dashboard|automod|context|escalation), automod_rule_id FK?,
@@ -864,12 +1013,45 @@ audit_logs        (id, guild_id, actor_id, actor_tag, action, target_type, targe
                    -- append-only
 dashboard_sessions? -- não: Auth.js JWT stateless; se migrar para DB sessions, adapter Drizzle
 meta              (key PK, value jsonb)  -- hash do manifesto de comandos, versão de schema de config, etc.
+squad_games       (id uuid PK, guild_id, name, squad_size, enabled, fields jsonb, created_at, updated_at)
+                   unique (guild_id, name)
+                   -- `fields`: até 5 perguntas {key, label, type select|tags|text, options[], required,
+                   -- match hard|soft|none}; o bot lê jogos sem cache, então o painel grava sem invalidate
+squad_profiles    (guild_id, user_id, game_id FK, PK(guild_id,user_id,game_id), availability integer,
+                   answers jsonb, status enum(searching|in_squad|paused), last_matched_at, created_at, updated_at)
+                   idx (guild_id, game_id, status)
+                   -- `availability`: máscara de 28 bits, bit = dia * 4 + faixa (domingo = 0); smallint não comporta
+squads            (id uuid PK, guild_id, game_id FK, name, text_channel_id, voice_channel_id, day, block,
+                   status enum(open|full|archived), last_confirmed_at, warned_at, archived_at, created_at, updated_at)
+                   idx (guild_id, game_id, status)
+                   -- `text_channel_id` nulo enquanto o canal nasce: a linha vem antes, na transação que
+                   -- reivindica a proposta; `voice_channel_id` é o voice preferido do pool (nulo = pool cheio)
+squad_members     (guild_id, squad_id FK, user_id, joined_at, PK(squad_id,user_id))
+                   idx (guild_id, user_id)
+squad_proposals   (id uuid PK, guild_id, game_id FK, user_ids[], thread_id, message_id, accepted_ids[],
+                   declined_ids[], squad_id FK set null, expires_at, closed_at, created_at)
+                   idx (guild_id, expires_at) where closed_at is null; unique (guild_id, thread_id)
+                   -- `user_ids` é a turma, que o cooldown de dupla consulta; `set null` porque a proposta
+                   -- continua valendo para o cooldown depois que o squad some
+squad_join_requests (id uuid PK, guild_id, squad_id FK, user_id, message_id, declined_ids[],
+                   status enum(pending|accepted|declined|expired), decided_by, created_at, decided_at)
+                   unique (squad_id, user_id) where status = 'pending'
+squad_sessions    (id bigserial PK, guild_id, squad_id FK, starts_at, ends_at, reminded_at, reminder_message_id,
+                   started_at, going_ids[], not_going_ids[], voice_channel_id, voice_overwrites jsonb,
+                   voice_reserved_at, voice_released_at, created_at)
+                   unique (squad_id, starts_at); idx (guild_id, ends_at) where reservado e não liberado
+                   -- o snapshot do voice mora aqui, e não em channel_locks: um /lock no voice reservado
+                   -- trocaria o que a liberação restaura
 ```
 
 Relações principais: `guilds 1—N cases`, `cases 1—0..1 scheduled_actions`,
 `automod_rules 1—N automod_hits`, `automod_rules 1—N cases`,
 `reaction_role_panels 1—N items`, `ticket_types 1—N tickets`, `ticket_panels
-N—N ticket_types` (array), tudo `N—1 guilds`.
+N—N ticket_types` (array), `squad_games 1—N squad_profiles|squads|squad_proposals`,
+`squads 1—N squad_members|squad_join_requests|squad_sessions`, tudo `N—1 guilds`.
+Toda tabela de squad tem `guild_id`, inclusive as filhas que chegam à guild pelo
+squad: um uuid vindo de `custom_id` ou da URL nunca alcança o squad de outro
+servidor.
 
 Config de módulo: `module_configs.config` é jsonb validado por um schema Zod
 **por módulo** em `packages/shared/src/config/<module>.ts`, com `version` para
@@ -889,6 +1071,13 @@ Três níveis, resolvidos por `guild_settings` + permissões nativas:
 
 `default_member_permissions` no registro do comando espelha o nível; o handler
 re-verifica (o registro é dica de UI, não segurança).
+
+No módulo `squads` (§5.11), `/squad` é de `member`, com duas exceções:
+`/squad painel` (publicar a mensagem fixa) é de `admin`, e `/squad renomear`
+exige ser do squad. Pela API do bot, publicar a mensagem fixa e rodar o match
+são de `admin`; arquivar e renomear squad são de `mod` e funcionam com o módulo
+desligado, porque limpar squad antigo é justamente o que se faz depois de
+desligar.
 
 ### 9.2 No painel
 
@@ -923,8 +1112,18 @@ painel admin aberto.
 `ViewChannel, SendMessages, SendMessagesInThreads, EmbedLinks, AttachFiles,
 ReadMessageHistory, ManageMessages, ManageChannels, ManageRoles, ManageGuild,
 KickMembers, BanMembers, ModerateMembers, ViewAuditLog, ManageThreads,
-AddReactions, UseExternalEmojis, MuteMembers, DeafenMembers, MoveMembers,
-CreateInstantInvite, ManageEvents, ManageGuildExpressions`.
+CreatePrivateThreads, AddReactions, UseExternalEmojis, Connect, Speak,
+MuteMembers, DeafenMembers, MoveMembers, CreateInstantInvite, ManageEvents,
+ManageGuildExpressions`.
+
+`CreatePrivateThreads`, `Connect` e `Speak` entraram na v1.5 para o módulo
+`squads` (§5.11): a thread privada da proposta e a reserva do voice. O bot não
+dá nem nega num overwrite o que ele mesmo não tem, então sem `Connect` ele não
+consegue fechar o voice ao `@everyone`. Sem elas o módulo não quebra: o match
+pula a thread e a reserva pula o voice, com aviso no log. O link de convite
+sai da lista `BOT_INVITE_PERMISSION_NAMES` de `packages/shared`; servidor que
+convidou o bot antes da v1.5 continua com as permissões antigas e precisa dar
+as três à mão ao cargo do bot.
 
 `ManageGuild` cobre editar nome, ícone, banner e nível de verificação pelo
 painel. Sem ela o bot continua funcionando: a tela
@@ -965,6 +1164,9 @@ provedor, documentada em `docs/runbook.md`.
 | **Backup do Supabase não é exportável no free tier**              | `pg_dump` próprio diário no serviço `backup` do Compose, 7 diários + 4 semanais no volume `backups`; `infra/scripts/restore.sh`             | feito — cópia externa (Object Storage + rclone) segue **opcional e não implementada** |
 | **Perder o rastro do que está rodando na VM**                     | `GIT_SHA` embutido na imagem pela CI, exibido no `/health`, no card Saúde e no alerta de boot                                              | feito — `infra/docker/bot.Dockerfile` |
 | **Rate limit do painel na Vercel**                                | 60/min por IP nas rotas de auth e nas server actions de escrita                                                                             | parcial — contagem **por instância**, porque o painel é stateless e a stack não tem store compartilhado (§12); serve para cortar script, não como cota |
+| **Teto de 500 canais por servidor** (v1.5)                        | um canal de texto por squad e voice emprestado de um pool, nunca um voice por squad (§5.11)                                                | parcial: o painel mostra o contador de canais, mas nada barra squad novo perto do teto; se criar o canal falhar, o squad é arquivado na hora |
+| **Pool de voices cheio** (v1.5)                                   | a reserva pega o voice preferido do squad ou o primeiro livre; sem nenhum, a sessão acontece sem sala e o lembrete avisa                    | parcial: não há fila nem voice extra; mais squads na mesma faixa do que voices no pool ficam sem sala |
+| **Voice do pool preso com `Connect` negado** (v1.5)               | snapshot dos overwrites na sessão; o restore no Discord vem antes de marcar a sessão como liberada, e o job tenta de novo a cada 5 min     | feito: `SessionService.release`, com teste |
 
 ## 12. Decisões arquiteturais (com justificativa)
 

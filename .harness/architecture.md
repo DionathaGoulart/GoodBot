@@ -34,7 +34,7 @@ pelo próprio bot, que é o único processo com uma sessão de gateway aberta.
                            │ Drizzle
                    ┌───────▼────────┐
                    │ Postgres       │  (Supabase em produção,
-                   │ 26 tabelas     │   Docker local em dev)
+                   │ 33 tabelas     │   Docker local em dev)
                    └────────────────┘
 ```
 
@@ -113,21 +113,25 @@ src/
   commands/       um arquivo por slash command, agrupados por módulo
     moderation/   ban, kick, timeout, warn, note, case, history, purge...
     automod/      automod, raid
-    community/    tag, ticket, reactionrole, welcome, verify, social
+    community/    tag, ticket, reactionrole, welcome, verify, social, squad
     utilities/    clear, lock, slowmode, poll, remind, info, stats, say
 
   events/         handlers de evento do gateway, agrupados por assunto
     automod/      messages, members
     logs/         messages, members, server, voice
-    community/    members, reaction-roles
+    community/    members, reaction-roles, squads-voice
     stats/        contagem
 
+  interactions/   botões, selects e modais, roteados pelo prefixo do
+                  `custom_id` (tickets, squads...)
   automod/        o motor: engine.ts + rules/{spam,links,caps,words,mentions}
   services/       a lógica de verdade; ver abaixo
   jobs/           tarefas periódicas: retention, social, stats-rollup,
                   demo-expiry (avisa quem convidou, se despede e sai quando a
                   demo vence), pending-expiry (recusa o convite parado uma
-                  semana na fila, avisa, sai e marca `expired`)
+                  semana na fila, avisa, sai e marca `expired`), squads
+                  (sessões da semana, lembrete, voice reservado e o passo
+                  diário de inatividade e match)
   lib/            utilitários sem estado: embeds, template, cooldown, purge,
                   channels (onde o bot pode falar), guild-setup,
                   inviter-dm (todo o texto dos avisos a quem convidou)...
@@ -148,6 +152,7 @@ fino: valida entrada, chama um service, responde. Os principais:
 | `AutomodService`          | avalia mensagem contra as regras ligadas                   |
 | `StatsService`            | acumula buckets em memória e faz flush periódico           |
 | `TicketService`           | abertura, transcript e fechamento                          |
+| `SquadService`            | squads fixos: perfil, match, propostas, casa e sessões     |
 | `ReactionRoleService`     | painéis por botão, menu ou reação                          |
 | `AuditService`            | trilha do que o bot e o painel fizeram                     |
 | `Scheduler`               | executa `scheduled_actions` (tempban, lembrete, unlock)    |
@@ -173,12 +178,12 @@ api/
   validate.ts      wrapper do @hono/zod-validator
   errors.ts        ApiHttpError para código/mensagem estáveis
   mappers.ts       entidade discord.js para o DTO do shared
-  routes/          uma rota por assunto (16 arquivos)
+  routes/          uma rota por assunto (20 arquivos)
 ```
 
 Rotas: `guild`, `bot-profile`, `channels`, `roles`, `members`, `messages`,
 `moderation`, `cases`, `invites`, `events`, `expressions`, `automod`, `config`,
-`commands`, `social`, `metrics`, `health`, `admin`, `registry`.
+`commands`, `social`, `squads`, `metrics`, `health`, `admin`, `registry`.
 
 Três invariantes que valem para **toda** rota nova:
 
@@ -227,10 +232,10 @@ app/
     servidor, perfil-do-bot, canais, cargos, membros, casos, banidos,
     convites, eventos, emojis, mensagens, auditoria, system
     config/     general, moderation, automod, logs, welcome, autorole,
-                reaction-roles, tickets, tags, social, commands
+                reaction-roles, tickets, tags, social, squads, commands
   convite/      as telas dos links de convite (`invite.` e `demo.`)
   actions/      Server Actions: admin, auth, cases, config, guild, messages,
-                modules, social — toda escrita de guild recebe o `guildId`
+                modules, social, squads — toda escrita de guild recebe o `guildId`
                 como primeiro argumento (ver 5.2)
   api/          auth (Auth.js), invite/{start,callback}, health,
                 cases/export, discord/*
@@ -367,17 +372,19 @@ Drizzle, e só aqui.
 src/
   client.ts        createDb(url)
   migrate.ts       roda as migrations (é um passo da CI, não do boot do bot)
-  schema/          14 arquivos: guilds (+ guild_registry), configs, cases,
+  schema/          15 arquivos: guilds (+ guild_registry), configs, cases,
                    automod, community,
-                   logs, messages, misc, social, stats, audit, enums, relations
-  repositories/    17 arquivos: uma função por consulta, nunca SQL solto fora
-drizzle/           7 migrations SQL versionadas
+                   logs, messages, misc, social, squads, stats, audit, enums,
+                   relations
+  repositories/    18 arquivos: uma função por consulta, nunca SQL solto fora
+drizzle/           14 migrations SQL versionadas
 ```
 
-26 tabelas. As centrais: `guilds`, `guild_registry`, `guild_settings`,
+33 tabelas. As centrais: `guilds`, `guild_registry`, `guild_settings`,
 `module_configs`, `cases`,
 `audit_logs`, `automod_rules`, `automod_hits`, `scheduled_actions`,
-`stat_buckets`, `tickets`, `reaction_role_panels`, `social_accounts`.
+`stat_buckets`, `tickets`, `reaction_role_panels`, `social_accounts`, `squads`
+(as sete do módulo começam por `squad_`).
 
 Fluxo obrigatório ao mexer no schema:
 
@@ -491,7 +498,7 @@ os toca).
 
 ---
 
-## 9. Cinco fluxos de ponta a ponta
+## 9. Seis fluxos de ponta a ponta
 
 **Um slash command (`/ban`)**
 
@@ -565,6 +572,36 @@ Quatro coisas nesse caminho não são gosto:
   derrubada por um clique no link normal. A demo não se renova porque prazo
   novo exige `demo_ended_at` nulo — a memória é a coluna, não o status.
 
+**Um match de squad**
+
+```
+botão da mensagem fixa ─▶ interactions/squads.ts ─▶ modal (respostas)
+  ─▶ grade da semana (a máscara viaja no custom_id) ─▶ SquadService.saveAvailability
+  ─▶ perfil `searching` ─▶ MatcherService.runFor(guild, jogo)
+  ─▶ proposeGroups (shared, puro) ─▶ thread privada + Aceito/Passo + INSERT squad_proposals
+  ─▶ primeiro "Aceito": uma transação cria `squads` e reivindica a proposta
+  ─▶ canal privado na categoria ─▶ SquadsJob (5 min) agenda squad_sessions
+  ─▶ lembrete + reserva do voice (snapshot na sessão) ─▶ na hora, move os membros
+  ─▶ fim da faixa: restaura os overwrites e só então marca liberado
+```
+
+Três coisas nesse caminho não são gosto:
+
+- **A regra mora em `shared`, o efeito no bot.** `squads/availability.ts` e
+  `squads/match.ts` são puros: máscara da grade, próxima sessão no fuso da guild
+  (com horário de verão) e agrupamento determinístico. O painel e os testes usam
+  as mesmas funções, sem Discord nem banco.
+- **A trava é do banco, não da memória.** Botão é clicado duas vezes e por
+  várias pessoas ao mesmo tempo, e o job passa de novo a cada 5 minutos. Todo
+  passo é uma `UPDATE` condicional (`claimProposalSquad`, `markSessionReminded`,
+  votos com `array_append`) antes de qualquer chamada ao Discord. O único estado
+  em memória é o mutex do matcher por guild e jogo, e ele só vale porque o bot é
+  uma instância só.
+- **Restaurar antes de marcar.** A liberação do voice devolve os overwrites no
+  Discord e só depois grava `voice_released_at`. Na ordem inversa, uma falha
+  passageira deixaria o voice do pool fechado ao `@everyone` sem nada que o
+  reabrisse.
+
 ---
 
 ## 10. Invariantes do projeto
@@ -612,6 +649,7 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | adicionar campo de config         | `shared/config/<módulo>.ts` → form em `apps/web/components/config/`      |
 | mexer no banco                    | `packages/db/src/schema/` → `db:generate` → revisar SQL → `db:migrate`   |
 | tarefa periódica                  | `apps/bot/src/jobs/` + registrar no `Scheduler`                          |
+| mexer em squads fixos             | `apps/bot/src/services/squads/` (fachada no `index.ts`) + regra pura em `shared/src/squads/` |
 | entender um servidor              | `pnpm guild scan "<nome>"` → `infra/discord/<slug>/servidor.md`          |
 | mudar a estrutura de um servidor  | `infra/discord/<slug>/guild.yaml` → `pnpm guild plan`                    |
 
@@ -640,5 +678,5 @@ Antes de dar qualquer trabalho por concluído:
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-69 arquivos de teste, ~780 casos (Vitest). Os testes de integração de
+115 arquivos de teste, ~1.280 casos (Vitest). Os testes de integração de
 repository precisam de um Postgres e são pulados sem ele.

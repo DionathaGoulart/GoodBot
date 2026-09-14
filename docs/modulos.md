@@ -174,6 +174,76 @@ Um não substitui o outro: deixar o de lives vazio significa live sem ping.
 
 ---
 
+## Squads
+
+Squad fixo: o mesmo grupo, no mesmo horário, toda semana. Quem procura monta um
+perfil com a agenda da semana, o bot cruza os perfis compatíveis, propõe o grupo
+e dá a cada squad um canal privado e um voice reservado na hora da sessão. O
+módulo serve a qualquer jogo: jogos e perguntas do perfil são cadastrados no
+painel, em **Squads > `JOGOS`**.
+
+**Entrar.** A mensagem fixa do canal de busca tem um botão por jogo ligado. O
+botão abre o perfil em dois passos: um modal com as perguntas do jogo (no máximo
+5, o teto de um modal do Discord) e depois a grade da semana, 7 dias por 4
+faixas (manhã, tarde, noite e madrugada), numa mensagem efêmera com um select por
+faixa. Salvar a grade é o "quero procurar": o perfil entra na busca e o match
+roda na hora.
+
+| Comando           | O que faz                                                       |
+| ----------------- | --------------------------------------------------------------- |
+| `/squad perfil`   | abre o mesmo perfil do botão                                    |
+| `/squad status`   | procurando ou pausado; procurar exige grade marcada             |
+| `/squad procurar` | squads com vaga nos seus horários, com botão para pedir entrada |
+| `/squad sair`     | sai do squad; o último a sair arquiva                           |
+| `/squad renomear` | só quem é do squad                                              |
+| `/squad painel`   | admin: publica ou reedita a mensagem fixa                       |
+
+**Match.** Só entre perfis que estão procurando, no mesmo jogo. Cada célula da
+grade em comum vale 1 ponto e cada resposta igual num campo "pesa no match" vale
+3; resposta diferente num campo "precisa bater" separa a dupla, e texto livre
+nunca conta. O grupo inteiro precisa dividir pelo menos uma célula, que vira a
+janela semanal do squad. A mesma dupla não é proposta de novo por 14 dias
+(`reproposeCooldownDays`). Antes de propor grupo novo, o matcher olha as vagas
+dos squads abertos: o candidato vira um pedido de entrada no canal do squad, e
+só fica sabendo quando for aceito.
+
+**Proposta sem líder.** Cada grupo recebe uma thread privada no canal de busca,
+com `ACEITO` e `PASSO`. O primeiro aceite cria o squad, cada aceite seguinte
+ocupa uma vaga e quem passou fica de fora. Sem nenhum aceite a proposta fecha em
+72 h (`proposalTtlHours`), e o pedido de entrada vence no mesmo prazo. No pedido
+basta um membro aceitar; ele só é recusado quando todos recusam.
+
+**A casa do squad.** Um canal de texto privado na categoria escolhida. Voice não
+se cria por squad: os voices do pool (os Hellpods, no Goodivers) são emprestados
+na hora, porque o Discord só deixa renomear canal duas vezes a cada dez minutos
+e o servidor tem teto de 500 canais. Meia hora antes da sessão
+(`reminderMinutesBefore`) sai o lembrete com `VOU` e `NÃO VOU`, e um voice livre
+do pool fica reservado: `@everyone` sem `Connect`, os membros com. Na hora, quem
+está em outro voice é movido e quem não está em nenhum é chamado. No fim da
+faixa, ou quando o voice esvazia depois do início, as permissões voltam
+exatamente ao que eram. Com o pool todo ocupado a sessão acontece sem sala, e o
+lembrete avisa.
+
+> O retrato das permissões do voice mora em `squad_sessions`, não em
+> `channel_locks`: um `/lock` num voice reservado trocaria o que a liberação
+> restaura.
+
+**Ciclo de vida.** `VOU`, presença no voice reservado e `AINDA JOGAMOS` contam
+como sinal de vida. Sem nenhum por 4 semanas (`inactiveWeeks`), o squad recebe um
+aviso; sem resposta em 7 dias, é arquivado: canal só leitura, voice liberado,
+pedidos e propostas encerrados e perfis pausados.
+
+Quem move tudo isso é o job `squads`, a cada 5 minutos, em cada servidor com o
+módulo ligado. O passo diário (inatividade e um match novo) roda uma vez por
+dia, depois das 12 h no fuso do servidor, para ninguém ser chamado de madrugada.
+
+> O bot precisa de `Connect`, `Speak` e `CreatePrivateThreads`. Sem elas o match
+> não abre a thread da proposta e a reserva do voice é pulada, com aviso no log
+> em vez de erro. O link de convite pede as três; num servidor que convidou o
+> bot antes disso, dê as três ao cargo dele à mão.
+
+---
+
 ## Adicionar um módulo
 
 1. Schema Zod em `packages/shared/src/config/<modulo>.ts`, exportado no barrel.
