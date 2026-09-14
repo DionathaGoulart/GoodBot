@@ -87,9 +87,13 @@ import {
   ArchiveSquadInputSchema,
   PostSquadSearchMessageInputSchema,
   PostSquadSearchMessageResultSchema,
+  ProposeSquadManuallyInputSchema,
   RenameSquadInputSchema,
   RunSquadMatchInputSchema,
   RunSquadMatchResultSchema,
+  SquadManualCheckInputSchema,
+  SquadManualCheckSchema,
+  SquadManualProposalResultSchema,
   SquadOverviewSchema,
   SquadSummarySchema,
 } from './squads';
@@ -170,9 +174,13 @@ import type {
   ArchiveSquadInput,
   PostSquadSearchMessageInput,
   PostSquadSearchMessageResult,
+  ProposeSquadManuallyInput,
   RenameSquadInput,
   RunSquadMatchInput,
   RunSquadMatchResult,
+  SquadManualCheck,
+  SquadManualCheckInput,
+  SquadManualProposalResult,
   SquadOverview,
   SquadSummary,
 } from './squads';
@@ -917,6 +925,30 @@ export function createInternalClient(options: InternalClientOptions) {
         RunSquadMatchResultSchema,
         `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/match`,
         { method: 'POST', body: RunSquadMatchInputSchema.parse(input) },
+      ),
+
+    /** Revisa a turma escolhida no painel: duplas, bloqueios e avisos. Não escreve nada. Só admin. */
+    checkSquadManualMatch: (
+      guildId: string,
+      gameId: string,
+      input: SquadManualCheckInput,
+    ): Promise<SquadManualCheck> =>
+      request(
+        SquadManualCheckSchema,
+        `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/manual/check`,
+        { method: 'POST', body: SquadManualCheckInputSchema.parse(input) },
+      ),
+
+    /** Abre a proposta com a turma escolhida, se os avisos confirmados ainda valem. Só admin. */
+    proposeSquadManually: (
+      guildId: string,
+      gameId: string,
+      input: ProposeSquadManuallyInput,
+    ): Promise<SquadManualProposalResult> =>
+      request(
+        SquadManualProposalResultSchema,
+        `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/manual/propose`,
+        { method: 'POST', body: ProposeSquadManuallyInputSchema.parse(input) },
       ),
   };
 }

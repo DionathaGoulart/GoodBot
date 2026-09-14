@@ -190,13 +190,37 @@ interface FakeVoiceState {
   setChannel: ReturnType<typeof vi.fn>;
 }
 
+/** Erro com o `code` numérico de um `DiscordAPIError`, que é o que o módulo lê. */
+export function discordError(message: string, code: number, extra: Record<string, unknown> = {}) {
+  return Object.assign(new Error(message), { code, ...extra });
+}
+
 export function fakeGuild() {
   const cache = new Collection<string, { id: string }>();
   const voiceStates = new Collection<string, FakeVoiceState>();
+  /** Quem `leave` tirou; o resto conta como membro. */
+  const left = new Set<string>();
   const guild = {
     id: GUILD_ID,
     roles: { everyone: { id: GUILD_ID } },
-    members: { me: { id: BOT_ID } },
+    members: {
+      me: { id: BOT_ID },
+      cache: new Collection<string, { id: string }>(),
+      fetch: vi.fn(async (options: { user: string | readonly string[] }) => {
+        if (typeof options.user !== 'string') {
+          return new Collection(
+            options.user.filter((id) => !left.has(id)).map((id) => [id, { id }] as const),
+          );
+        }
+        if (left.has(options.user)) throw discordError('Unknown Member', 10007);
+        return { id: options.user };
+      }),
+    },
+    /** Tira alguém do servidor: `members.fetch` passa a responder "Unknown Member". */
+    leave(userId: string): void {
+      left.add(userId);
+      guild.members.cache.delete(userId);
+    },
     channels: {
       cache,
       fetch: vi.fn(async (id: string) => cache.get(id) ?? null),

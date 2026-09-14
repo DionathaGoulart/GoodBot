@@ -12,16 +12,18 @@ import {
   ArchiveSquadInputSchema,
   MAX_GUILD_CHANNELS,
   PostSquadSearchMessageInputSchema,
+  ProposeSquadManuallyInputSchema,
   RenameSquadInputSchema,
   RunSquadMatchInputSchema,
   SquadGameIdParamSchema,
   SquadIdParamSchema,
+  SquadManualCheckInputSchema,
   UserFacingError,
 } from '@goodbot/shared';
 import { Hono } from 'hono';
 
 import { requireActor } from '../actor';
-import { notFound } from '../errors';
+import { ApiHttpError, notFound } from '../errors';
 import {
   MESSAGE_LIMIT_PER_MINUTE,
   createRateLimiter,
@@ -29,17 +31,27 @@ import {
 } from '../middleware/rate-limit';
 import { validate } from '../validate';
 
+import type { ManualOutcome } from '../../services/squads';
 import type { ApiDeps, ApiEnv } from '../context';
 import type { Squad, SquadGame, SquadProposal } from '@goodbot/db';
 import type {
+  ManualMatchEvaluation,
   PostSquadSearchMessageResult,
   RunSquadMatchResult,
   SquadGameSummary,
+  SquadManualCheck,
+  SquadManualProposalResult,
   SquadOverview,
   SquadProposalSummary,
   SquadSummary,
 } from '@goodbot/shared';
 import type { Guild } from 'discord.js';
+
+/**
+ * Teto por guild da revisão do match manual. Folgado porque revisar não manda
+ * nada ao Discord (o `writeLimit` existe por isso); segura só clique em rajada.
+ */
+const MANUAL_CHECK_LIMIT_PER_MINUTE = 60;
 
 function toGameSummary(row: SquadGame): SquadGameSummary {
   return {
@@ -83,6 +95,32 @@ function toProposalSummary(row: SquadProposal): SquadProposalSummary {
   };
 }
 
+function toCheck(evaluation: ManualMatchEvaluation, gameId: string): SquadManualCheck {
+  return { gameId, ...evaluation };
+}
+
+/** Revisão que recusa vira erro; `done` segue para a resposta da rota. */
+function manualOutcome<T>(
+  outcome: ManualOutcome<T>,
+): Extract<ManualOutcome<T>, { outcome: 'done' }> {
+  if (outcome.outcome === 'blocked') {
+    const count = outcome.check.blocks.length;
+    throw new ApiHttpError(
+      422,
+      'MANUAL_MATCH_BLOCKED',
+      `O grupo tem ${String(count)} ${count === 1 ? 'bloqueio' : 'bloqueios'}. Revise no painel.`,
+    );
+  }
+  if (outcome.outcome === 'unconfirmed') {
+    throw new ApiHttpError(
+      409,
+      'MANUAL_MATCH_UNCONFIRMED',
+      'Há avisos que não foram confirmados. Revise de novo.',
+    );
+  }
+  return outcome;
+}
+
 /**
  * Canais que contam para o teto do Discord. Thread não conta, e é do cache
  * real da guild, não das linhas de `squads`: o teto é do servidor inteiro, e
@@ -98,6 +136,12 @@ async function requireSquad(deps: ApiDeps, guildId: string, squadId: string): Pr
   return squad;
 }
 
+async function requireGame(deps: ApiDeps, guildId: string, gameId: string): Promise<SquadGame> {
+  const game = await getSquadGame(deps.db, guildId, gameId);
+  if (!game) throw notFound('Jogo não encontrado.', 'GAME_NOT_FOUND');
+  return game;
+}
+
 async function summaryOf(deps: ApiDeps, guildId: string, squad: Squad): Promise<SquadSummary> {
   const members = await listSquadMembers(deps.db, guildId, squad.id);
   return toSquadSummary(
@@ -111,15 +155,16 @@ async function summaryOf(deps: ApiDeps, guildId: string, squad: Squad): Promise<
  * que precisam do Discord. Jogos e config o painel grava direto no banco e
  * avisa pelo `/config/invalidate`, como nos outros módulos.
  *
- * Toda escrita traz `actorId`: publicar a mensagem fixa e rodar o match são
- * de admin; arquivar e renomear, de moderador, e funcionam com o módulo
- * desligado, porque limpar squad antigo é justamente o que se faz depois de
+ * Toda escrita traz `actorId`: publicar a mensagem fixa, rodar o match e o
+ * match manual são de admin; arquivar e renomear, de moderador, e funcionam
+ * com o módulo desligado, porque limpar squad antigo é justamente o que se faz depois de
  * desligar.
  */
 export function createSquadRoutes(deps: ApiDeps): Hono<ApiEnv> {
   // Toda escrita daqui manda mensagem, abre thread ou mexe em canal: mesmo
   // balde apertado por guild das mensagens do painel (PRD §7.4).
   const writeLimit = guildRateLimit(createRateLimiter({ limit: MESSAGE_LIMIT_PER_MINUTE }));
+  const checkLimit = guildRateLimit(createRateLimiter({ limit: MANUAL_CHECK_LIMIT_PER_MINUTE }));
 
   return (
     new Hono<ApiEnv>()
@@ -260,6 +305,51 @@ export function createSquadRoutes(deps: ApiDeps): Hono<ApiEnv> {
             source: 'dashboard',
           });
           return c.json(await summaryOf(deps, guild.id, squad));
+        },
+      )
+
+      /** Revisão do match manual: o bot vê linhas frescas e quem saiu do servidor. */
+      .post(
+        '/games/:gameId/manual/check',
+        checkLimit,
+        validate('param', SquadGameIdParamSchema),
+        validate('json', SquadManualCheckInputSchema),
+        async (c) => {
+          const { gameId } = c.req.valid('param');
+          const input = c.req.valid('json');
+          const guild = c.get('guild');
+          await requireActor(deps, guild, input.actorId, 'admin');
+
+          await deps.squads.requireConfig(guild.id);
+          await requireGame(deps, guild.id, gameId);
+          const check = await deps.squads.checkManualMatch(guild, gameId, input);
+          return c.json(toCheck(check, gameId));
+        },
+      )
+
+      /**
+       * Bloqueio é 422 (a turma não serve); aviso sem confirmação é 409 (a
+       * situação mudou desde a revisão e o painel precisa mostrar de novo).
+       */
+      .post(
+        '/games/:gameId/manual/propose',
+        writeLimit,
+        validate('param', SquadGameIdParamSchema),
+        validate('json', ProposeSquadManuallyInputSchema),
+        async (c) => {
+          const { gameId } = c.req.valid('param');
+          const input = c.req.valid('json');
+          const guild = c.get('guild');
+          await requireActor(deps, guild, input.actorId, 'admin');
+
+          await deps.squads.requireConfig(guild.id);
+          await requireGame(deps, guild.id, gameId);
+          const done = manualOutcome(await deps.squads.proposeManually(guild, gameId, input));
+          const result: SquadManualProposalResult = {
+            proposal: toProposalSummary(done.proposal),
+            check: toCheck(done.check, gameId),
+          };
+          return c.json(result);
         },
       )
   );

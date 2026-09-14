@@ -1,8 +1,16 @@
 import { z } from 'zod';
 
 import { SnowflakeSchema } from '../config/common';
-import { SquadGameFieldSchema, SquadNameSchema } from '../config/squads';
-import { MAX_REASON_LENGTH, SQUAD_BLOCKS, SQUAD_DAYS, SQUAD_STATUSES } from '../constants';
+import { SquadAvailabilitySchema, SquadGameFieldSchema, SquadNameSchema } from '../config/squads';
+import {
+  MAX_REASON_LENGTH,
+  MAX_SQUAD_SIZE,
+  MIN_SQUAD_SIZE,
+  SQUAD_BLOCKS,
+  SQUAD_DAYS,
+  SQUAD_STATUSES,
+} from '../constants';
+import { MANUAL_MATCH_ISSUE_CODES } from '../squads/manual';
 
 /** Parâmetro `:squadId` das rotas de um squad. */
 export const SquadIdParamSchema = z.object({ squadId: z.uuid() });
@@ -128,3 +136,87 @@ export const RunSquadMatchResultSchema = z.object({
   joinRequests: z.number().int().min(0),
 });
 export type RunSquadMatchResult = z.infer<typeof RunSquadMatchResultSchema>;
+
+// ── jogadores: match manual e gestão pelo painel ────────────────────────────
+
+/** Uma célula da grade: dia (0 = domingo) e índice da faixa. */
+export const SquadCellSchema = z.object({
+  day: z
+    .number()
+    .int()
+    .min(0)
+    .max(SQUAD_DAYS - 1),
+  block: z
+    .number()
+    .int()
+    .min(0)
+    .max(SQUAD_BLOCKS.length - 1),
+});
+
+const uniqueIds = (ids: readonly string[]) => new Set(ids).size === ids.length;
+
+/** A turma escolhida pelo admin, sem repetição. */
+export const PickedUserIdsSchema = z
+  .array(SnowflakeSchema)
+  .min(MIN_SQUAD_SIZE, 'Escolha pelo menos duas pessoas.')
+  .max(MAX_SQUAD_SIZE, `Escolha no máximo ${String(MAX_SQUAD_SIZE)} pessoas.`)
+  .refine(uniqueIds, 'Pessoa repetida na seleção.');
+
+/** As `key`s dos avisos que o admin leu e aceitou. */
+export const ConfirmedWarningsSchema = z.array(z.string().max(200)).max(200).default([]);
+
+export const SquadManualIssueSchema = z.object({
+  /** Estável entre revisões; é o que `confirmedWarnings` devolve. */
+  key: z.string(),
+  code: z.enum(MANUAL_MATCH_ISSUE_CODES),
+  severity: z.enum(['block', 'warning']),
+  userIds: z.array(SnowflakeSchema),
+  /** Só em `HARD_MISMATCH`: os campos que não batem. */
+  fieldKeys: z.array(z.string()).optional(),
+});
+export type SquadManualIssue = z.infer<typeof SquadManualIssueSchema>;
+
+export const SquadManualPairSchema = z.object({
+  userIds: z.tuple([SnowflakeSchema, SnowflakeSchema]),
+  score: z.number().int().min(0),
+  hardOk: z.boolean(),
+  commonCells: z.number().int().min(0),
+  cooldown: z.boolean(),
+  hardConflicts: z.array(z.string()),
+});
+export type SquadManualPair = z.infer<typeof SquadManualPairSchema>;
+
+/** A revisão de uma turma escolhida à mão, calculada pelo bot com dados frescos. */
+export const SquadManualCheckSchema = z.object({
+  gameId: z.string(),
+  userIds: z.array(SnowflakeSchema),
+  pairs: z.array(SquadManualPairSchema),
+  score: z.number().int().min(0),
+  commonMask: SquadAvailabilitySchema,
+  slot: SquadCellSchema.nullable(),
+  blocks: z.array(SquadManualIssueSchema),
+  warnings: z.array(SquadManualIssueSchema),
+});
+export type SquadManualCheck = z.infer<typeof SquadManualCheckSchema>;
+
+/** `POST /guilds/:id/squads/games/:gameId/manual/check`: revisa sem escrever nada. Só admin. */
+export const SquadManualCheckInputSchema = z.object({
+  actorId: SnowflakeSchema,
+  userIds: PickedUserIdsSchema,
+});
+export type SquadManualCheckInput = z.infer<typeof SquadManualCheckInputSchema>;
+
+/**
+ * `POST /guilds/:id/squads/games/:gameId/manual/propose`: abre a proposta com a
+ * turma. Passa só se `confirmedWarnings` cobre todos os avisos recalculados.
+ */
+export const ProposeSquadManuallyInputSchema = SquadManualCheckInputSchema.extend({
+  confirmedWarnings: ConfirmedWarningsSchema,
+});
+export type ProposeSquadManuallyInput = z.infer<typeof ProposeSquadManuallyInputSchema>;
+
+export const SquadManualProposalResultSchema = z.object({
+  proposal: SquadProposalSummarySchema,
+  check: SquadManualCheckSchema,
+});
+export type SquadManualProposalResult = z.infer<typeof SquadManualProposalResultSchema>;

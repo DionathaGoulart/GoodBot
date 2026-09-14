@@ -5,6 +5,7 @@ import { childLogger } from '../../logger';
 
 import type { AuditEntry, AuditService } from '../audit';
 import type { ConfigService } from '../config';
+import type { ManualMatchService } from './manual';
 import type { MatcherService } from './matcher';
 import type { ProfileService } from './profiles';
 import type { ProposalService } from './proposals';
@@ -17,6 +18,9 @@ import type { SquadsConfig } from '@goodbot/shared';
 import type { Client, Guild, GuildBasedChannel, TextChannel } from 'discord.js';
 
 export const log = childLogger('squads');
+
+/** "Unknown Member": o Discord confirma que a pessoa não está no servidor. */
+const DISCORD_UNKNOWN_MEMBER = 10007;
 
 export interface SquadServiceDeps {
   db: Db;
@@ -37,6 +41,7 @@ export interface SquadParts {
   requests: JoinRequestService;
   sessions: SessionService;
   search: SearchService;
+  manual: ManualMatchService;
 }
 
 /**
@@ -101,6 +106,23 @@ export class SquadContext {
     const channel = await this.fetchChannel(guild, squad.textChannelId);
     return channel?.type === ChannelType.GuildText ? (channel as TextChannel) : null;
   }
+
+  /**
+   * A pessoa ainda está no servidor? Cache primeiro, depois o Discord. `false`
+   * só com "Unknown Member"; qualquer outra falha é `null` (não se sabe), e
+   * quem chama não bloqueia por falha passageira: se ela saiu mesmo, o Discord
+   * recusa adiante.
+   */
+  async isGuildMember(guild: Guild, userId: string): Promise<boolean | null> {
+    if (guild.members.cache.has(userId)) return true;
+    try {
+      await guild.members.fetch({ user: userId });
+      return true;
+    } catch (error) {
+      return discordErrorCode(error) === DISCORD_UNKNOWN_MEMBER ? false : null;
+    }
+  }
+
 }
 
 /** Handler de `.catch` que só registra: falha do Discord que não é culpa de quem clicou. */

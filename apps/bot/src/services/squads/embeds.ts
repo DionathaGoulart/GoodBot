@@ -280,6 +280,19 @@ export function archivedNoticeMessage(view: {
   };
 }
 
+// ── match manual e aviso de admin ───────────────────────────────────────────
+
+/**
+ * A nota que a proposta manual deixa na thread. O admin é citado sem ser
+ * chamado: sem o ping ele não recebe notificação nem é puxado para a thread.
+ */
+export function manualProposalNote(actorId: string): BaseMessageOptions {
+  return {
+    content: `Esta turma foi escolhida por ${mention(actorId)} no painel. Vale o de sempre: **Aceito** para jogar junto, **Passo** para ficar de fora.`,
+    allowedMentions: { users: [] },
+  };
+}
+
 // ── pedido de entrada ───────────────────────────────────────────────────────
 
 export type JoinRequestState = 'pending' | 'accepted' | 'declined' | 'expired';

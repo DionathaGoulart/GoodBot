@@ -9,6 +9,7 @@ import {
   RoleListQuerySchema,
 } from './members';
 import { ModerationActionInputSchema } from './moderation';
+import { ProposeSquadManuallyInputSchema, SquadManualCheckInputSchema } from './squads';
 
 const ids = { targetId: '123456789012345678', actorId: '223456789012345678' };
 
@@ -109,6 +110,25 @@ describe('MemberLookupQuerySchema', () => {
     expect(
       MemberLookupQuerySchema.safeParse({ ids: ids(MAX_MEMBER_LOOKUP_IDS + 1).join() }).success,
     ).toBe(false);
+  });
+});
+
+describe('match manual de squad', () => {
+  const actorId = '223456789012345678';
+  const [a, b] = ['123456789012345678', '323456789012345678'];
+
+  it('a turma tem pelo menos duas pessoas, sem repetição', () => {
+    expect(SquadManualCheckInputSchema.safeParse({ actorId, userIds: [a] }).success).toBe(false);
+    expect(SquadManualCheckInputSchema.safeParse({ actorId, userIds: [a, a] }).success).toBe(false);
+    expect(SquadManualCheckInputSchema.safeParse({ actorId, userIds: [a, b] }).success).toBe(true);
+  });
+
+  it('sem avisos confirmados a lista é vazia', () => {
+    expect(ProposeSquadManuallyInputSchema.parse({ actorId, userIds: [a, b] })).toEqual({
+      actorId,
+      userIds: [a, b],
+      confirmedWarnings: [],
+    });
   });
 });
 

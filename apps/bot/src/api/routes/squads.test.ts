@@ -1,4 +1,10 @@
-import { SquadOverviewSchema, SquadSummarySchema, toBits } from '@goodbot/shared';
+import {
+  SquadManualCheckSchema,
+  SquadManualProposalResultSchema,
+  SquadOverviewSchema,
+  SquadSummarySchema,
+  toBits,
+} from '@goodbot/shared';
 import { Collection, PermissionFlagsBits, PermissionsBitField } from 'discord.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -291,5 +297,125 @@ describe('POST /guilds/:id/squads/games/:gameId/match', () => {
     expect(moduleOff.status).toBe(400);
     expect(await moduleOff.json()).toMatchObject({ error: { code: 'MODULE_DISABLED' } });
     expect(s.search.threads.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /guilds/:id/squads/games/:gameId/manual/check', () => {
+  const checkUrl = (gameId: string) => `/guilds/${GUILD_ID}/squads/games/${gameId}/manual/check`;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('só admin revisa, jogo de outra guild é 404 e a turma precisa de duas pessoas distintas', async () => {
+    const s = apiScenario();
+    const game = seedGame();
+    const foreign = seedGame({ guildId: OTHER_GUILD });
+
+    const asMod = await s.app.request(checkUrl(game.id), post({ actorId: MOD, userIds: [A, B] }));
+    expect(asMod.status).toBe(403);
+    expect(await asMod.json()).toMatchObject({ error: { code: 'ACTOR_NOT_ADMIN' } });
+
+    const missing = await s.app.request(
+      checkUrl(foreign.id),
+      post({ actorId: ADMIN, userIds: [A, B] }),
+    );
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({ error: { code: 'GAME_NOT_FOUND' } });
+
+    for (const userIds of [[A, A], [A]]) {
+      const invalid = await s.app.request(checkUrl(game.id), post({ actorId: ADMIN, userIds }));
+      expect(invalid.status).toBe(400);
+      expect(await invalid.json()).toMatchObject({ error: { code: 'VALIDATION' } });
+    }
+  });
+
+  it('admin recebe a revisão no formato do schema, sem nada escrito', async () => {
+    const s = apiScenario();
+    const game = seedGame();
+    for (const userId of [A, B]) {
+      seedProfile({ userId, gameId: game.id, availability: SATURDAY_NIGHT });
+    }
+
+    const res = await s.app.request(checkUrl(game.id), post({ actorId: ADMIN, userIds: [B, A] }));
+
+    expect(res.status).toBe(200);
+    expect(SquadManualCheckSchema.parse(await res.json())).toMatchObject({
+      gameId: game.id,
+      userIds: [A, B],
+      slot: { day: 6, block: 2 },
+      blocks: [],
+      warnings: [],
+    });
+    expect(store.proposals).toHaveLength(0);
+  });
+});
+
+describe('POST /guilds/:id/squads/games/:gameId/manual/propose', () => {
+  const proposeUrl = (gameId: string) =>
+    `/guilds/${GUILD_ID}/squads/games/${gameId}/manual/propose`;
+
+  function withProfiles(s: ReturnType<typeof apiScenario>, paused: string[] = []) {
+    const game = seedGame();
+    for (const userId of [A, B]) {
+      seedProfile({
+        userId,
+        gameId: game.id,
+        availability: SATURDAY_NIGHT,
+        status: paused.includes(userId) ? 'paused' : 'searching',
+      });
+    }
+    return game;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('bloqueio é 422 e aviso sem confirmação é 409', async () => {
+    const s = apiScenario();
+    const game = withProfiles(s, [A]);
+
+    const blocked = await s.app.request(
+      proposeUrl(game.id),
+      post({ actorId: ADMIN, userIds: [A, C] }),
+    );
+    expect(blocked.status).toBe(422);
+    expect(await blocked.json()).toMatchObject({ error: { code: 'MANUAL_MATCH_BLOCKED' } });
+
+    const unconfirmed = await s.app.request(
+      proposeUrl(game.id),
+      post({ actorId: ADMIN, userIds: [A, B] }),
+    );
+    expect(unconfirmed.status).toBe(409);
+    expect(await unconfirmed.json()).toMatchObject({ error: { code: 'MANUAL_MATCH_UNCONFIRMED' } });
+    expect(s.search.threads.create).not.toHaveBeenCalled();
+  });
+
+  it('com os avisos confirmados abre a proposta e devolve a revisão', async () => {
+    const s = apiScenario();
+    const game = withProfiles(s, [A]);
+
+    const res = await s.app.request(
+      proposeUrl(game.id),
+      post({ actorId: ADMIN, userIds: [A, B], confirmedWarnings: [`NOT_SEARCHING:${A}`] }),
+    );
+
+    expect(res.status).toBe(200);
+    const body = SquadManualProposalResultSchema.parse(await res.json());
+    expect(body.proposal.userIds).toEqual([A, B]);
+    expect(body.check.warnings.map((warning) => warning.key)).toEqual([`NOT_SEARCHING:${A}`]);
+    expect(s.search.threads.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('sem canal de busca é 400', async () => {
+    const s = apiScenario();
+    const game = withProfiles(s);
+    s.setConfig({ searchChannelId: null });
+
+    const res = await s.app.request(proposeUrl(game.id), post({ actorId: ADMIN, userIds: [A, B] }));
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: 'SQUADS_NO_SEARCH_CHANNEL' } });
   });
 });

@@ -1,6 +1,7 @@
 import { listSquadsForUser } from '@goodbot/db';
 
 import { SquadContext } from './context';
+import { ManualMatchService } from './manual';
 import { MatcherService } from './matcher';
 import { ProfileService } from './profiles';
 import { ProposalService } from './proposals';
@@ -10,6 +11,7 @@ import { SessionService } from './sessions';
 import { SquadLifecycleService } from './squads';
 
 import type { SquadServiceDeps } from './context';
+import type { ManualOutcome } from './manual';
 import type { MatchResult } from './matcher';
 import type { AvailabilityResult, ProfileDraft, ProfileForm, ProfileResult } from './profiles';
 import type { ProposalAcceptResult, ProposalDeclineResult } from './proposals';
@@ -30,10 +32,17 @@ import type {
   SquadProposal,
   SquadSession,
 } from '@goodbot/db';
-import type { SquadAnswers, SquadsConfig } from '@goodbot/shared';
+import type {
+  ManualMatchEvaluation,
+  ProposeSquadManuallyInput,
+  SquadAnswers,
+  SquadManualCheckInput,
+  SquadsConfig,
+} from '@goodbot/shared';
 import type { BaseMessageOptions, Guild } from 'discord.js';
 
 export type { SquadServiceDeps } from './context';
+export type { ManualOutcome } from './manual';
 export type { MatchResult } from './matcher';
 export type { AvailabilityResult, ProfileDraft, ProfileForm, ProfileResult } from './profiles';
 export type { ProposalAcceptResult, ProposalDeclineResult } from './proposals';
@@ -70,6 +79,7 @@ export class SquadService {
       requests: new JoinRequestService(this.ctx),
       sessions: new SessionService(this.ctx),
       search: new SearchService(this.ctx),
+      manual: new ManualMatchService(this.ctx),
     };
   }
 
@@ -170,6 +180,24 @@ export class SquadService {
 
   runMatch(guildId: string, gameId: string): Promise<MatchResult> {
     return this.ctx.parts.matcher.runFor(guildId, gameId);
+  }
+
+  /** Revisa a turma escolhida no painel, sem escrever nada. */
+  checkManualMatch(
+    guild: Guild,
+    gameId: string,
+    input: SquadManualCheckInput,
+  ): Promise<ManualMatchEvaluation> {
+    return this.ctx.parts.manual.check(guild, gameId, input);
+  }
+
+  /** Abre a proposta com a turma escolhida, se a revisão refeita na fila deixar. */
+  proposeManually(
+    guild: Guild,
+    gameId: string,
+    input: ProposeSquadManuallyInput,
+  ): Promise<ManualOutcome<{ proposal: SquadProposal }>> {
+    return this.ctx.parts.manual.propose(guild, gameId, input);
   }
 
   // ── propostas ─────────────────────────────────────────────────────────────
