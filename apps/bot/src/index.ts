@@ -12,6 +12,7 @@ import { DemoExpiryJob } from './jobs/demo-expiry';
 import { PendingExpiryJob } from './jobs/pending-expiry';
 import { RetentionJob } from './jobs/retention';
 import { SocialJob } from './jobs/social';
+import { SquadsJob } from './jobs/squads';
 import { StatsRollupJob } from './jobs/stats-rollup';
 import { recordError } from './lib/error-log';
 import { loadCommands, loadEvents } from './lib/loader';
@@ -153,8 +154,16 @@ async function main(): Promise<void> {
     },
   });
   const social = new YouTubeProvider();
-  // Squads fixos: comandos, botões e o evento de voz usam pelo `ctx`; o job chega depois.
+  // Squads fixos: comandos, botões e o evento de voz usam pelo `ctx`; o job
+  // cuida do relógio (propostas vencidas, sessões, voice e inatividade).
   const squads = new SquadService({ db, client, config, audit });
+  const squadsJob = new SquadsJob({
+    db,
+    client,
+    config,
+    squads,
+    guildIds: () => registry.servedGuildIds(),
+  });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
   // Os links que os avisos de ciclo de vida citam. Saem do `AUTH_URL` pela
@@ -261,6 +270,7 @@ async function main(): Promise<void> {
     stats.start();
     statsRollup.start();
     socialJob.start();
+    squadsJob.start();
     demoExpiry.start();
     pendingExpiry.start();
     retention.start();
@@ -299,6 +309,7 @@ async function main(): Promise<void> {
       stats.stop();
       statsRollup.stop();
       socialJob.stop();
+      squadsJob.stop();
       demoExpiry.stop();
       pendingExpiry.stop();
       retention.stop();

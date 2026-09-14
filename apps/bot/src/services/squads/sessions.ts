@@ -18,7 +18,7 @@ import {
   upsertSquadSession,
   voteSquadSession,
 } from '@goodbot/db';
-import { DAY_MS, nextSessionAt, UserFacingError, WEEK_MS } from '@goodbot/shared';
+import { DAY_MS, MINUTE_MS, nextSessionAt, UserFacingError, WEEK_MS } from '@goodbot/shared';
 import { ChannelType } from 'discord.js';
 
 import { currentOverwrites, snapshotOverwrites } from '../../lib/overwrites';
@@ -66,6 +66,16 @@ export interface InactivityResult {
   archived: string[];
 }
 
+/** O que o job tem a fazer com as sessões nesta passada. */
+export interface DueSessions {
+  /** Dentro da antecedência do lembrete, ainda sem lembrete e sem ter acabado. */
+  remind: SquadSession[];
+  /** Já começaram, sem início marcado e sem ter acabado. */
+  start: SquadSession[];
+  /** Reserva viva com a faixa encerrada. */
+  release: SquadSession[];
+}
+
 const isReserved = (session: SquadSession) =>
   session.voiceReservedAt !== null && session.voiceReleasedAt === null;
 
@@ -107,6 +117,31 @@ export class SessionService {
       }
     }
     return sessions;
+  }
+
+  /**
+   * As sessões com passo pendente agora. A trava de cada passo continua sendo
+   * a `UPDATE` condicional; a lista só evita chamar o Discord à toa. Uma faixa
+   * dura no máximo 24 h, então a busca olha um dia para trás: sessão que
+   * acabou com o bot fora do ar não recebe lembrete nem começa atrasada.
+   */
+  async due(guildId: string): Promise<DueSessions> {
+    const { db } = this.ctx;
+    const config = await this.ctx.config.get(guildId, 'squads');
+    const now = this.ctx.now();
+    const lead = config.reminderMinutesBefore * MINUTE_MS;
+    const [upcoming, release] = await Promise.all([
+      listSessionsStartingBetween(db, guildId, new Date(now - DAY_MS), new Date(now + lead + 1)),
+      listSessionsToRelease(db, guildId, new Date(now)),
+    ]);
+    const live = upcoming.filter((session) => session.endsAt.getTime() > now);
+    return {
+      remind: live.filter((session) => session.remindedAt === null),
+      start: live.filter(
+        (session) => session.startedAt === null && session.startsAt.getTime() <= now,
+      ),
+      release,
+    };
   }
 
   /**

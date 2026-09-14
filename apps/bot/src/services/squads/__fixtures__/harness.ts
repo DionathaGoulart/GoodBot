@@ -58,6 +58,7 @@ export function createHarness(overrides: Partial<SquadsConfig> = {}) {
 
   return {
     service,
+    client: client as unknown as Client,
     guild,
     /** A mesma guild, com o tipo que o service espera. */
     discordGuild: guild as unknown as Guild,

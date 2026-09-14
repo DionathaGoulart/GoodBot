@@ -94,6 +94,17 @@ export function localDayKey(at: Date, timeZone: string): string {
   return new Date(start.getTime() + offset).toISOString().slice(0, 10);
 }
 
+/** Hora local (0–23) no fuso da guild; fuso inválido cai em UTC. */
+export function localHour(at: Date, timeZone: string): number {
+  try {
+    return Number(
+      new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', hour: '2-digit' }).format(at),
+    );
+  } catch {
+    return at.getUTCHours();
+  }
+}
+
 export interface StatsDeps {
   db: Db;
   client: Client;

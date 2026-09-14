@@ -20,7 +20,7 @@ import type {
   PublishedSearchMessage,
   PublishSearchOptions,
 } from './search';
-import type { InactivityResult, RemindResult, StartResult } from './sessions';
+import type { DueSessions, InactivityResult, RemindResult, StartResult } from './sessions';
 import type { ArchiveOptions, RemoveMemberResult, RenameOptions, RenameResult } from './squads';
 import type {
   Squad,
@@ -44,7 +44,7 @@ export type {
   PublishedSearchMessage,
   PublishSearchOptions,
 } from './search';
-export type { InactivityResult, RemindResult, StartResult } from './sessions';
+export type { DueSessions, InactivityResult, RemindResult, StartResult } from './sessions';
 export type { ArchiveOptions, RemoveMemberResult, RenameOptions, RenameResult } from './squads';
 
 /**
@@ -264,6 +264,11 @@ export class SquadService {
 
   ensureUpcomingSessions(guildId: string): Promise<SquadSession[]> {
     return this.ctx.parts.sessions.ensureUpcoming(guildId);
+  }
+
+  /** Sessões a lembrar, começar e liberar nesta passada do job. */
+  dueSessions(guildId: string): Promise<DueSessions> {
+    return this.ctx.parts.sessions.due(guildId);
   }
 
   remindSession(guild: Guild, session: SquadSession): Promise<RemindResult | null> {

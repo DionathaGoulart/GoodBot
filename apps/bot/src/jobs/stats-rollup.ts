@@ -2,7 +2,7 @@ import { rollupHourlyBuckets } from '@goodbot/db';
 import { DAY_MS, HOUR_MS } from '@goodbot/shared';
 
 import { childLogger } from '../logger';
-import { localDayKey } from '../services/stats';
+import { localDayKey, localHour } from '../services/stats';
 
 import type { ConfigService } from '../services/config';
 import type { Db } from '@goodbot/db';
@@ -93,16 +93,5 @@ export class StatsRollupJob {
       log.info({ guildId, ...result, before }, 'buckets horários agregados em diários');
     }
     return result.removed;
-  }
-}
-
-/** Hora local (0–23) no fuso da guild; fuso inválido cai em UTC. */
-function localHour(at: Date, timeZone: string): number {
-  try {
-    return Number(
-      new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', hour: '2-digit' }).format(at),
-    );
-  } catch {
-    return at.getUTCHours();
   }
 }

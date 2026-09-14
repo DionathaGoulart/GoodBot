@@ -35,6 +35,7 @@ export interface FakeStore {
   proposals: SquadProposal[];
   requests: SquadJoinRequest[];
   sessions: SquadSession[];
+  meta: Map<string, unknown>;
 }
 
 const emptyStore = (): FakeStore => ({
@@ -45,6 +46,7 @@ const emptyStore = (): FakeStore => ({
   proposals: [],
   requests: [],
   sessions: [],
+  meta: new Map(),
 });
 
 export const store: FakeStore = emptyStore();
@@ -91,6 +93,17 @@ export const impl = {
   // ── config (só a escrita da mensagem fixa; a leitura é o ConfigService falso)
   async setModuleConfig(_db: unknown, _guildId: string, _module: string, input: unknown) {
     return copy(input);
+  },
+
+  // ── meta
+  squadsDailyKey(guildId: string) {
+    return `squads_daily:${guildId}`;
+  },
+  async getMeta(_db: unknown, key: string) {
+    return store.meta.has(key) ? copy(store.meta.get(key)) : null;
+  },
+  async setMeta(_db: unknown, key: string, value: unknown) {
+    store.meta.set(key, copy(value));
   },
 
   // ── jogos
