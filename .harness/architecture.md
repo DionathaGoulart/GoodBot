@@ -595,12 +595,48 @@ Três coisas nesse caminho não são gosto:
   várias pessoas ao mesmo tempo, e o job passa de novo a cada 5 minutos. Todo
   passo é uma `UPDATE` condicional (`claimProposalSquad`, `markSessionReminded`,
   votos com `array_append`) antes de qualquer chamada ao Discord. O único estado
-  em memória é o mutex do matcher por guild e jogo, e ele só vale porque o bot é
-  uma instância só.
+  em memória é a fila compartilhada por guild e jogo do `MatcherService`
+  (`withGameLock`): a passada do matcher, o match manual e apagar perfil entram
+  nela, e uma tarefa na fila nunca espera `runFor` do mesmo jogo, senão espera a
+  si mesma. Ela só vale porque o bot é uma instância só; escalar para mais de
+  uma instância pediria trava no banco.
 - **Restaurar antes de marcar.** A liberação do voice devolve os overwrites no
   Discord e só depois grava `voice_released_at`. Na ordem inversa, uma falha
   passageira deixaria o voice do pool fechado ao `@everyone` sem nada que o
   reabrisse.
+
+**Um match manual**
+
+```
+aba JOGADORES: o admin marca linhas ─▶ manualMatchPeople + evaluateManualMatch
+  (shared, puro, com o dado do carregamento) mostram nota e avisos na hora
+  ─▶ PROPOR AO GRUPO ─▶ action do painel ─▶ POST /squads/games/:gameId/manual/check
+  ─▶ ManualMatchService.check: uma leitura por tipo no banco + isGuildMember
+  ─▶ o diálogo mostra duplas, janela, bloqueios e avisos (cada um com `key`)
+  ─▶ confirmar ─▶ POST .../manual/propose { userIds, confirmedWarnings }
+  ─▶ matcher.withGameLock(guild, jogo): recarrega tudo e avalia de novo
+     bloqueio ─▶ 422 MANUAL_MATCH_BLOCKED
+     aviso fora de confirmedWarnings ─▶ 409 MANUAL_MATCH_UNCONFIRMED
+  ─▶ matcher.searchChannel ─▶ matcher.openProposal (o mesmo do automático)
+  ─▶ nota "turma escolhida no painel" na thread ─▶ auditoria squad.proposal.manual
+  ─▶ daqui em diante é o caminho de cima: Aceito, Passo, prazo e cooldown
+```
+
+Duas coisas nesse caminho, e na gestão de jogadores ao lado dele, não são gosto:
+
+- **A revisão roda de novo dentro da fila.** A avaliação do painel usa o dado do
+  carregamento da página; a do bot lê o banco e a presença no servidor na hora
+  (`SquadContext.isGuildMember`: `false` só com "Unknown Member", e falha
+  passageira não bloqueia). A confirmação é a lista de `key`s vistas, não um
+  booleano: a segunda chamada de um clique duplo vê a proposta que a primeira
+  abriu e cai em `IN_OPEN_PROPOSAL`.
+- **Ação de admin avisa por DM, e a DM nunca derruba a ação.** Pausar, retomar,
+  editar respostas, apagar perfil e tirar do squad (`PlayerAdminService`) seguem
+  checagens, efeito, auditoria com o motivo e só então a DM:
+  `SquadContext.sendDm`, com a copy de `adminActionDm` em `embeds.ts`. `sendDm`
+  nunca lança (a rota devolve `notified: false`) e não loga o erro, só IDs, ação
+  e código do Discord, porque o `DiscordAPIError` carrega o corpo da requisição
+  com o texto da DM e o motivo. Apagar perfil manda a DM depois de soltar a fila.
 
 ---
 
@@ -650,6 +686,8 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | mexer no banco                    | `packages/db/src/schema/` → `db:generate` → revisar SQL → `db:migrate`   |
 | tarefa periódica                  | `apps/bot/src/jobs/` + registrar no `Scheduler`                          |
 | mexer em squads fixos             | `apps/bot/src/services/squads/` (fachada no `index.ts`) + regra pura em `shared/src/squads/` |
+| mexer no match manual             | `apps/bot/src/services/squads/manual.ts` + regra pura em `packages/shared/src/squads/manual.ts` |
+| mexer na gestão de jogadores      | `apps/bot/src/services/squads/players.ts` (texto da DM em `embeds.ts`)   |
 | entender um servidor              | `pnpm guild scan "<nome>"` → `infra/discord/<slug>/servidor.md`          |
 | mudar a estrutura de um servidor  | `infra/discord/<slug>/guild.yaml` → `pnpm guild plan`                    |
 

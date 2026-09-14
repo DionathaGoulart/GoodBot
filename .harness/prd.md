@@ -232,6 +232,12 @@ body cap (§7.3). Endpoints (todos validados com Zod de `packages/shared`):
 - `GET /guilds/:id/channels|roles|members?q=&limit=` — dados ao vivo do cache
   do bot (com fallback a fetch).
 - `GET /guilds/:id/members/:userId` — detalhe ao vivo.
+- `GET /guilds/:id/members/lookup?ids=`: nome e avatar de até 100 IDs
+  separados por vírgula (repetidos contam uma vez). Cache primeiro, o resto
+  numa busca só pelo gateway; devolve `members`, `missing` (confirmados fora
+  do servidor) e `unresolved` (o gateway não respondeu, a tela mostra o ID). É
+  leitura, sem `actorId`, como `GET /members`, e fica registrada antes de
+  `/members/:userId`. Serve a aba `JOGADORES` dos squads (§6.2).
 - `POST /guilds/:id/moderation` — `{type, targetId, reason, duration,
 actorId}` → executa a ação e cria caso (mesmo caminho que o slash command).
 - `POST /guilds/:id/config/invalidate` — `{module}` → bot recarrega cache
@@ -640,15 +646,70 @@ antes do trabalho: falha espera o dia seguinte em vez de se repetir a cada 5
 minutos. Cada passo é isolado e cada trava é uma `UPDATE` condicional, então
 uma passada repetida não repete nada.
 
+**Pelo painel.** A aba `JOGADORES` (§6.2) dá ao admin duas coisas que o
+Discord não dá: escolher uma turma à mão e cuidar do perfil de outra pessoa.
+
+O **match manual** tem uma forma só, **propor ao grupo**: o bot abre a mesma
+proposta do match automático (thread privada no canal de busca, **Aceito /
+Passo**, prazo e cooldown), só que com as pessoas que o admin marcou, e deixa
+na thread uma nota dizendo que a turma foi escolhida no painel. O painel nunca
+põe ninguém dentro de um squad: a casa do squad continua nascendo no primeiro
+aceite. A mesma função pura (`evaluateManualMatch`, em `shared`) avalia a turma
+no painel, enquanto o admin marca as linhas, e no bot, com dados frescos do
+banco e a presença de cada pessoa no servidor. Ela bloqueia só o que a proposta
+não comporta e avisa do resto:
+
+| Código                 | Efeito   | Quando                                                                   |
+| ---------------------- | -------- | ------------------------------------------------------------------------ |
+| `PROFILE_NOT_FOUND`    | bloqueia | a pessoa não tem perfil neste jogo                                       |
+| `NOT_IN_GUILD`         | bloqueia | a pessoa saiu do servidor                                                |
+| `IN_SQUAD_IN_GAME`     | bloqueia | membro de squad `open` ou `full` deste jogo, ou perfil `in_squad`        |
+| `IN_OPEN_PROPOSAL`     | bloqueia | está numa proposta aberta deste jogo e não passou                        |
+| `NO_COMMON_CELL`       | bloqueia | o grupo não divide nenhuma célula, e a proposta ficaria sem janela       |
+| `GROUP_OVER_SIZE`      | avisa    | turma maior que o squad: quem aceitar primeiro fica com as vagas         |
+| `NOT_SEARCHING`        | avisa    | o perfil está `paused`                                                   |
+| `AT_SQUAD_LIMIT`       | avisa    | no teto de squads (`maxSquadsPerUser`): o aceite recusa até sair de um   |
+| `PAIR_COOLDOWN`        | avisa    | a dupla recebeu proposta dentro de `reproposeCooldownDays`               |
+| `HARD_MISMATCH`        | avisa    | campo `hard` respondido pelos dois e diferente                           |
+| `PENDING_JOIN_REQUEST` | avisa    | pedido de entrada pendente num squad vivo deste jogo                     |
+
+Quem está num squad deste jogo nem pode ser marcado: tirar do squad vem antes.
+Cada aviso tem uma `key` estável, e a proposta só sai quando o pedido confirma
+**todas** as `key`s dos avisos recalculados pelo bot. Se a situação mudou desde
+a revisão (apareceu um aviso novo), o bot recusa e o painel mostra a revisão de
+novo. Isso é a confirmação explícita e, de quebra, torna o clique duplo
+inofensivo: a segunda chamada já vê a proposta que a primeira abriu. A passada
+do matcher, o match manual e apagar perfil entram numa **fila por guild e
+jogo**, então a passada diária e um clique no painel não propõem as mesmas
+pessoas ao mesmo tempo.
+
+A **gestão de perfil** é pausar, retomar, editar respostas, apagar o perfil e
+tirar a pessoa de um squad. `in_squad` continua só do bot: pausar ou retomar
+quem está num squad deste jogo é recusado, e pedir o status que o perfil já tem
+também. Retomar exige grade marcada (só a própria pessoa marca) e roda o match,
+como `/squad status`; editar respostas confere contra as perguntas atuais do
+jogo e não roda o match. Apagar é recusado enquanto a pessoa estiver num squad
+deste jogo, numa proposta aberta dele sem ter passado ou com pedido de entrada
+pendente num squad vivo dele. Toda ação exige um **motivo**, que vai para a
+auditoria e para uma **DM à pessoa**: a DM diz que foi "a staff" (quem clicou
+fica só na auditoria), traz o motivo e o comando para conferir ou voltar atrás.
+A DM é consequência, não condição: se ela não chega (DM fechada, bot bloqueado,
+pessoa fora do servidor), a ação vale do mesmo jeito e a resposta volta com
+`notified: false`, que o painel mostra como "não consegui avisar a pessoa por
+DM". Tirar do squad também avisa o canal do squad, que fica sabendo que foi a
+staff, mas nunca o motivo.
+
 **Permissões.** O módulo depende de `CreatePrivateThreads` (thread da
 proposta), `Connect` e `Speak` (reserva do voice), além de `ManageChannels`,
 `ManageRoles` e `MoveMembers`, que o convite já pedia. Sem elas ele não quebra:
 o match e a reserva conferem antes e pulam com aviso no log (§10).
 
 Fora do escopo desta versão: voice criado e apagado por squad, lobby "jogar
-agora", mais de um horário por squad, match entre jogos diferentes, DM aos
-membros e estatísticas em `stat_buckets` (os contadores do painel saem direto
-das tabelas).
+agora", mais de um horário por squad, match entre jogos diferentes,
+estatísticas em `stat_buckets` (os contadores do painel saem direto das
+tabelas) e DM aos membros, com uma exceção: as ações de admin pelo painel
+(pausar, retomar, editar respostas, apagar perfil e tirar do squad) avisam a
+pessoa por DM com o motivo.
 
 ## 6. Requisitos funcionais — Painel
 
@@ -709,10 +770,21 @@ grava, escreve auditoria (§6.5), chama `invalidate` no bot, toast.
   enquanto ele tiver squad `open|full`, porque a cascata apagaria as linhas e
   deixaria os canais no Discord. `SQUADS`: os squads vivos com membros, janela,
   voice e última confirmação, o contador de canais do servidor (teto de 500) e
-  as ações de renomear e arquivar. `PROCURANDO`: os perfis `searching` por jogo
-  e as propostas abertas. Jogos são gravados direto no banco, sem `invalidate`,
-  porque o bot os lê sem cache; publicar, match, arquivar e renomear passam pela
-  API do bot. Salvar o config preserva o `searchMessageId`, que é do bot: um
+  as ações de renomear e arquivar. `JOGADORES` (no lugar da antiga
+  `PROCURANDO`), por jogo: todos os perfis em qualquer status, com nome e
+  avatar; contadores (total, por status e por opção de cada pergunta `select`
+  ou `tags`); a ocupação da grade 7 × 4 num heatmap; um sheet com o perfil
+  completo e as ações de gestão, cada uma com motivo obrigatório; a seleção de
+  linhas para o match manual, com a nota de cada dupla e os avisos calculados na
+  hora e a revisão do bot antes de propor ao grupo; as propostas abertas e o
+  botão de match automático. Quem é `mod` vê a aba só com as propostas abertas:
+  perfis, respostas e nomes nem são carregados para quem não é admin. Os perfis
+  são lidos direto do banco pelo servidor do painel; nome e avatar vêm do
+  lookup em lote do bot (`GET /guilds/:id/members/lookup`), e com o bot fora do
+  ar o nome cai para o ID e o resto funciona. Jogos são gravados direto no
+  banco, sem `invalidate`, porque o bot os lê sem cache; toda outra escrita
+  (publicar, match, arquivar, renomear, propor ao grupo e a gestão de perfis)
+  passa pela API do bot, que grava a auditoria. Salvar o config preserva o `searchMessageId`, que é do bot: um
   formulário aberto antes de uma publicação levaria o id velho, e a publicação
   seguinte mandaria uma segunda mensagem em vez de editar a primeira.
 - **Comandos**: por comando: ativo, cargos permitidos, canais permitidos/
@@ -1074,10 +1146,13 @@ re-verifica (o registro é dica de UI, não segurança).
 
 No módulo `squads` (§5.11), `/squad` é de `member`, com duas exceções:
 `/squad painel` (publicar a mensagem fixa) é de `admin`, e `/squad renomear`
-exige ser do squad. Pela API do bot, publicar a mensagem fixa e rodar o match
-são de `admin`; arquivar e renomear squad são de `mod` e funcionam com o módulo
-desligado, porque limpar squad antigo é justamente o que se faz depois de
-desligar.
+exige ser do squad. Pela API do bot, publicar a mensagem fixa, rodar o match,
+o match manual (revisar e propor ao grupo) e a gestão de perfis (pausar,
+retomar, editar respostas e apagar) são de `admin`, e tirar alguém de um squad
+também; arquivar e renomear squad são de `mod`. Arquivar, renomear e tirar do
+squad funcionam com o módulo desligado, porque limpar squad antigo é justamente
+o que se faz depois de desligar. No painel, a lista de jogadores (perfis,
+respostas e nomes) é só de `admin`: o `mod` vê só as propostas abertas.
 
 ### 9.2 No painel
 

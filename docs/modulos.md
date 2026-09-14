@@ -237,6 +237,29 @@ Quem move tudo isso é o job `squads`, a cada 5 minutos, em cada servidor com o
 módulo ligado. O passo diário (inatividade e um match novo) roda uma vez por
 dia, depois das 12 h no fuso do servidor, para ninguém ser chamado de madrugada.
 
+**Pelo painel.** Em **Squads > `JOGADORES`** o admin vê, por jogo, todos os
+perfis com nome, status, respostas e a ocupação da grade, além das propostas
+abertas e do botão de match automático (quem é `mod` vê só as propostas).
+Marcando duas ou mais pessoas, o painel mostra a nota de cada dupla e os avisos,
+e `PROPOR AO GRUPO` abre a revisão feita pelo bot. O match manual só propõe: sai
+a mesma thread privada com `ACEITO` e `PASSO`, com uma nota dizendo que a turma
+foi escolhida no painel, e ninguém entra em squad sem aceitar. Pessoa sem perfil
+no jogo, fora do servidor, já num squad ou numa proposta aberta desse jogo, ou um
+grupo sem nenhum horário em comum **bloqueiam** a proposta. Perfil pausado, turma
+maior que o squad, pessoa no teto de squads, dupla proposta há menos de 14 dias,
+resposta diferente num campo "precisa bater" e pedido de entrada pendente só
+**avisam**, e o admin marca que leu antes de confirmar. No perfil de cada pessoa
+dá para pausar ou retomar a busca, editar as respostas, apagar o perfil (não
+enquanto ela estiver num squad, numa proposta aberta ou com pedido pendente
+nesse jogo) e tirar de um squad; tirar do squad funciona até com o módulo
+desligado. Cada ação pede um motivo, e a pessoa recebe uma DM dizendo que a
+staff do servidor mudou algo, com o motivo e o comando para conferir ou voltar
+atrás (`/squad status`, `/squad perfil` ou `/squad procurar`). O nome de quem
+clicou não vai na DM, fica na auditoria. Se a DM não chegar (DM fechada ou pessoa
+fora do servidor), a ação vale do mesmo jeito e o aviso do painel diz que a
+pessoa não foi avisada. Quem é tirado de um squad some do canal, e o canal fica
+sabendo que foi a staff, sem o motivo.
+
 > O bot precisa de `Connect`, `Speak` e `CreatePrivateThreads`. Sem elas o match
 > não abre a thread da proposta e a reserva do voice é pulada, com aviso no log
 > em vez de erro. O link de convite pede as três; num servidor que convidou o
