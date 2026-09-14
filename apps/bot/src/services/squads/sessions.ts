@@ -22,7 +22,7 @@ import { ChannelType } from 'discord.js';
 
 import { currentOverwrites, snapshotOverwrites } from '../../lib/overwrites';
 import { isLockable } from '../locks';
-import { log, logFailure } from './context';
+import { discordErrorCode, log, logFailure } from './context';
 import { inactivityWarningMessage, sessionReminderMessage, sessionStartMessage } from './embeds';
 import {
   encodeVoiceSnapshot,
@@ -32,6 +32,7 @@ import {
   voiceReservationOverwrites,
 } from './overwrites';
 
+import type { LockableChannel } from '../locks';
 import type { SquadContext } from './context';
 import type { Squad, SquadSession } from '@goodbot/db';
 import type { Guild, VoiceChannel } from 'discord.js';
@@ -45,6 +46,9 @@ export const INACTIVITY_GRACE_MS = WEEK_MS;
  * que passou disso e ainda não foi liberado cai em `listSessionsToRelease`.
  */
 const RESERVATION_LOOKAROUND_MS = 2 * DAY_MS;
+
+/** `DiscordAPIError` de canal inexistente: o voice foi apagado. */
+const DISCORD_UNKNOWN_CHANNEL = 10003;
 
 export interface RemindResult {
   session: SquadSession;
@@ -279,24 +283,51 @@ export class SessionService {
 
   /**
    * Libera a reserva: os ids que ela tocou voltam ao snapshot, o resto do
-   * canal fica como está. `false` quando não havia reserva viva.
+   * canal fica como está. O Discord vem antes do banco: se o restore falha
+   * (rate limit, 5xx, 50013 passageiro), a sessão continua reservada e a
+   * próxima passada do job tenta de novo. Marcar antes deixaria o voice do
+   * pool com `Connect` negado ao `@everyone` para sempre, porque
+   * `listSessionsToRelease` nunca mais devolveria a sessão.
+   *
+   * Duas liberações ao mesmo tempo (evento de voz e job) restauram o mesmo
+   * snapshot e chegam ao mesmo estado; a `UPDATE` condicional só decide quem
+   * registra a auditoria. `false` quando não havia reserva viva, quando outra
+   * chamada marcou primeiro ou quando o restore falhou.
    */
   async release(guild: Guild, session: SquadSession): Promise<boolean> {
-    const released = await releaseSessionVoice(this.ctx.db, guild.id, session.id, this.ctx.date());
-    if (!released) return false;
-    const { voiceChannelId, voiceOverwrites } = released;
-    if (!voiceChannelId || !voiceOverwrites) return true;
+    const { db } = this.ctx;
+    const current = await getSquadSession(db, guild.id, session.id);
+    if (!current || !isReserved(current)) return false;
+    const { voiceChannelId, voiceOverwrites } = current;
+    const bindings = { guildId: guild.id, sessionId: current.id, voiceChannelId };
 
-    try {
-      const voice = await this.ctx.fetchChannel(guild, voiceChannelId);
-      if (!isLockable(voice)) {
-        log.info({ guildId: guild.id, voiceChannelId }, 'voice da sessão não existe mais');
-        return true;
+    let restored = false;
+    if (voiceChannelId && voiceOverwrites) {
+      const voice = await this.voiceForRelease(guild, voiceChannelId);
+      if (voice === 'retry') return false;
+      if (voice) {
+        try {
+          await voice.permissionOverwrites.set(
+            restoreVoiceOverwrites(
+              currentOverwrites(voice),
+              voiceOverwrites,
+              guild.roles.everyone.id,
+            ),
+            'Fim da sessão do squad',
+          );
+          restored = true;
+        } catch (error) {
+          log.warn({ err: error, ...bindings }, 'falha ao liberar o voice; o job tenta de novo');
+          return false;
+        }
+      } else {
+        log.info(bindings, 'voice da sessão não existe mais');
       }
-      await voice.permissionOverwrites.set(
-        restoreVoiceOverwrites(currentOverwrites(voice), voiceOverwrites, guild.roles.everyone.id),
-        'Fim da sessão do squad',
-      );
+    }
+
+    const released = await releaseSessionVoice(db, guild.id, current.id, this.ctx.date());
+    if (!released) return false;
+    if (restored && voiceChannelId) {
       this.ctx.record({
         guildId: guild.id,
         action: 'squad.voice.release',
@@ -304,13 +335,32 @@ export class SessionService {
         target: { type: 'channel', id: voiceChannelId },
         after: { squadId: released.squadId, sessionId: released.id },
       });
-    } catch (error) {
-      log.warn(
-        { err: error, guildId: guild.id, sessionId: released.id },
-        'falha ao liberar o voice',
-      );
     }
     return true;
+  }
+
+  /**
+   * O voice a restaurar. `null` quando o canal foi apagado (não há o que
+   * restaurar, a reserva pode ser marcada); `'retry'` quando o Discord falhou
+   * por outro motivo e não dá para saber se o canal ainda existe.
+   */
+  private async voiceForRelease(
+    guild: Guild,
+    voiceChannelId: string,
+  ): Promise<LockableChannel | null | 'retry'> {
+    const cached = guild.channels.cache.get(voiceChannelId);
+    if (cached) return isLockable(cached) ? cached : null;
+    try {
+      const fetched = await guild.channels.fetch(voiceChannelId);
+      return isLockable(fetched) ? fetched : null;
+    } catch (error) {
+      if (discordErrorCode(error) === DISCORD_UNKNOWN_CHANNEL) return null;
+      log.warn(
+        { err: error, guildId: guild.id, voiceChannelId },
+        'não foi possível buscar o voice da sessão; o job tenta de novo',
+      );
+      return 'retry';
+    }
   }
 
   /** Libera toda reserva viva de um squad (arquivamento). Nunca lança. */

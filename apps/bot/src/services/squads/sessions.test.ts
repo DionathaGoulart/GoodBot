@@ -101,6 +101,59 @@ describe('SquadService: sessões', () => {
     expect(await s.service.releaseVoice(s.discordGuild, sessionRow())).toBe(false);
   });
 
+  it('restore que falha não marca a liberação, e a próxima chamada tenta de novo', async () => {
+    const s = scenario();
+    await s.service.reserveVoice(s.discordGuild, s.session);
+    s.voice.permissionOverwrites.set.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+
+    expect(await s.service.releaseVoice(s.discordGuild, sessionRow())).toBe(false);
+    expect(sessionRow().voiceReleasedAt).toBeNull();
+    expect(repositories.releaseSessionVoice).not.toHaveBeenCalled();
+    expect(s.audit.record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'squad.voice.release' }),
+    );
+
+    expect(await s.service.releaseVoice(s.discordGuild, sessionRow())).toBe(true);
+    expect(sessionRow().voiceReleasedAt).not.toBeNull();
+    expect(overwritesOf(s.voice.permissionOverwrites)).toEqual(BEFORE);
+    expect(s.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'squad.voice.release' }),
+    );
+  });
+
+  it('voice apagado: a liberação é marcada sem tocar o Discord', async () => {
+    const s = scenario();
+    await s.service.reserveVoice(s.discordGuild, s.session);
+    s.voice.permissionOverwrites.set.mockClear();
+    s.guild.channels.cache.delete(s.voice.id);
+
+    expect(await s.service.releaseVoice(s.discordGuild, sessionRow())).toBe(true);
+    expect(sessionRow().voiceReleasedAt).not.toBeNull();
+    expect(s.voice.permissionOverwrites.set).not.toHaveBeenCalled();
+  });
+
+  it('falha ao buscar o voice (não é canal inexistente) deixa a reserva para a próxima passada', async () => {
+    const s = scenario();
+    await s.service.reserveVoice(s.discordGuild, s.session);
+    s.guild.channels.cache.delete(s.voice.id);
+    s.guild.channels.fetch.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 0 }));
+
+    expect(await s.service.releaseVoice(s.discordGuild, sessionRow())).toBe(false);
+    expect(sessionRow().voiceReleasedAt).toBeNull();
+  });
+
+  it('liberação bem-sucedida marca uma vez; a segunda chamada não chama o Discord', async () => {
+    const s = scenario();
+    await s.service.reserveVoice(s.discordGuild, s.session);
+    s.voice.permissionOverwrites.set.mockClear();
+    const stale = sessionRow();
+
+    expect(await s.service.releaseVoice(s.discordGuild, stale)).toBe(true);
+    expect(await s.service.releaseVoice(s.discordGuild, stale)).toBe(false);
+    expect(s.voice.permissionOverwrites.set).toHaveBeenCalledTimes(1);
+    expect(repositories.releaseSessionVoice).toHaveBeenCalledTimes(1);
+  });
+
   it('voice segurado por outra reserva viva não é reservado de novo', async () => {
     const s = scenario();
     const other = seedSquad({ gameId: s.game.id });
