@@ -206,6 +206,7 @@ async function main(): Promise<void> {
       reactionRoles,
       tickets,
       social,
+      squads,
       commands,
       registry,
       maintenance,

@@ -230,6 +230,19 @@ export async function listSearchingProfiles(
     .orderBy(asc(squadProfiles.userId));
 }
 
+/** `gameId → perfis searching`, para os contadores do painel. Jogo sem ninguém fica de fora. */
+export async function countSearchingProfilesByGame(
+  db: DbExecutor,
+  guildId: string,
+): Promise<Record<string, number>> {
+  const rows = await db
+    .select({ gameId: squadProfiles.gameId, count: count() })
+    .from(squadProfiles)
+    .where(and(eq(squadProfiles.guildId, guildId), eq(squadProfiles.status, 'searching')))
+    .groupBy(squadProfiles.gameId);
+  return Object.fromEntries(rows.map((row) => [row.gameId, row.count]));
+}
+
 export async function setSquadProfileStatus(
   db: DbExecutor,
   guildId: string,
@@ -562,6 +575,20 @@ export async function listSquadMembers(
     .select()
     .from(squadMembers)
     .where(and(eq(squadMembers.guildId, guildId), eq(squadMembers.squadId, squadId)))
+    .orderBy(asc(squadMembers.joinedAt));
+}
+
+/** Membros de vários squads numa consulta só: a lista do painel não faz uma por squad. */
+export async function listMembersOfSquads(
+  db: DbExecutor,
+  guildId: string,
+  squadIds: readonly string[],
+): Promise<SquadMember[]> {
+  if (squadIds.length === 0) return [];
+  return db
+    .select()
+    .from(squadMembers)
+    .where(and(eq(squadMembers.guildId, guildId), inArray(squadMembers.squadId, [...squadIds])))
     .orderBy(asc(squadMembers.joinedAt));
 }
 

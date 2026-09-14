@@ -10,6 +10,7 @@ import {
   archiveSquad,
   claimProposalSquad,
   closeSquadProposal,
+  countSearchingProfilesByGame,
   countSquadsForUser,
   createSquad,
   createSquadGame,
@@ -23,6 +24,7 @@ import {
   getSquadJoinRequest,
   getSquadProposal,
   listInactiveSquads,
+  listMembersOfSquads,
   listPendingJoinRequests,
   listRecentJoinRequestKeys,
   listRecentProposalPairs,
@@ -36,6 +38,7 @@ import {
   setSessionReminderMessage,
   setSquadStatus,
   touchSquadConfirmed,
+  upsertSquadProfile,
   upsertSquadSession,
   voteSquadSession,
 } from './squads';
@@ -439,9 +442,7 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect((await getActiveSessionByVoice(db, GUILD_ID, voiceId, at(-HOUR / 2)))?.id).toBe(
         session.id,
       );
-      expect((await getActiveSessionByVoice(db, GUILD_ID, voiceId, at(HOUR)))?.id).toBe(
-        session.id,
-      );
+      expect((await getActiveSessionByVoice(db, GUILD_ID, voiceId, at(HOUR)))?.id).toBe(session.id);
       expect(await getActiveSessionByVoice(db, GUILD_ID, voiceId, session.endsAt)).toBeNull();
       expect(await getActiveSessionByVoice(db, OTHER_GUILD_ID, voiceId, at(HOUR))).toBeNull();
       expect(
@@ -502,6 +503,52 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect(ids).not.toContain(confirmedRecently.id);
       expect(ids).not.toContain(archived.id);
       expect(ids).not.toContain(young.id);
+    });
+
+    it('listMembersOfSquads traz só os squads pedidos, só da guild', async () => {
+      const first = await newSquad('Lista um');
+      const second = await newSquad('Lista dois');
+      const skipped = await newSquad('Fora da lista');
+      await addSquadMember(db, { guildId: GUILD_ID, squadId: first.id, userId: USER_A });
+      await addSquadMember(db, { guildId: GUILD_ID, squadId: second.id, userId: USER_B });
+      await addSquadMember(db, { guildId: GUILD_ID, squadId: first.id, userId: USER_C });
+      await addSquadMember(db, { guildId: GUILD_ID, squadId: skipped.id, userId: USER_D });
+
+      const pairs = (await listMembersOfSquads(db, GUILD_ID, [first.id, second.id]))
+        .map((member) => `${member.squadId}:${member.userId}`)
+        .sort();
+      expect(pairs).toEqual(
+        [`${first.id}:${USER_A}`, `${first.id}:${USER_C}`, `${second.id}:${USER_B}`].sort(),
+      );
+      expect(await listMembersOfSquads(db, OTHER_GUILD_ID, [first.id])).toEqual([]);
+      expect(await listMembersOfSquads(db, GUILD_ID, [])).toEqual([]);
+    });
+
+    it('countSearchingProfilesByGame conta só searching, por jogo e por guild', async () => {
+      const other = await createSquadGame(db, {
+        guildId: GUILD_ID,
+        name: 'Contagem',
+        squadSize: 2,
+      });
+      if (!other) throw new Error('jogo de contagem não foi criado');
+      const profiles = [
+        [USER_A, 'searching'],
+        [USER_B, 'searching'],
+        [USER_C, 'paused'],
+      ] as const;
+      for (const [userId, status] of profiles) {
+        await upsertSquadProfile(db, {
+          guildId: GUILD_ID,
+          userId,
+          gameId: other.id,
+          availability: 1,
+          answers: {},
+          status,
+        });
+      }
+
+      expect((await countSearchingProfilesByGame(db, GUILD_ID))[other.id]).toBe(2);
+      expect(await countSearchingProfilesByGame(db, OTHER_GUILD_ID)).toEqual({});
     });
   });
 });

@@ -167,6 +167,14 @@ export const impl = {
         .sort(byUserId),
     );
   },
+  async countSearchingProfilesByGame(_db: unknown, guildId: string) {
+    const counts: Record<string, number> = {};
+    for (const profile of store.profiles) {
+      if (profile.guildId !== guildId || profile.status !== 'searching') continue;
+      counts[profile.gameId] = (counts[profile.gameId] ?? 0) + 1;
+    }
+    return counts;
+  },
   async setSquadProfileStatus(
     _db: unknown,
     guildId: string,
@@ -344,6 +352,13 @@ export const impl = {
     return copy(
       store.members
         .filter((m) => m.guildId === guildId && m.squadId === squadId)
+        .sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime()),
+    );
+  },
+  async listMembersOfSquads(_db: unknown, guildId: string, squadIds: readonly string[]) {
+    return copy(
+      store.members
+        .filter((m) => m.guildId === guildId && squadIds.includes(m.squadId))
         .sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime()),
     );
   },
@@ -640,12 +655,7 @@ export const impl = {
     row.voiceReleasedAt = at;
     return copy(row);
   },
-  async getActiveSessionByVoice(
-    _db: unknown,
-    guildId: string,
-    voiceChannelId: string,
-    now: Date,
-  ) {
+  async getActiveSessionByVoice(_db: unknown, guildId: string, voiceChannelId: string, now: Date) {
     const found = store.sessions
       .filter(
         (s) =>

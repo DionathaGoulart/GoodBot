@@ -82,6 +82,16 @@ import {
   SocialResolveResultSchema,
   SocialTestResultSchema,
 } from './social';
+import {
+  ArchiveSquadInputSchema,
+  PostSquadSearchMessageInputSchema,
+  PostSquadSearchMessageResultSchema,
+  RenameSquadInputSchema,
+  RunSquadMatchInputSchema,
+  RunSquadMatchResultSchema,
+  SquadOverviewSchema,
+  SquadSummarySchema,
+} from './squads';
 import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
 import { SocialAccountInputSchema } from '../config/social';
 
@@ -154,6 +164,16 @@ import type {
   SocialResolveResult,
   SocialTestResult,
 } from './social';
+import type {
+  ArchiveSquadInput,
+  PostSquadSearchMessageInput,
+  PostSquadSearchMessageResult,
+  RenameSquadInput,
+  RunSquadMatchInput,
+  RunSquadMatchResult,
+  SquadOverview,
+  SquadSummary,
+} from './squads';
 import type { CloseTicketInput, CloseTicketResult } from './tickets';
 import type { SocialAccountInput } from '../config/social';
 import type { z } from 'zod';
@@ -839,6 +859,56 @@ export function createInternalClient(options: InternalClientOptions) {
         SocialTestResultSchema,
         `${guild(guildId)}/social/${encodeURIComponent(accountId)}/test`,
         { method: 'POST' },
+      ),
+
+    /** Jogos, squads vivos, propostas abertas e contadores do módulo de squads. */
+    squadsOverview: (guildId: string): Promise<SquadOverview> =>
+      request(SquadOverviewSchema, `${guild(guildId)}/squads/overview`),
+
+    /** Publica ou reedita a mensagem fixa do canal de busca. Só admin. */
+    postSquadSearchMessage: (
+      guildId: string,
+      input: PostSquadSearchMessageInput,
+    ): Promise<PostSquadSearchMessageResult> =>
+      request(PostSquadSearchMessageResultSchema, `${guild(guildId)}/squads/search-message`, {
+        method: 'POST',
+        body: PostSquadSearchMessageInputSchema.parse(input),
+      }),
+
+    /** Arquiva pelo painel (mod ou acima): canal só leitura e voice liberado. */
+    archiveSquad: (
+      guildId: string,
+      squadId: string,
+      input: ArchiveSquadInput,
+    ): Promise<SquadSummary> =>
+      request(
+        SquadSummarySchema,
+        `${guild(guildId)}/squads/${encodeURIComponent(squadId)}/archive`,
+        { method: 'POST', body: ArchiveSquadInputSchema.parse(input) },
+      ),
+
+    /** Renomeia pelo painel (mod ou acima); o canal acompanha quando o Discord deixa. */
+    renameSquad: (
+      guildId: string,
+      squadId: string,
+      input: RenameSquadInput,
+    ): Promise<SquadSummary> =>
+      request(
+        SquadSummarySchema,
+        `${guild(guildId)}/squads/${encodeURIComponent(squadId)}/rename`,
+        { method: 'POST', body: RenameSquadInputSchema.parse(input) },
+      ),
+
+    /** Roda o matcher do jogo agora, sem esperar o passo diário do job. Só admin. */
+    runSquadMatch: (
+      guildId: string,
+      gameId: string,
+      input: RunSquadMatchInput,
+    ): Promise<RunSquadMatchResult> =>
+      request(
+        RunSquadMatchResultSchema,
+        `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/match`,
+        { method: 'POST', body: RunSquadMatchInputSchema.parse(input) },
       ),
   };
 }
