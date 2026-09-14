@@ -162,6 +162,7 @@ roles:
     hoist: true
   - name: Youtube
     color: "#ff0000"
+    mentionable: true
     permissions:
       - AddReactions
       - Stream
@@ -185,11 +186,12 @@ roles:
   - name: Eventos
     mentionable: true
   - name: Boletins
+  - name: Files
 categories:
   - name: Quartel-General
     channels:
       - name: bem-vindos
-        topic: Chegadas e impulsos da Super Terra.
+        topic: Aviso automático de quem chega e de quem impulsiona o servidor.
         overrides:
           - role: GoodBot
             view: allow
@@ -200,6 +202,7 @@ categories:
             view: allow
             send: deny
       - name: protocolos
+        topic: As regras do servidor. Leia antes de tudo.
         overrides:
           - role: GoodBot
             view: allow
@@ -228,8 +231,9 @@ categories:
             view: allow
             send: allow
       - name: files
+        topic: Downloads das ferramentas do Goodivers, como a Macro HD2 e o GoodVoice. Aparece pra quem tem o cargo Files.
         overrides:
-          - role: Boletins
+          - role: Files
             view: allow
           - role: GoodBot
             view: allow
@@ -260,6 +264,7 @@ categories:
     channels:
       - name: transmissões
         type: announcement
+        topic: Vídeos e lives novos do canal Goodivers, postados automaticamente pelo bot.
         overrides:
           - role: "@everyone"
             view: deny
@@ -277,19 +282,21 @@ categories:
           - role: Boletins
             view: allow
       - name: patch-notes
+        topic: Notas de atualização oficiais do Helldivers 2, trazidas do Discord oficial do jogo.
         overrides:
-          - role: "@everyone"
-            view: deny
-            send: deny
+          - role: Boletins
+            view: allow
           - role: GoodBot
             view: allow
             send: allow
           - role: Ministro
             view: allow
             send: allow
-          - role: Boletins
-            view: allow
+          - role: "@everyone"
+            view: deny
+            send: deny
       - name: ordens-superiores
+        topic: Ordens Superiores (Major Orders) da guerra galáctica, trazidas do Discord oficial do jogo.
         overrides:
           - role: "@everyone"
             view: deny
@@ -303,27 +310,29 @@ categories:
           - role: Boletins
             view: allow
       - name: comunicados-oficiais
+        topic: "Anúncios oficiais do Helldivers 2: novidades, roadmap, eventos e pesquisas."
         overrides:
-          - role: "@everyone"
-            view: deny
-            send: deny
+          - role: Boletins
+            view: allow
           - role: GoodBot
             view: allow
             send: allow
           - role: Ministro
             view: allow
             send: allow
-          - role: Boletins
-            view: allow
+          - role: "@everyone"
+            view: deny
+            send: deny
   - name: Canal Goodivers
   - name: Área Social
     channels:
       - name: Zona de Combate¹
         type: voice
+      - name: clipes-e-prints
+        topic: Seus melhores clipes e prints do jogo. Divulgar canal ou live só vale aqui.
+        slowmode: 30
       - name: Zona de Combate²
         type: voice
-      - name: clipes-e-prints
-        slowmode: 30
       - name: Comando Secreto
         type: voice
         overrides:
@@ -332,15 +341,18 @@ categories:
           - role: "@everyone"
             view: deny
       - name: sala-de-comando
+        topic: "Papo geral sobre Helldivers 2: estratégias, builds, dúvidas e novidades."
       - name: Criogenia
         type: voice
       - name: off-topic
+        topic: Conversa livre sobre qualquer assunto fora do Helldivers 2.
   - name: Esquadrões
     channels:
-      - name: procurar-esquadrão
-        slowmode: 10
       - name: Hellpod Alfa
         type: voice
+      - name: procurar-esquadrão
+        topic: "Monte ou ache esquadrão: diga plataforma, dificuldade e horário. Marque @Democracia pra chamar quem quer jogar."
+        slowmode: 10
       - name: Hellpod Bravo
         type: voice
       - name: Hellpod Charlie
@@ -358,6 +370,7 @@ categories:
         send: allow
     channels:
       - name: alto-comando
+        topic: Conversa da staff. Também recebe os avisos do Discord pra moderadores.
         overrides:
           - role: GoodBot
             view: allow
@@ -366,6 +379,7 @@ categories:
           - role: "@everyone"
             view: deny
       - name: log-moderação
+        topic: Registro automático das punições e casos aplicados pelo Goodbot.
         overrides:
           - role: GoodBot
             view: allow
@@ -375,6 +389,7 @@ categories:
           - role: "@everyone"
             view: deny
       - name: log-mensagens
+        topic: Registro automático de mensagens editadas e apagadas.
         overrides:
           - role: GoodBot
             view: allow
@@ -384,6 +399,7 @@ categories:
           - role: "@everyone"
             view: deny
       - name: log-membros
+        topic: Registro automático de entradas, saídas e mudanças de cargo ou apelido.
         overrides:
           - role: GoodBot
             view: allow
@@ -393,6 +409,7 @@ categories:
           - role: "@everyone"
             view: deny
       - name: log-servidor
+        topic: Registro automático de mudanças em canais, cargos, emojis e configurações do servidor.
         overrides:
           - role: GoodBot
             view: allow
@@ -402,6 +419,7 @@ categories:
           - role: "@everyone"
             view: deny
       - name: log-voz
+        topic: Registro automático de quem entra, sai ou troca de canal de voz.
         overrides:
           - role: GoodBot
             view: allow
