@@ -5,6 +5,7 @@ import { DEFAULT_LOGS_CONFIG, LogsConfigSchema } from './logs';
 import { DEFAULT_MODERATION_CONFIG, ModerationConfigSchema } from './moderation';
 import { DEFAULT_REACTION_ROLES_CONFIG, ReactionRolesConfigSchema } from './reaction-roles';
 import { DEFAULT_SOCIAL_CONFIG, SocialConfigSchema } from './social';
+import { DEFAULT_SQUADS_CONFIG, SquadsConfigSchema } from './squads';
 import { DEFAULT_STATS_CONFIG, StatsConfigSchema } from './stats';
 import { DEFAULT_TAGS_CONFIG, TagsConfigSchema } from './tags';
 import { DEFAULT_TICKETS_CONFIG, TicketsConfigSchema } from './tickets';
@@ -29,6 +30,7 @@ export * from './tags';
 export * from './utilities';
 export * from './stats';
 export * from './social';
+export * from './squads';
 
 /** Módulo → schema Zod do jsonb `module_configs.config`. */
 export const MODULE_SCHEMAS = {
@@ -44,6 +46,7 @@ export const MODULE_SCHEMAS = {
   utilities: UtilitiesConfigSchema,
   stats: StatsConfigSchema,
   social: SocialConfigSchema,
+  squads: SquadsConfigSchema,
 } as const satisfies Record<Module, z.ZodType>;
 
 export type ModuleSchemas = typeof MODULE_SCHEMAS;
@@ -66,6 +69,7 @@ export const DEFAULT_MODULE_CONFIGS: { readonly [M in Module]: ModuleConfig<M> }
   utilities: DEFAULT_UTILITIES_CONFIG,
   stats: DEFAULT_STATS_CONFIG,
   social: DEFAULT_SOCIAL_CONFIG,
+  squads: DEFAULT_SQUADS_CONFIG,
 };
 
 /** Valida (e completa com defaults) o config de um módulo. Lança `ZodError`. */

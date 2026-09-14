@@ -9,3 +9,4 @@ export * from './errors';
 export * from './templates';
 export * from './config/index';
 export * from './api/index';
+export * from './squads/index';

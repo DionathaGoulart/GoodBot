@@ -17,6 +17,7 @@ export const MODULES = [
   'utilities',
   'stats',
   'social',
+  'squads',
 ] as const;
 export type Module = (typeof MODULES)[number];
 
@@ -173,6 +174,26 @@ export type ReactionRoleStyle = (typeof REACTION_ROLE_STYLES)[number];
 
 export const TICKET_STATUSES = ['open', 'closed'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
+
+/**
+ * Perfil de um jogador no módulo `squads`, um por jogo. `in_squad` é posto e
+ * tirado pelo bot (entrar ou sair de um squad); o jogador só escolhe entre
+ * procurar e pausar.
+ */
+export const SQUAD_PROFILE_STATUSES = ['searching', 'in_squad', 'paused'] as const;
+export type SquadProfileStatus = (typeof SQUAD_PROFILE_STATUSES)[number];
+
+/**
+ * `full` fica separado de `open` porque só a vaga de um squad `open` continua
+ * pesquisável pelo matcher. `archived` é o fim: canal só leitura, voice
+ * liberado, e não volta.
+ */
+export const SQUAD_STATUSES = ['open', 'full', 'archived'] as const;
+export type SquadStatus = (typeof SQUAD_STATUSES)[number];
+
+/** Pedido para entrar num squad que já existe: basta um membro aceitar. */
+export const SQUAD_REQUEST_STATUSES = ['pending', 'accepted', 'declined', 'expired'] as const;
+export type SquadRequestStatus = (typeof SQUAD_REQUEST_STATUSES)[number];
 
 /** As que descrevem um membro (PRD §5.5): entrada, saída e DM de boas-vindas. */
 export const MEMBER_TEMPLATE_VARIABLES = [
@@ -349,3 +370,75 @@ export const SOCIAL_KIND_HEADLINE: Record<SocialKind, string> = {
 export const SOCIAL_PLATFORM_LABEL: Record<SocialPlatform, string> = {
   youtube: 'YouTube',
 };
+
+// ── Squads (módulo `squads`) ────────────────────────────────────────────────
+
+/**
+ * As quatro faixas do dia na grade de disponibilidade, nesta ordem. A ordem é
+ * contrato: o índice da faixa entra no bit da grade (`dia * 4 + faixa`) e na
+ * coluna `block` do squad, então reordenar aqui embaralha toda grade já salva.
+ * Horário e rótulo de cada faixa é que são editáveis, no config do módulo.
+ */
+export const SQUAD_BLOCKS = ['morning', 'afternoon', 'evening', 'night'] as const;
+export type SquadBlock = (typeof SQUAD_BLOCKS)[number];
+
+/** Dias da grade: 0 = domingo até 6 = sábado, igual ao `Date#getDay`. */
+export const SQUAD_DAYS = 7;
+/** Células da grade (7 dias × 4 faixas). Cada célula é um bit da máscara. */
+export const SQUAD_CELLS = SQUAD_DAYS * SQUAD_BLOCKS.length;
+/**
+ * Maior máscara válida: os 28 bits ligados. Não cabe em `smallint` (16 bits),
+ * por isso a coluna no Postgres é `integer`.
+ */
+export const SQUAD_AVAILABILITY_MAX = 2 ** SQUAD_CELLS - 1;
+
+/**
+ * Tipos de campo que um jogo pode perguntar: `select` é uma escolha, `tags`
+ * são várias da mesma lista, `text` é livre. Texto livre nunca entra no match,
+ * porque comparar "PS5" com "playstation 5" seria adivinhar.
+ */
+export const SQUAD_FIELD_TYPES = ['select', 'text', 'tags'] as const;
+export type SquadFieldType = (typeof SQUAD_FIELD_TYPES)[number];
+
+/**
+ * Quanto um campo pesa no match. `hard` barra a dupla quando as respostas não
+ * batem (plataformas diferentes não jogam juntas); `soft` só soma pontos
+ * (dificuldade parecida ajuda, mas não impede); `none` é só informativo.
+ */
+export const SQUAD_FIELD_MATCH = ['hard', 'soft', 'none'] as const;
+export type SquadFieldMatch = (typeof SQUAD_FIELD_MATCH)[number];
+
+/**
+ * Nota de uma dupla: `faixas em comum × cell + campos soft que batem × soft`.
+ *
+ * Um campo soft vale três faixas porque o squad joga numa janela só por
+ * semana: a primeira faixa em comum é o requisito, as seguintes são folga de
+ * agenda. Com peso 3, a afinidade desempata agendas parecidas, mas cada campo
+ * soft só compensa três faixas a menos; quem divide muito mais horário ainda
+ * passa na frente.
+ */
+export const SQUAD_MATCH_WEIGHTS = { cell: 1, soft: 3 } as const;
+
+/** Tamanho de um squad: de uma dupla até dez jogadores. */
+export const MIN_SQUAD_SIZE = 2;
+export const MAX_SQUAD_SIZE = 10;
+/**
+ * Campos por jogo. O teto vem do Discord: um modal tem no máximo cinco
+ * componentes, e as perguntas do jogo cabem num modal só.
+ */
+export const MAX_SQUAD_GAME_FIELDS = 5;
+/** Opções de um campo `select` ou `tags`: um select do Discord mostra até 25. */
+export const MAX_SQUAD_FIELD_OPTIONS = 25;
+/** Rótulo de um campo: o label de um componente de modal tem até 45 caracteres. */
+export const MAX_SQUAD_FIELD_LABEL_LENGTH = 45;
+/** Uma opção vira `value` de select no Discord, que tem até 100 caracteres. */
+export const MAX_SQUAD_OPTION_LENGTH = 100;
+/** Resposta em texto livre, com o mesmo teto do input do modal. */
+export const MAX_SQUAD_TEXT_ANSWER_LENGTH = 100;
+/** Rótulo de uma faixa da grade ("Manhã", "Madrugada"). */
+export const MAX_SQUAD_BLOCK_LABEL_LENGTH = 32;
+/**
+ * Canais por servidor (limite do Discord). Cada squad gasta um canal de texto,
+ * então o painel mostra quanto do teto já foi usado.
+ */
+export const MAX_GUILD_CHANNELS = 500;
