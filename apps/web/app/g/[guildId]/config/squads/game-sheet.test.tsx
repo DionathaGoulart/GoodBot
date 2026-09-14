@@ -30,7 +30,10 @@ function addQuestion(label: string) {
   fireEvent.change(inputs[inputs.length - 1] as HTMLElement, { target: { value: label } });
 }
 
-describe('GameSheet', () => {
+// Sozinho o arquivo roda em ~2 s, mas no `pnpm test` da raiz ele divide a
+// máquina com os outros pacotes e o primeiro render do sheet passou dos 5 s
+// padrão do Vitest.
+describe('GameSheet', { timeout: 20_000 }, () => {
   beforeEach(() => {
     saveSquadGameAction.mockReset();
   });
