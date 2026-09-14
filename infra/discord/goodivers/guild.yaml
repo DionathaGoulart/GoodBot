@@ -212,17 +212,6 @@ categories:
           - role: "@everyone"
             view: allow
             send: deny
-      - name: alistamento
-        topic: Toque num cargo para pegar. Toque de novo para largar.
-        overrides:
-          - role: GoodBot
-            view: allow
-            send: allow
-          - role: Ministro
-            send: allow
-          - role: "@everyone"
-            view: allow
-            send: deny
       - name: recrutas
         topic: Recém-chegado? Diga oi e tire suas dúvidas por aqui.
         slowmode: 5

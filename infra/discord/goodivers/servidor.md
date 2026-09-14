@@ -3,7 +3,7 @@
 - **ID** `1316158165645000806`
 - **Membros** 11
 - **Dono** goodivers `270244055483547650`
-- **Varrido em** 14/09/2026, 09:20:10
+- **Varrido em** 14/09/2026, 09:45:39
 
 > Retrato do servidor na hora da varredura, gerado por `pnpm guild scan`.
 > Para reformar, edite o `guild.yaml` ao lado, rode `pnpm guild plan` para
@@ -41,7 +41,7 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
 
 **Cargos de bot** (o Discord não deixa editar): GoodBot
 
-## Canais (7 categorias, 30 canais)
+## Canais (7 categorias, 29 canais)
 
 ### Quartel-General
 
@@ -52,11 +52,6 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
   - `@everyone` — vê, não escreve
 - **#protocolos** · texto
   - _As regras do servidor. Leia antes de tudo._
-  - `GoodBot` — vê, escreve
-  - `Ministro` — escreve
-  - `@everyone` — vê, não escreve
-- **#alistamento** · texto
-  - _Toque num cargo para pegar. Toque de novo para largar._
   - `GoodBot` — vê, escreve
   - `Ministro` — escreve
   - `@everyone` — vê, não escreve
