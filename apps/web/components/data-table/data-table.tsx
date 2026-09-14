@@ -80,6 +80,8 @@ export interface DataTableProps<T extends Record<string, unknown>> {
   searchPlaceholder?: string;
   /** Filtros e botões da barra de ferramentas (§6.3). */
   toolbar?: React.ReactNode;
+  /** Barra de seleção em massa (§6.3): quando presente, ocupa o lugar da busca e da toolbar. */
+  selectionBar?: React.ReactNode;
   /** Texto do estado vazio (§8) e o CTA opcional ao lado. */
   emptyDescription?: string;
   emptyAction?: React.ReactNode;
@@ -102,6 +104,7 @@ export function DataTable<T extends Record<string, unknown>>({
   data,
   searchPlaceholder,
   toolbar,
+  selectionBar,
   emptyDescription = 'Nada para mostrar por aqui.',
   emptyAction,
   refetching = false,
@@ -135,7 +138,9 @@ export function DataTable<T extends Record<string, unknown>>({
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
-      {searchPlaceholder || toolbar ? (
+      {selectionBar ? (
+        <div className="sticky top-0 z-10 animate-enter">{selectionBar}</div>
+      ) : searchPlaceholder || toolbar ? (
         <div className="flex flex-wrap items-center gap-2">
           {searchPlaceholder ? (
             <Input

@@ -57,4 +57,29 @@ describe('DataTable', () => {
     expect(screen.getByText('regra-01')).toBeInTheDocument();
     expect(screen.queryByText('regra-02')).not.toBeInTheDocument();
   });
+
+  it('a barra de seleção toma o lugar da busca e da toolbar enquanto existe', () => {
+    const toolbar = <button type="button">NOVA</button>;
+    const { rerender } = render(
+      <DataTable
+        columns={COLUMNS}
+        data={rows(3)}
+        searchPlaceholder="BUSCAR"
+        toolbar={toolbar}
+        selectionBar={<p>2 SELECIONADOS</p>}
+      />,
+    );
+
+    expect(screen.getByText('2 SELECIONADOS')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('BUSCAR')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'NOVA' })).not.toBeInTheDocument();
+
+    rerender(
+      <DataTable columns={COLUMNS} data={rows(3)} searchPlaceholder="BUSCAR" toolbar={toolbar} />,
+    );
+
+    expect(screen.queryByText('2 SELECIONADOS')).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('BUSCAR')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'NOVA' })).toBeInTheDocument();
+  });
 });
