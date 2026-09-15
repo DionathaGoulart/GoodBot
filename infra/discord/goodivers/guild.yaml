@@ -12,8 +12,12 @@
 
 name: Goodivers
 roles:
-  - name: Goodivers
-    color: "#d4af37"
+  - name: General
+    color: "#f1c40f"
+    hoist: true
+  - name: Comandante
+    color: "#ff66db"
+    hoist: true
     permissions:
       - CreateInstantInvite
       - KickMembers
@@ -54,8 +58,9 @@ roles:
       - SendMessagesInThreads
       - ModerateMembers
       - SendPolls
-  - name: Ministro
-    color: "#e03c31"
+  - name: Almirante
+    color: "#9b59b6"
+    hoist: true
     permissions:
       - CreateInstantInvite
       - KickMembers
@@ -116,15 +121,9 @@ roles:
       - UseExternalStickers
       - SendMessagesInThreads
       - SendPolls
-  - name: Impulsionador
-    color: "#f47fff"
-    hoist: true
-  - name: Veterano
-    color: "#3498db"
-    permissions:
-      - MoveMembers
   - name: Helldiver
     color: "#2ecc71"
+    hoist: true
     permissions:
       - CreateInstantInvite
       - AddReactions
@@ -142,24 +141,11 @@ roles:
       - CreatePublicThreads
       - UseExternalStickers
       - SendMessagesInThreads
-  - name: Cidadão
-    color: "#95a5a6"
   - name: PC
   - name: PS5
+  - name: Xbox
   - name: Democracia
     mentionable: true
-  - name: General
-    color: "#f1c40f"
-    hoist: true
-  - name: Comandante
-    color: "#ff00c3"
-    hoist: true
-  - name: Cadete Espacial
-    color: "#3498db"
-    hoist: true
-  - name: Cadete
-    color: "#607d8b"
-    hoist: true
   - name: Youtube
     color: "#ff0000"
     mentionable: true
@@ -193,10 +179,10 @@ categories:
       - name: bem-vindos
         topic: Aviso automático de quem chega e de quem impulsiona o servidor.
         overrides:
-          - role: GoodBot
+          - role: Bots
             view: allow
             send: allow
-          - role: Ministro
+          - role: Almirante
             send: allow
           - role: "@everyone"
             view: allow
@@ -204,10 +190,10 @@ categories:
       - name: protocolos
         topic: As regras do servidor. Leia antes de tudo.
         overrides:
-          - role: GoodBot
+          - role: Bots
             view: allow
             send: allow
-          - role: Ministro
+          - role: Almirante
             send: allow
           - role: "@everyone"
             view: allow
@@ -224,14 +210,14 @@ categories:
         overrides:
           - role: Files
             view: allow
-          - role: GoodBot
+          - role: Bots
             view: allow
             send: allow
           - role: Youtube
             send: deny
           - role: Helldiver
             send: deny
-          - role: Ministro
+          - role: Almirante
             view: allow
             send: allow
           - role: "@everyone"
@@ -242,10 +228,10 @@ categories:
       - role: "@everyone"
         view: deny
         send: deny
-      - role: GoodBot
+      - role: Bots
         view: allow
         send: allow
-      - role: Ministro
+      - role: Almirante
         view: allow
         send: allow
       - role: Boletins
@@ -255,30 +241,30 @@ categories:
         type: announcement
         topic: Vídeos e lives novos do canal Goodivers, postados automaticamente pelo bot.
         overrides:
-          - role: "@everyone"
-            view: deny
-            send: deny
-          - role: GoodBot
+          - role: Boletins
+            view: allow
+          - role: Bots
             view: allow
             send: allow
           - role: Vídeos
             view: allow
-          - role: Ministro
+          - role: Almirante
             view: allow
             send: allow
           - role: Lives
             view: allow
-          - role: Boletins
-            view: allow
+          - role: "@everyone"
+            view: deny
+            send: deny
       - name: patch-notes
         topic: Notas de atualização oficiais do Helldivers 2, trazidas do Discord oficial do jogo.
         overrides:
           - role: Boletins
             view: allow
-          - role: GoodBot
+          - role: Bots
             view: allow
             send: allow
-          - role: Ministro
+          - role: Almirante
             view: allow
             send: allow
           - role: "@everyone"
@@ -290,10 +276,10 @@ categories:
           - role: "@everyone"
             view: deny
             send: deny
-          - role: GoodBot
+          - role: Bots
             view: allow
             send: allow
-          - role: Ministro
+          - role: Almirante
             view: allow
             send: allow
           - role: Boletins
@@ -301,40 +287,49 @@ categories:
       - name: comunicados-oficiais
         topic: "Anúncios oficiais do Helldivers 2: novidades, roadmap, eventos e pesquisas."
         overrides:
-          - role: Boletins
-            view: allow
-          - role: GoodBot
-            view: allow
-            send: allow
-          - role: Ministro
-            view: allow
-            send: allow
           - role: "@everyone"
             view: deny
             send: deny
+          - role: Bots
+            view: allow
+            send: allow
+          - role: Almirante
+            view: allow
+            send: allow
+          - role: Boletins
+            view: allow
   - name: Canal Goodivers
   - name: Área Social
     channels:
       - name: Zona de Combate¹
         type: voice
-      - name: clipes-e-prints
-        topic: Seus melhores clipes e prints do jogo. Divulgar canal ou live só vale aqui.
-        slowmode: 30
-      - name: Zona de Combate²
-        type: voice
-      - name: Comando Secreto
-        type: voice
-        overrides:
-          - role: Ministro
-            view: allow
-          - role: "@everyone"
-            view: deny
       - name: sala-de-comando
         topic: "Papo geral sobre Helldivers 2: estratégias, builds, dúvidas e novidades."
-      - name: Criogenia
+        overrides:
+          - role: "@everyone"
+            view: allow
+      - name: Zona de Combate²
         type: voice
       - name: off-topic
         topic: Conversa livre sobre qualquer assunto fora do Helldivers 2.
+        overrides:
+          - role: "@everyone"
+            view: allow
+      - name: Comando Secreto
+        type: voice
+        overrides:
+          - role: Almirante
+            view: allow
+          - role: "@everyone"
+            view: deny
+      - name: clipes-e-prints
+        topic: Seus melhores clipes e prints do jogo. Divulgar canal ou live só vale aqui.
+        slowmode: 30
+        overrides:
+          - role: "@everyone"
+            view: allow
+      - name: Criogenia
+        type: voice
   - name: Esquadrões
     channels:
       - name: Hellpod Alfa
@@ -343,6 +338,7 @@ categories:
         topic: Aqui só o Goodbot escreve. Clique no botão do jogo na mensagem fixada pra montar seu perfil e achar esquadrão.
         overrides:
           - role: "@everyone"
+            view: allow
             send: deny
       - name: Hellpod Bravo
         type: voice
@@ -352,7 +348,7 @@ categories:
         type: voice
   - name: Squads
     overrides:
-      - role: GoodBot
+      - role: Bots
         view: allow
         send: allow
       - role: "@everyone"
@@ -361,68 +357,68 @@ categories:
     overrides:
       - role: "@everyone"
         view: deny
-      - role: Ministro
+      - role: Almirante
         view: allow
-      - role: GoodBot
+      - role: Bots
         view: allow
         send: allow
     channels:
       - name: alto-comando
         topic: Conversa da staff. Também recebe os avisos do Discord pra moderadores.
         overrides:
-          - role: GoodBot
+          - role: Bots
             view: allow
-          - role: Ministro
+          - role: Almirante
             view: allow
           - role: "@everyone"
             view: deny
       - name: log-moderação
         topic: Registro automático das punições e casos aplicados pelo Goodbot.
         overrides:
-          - role: GoodBot
+          - role: Bots
             view: allow
             send: allow
-          - role: Ministro
+          - role: Almirante
             view: allow
           - role: "@everyone"
             view: deny
       - name: log-mensagens
         topic: Registro automático de mensagens editadas e apagadas.
         overrides:
-          - role: GoodBot
+          - role: Bots
             view: allow
             send: allow
-          - role: Ministro
+          - role: Almirante
             view: allow
           - role: "@everyone"
             view: deny
       - name: log-membros
         topic: Registro automático de entradas, saídas e mudanças de cargo ou apelido.
         overrides:
-          - role: GoodBot
+          - role: Bots
             view: allow
             send: allow
-          - role: Ministro
+          - role: Almirante
             view: allow
           - role: "@everyone"
             view: deny
       - name: log-servidor
         topic: Registro automático de mudanças em canais, cargos, emojis e configurações do servidor.
         overrides:
-          - role: GoodBot
+          - role: Bots
             view: allow
             send: allow
-          - role: Ministro
+          - role: Almirante
             view: allow
           - role: "@everyone"
             view: deny
       - name: log-voz
         topic: Registro automático de quem entra, sai ou troca de canal de voz.
         overrides:
-          - role: GoodBot
+          - role: Bots
             view: allow
             send: allow
-          - role: Ministro
+          - role: Almirante
             view: allow
           - role: "@everyone"
             view: deny
