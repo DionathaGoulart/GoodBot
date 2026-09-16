@@ -176,10 +176,11 @@ Um não substitui o outro: deixar o de lives vazio significa live sem ping.
 
 ## Squads
 
-Squad fixo: o mesmo grupo, no mesmo horário, toda semana. Quem procura monta um
+Squad fixo: o mesmo grupo, que marca jogatina quando quer. Quem procura monta um
 perfil com a agenda da semana, o bot cruza os perfis compatíveis, propõe o grupo
-e dá a cada squad um canal privado e um voice reservado na hora da sessão. O
-módulo serve a qualquer jogo: jogos e perguntas do perfil são cadastrados no
+e dá a cada squad um canal privado com um guia fixo. A agenda serve só para o
+match: a hora de jogar é o squad que marca, com `/bora` ou o botão `BORA`, e o
+bot chama o grupo e reserva um voice na hora. O módulo serve a qualquer jogo: jogos e perguntas do perfil são cadastrados no
 painel, em **Squads > `JOGOS`**.
 
 **Entrar.** A mensagem fixa do canal de busca tem um botão por jogo ligado. O
@@ -189,52 +190,76 @@ faixas (manhã, tarde, noite e madrugada), numa mensagem efêmera com um select 
 faixa. Salvar a grade é o "quero procurar": o perfil entra na busca e o match
 roda na hora.
 
-| Comando           | O que faz                                                       |
-| ----------------- | --------------------------------------------------------------- |
-| `/squad perfil`   | abre o mesmo perfil do botão                                    |
-| `/squad status`   | procurando ou pausado; procurar exige grade marcada             |
-| `/squad procurar` | squads com vaga nos seus horários, com botão para pedir entrada |
-| `/squad sair`     | sai do squad; o último a sair arquiva                           |
-| `/squad renomear` | só quem é do squad                                              |
-| `/squad painel`   | admin: publica ou reedita a mensagem fixa                       |
+| Comando                  | O que faz                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| `/bora [quando] [squad]` | marca uma jogatina (`agora`, `hoje 21h`, `sex 22h`); sem "quando", abre o modal |
+| `/squad perfil`          | abre o mesmo perfil do botão                                                    |
+| `/squad status`          | procurando ou pausado; procurar exige grade marcada                             |
+| `/squad procurar`        | squads com vaga nos seus horários, com botão para pedir entrada                 |
+| `/squad sair`            | sai do squad; o último a sair arquiva                                           |
+| `/squad renomear`        | só quem é do squad                                                              |
+| `/squad painel`          | admin: publica ou reedita a mensagem fixa                                       |
+
+Os comandos são atalho: tudo o que eles fazem está também num botão de uma
+mensagem do bot (mensagem fixa, guia do squad, mensagem da jogatina).
 
 **Match.** Só entre perfis que estão procurando, no mesmo jogo. Cada célula da
 grade em comum vale 1 ponto e cada resposta igual num campo "pesa no match" vale
 3; resposta diferente num campo "precisa bater" separa a dupla, e texto livre
-nunca conta. O grupo inteiro precisa dividir pelo menos uma célula, que vira a
-janela semanal do squad. A mesma dupla não é proposta de novo por 14 dias
+nunca conta. O grupo inteiro precisa dividir pelo menos uma célula, para ter um
+horário em que todos joguem juntos. A mesma dupla não é proposta de novo por 14 dias
 (`reproposeCooldownDays`). Antes de propor grupo novo, o matcher olha as vagas
-dos squads abertos: o candidato vira um pedido de entrada no canal do squad, e
-só fica sabendo quando for aceito.
+dos squads abertos: quem divide uma célula com gente suficiente do squad para
+fechar uma party vira um pedido de entrada no canal do squad, e só fica sabendo
+quando for aceito.
 
 **Proposta sem líder.** Cada grupo recebe uma thread privada no canal de busca,
-com `ACEITO` e `PASSO`. O primeiro aceite cria o squad, cada aceite seguinte
+com `ACEITO` e `PASSO`, e mostra em que horário a turma bate (só informação: o
+squad não tem horário fixo). O primeiro aceite cria o squad, cada aceite seguinte
 ocupa uma vaga e quem passou fica de fora. Sem nenhum aceite a proposta fecha em
 72 h (`proposalTtlHours`), e o pedido de entrada vence no mesmo prazo. No pedido
 basta um membro aceitar; ele só é recusado quando todos recusam.
 
-**A casa do squad.** Um canal de texto privado na categoria escolhida. Voice não
-se cria por squad: os voices do pool (os Hellpods, no Goodivers) são emprestados
-na hora, porque o Discord só deixa renomear canal duas vezes a cada dez minutos
-e o servidor tem teto de 500 canais. Meia hora antes da sessão
-(`reminderMinutesBefore`) sai o lembrete com `VOU` e `NÃO VOU`, e um voice livre
-do pool fica reservado: `@everyone` sem `Connect`, os membros com. Na hora, quem
-está em outro voice é movido e quem não está em nenhum é chamado. No fim da
-faixa, ou quando o voice esvazia depois do início, as permissões voltam
-exatamente ao que eram. Com o pool todo ocupado a sessão acontece sem sala, e o
-lembrete avisa.
+**A casa do squad.** Um canal de texto privado na categoria escolhida. A primeira
+mensagem dele é o **guia**, pinado: membros e vagas, sala preferida, próximas
+jogatinas e os botões `BORA`, `RENOMEAR`, `PROCURAR OUTRO SQUAD` (quando o
+servidor deixa estar em mais de um squad) e `SAIR DO SQUAD`. O bot reedita o
+guia a cada mudança e publica de novo se alguém o apagar. Voice não se cria por
+squad: os voices do pool (os Hellpods, no Goodivers) são emprestados por
+jogatina, porque o Discord só deixa renomear canal duas vezes a cada dez minutos
+e o servidor tem teto de 500 canais.
+
+**Jogatina.** Quem quer jogar aperta `BORA` no guia (um campo só, "quando") ou
+usa `/bora hoje 21h`. O bot entende `agora`, `hoje 21h`, `hoje 21:30`,
+`amanhã 20h`, `sex 22h`, `dom 15h` e `16/09 21h`, no fuso do servidor, e o
+autocomplete mostra o que ele entendeu antes de enviar. Quem marcou já vai. A
+mensagem da jogatina chama o squad e tem `VOU`, `NÃO VOU` e `CANCELAR`; ela dura
+3 h (`sessionHours`) e cada squad tem até 5 marcadas (`maxUpcomingSessions`).
+Meia hora antes (`reminderMinutesBefore`) um voice livre do pool fica reservado
+(`@everyone` sem `Connect`, os membros com) e sai um lembrete curto. Jogatina
+marcada para daqui a pouco já sai com sala; marcada para `agora`, já começa. Na
+hora, quem está em outro voice é movido e quem não está em nenhum é chamado. No
+fim da jogatina, ou quando o voice esvazia depois do início, as permissões
+voltam exatamente ao que eram. Com o pool todo ocupado a jogatina acontece sem
+sala, e o lembrete avisa.
+
+`CANCELAR` vale antes do início, para quem marcou ou para qualquer membro
+enquanto ninguém mais confirmou. Depois do início, a mensagem ganha `REPETIR`,
+que marca a mesma hora na semana seguinte. Não há jogatina automática: a rotina
+é o `REPETIR`.
 
 > O retrato das permissões do voice mora em `squad_sessions`, não em
 > `channel_locks`: um `/lock` num voice reservado trocaria o que a liberação
 > restaura.
 
-**Ciclo de vida.** `VOU`, presença no voice reservado e `AINDA JOGAMOS` contam
-como sinal de vida. Sem nenhum por 4 semanas (`inactiveWeeks`), o squad recebe um
+**Ciclo de vida.** Marcar jogatina, `VOU`, presença no voice reservado e
+`AINDA JOGAMOS` contam como sinal de vida. Sem nenhum por 4 semanas (`inactiveWeeks`), o squad recebe um
 aviso; sem resposta em 7 dias, é arquivado: canal só leitura, voice liberado,
 pedidos e propostas encerrados e perfis pausados.
 
 Quem move tudo isso é o job `squads`, a cada 5 minutos, em cada servidor com o
-módulo ligado. O passo diário (inatividade e um match novo) roda uma vez por
+módulo ligado: lembra, reserva, começa e libera as jogatinas, mas nunca marca
+uma. O passo diário (inatividade, guias em dia e um match novo) roda uma vez por
 dia, depois das 12 h no fuso do servidor, para ninguém ser chamado de madrugada.
 
 **Pelo painel.** Em **Squads > `JOGADORES`** o admin vê, por jogo, todos os
@@ -260,10 +285,11 @@ fora do servidor), a ação vale do mesmo jeito e o aviso do painel diz que a
 pessoa não foi avisada. Quem é tirado de um squad some do canal, e o canal fica
 sabendo que foi a staff, sem o motivo.
 
-> O bot precisa de `Connect`, `Speak` e `CreatePrivateThreads`. Sem elas o match
-> não abre a thread da proposta e a reserva do voice é pulada, com aviso no log
-> em vez de erro. O link de convite pede as três; num servidor que convidou o
-> bot antes disso, dê as três ao cargo dele à mão.
+> O bot precisa de `Connect`, `Speak`, `CreatePrivateThreads` e `PinMessages`.
+> Sem elas o match não abre a thread da proposta, a reserva do voice é pulada e o
+> guia sai sem pin, com aviso no log em vez de erro. O link de convite pede as
+> quatro; num servidor que convidou o bot antes disso, dê ao cargo dele à mão as
+> que faltarem.
 
 ---
 

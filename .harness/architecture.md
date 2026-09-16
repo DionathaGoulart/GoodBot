@@ -130,8 +130,8 @@ src/
                   demo-expiry (avisa quem convidou, se despede e sai quando a
                   demo vence), pending-expiry (recusa o convite parado uma
                   semana na fila, avisa, sai e marca `expired`), squads
-                  (sessões da semana, lembrete, voice reservado e o passo
-                  diário de inatividade e match)
+                  (lembrete, voice reservado e início das jogatinas, e o
+                  passo diário de inatividade, guias e match)
   lib/            utilitários sem estado: embeds, template, cooldown, purge,
                   channels (onde o bot pode falar), guild-setup,
                   inviter-dm (todo o texto dos avisos a quem convidou)...
@@ -152,7 +152,7 @@ fino: valida entrada, chama um service, responde. Os principais:
 | `AutomodService`          | avalia mensagem contra as regras ligadas                   |
 | `StatsService`            | acumula buckets em memória e faz flush periódico           |
 | `TicketService`           | abertura, transcript e fechamento                          |
-| `SquadService`            | squads fixos: perfil, match, propostas, casa e sessões     |
+| `SquadService`            | squads fixos: perfil, match, propostas, casa, guia, jogatinas |
 | `ReactionRoleService`     | painéis por botão, menu ou reação                          |
 | `AuditService`            | trilha do que o bot e o painel fizeram                     |
 | `Scheduler`               | executa `scheduled_actions` (tempban, lembrete, unlock)    |
@@ -580,16 +580,27 @@ botão da mensagem fixa ─▶ interactions/squads.ts ─▶ modal (respostas)
   ─▶ perfil `searching` ─▶ MatcherService.runFor(guild, jogo)
   ─▶ proposeGroups (shared, puro) ─▶ thread privada + Aceito/Passo + INSERT squad_proposals
   ─▶ primeiro "Aceito": uma transação cria `squads` e reivindica a proposta
-  ─▶ canal privado na categoria ─▶ SquadsJob (5 min) agenda squad_sessions
-  ─▶ lembrete + reserva do voice (snapshot na sessão) ─▶ na hora, move os membros
-  ─▶ fim da faixa: restaura os overwrites e só então marca liberado
+  ─▶ canal privado na categoria ─▶ GuideService.publish (guia pinado, chama os membros)
 ```
 
-Três coisas nesse caminho não são gosto:
+**Uma jogatina**
 
-- **A regra mora em `shared`, o efeito no bot.** `squads/availability.ts` e
-  `squads/match.ts` são puros: máscara da grade, próxima sessão no fuso da guild
-  (com horário de verão) e agrupamento determinístico. O painel e os testes usam
+```
+/bora hoje 21h (commands/community/bora.ts) ou BORA no guia ─▶ modal (quando)
+  ─▶ SessionService.scheduleFromText ─▶ parseWhen (shared, fuso da guild)
+  ─▶ INSERT squad_sessions (quem marcou já vai) ─▶ mensagem com VOU / NÃO VOU / CANCELAR
+  ─▶ GuideService.refresh ─▶ SquadsJob (5 min): lembrete + reserva do voice (snapshot na jogatina)
+  ─▶ na hora, move os membros ─▶ voiceStateUpdate (events/community/squads-voice.ts) marca played_at
+  ─▶ fim da jogatina ou voice vazio: restaura os overwrites e só então marca liberado
+  ─▶ REPETIR marca a mesma hora na semana seguinte
+```
+
+Três coisas nesses caminhos não são gosto:
+
+- **A regra mora em `shared`, o efeito no bot.** `squads/availability.ts`,
+  `squads/match.ts`, `squads/when.ts` e `squads/zoned.ts` são puros: máscara da
+  grade, agrupamento determinístico, "cabe no squad" (`fitsSquad`), o "quando"
+  do `/bora` e o relógio de parede no fuso da guild (com horário de verão). O painel e os testes usam
   as mesmas funções, sem Discord nem banco.
 - **A trava é do banco, não da memória.** Botão é clicado duas vezes e por
   várias pessoas ao mesmo tempo, e o job passa de novo a cada 5 minutos. Todo
@@ -686,6 +697,8 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | mexer no banco                    | `packages/db/src/schema/` → `db:generate` → revisar SQL → `db:migrate`   |
 | tarefa periódica                  | `apps/bot/src/jobs/` + registrar no `Scheduler`                          |
 | mexer em squads fixos             | `apps/bot/src/services/squads/` (fachada no `index.ts`) + regra pura em `shared/src/squads/` |
+| mexer na jogatina (`/bora`)       | `apps/bot/src/services/squads/sessions.ts` + "quando" em `packages/shared/src/squads/when.ts` |
+| mexer no guia fixo do squad       | `apps/bot/src/services/squads/guide.ts` (texto em `guideMessage`, `embeds.ts`) |
 | mexer no match manual             | `apps/bot/src/services/squads/manual.ts` + regra pura em `packages/shared/src/squads/manual.ts` |
 | mexer na gestão de jogadores      | `apps/bot/src/services/squads/players.ts` (texto da DM em `embeds.ts`)   |
 | entender um servidor              | `pnpm guild scan "<nome>"` → `infra/discord/<slug>/servidor.md`          |

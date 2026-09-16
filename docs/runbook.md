@@ -268,6 +268,27 @@ Se os IPs variam muito (botnet), rotacione o `INTERNAL_API_TOKEN` — ele é a
 
 ---
 
+## Squads: depois de subir a jogatina sob demanda (v1.6)
+
+A migration `0014` tira a janela semanal dos squads (`day` e `block` ficam
+nulos) e o job para de agendar sessão. Nada precisa ser feito à mão, mas o que
+se vê nas primeiras horas é diferente do normal:
+
+- **Aba SQUADS com "o bot não respondeu" por alguns minutos.** O deploy sobe o
+  painel e o bot em paralelo depois da migration; o painel antigo não entende o
+  retrato novo do bot. Some quando os dois terminam.
+- **Squads antigos sem guia.** O guia fixo de quem já existia sai no passo
+  diário do job, depois das 12 h no fuso do servidor. Para adiantar, qualquer
+  mudança no squad (alguém marcar jogatina, renomear) publica o guia na hora.
+- **Guia sem pin.** O servidor convidou o bot antes de ele pedir
+  `PinMessages`. Dê "Fixar mensagens" ao cargo do bot; o log mostra
+  `guia do squad sem pin: falta PinMessages no canal` enquanto faltar.
+- **Sessões semanais já marcadas continuam.** Viram jogatinas sem autor
+  (`created_by` nulo), com lembrete, voice e votos como antes. Depois delas,
+  nenhuma nova nasce sozinha.
+
+---
+
 ## Checklist mensal
 
 - [ ] **Painel do dono:** `admin.<dominio>` — a tela de **Saúde** junta RAM

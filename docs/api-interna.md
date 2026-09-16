@@ -89,28 +89,28 @@ validação Zod) e `retryAfter` quando o 503 veio de rate limit.
 
 ## 4. Rotas
 
-| Grupo         | O que dá                                                                                                                                                                                                                 |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `guild`       | perfil, settings, ícone, banner, audit log                                                                                                                                                                               |
-| `bot-profile` | apelido, foto, capa e bio do bot **neste** servidor                                                                                                                                                                      |
-| `channels`    | listar, criar, editar, apagar, lock/unlock, slowmode, overrides                                                                                                                                                          |
-| `roles`       | listar (`?counts=1` conta membros), criar, editar, apagar, mover                                                                                                                                                         |
-| `members`     | listar, detalhe, cargos de um membro, `lookup?ids=` (até 100 IDs de uma vez, com `missing` e `unresolved`)                                                                                                               |
-| `messages`    | enviar, histórico, apagar, publicar/despublicar painel                                                                                                                                                                   |
-| `moderation`  | ban, unban, listar bans, ações de moderação                                                                                                                                                                              |
-| `cases`       | listar, editar e apagar caso                                                                                                                                                                                             |
-| `invites`     | listar, criar, revogar                                                                                                                                                                                                   |
-| `events`      | eventos agendados: listar, criar, editar, apagar                                                                                                                                                                         |
-| `expressions` | emojis e stickers: criar, editar, apagar                                                                                                                                                                                 |
-| `automod`     | estado e ativação do modo anti-raid                                                                                                                                                                                      |
-| `config`      | invalidar o cache de config de um módulo                                                                                                                                                                                 |
-| `commands`    | listar os comandos registrados                                                                                                                                                                                           |
-| `social`      | contas de rede social e teste de anúncio                                                                                                                                                                                 |
-| `squads`      | retrato do módulo, mensagem fixa, match, arquivar e renomear; match manual (revisar e propor, §4.4); tirar do squad, status, respostas e apagar perfil (`reason` obrigatório, `notified` na resposta diz se a DM chegou) |
-| `admin`       | painel do dono: guilds, expulsar, broadcast, manutenção, resync                                                                                                                                                          |
-| `registry`    | o aviso por DM a quem convidou o bot (ciclo de vida do convite)                                                                                                                                                          |
-| `metrics`     | contadores em formato Prometheus                                                                                                                                                                                         |
-| `health`      | **sem auth** — estado do gateway, banco e último backup                                                                                                                                                                  |
+| Grupo         | O que dá                                                                                                                                                                                                                                                                                             |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `guild`       | perfil, settings, ícone, banner, audit log                                                                                                                                                                                                                                                           |
+| `bot-profile` | apelido, foto, capa e bio do bot **neste** servidor                                                                                                                                                                                                                                                  |
+| `channels`    | listar, criar, editar, apagar, lock/unlock, slowmode, overrides                                                                                                                                                                                                                                      |
+| `roles`       | listar (`?counts=1` conta membros), criar, editar, apagar, mover                                                                                                                                                                                                                                     |
+| `members`     | listar, detalhe, cargos de um membro, `lookup?ids=` (até 100 IDs de uma vez, com `missing` e `unresolved`)                                                                                                                                                                                           |
+| `messages`    | enviar, histórico, apagar, publicar/despublicar painel                                                                                                                                                                                                                                               |
+| `moderation`  | ban, unban, listar bans, ações de moderação                                                                                                                                                                                                                                                          |
+| `cases`       | listar, editar e apagar caso                                                                                                                                                                                                                                                                         |
+| `invites`     | listar, criar, revogar                                                                                                                                                                                                                                                                               |
+| `events`      | eventos agendados: listar, criar, editar, apagar                                                                                                                                                                                                                                                     |
+| `expressions` | emojis e stickers: criar, editar, apagar                                                                                                                                                                                                                                                             |
+| `automod`     | estado e ativação do modo anti-raid                                                                                                                                                                                                                                                                  |
+| `config`      | invalidar o cache de config de um módulo                                                                                                                                                                                                                                                             |
+| `commands`    | listar os comandos registrados                                                                                                                                                                                                                                                                       |
+| `social`      | contas de rede social e teste de anúncio                                                                                                                                                                                                                                                             |
+| `squads`      | retrato do módulo (cada squad com as jogatinas que ainda não acabaram, em `upcomingSessions`), mensagem fixa, match, arquivar e renomear; match manual (revisar e propor, §4.4); tirar do squad, status, respostas e apagar perfil (`reason` obrigatório, `notified` na resposta diz se a DM chegou) |
+| `admin`       | painel do dono: guilds, expulsar, broadcast, manutenção, resync                                                                                                                                                                                                                                      |
+| `registry`    | o aviso por DM a quem convidou o bot (ciclo de vida do convite)                                                                                                                                                                                                                                      |
+| `metrics`     | contadores em formato Prometheus                                                                                                                                                                                                                                                                     |
+| `health`      | **sem auth** — estado do gateway, banco e último backup                                                                                                                                                                                                                                              |
 
 Os schemas de request e response de cada uma estão em
 `packages/shared/src/api/`.
@@ -179,7 +179,7 @@ bot, não a tela:
 
 1. `POST /guilds/:guildId/squads/games/:gameId/manual/check` com
    `{ actorId, userIds }` (2 a 10 pessoas, sem repetição) não escreve nada.
-   Devolve as duplas com nota, a janela sugerida (`slot`), `blocks` e
+   Devolve as duplas com nota, a célula em comum com mais gente (`slot`), `blocks` e
    `warnings`, cada item com uma `key` estável (`CODE`, `CODE:userId` ou
    `CODE:idA:idB`). Tem teto próprio de 60/min por guild, porque revisar não
    manda nada ao Discord.
@@ -191,10 +191,10 @@ bot, não a tela:
 
 As duas recusas são diferentes de propósito:
 
-| Status | Código                     | Quer dizer                                                                                   | O cliente faz                     |
-| ------ | -------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------- |
-| 422    | `MANUAL_MATCH_BLOCKED`     | a turma não serve: sem perfil, fora do servidor, já em squad ou proposta do jogo, sem janela | muda a seleção                    |
-| 409    | `MANUAL_MATCH_UNCONFIRMED` | apareceu aviso fora de `confirmedWarnings`: a situação mudou desde a revisão                 | revisa de novo e mostra os avisos |
+| Status | Código                     | Quer dizer                                                                                             | O cliente faz                     |
+| ------ | -------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| 422    | `MANUAL_MATCH_BLOCKED`     | a turma não serve: sem perfil, fora do servidor, já em squad ou proposta do jogo, sem horário em comum | muda a seleção                    |
+| 409    | `MANUAL_MATCH_UNCONFIRMED` | apareceu aviso fora de `confirmedWarnings`: a situação mudou desde a revisão                           | revisa de novo e mostra os avisos |
 
 Reenviar as `key`s de uma revisão antiga não passa por cima de aviso novo,
 porque ele traz uma `key` que não estava na lista. É isso que torna o clique

@@ -1,7 +1,18 @@
 # Goodbot — PRD (Product Requirements Document)
 
-Versão 1.5 · 2026-09-14 · Documento de referência para todas as sessões.
+Versão 1.6 · 2026-09-16 · Documento de referência para todas as sessões.
 Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (UI).
+
+> **v1.6: jogatina sob demanda.** O squad deixou de ter janela semanal fixa:
+> a grade do perfil serve só para o match, e quem marca a hora de jogar é o
+> próprio squad, com `/bora` ou o botão **BORA**. A sessão semanal automática
+> saiu; **REPETIR** cobre a rotina. Cada squad ganhou um guia fixo, pinado no
+> canal, com membros, próximas jogatinas e os botões do squad, e por isso o
+> convite passou a pedir `PinMessages`. O que mudou no documento: §5.11
+> (proposta, pedido de entrada, jogatina, guia, ciclo de vida e relógio), a
+> página na §6.2, `squads` e `squad_sessions` na §8, `/bora` na §9.1, a §10 e
+> um risco na §11. O que **não** mudou: o perfil, o match manual, a gestão de
+> jogadores e os outros módulos.
 
 > **v1.5: squads fixos.** Entrou o módulo `squads` (§5.11): perfil de jogador
 > com a agenda da semana, match por horário, proposta sem líder, canal privado
@@ -532,10 +543,11 @@ aprovação é o que segura isso — e a demo que expira sozinha também.
 
 ### 5.11 Squads fixos
 
-Quem quer jogar sempre com o mesmo grupo, no mesmo horário, não tinha como
-achar gente com a mesma agenda: o pedido no canal de busca sumia no chat. O
-módulo `squads` guarda a agenda de cada jogador, cruza os perfis e monta o
-squad sem precisar de líder. Ele serve a qualquer jogo, porque o jogo e as
+Quem quer jogar sempre com o mesmo grupo não tinha como achar gente com a
+mesma agenda: o pedido no canal de busca sumia no chat. O módulo `squads`
+guarda a agenda de cada jogador, cruza os perfis e monta o squad sem precisar
+de líder. A agenda acerta **quem** joga junto; **quando** jogar é o squad que
+marca, jogatina a jogatina. Ele serve a qualquer jogo, porque o jogo e as
 perguntas do perfil são cadastro do painel (§6.2).
 
 **Perfil.** Um por pessoa e por jogo, com três partes:
@@ -568,8 +580,8 @@ perde uma grade pela metade.
 abaixo do teto de squads por pessoa (`maxSquadsPerUser`, padrão 1). Cada célula
 em comum vale 1 ponto e cada resposta igual em campo `soft` vale 3; campo
 `hard` diferente impede a dupla. Um grupo precisa dividir **pelo menos uma
-célula como grupo**, porque sobreposição dupla a dupla não garante uma janela
-comum. O resultado é determinístico: os mesmos perfis, em qualquer ordem,
+célula como grupo**, porque sobreposição dupla a dupla não garante um horário
+em que todos joguem juntos. O resultado é determinístico: os mesmos perfis, em qualquer ordem,
 formam os mesmos grupos. A mesma dupla não é reproposta no mesmo jogo antes de
 `reproposeCooldownDays` (14). Antes de propor grupo novo, o matcher preenche as
 vagas dos squads `open` com pedidos de entrada (abaixo). Ele roda ao salvar a
@@ -581,8 +593,9 @@ cargo inteiro para dentro dela, e por isso o cargo de ping (`pingRoleId`) é só
 da mensagem fixa pública, e só no primeiro envio. A mensagem tem **Aceito /
 Passo**:
 
-- o **primeiro aceite cria o squad**, com a janela semanal na célula com mais
-  gente entre quem não passou;
+- o **primeiro aceite cria o squad**. Squad não tem horário fixo: a mensagem
+  mostra a célula com mais gente entre quem não passou ("vocês batem em"), só
+  como informação;
 - cada aceite seguinte ocupa uma vaga, e quem passou fica de fora; cheio, o
   squad vira `full`;
 - a proposta fecha quando todos decidiram, quando o squad enche ou em
@@ -595,9 +608,11 @@ mesmo motivo: criar o canal primeiro deixaria um canal órfão a cada corrida
 perdida.
 
 **Pedido de entrada.** Vaga de squad `open` continua pesquisável.
-`/squad procurar` lista os squads em que a pessoa cabe (vaga livre, janela
-marcada na grade dela, nenhum `hard` batendo de frente com um membro) e oferece
-o pedido. O pedido aparece no canal privado do squad com **Aceitar /
+`/squad procurar` lista os squads em que a pessoa cabe (vaga livre, grade que
+dá party com os membros, nenhum `hard` batendo de frente com um membro) e
+oferece o pedido. Dar party é existir uma célula que a pessoa divide com pelo
+menos `min(tamanho do squad, membros) - 1` membros (`fitsSquad`, em `shared`);
+o matcher usa a mesma regra para preencher vaga. O pedido aparece no canal privado do squad com **Aceitar /
 Recusar**: **basta um aceite**, e ele só é recusado quando todos os membros
 recusaram. O pedido que o matcher cria sozinho é silencioso para o candidato até
 ser aceito. Pedido vence no mesmo prazo da proposta, e pedido recusado ou
@@ -610,37 +625,82 @@ Discord: canal só pode ser renomeado duas vezes a cada dez minutos, e o servido
 tem teto de 500 canais (o painel mostra o contador). O nome do squad vai no
 canal de texto e nos embeds; voice do pool **nunca** é renomeado.
 
-**Sessão semanal.** O job agenda a sessão da semana de cada squad `open|full`
-no fuso da guild (`guild_settings.timezone`), atravessando virada de semana e
-horário de verão. `reminderMinutesBefore` (30) antes do início:
+**Guia fixo.** A primeira mensagem do canal do squad, pinada: membros e vagas,
+sala preferida, próximas jogatinas (quando e quantos vão), um "como usar" e os
+botões **BORA**, **RENOMEAR**, **PROCURAR OUTRO SQUAD** (só quando
+`maxSquadsPerUser` passa de 1) e **SAIR DO SQUAD**. Ele nasce junto com o
+canal, chamando os membros, e é reeditado a cada mudança que mostra: entrada e
+saída de membro, jogatina marcada, votada, começada ou cancelada, nome novo e
+arquivamento (que o troca por um aviso sem botões). Guia apagado é publicado de
+novo na mudança seguinte; falha passageira do Discord não republica, porque dois
+guias no canal são piores que um desatualizado. O passo diário do job põe todos
+os guias em dia, o que cobre squads anteriores ao guia e jogatinas que já
+acabaram. Pinar exige `PinMessages` no canal; sem ela o guia fica no ar sem pin
+e o log avisa.
+
+A regra do módulo é **botão antes de comando**: toda ação do fluxo está num
+botão, select ou modal de uma mensagem que o bot já deixou na frente da pessoa
+(guia, jogatina, proposta, mensagem fixa). O comando é atalho, nunca o único
+caminho.
+
+**Jogatina.** Quem marca é gente: `/bora [quando] [squad]` ou o botão **BORA**
+do guia, que abre um modal com um campo só. O "quando" é texto livre lido no
+fuso da guild (`guild_settings.timezone`, com horário de verão) por
+`parseWhen`, em `shared`: `agora`, `hoje 21h`, `hoje 21:30`, `amanhã 20h`,
+`sex 22h`, `sexta 22h`, `dom 15h`, `16/09 21h`. O erro sempre ensina, com
+exemplos, e horário que já passou sugere o do dia seguinte. Sem "quando", o
+`/bora` abre o mesmo modal; com, o autocomplete ecoa o que o bot entendeu antes
+de enviar. Dentro do canal de um squad o padrão é esse squad.
+
+Marcar uma jogatina grava a linha em `squad_sessions` com quem marcou
+(`created_by`, que já entra como "vou") e o fim em `starts_at + sessionHours`
+(3 h); anuncia no canal do squad chamando os membros, com **VOU / NÃO VOU /
+CANCELAR** e a contagem viva de quem vai, quem não vai e quem não respondeu; e
+atualiza o guia. Dois pedidos para o mesmo minuto viram uma jogatina só (índice
+único), e quem chegou depois vira "vou" nela. Cada squad tem no máximo
+`maxUpcomingSessions` (5) jogatinas marcadas. Marcada para dentro da
+antecedência do lembrete, a jogatina já sai com sala; marcada para `agora`, já
+começa.
+
+`reminderMinutesBefore` (30) antes do início:
 
 1. **reserva** um voice livre do pool (o preferido do squad, quando livre):
    grava o snapshot dos overwrites e só então nega `Connect` ao `@everyone` e
-   libera os membros e o próprio bot. O snapshot mora na sessão, e não em
+   libera os membros e o próprio bot. O snapshot mora na jogatina, e não em
    `channel_locks`, porque um `/lock` no mesmo voice trocaria o que a liberação
-   restaura. Com o pool todo ocupado a sessão fica sem sala, e o lembrete diz;
-2. manda o **lembrete** com **Vou / Não vou** no canal do squad, mencionando os
-   membros.
+   restaura. Com o pool todo ocupado a jogatina fica sem sala, e o lembrete diz;
+2. manda um **lembrete** curto no canal do squad, mencionando quem não disse
+   "não vou" e apontando a sala. É uma mensagem à parte porque editar a
+   mensagem da jogatina não notifica ninguém.
 
 Na hora, o bot **move** para o voice reservado quem já está em outro voice da
 guild e chama, numa mensagem só, quem não está em nenhum (o Discord só deixa
 mover quem já está em voice); quem votou "Não vou" fica em paz. No fim da
-faixa, ou quando o voice reservado esvazia depois do início, a reserva é
+jogatina, ou quando o voice reservado esvazia depois do início, a reserva é
 **liberada**: os overwrites voltam exatamente ao snapshot. O restore vem antes
-de marcar a sessão como liberada, para uma falha passageira do Discord ser
+de marcar a reserva como liberada, para uma falha passageira do Discord ser
 tentada de novo na passada seguinte em vez de deixar o voice fechado de vez.
 
-**Ciclo de vida.** Contam como sinal de vida: "Vou", a presença de um membro
-no voice reservado (de uma hora antes do início até o fim da faixa) e o botão
-**Ainda jogamos**. Squad sem sinal por `inactiveWeeks` (4) semanas recebe um
+**CANCELAR** vale só antes do início: para quem marcou, ou para qualquer membro
+enquanto ninguém além dele disse "vou". A sala reservada volta para o pool.
+Depois do início, a mensagem troca os botões por **REPETIR**, que marca a mesma
+hora de parede uma semana depois (clicado semanas mais tarde, pula para a
+primeira semana que ainda não passou). Não existe agendamento automático:
+repetir é a rotina. `played_at` marca a jogatina que rolou, na primeira presença
+de um membro no voice reservado ou, sem sala, no início com dois "vou".
+
+**Ciclo de vida.** Contam como sinal de vida: marcar jogatina, "Vou", a
+presença de um membro no voice reservado (de uma hora antes do início até o fim
+da jogatina) e o botão **Ainda jogamos**. Squad sem sinal por `inactiveWeeks` (4) semanas recebe um
 aviso; sem resposta em mais 7 dias, é **arquivado**: canal só leitura, voice
-liberado, pedidos e propostas encerrados, perfis pausados. Sair do squad reabre
+liberado, pedidos e propostas encerrados, perfis pausados e o guia trocado pelo
+aviso de arquivado. Sair do squad reabre
 a vaga (`full` volta a `open`); o último a sair arquiva.
 
 **O relógio.** Um job a cada 5 minutos, por guild atendida com o módulo ligado,
-na ordem: expira propostas e pedidos, agenda as sessões, lembra (e reserva),
-começa (e move) e libera o voice das faixas encerradas. O passo diário
-(inatividade e um match novo) roda uma vez por dia **depois das 12 h locais**,
+na ordem: expira propostas e pedidos, lembra (e reserva), começa (e move) e
+libera o voice das jogatinas encerradas. Ele não marca jogatina. O passo diário
+(inatividade, guias em dia e um match novo) roda uma vez por dia **depois das 12 h locais**,
 porque aviso e proposta chamam gente pelo nome. O dia fica marcado em `meta`
 antes do trabalho: falha espera o dia seguinte em vez de se repetir a cada 5
 minutos. Cada passo é isolado e cada trava é uma `UPDATE` condicional, então
@@ -665,7 +725,7 @@ não comporta e avisa do resto:
 | `NOT_IN_GUILD`         | bloqueia | a pessoa saiu do servidor                                                |
 | `IN_SQUAD_IN_GAME`     | bloqueia | membro de squad `open` ou `full` deste jogo, ou perfil `in_squad`        |
 | `IN_OPEN_PROPOSAL`     | bloqueia | está numa proposta aberta deste jogo e não passou                        |
-| `NO_COMMON_CELL`       | bloqueia | o grupo não divide nenhuma célula, e a proposta ficaria sem janela       |
+| `NO_COMMON_CELL`       | bloqueia | o grupo não divide nenhuma célula: não há horário para jogarem juntos    |
 | `GROUP_OVER_SIZE`      | avisa    | turma maior que o squad: quem aceitar primeiro fica com as vagas         |
 | `NOT_SEARCHING`        | avisa    | o perfil está `paused`                                                   |
 | `AT_SQUAD_LIMIT`       | avisa    | no teto de squads (`maxSquadsPerUser`): o aceite recusa até sair de um   |
@@ -700,13 +760,14 @@ DM". Tirar do squad também avisa o canal do squad, que fica sabendo que foi a
 staff, mas nunca o motivo.
 
 **Permissões.** O módulo depende de `CreatePrivateThreads` (thread da
-proposta), `Connect` e `Speak` (reserva do voice), além de `ManageChannels`,
-`ManageRoles` e `MoveMembers`, que o convite já pedia. Sem elas ele não quebra:
-o match e a reserva conferem antes e pulam com aviso no log (§10).
+proposta), `Connect` e `Speak` (reserva do voice) e `PinMessages` (guia), além
+de `ManageChannels`, `ManageRoles` e `MoveMembers`, que o convite já pedia. Sem
+elas ele não quebra: o match, a reserva e o pin conferem antes e pulam com
+aviso no log (§10).
 
-Fora do escopo desta versão: voice criado e apagado por squad, lobby "jogar
-agora", mais de um horário por squad, match entre jogos diferentes,
-estatísticas em `stat_buckets` (os contadores do painel saem direto das
+Fora do escopo desta versão: voice criado e apagado por squad, jogatina
+recorrente automática (`/bora toda sexta`), mais de um voice por jogatina, match
+entre jogos diferentes, estatísticas em `stat_buckets` (os contadores do painel saem direto das
 tabelas) e DM aos membros, com uma exceção: as ações de admin pelo painel
 (pausar, retomar, editar respostas, apagar perfil e tirar do squad) avisam a
 pessoa por DM com o motivo.
@@ -763,13 +824,14 @@ grava, escreve auditoria (§6.5), chama `invalidate` no bot, toast.
   de log; lista de tickets abertos/fechados com link de transcript.
 - **Tags**: tabela CRUD com editor (texto/embed), permissão de criação.
 - **Squads** (§5.11), em quatro abas. `CONFIGURAÇÃO`: canal de busca, cargo de
-  ping, categoria, nome do canal, voices do pool, prazos e as 4 faixas da
-  grade, com o painel da mensagem fixa (publicar ou atualizar) no topo.
+  ping, categoria, nome do canal, voices do pool, prazos, duração da jogatina,
+  jogatinas marcadas por squad e as 4 faixas da grade, com o painel da mensagem fixa (publicar ou atualizar) no topo.
   `JOGOS`: CRUD de jogo (nome, 2 a 10 jogadores por squad, ligado) com as até 5
   perguntas do perfil, e o botão de rodar o match agora; apagar jogo é recusado
   enquanto ele tiver squad `open|full`, porque a cascata apagaria as linhas e
-  deixaria os canais no Discord. `SQUADS`: os squads vivos com membros, janela,
-  voice e última confirmação, o contador de canais do servidor (teto de 500) e
+  deixaria os canais no Discord. `SQUADS`: os squads vivos com membros, próxima
+  jogatina (quando e quantos vão, e quantas mais estão marcadas), voice e
+  último sinal de vida, o contador de canais do servidor (teto de 500) e
   as ações de renomear e arquivar. `JOGADORES` (no lugar da antiga
   `PROCURANDO`), por jogo: todos os perfis em qualquer status, com nome e
   avatar; contadores (total, por status e por opção de cada pergunta `select`
@@ -1093,9 +1155,12 @@ squad_profiles    (guild_id, user_id, game_id FK, PK(guild_id,user_id,game_id), 
                    answers jsonb, status enum(searching|in_squad|paused), last_matched_at, created_at, updated_at)
                    idx (guild_id, game_id, status)
                    -- `availability`: máscara de 28 bits, bit = dia * 4 + faixa (domingo = 0); smallint não comporta
-squads            (id uuid PK, guild_id, game_id FK, name, text_channel_id, voice_channel_id, day, block,
-                   status enum(open|full|archived), last_confirmed_at, warned_at, archived_at, created_at, updated_at)
+squads            (id uuid PK, guild_id, game_id FK, name, text_channel_id, voice_channel_id, day?, block?,
+                   guide_message_id, status enum(open|full|archived), last_confirmed_at, warned_at, archived_at,
+                   created_at, updated_at)
                    idx (guild_id, game_id, status)
+                   -- `day`/`block`: janela semanal da v1.5, nula e sem escrita desde a v1.6; sai na migration
+                   -- seguinte. `guide_message_id`: o guia fixo pinado no canal (nulo = ainda não publicado)
                    -- `text_channel_id` nulo enquanto o canal nasce: a linha vem antes, na transação que
                    -- reivindica a proposta; `voice_channel_id` é o voice preferido do pool (nulo = pool cheio)
 squad_members     (guild_id, squad_id FK, user_id, joined_at, PK(squad_id,user_id))
@@ -1108,10 +1173,13 @@ squad_proposals   (id uuid PK, guild_id, game_id FK, user_ids[], thread_id, mess
 squad_join_requests (id uuid PK, guild_id, squad_id FK, user_id, message_id, declined_ids[],
                    status enum(pending|accepted|declined|expired), decided_by, created_at, decided_at)
                    unique (squad_id, user_id) where status = 'pending'
-squad_sessions    (id bigserial PK, guild_id, squad_id FK, starts_at, ends_at, reminded_at, reminder_message_id,
-                   started_at, going_ids[], not_going_ids[], voice_channel_id, voice_overwrites jsonb,
-                   voice_reserved_at, voice_released_at, created_at)
+squad_sessions    (id bigserial PK, guild_id, squad_id FK, starts_at, ends_at, created_by, reminded_at, message_id,
+                   reminder_message_id?, started_at, going_ids[], not_going_ids[], voice_channel_id,
+                   voice_overwrites jsonb, voice_reserved_at, voice_released_at, played_at, cancelled_at,
+                   cancelled_by, created_at)
                    unique (squad_id, starts_at); idx (guild_id, ends_at) where reservado e não liberado
+                   -- a jogatina: `created_by` nulo = sessão semanal da v1.5; `ends_at` = início + `sessionHours`;
+                   -- `message_id` é a mensagem com Vou / Não vou (herdou `reminder_message_id`, que sai com `day`)
                    -- o snapshot do voice mora aqui, e não em channel_locks: um /lock no voice reservado
                    -- trocaria o que a liberação restaura
 ```
@@ -1144,9 +1212,10 @@ Três níveis, resolvidos por `guild_settings` + permissões nativas:
 `default_member_permissions` no registro do comando espelha o nível; o handler
 re-verifica (o registro é dica de UI, não segurança).
 
-No módulo `squads` (§5.11), `/squad` é de `member`, com duas exceções:
-`/squad painel` (publicar a mensagem fixa) é de `admin`, e `/squad renomear`
-exige ser do squad. Pela API do bot, publicar a mensagem fixa, rodar o match,
+No módulo `squads` (§5.11), `/squad` e `/bora` são de `member`, com duas
+exceções: `/squad painel` (publicar a mensagem fixa) é de `admin`, e
+`/squad renomear` exige ser do squad. `/bora` e os botões da jogatina (VOU, NÃO
+VOU, CANCELAR, REPETIR) exigem ser do squad. Pela API do bot, publicar a mensagem fixa, rodar o match,
 o match manual (revisar e propor ao grupo) e a gestão de perfis (pausar,
 retomar, editar respostas e apagar) são de `admin`, e tirar alguém de um squad
 também; arquivar e renomear squad são de `mod`. Arquivar, renomear e tirar do
@@ -1185,7 +1254,7 @@ painel admin aberto.
 ## 10. Permissões do bot no Discord (convite)
 
 `ViewChannel, SendMessages, SendMessagesInThreads, EmbedLinks, AttachFiles,
-ReadMessageHistory, ManageMessages, ManageChannels, ManageRoles, ManageGuild,
+ReadMessageHistory, ManageMessages, PinMessages, ManageChannels, ManageRoles, ManageGuild,
 KickMembers, BanMembers, ModerateMembers, ViewAuditLog, ManageThreads,
 CreatePrivateThreads, AddReactions, UseExternalEmojis, Connect, Speak,
 MuteMembers, DeafenMembers, MoveMembers, CreateInstantInvite, ManageEvents,
@@ -1199,6 +1268,11 @@ pula a thread e a reserva pula o voice, com aviso no log. O link de convite
 sai da lista `BOT_INVITE_PERMISSION_NAMES` de `packages/shared`; servidor que
 convidou o bot antes da v1.5 continua com as permissões antigas e precisa dar
 as três à mão ao cargo do bot.
+
+`PinMessages` entrou na v1.6 para o guia fixo do squad. No Discord, "Fixar
+mensagens" é uma permissão própria, que `ManageMessages` não cobre: servidor que
+convidou o bot antes precisa dá-la à mão, e até lá o guia sai sem pin, com aviso
+no log.
 
 `ManageGuild` cobre editar nome, ícone, banner e nível de verificação pelo
 painel. Sem ela o bot continua funcionando: a tela
@@ -1240,7 +1314,8 @@ provedor, documentada em `docs/runbook.md`.
 | **Perder o rastro do que está rodando na VM**                     | `GIT_SHA` embutido na imagem pela CI, exibido no `/health`, no card Saúde e no alerta de boot                                              | feito — `infra/docker/bot.Dockerfile` |
 | **Rate limit do painel na Vercel**                                | 60/min por IP nas rotas de auth e nas server actions de escrita                                                                             | parcial — contagem **por instância**, porque o painel é stateless e a stack não tem store compartilhado (§12); serve para cortar script, não como cota |
 | **Teto de 500 canais por servidor** (v1.5)                        | um canal de texto por squad e voice emprestado de um pool, nunca um voice por squad (§5.11)                                                | parcial: o painel mostra o contador de canais, mas nada barra squad novo perto do teto; se criar o canal falhar, o squad é arquivado na hora |
-| **Pool de voices cheio** (v1.5)                                   | a reserva pega o voice preferido do squad ou o primeiro livre; sem nenhum, a sessão acontece sem sala e o lembrete avisa                    | parcial: não há fila nem voice extra; mais squads na mesma faixa do que voices no pool ficam sem sala |
+| **Pool de voices cheio** (v1.5)                                   | a reserva pega o voice preferido do squad ou o primeiro livre; sem nenhum, a jogatina acontece sem sala e o lembrete avisa                    | parcial: não há fila nem voice extra; mais jogatinas ao mesmo tempo do que voices no pool ficam sem sala |
+| **Horário do `/bora` mal entendido** (v1.6)                       | `parseWhen` puro no fuso da guild, erro que traz exemplos, autocomplete que ecoa o que o bot entendeu antes de enviar e mensagem da jogatina com a data completa | feito: `shared/squads/when.ts`, com testes de tabela |
 | **Voice do pool preso com `Connect` negado** (v1.5)               | snapshot dos overwrites na sessão; o restore no Discord vem antes de marcar a sessão como liberada, e o job tenta de novo a cada 5 min     | feito: `SessionService.release`, com teste |
 
 ## 12. Decisões arquiteturais (com justificativa)
