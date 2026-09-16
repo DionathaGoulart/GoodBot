@@ -49,7 +49,7 @@ export const messageCreate = defineEvent(Events.MessageCreate, async (ctx, messa
   if (!message.guildId || message.author.bot) return;
   const config = await logsConfig(ctx, message.guildId);
   if (!config.enabled || !config.messageCache.enabled) return;
-  ctx.messageCache.record(message);
+  ctx.messageCache.record(message, config.messageCache.perChannel);
 });
 
 export const messageUpdate = defineEvent(
@@ -71,7 +71,9 @@ export const messageUpdate = defineEvent(
       null;
     if (before !== null && before === message.content) return;
 
-    if (config.messageCache.enabled) ctx.messageCache.record(message);
+    if (config.messageCache.enabled) {
+      ctx.messageCache.record(message, config.messageCache.perChannel);
+    }
 
     const embed = logEmbed({
       title: 'Mensagem editada',

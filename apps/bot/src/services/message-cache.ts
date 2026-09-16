@@ -1,5 +1,11 @@
 import { cacheMessages, deleteCachedMessagesBefore, getCachedMessages } from '@goodbot/db';
-import { DAY_MS, MESSAGE_CACHE_RETENTION_DAYS, SECOND_MS } from '@goodbot/shared';
+import {
+  DAY_MS,
+  HOUR_MS,
+  MESSAGE_CACHE_RETENTION_DAYS,
+  MINUTE_MS,
+  SECOND_MS,
+} from '@goodbot/shared';
 
 import { childLogger } from '../logger';
 
@@ -12,6 +18,15 @@ const log = childLogger('message-cache');
 export const BUFFER_SIZE = 100;
 export const BUFFER_FLUSH_MS = 5 * SECOND_MS;
 
+/**
+ * Canal sem mensagem nova há mais que isto sai da memória. É o mesmo prazo do
+ * sweeper de mensagens do discord.js (`client.ts`): passado ele, quem pede o
+ * conteúdo vai ao banco, que guarda 7 dias.
+ */
+export const IDLE_CHANNEL_MS = HOUR_MS;
+/** De quanto em quanto tempo os canais parados são procurados. */
+export const SWEEP_INTERVAL_MS = 10 * MINUTE_MS;
+
 /** O que o log de exclusão precisa saber sobre uma mensagem. */
 export interface CachedContent {
   messageId: string;
@@ -23,10 +38,16 @@ export interface CachedContent {
 
 export interface MessageCacheDeps {
   db: Db;
-  /** Mensagens mantidas em memória por canal (`logs.messageCache.perChannel`). */
-  perChannel?: number;
   bufferSize?: number;
   flushIntervalMs?: number;
+  now?: () => number;
+}
+
+/** O LRU de um canal e a hora da última mensagem que entrou nele. */
+interface ChannelMemory {
+  /** `Map` preserva a ordem de inserção: o primeiro item é o mais antigo. */
+  entries: Map<string, CachedContent>;
+  lastAt: number;
 }
 
 /**
@@ -36,31 +57,27 @@ export interface MessageCacheDeps {
  *
  * São duas camadas: um LRU por canal em memória (leitura instantânea, sem ida
  * ao banco) e a tabela `message_cache`, escrita em lote e podada em 7 dias.
+ *
+ * A memória é o que mais cresce com o número de servidores, então ela tem dois
+ * limites: o tamanho de cada canal é o `perChannel` da guild **dona** do canal
+ * (um servidor que pede 1000 não aumenta o cache dos outros), e canal parado há
+ * mais de `IDLE_CHANNEL_MS` sai inteiro. Sem o segundo, todo canal que falou
+ * uma vez desde o boot ficava na RAM até o próximo reinício.
  */
 export class MessageCacheService {
   private readonly deps: MessageCacheDeps;
-  private perChannel: number;
   private readonly bufferSize: number;
-  /** `Map` preserva a ordem de inserção: o primeiro item é o mais antigo. */
-  private readonly memory = new Map<string, Map<string, CachedContent>>();
+  private readonly now: () => number;
+  private readonly memory = new Map<string, ChannelMemory>();
   private buffer: CacheMessageInput[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
+  private sweepTimer: NodeJS.Timeout | null = null;
   private flushing = false;
 
   constructor(deps: MessageCacheDeps) {
     this.deps = deps;
-    this.perChannel = deps.perChannel ?? 200;
     this.bufferSize = deps.bufferSize ?? BUFFER_SIZE;
-  }
-
-  /**
-   * Ajusta o LRU ao `logs.messageCache.perChannel`. O cache é do processo e a
-   * config é por guild, então o `ready` aplica aqui o **maior** valor entre as
-   * guilds configuradas: sobra folga para as menos exigentes e nenhuma fica
-   * com cache curto demais.
-   */
-  setPerChannel(value: number): void {
-    this.perChannel = value;
+    this.now = deps.now ?? Date.now;
   }
 
   start(): void {
@@ -71,11 +88,17 @@ export class MessageCacheService {
       );
       this.flushTimer.unref();
     }
+    if (!this.sweepTimer) {
+      this.sweepTimer = setInterval(() => this.sweep(), SWEEP_INTERVAL_MS);
+      this.sweepTimer.unref();
+    }
   }
 
   stop(): void {
     if (this.flushTimer) clearInterval(this.flushTimer);
+    if (this.sweepTimer) clearInterval(this.sweepTimer);
     this.flushTimer = null;
+    this.sweepTimer = null;
   }
 
   /** Mensagens no buffer esperando o INSERT em lote — gauge do `/metrics`. */
@@ -83,8 +106,19 @@ export class MessageCacheService {
     return this.buffer.length;
   }
 
-  /** Registra uma mensagem (memória na hora, banco no próximo lote). */
-  record(message: Message | PartialMessage): void {
+  /** Canais com mensagens na memória agora (gauge `message_cache_channels`). */
+  get channelsInMemory(): number {
+    return this.memory.size;
+  }
+
+  /**
+   * Registra uma mensagem (memória na hora, banco no próximo lote).
+   *
+   * `perChannel` é o `logs.messageCache.perChannel` da guild da mensagem. Ele
+   * vem de quem chama, que já leu a config pelo `ConfigService`: assim uma
+   * mudança no painel vale na mensagem seguinte, sem reinício.
+   */
+  record(message: Message | PartialMessage, perChannel: number): void {
     if (!message.guildId || !message.author) return;
     // Bots geram volume alto e conteúdo pouco útil para auditoria.
     if (message.author.bot) return;
@@ -96,7 +130,7 @@ export class MessageCacheService {
       content: message.content ?? '',
       attachments: toCachedAttachments(message),
     };
-    this.remember(entry);
+    this.remember(entry, perChannel);
 
     this.buffer.push({
       messageId: entry.messageId,
@@ -110,24 +144,45 @@ export class MessageCacheService {
     if (this.buffer.length >= this.bufferSize) void this.flush();
   }
 
-  private remember(entry: CachedContent): void {
+  private remember(entry: CachedContent, perChannel: number): void {
     let channel = this.memory.get(entry.channelId);
     if (!channel) {
-      channel = new Map();
+      channel = { entries: new Map(), lastAt: 0 };
       this.memory.set(entry.channelId, channel);
     }
-    channel.delete(entry.messageId);
-    channel.set(entry.messageId, entry);
-    while (channel.size > this.perChannel) {
-      const oldest = channel.keys().next().value;
+    channel.lastAt = this.now();
+    const { entries } = channel;
+    entries.delete(entry.messageId);
+    entries.set(entry.messageId, entry);
+    while (entries.size > perChannel) {
+      const oldest = entries.keys().next().value;
       if (oldest === undefined) break;
-      channel.delete(oldest);
+      entries.delete(oldest);
     }
+  }
+
+  /**
+   * Tira da memória os canais parados há mais de `IDLE_CHANNEL_MS`. O conteúdo
+   * continua no banco; o que muda é só que a próxima leitura dele custa uma
+   * query. Devolve quantos canais saíram.
+   */
+  sweep(): number {
+    const cutoff = this.now() - IDLE_CHANNEL_MS;
+    let removed = 0;
+    for (const [channelId, channel] of this.memory) {
+      if (channel.lastAt <= cutoff) {
+        this.memory.delete(channelId);
+        removed += 1;
+      }
+    }
+    if (removed > 0)
+      log.debug({ removed, left: this.memory.size }, 'canais parados saíram da memória');
+    return removed;
   }
 
   /** Conteúdo de uma mensagem: memória primeiro, banco depois. */
   async get(channelId: string, messageId: string): Promise<CachedContent | null> {
-    const hit = this.memory.get(channelId)?.get(messageId);
+    const hit = this.memory.get(channelId)?.entries.get(messageId);
     if (hit) return hit;
     const [row] = await this.lookup([messageId]);
     return row ?? null;
@@ -135,7 +190,7 @@ export class MessageCacheService {
 
   /** Versão em lote, usada pelo log de bulk delete. */
   async getMany(channelId: string, messageIds: readonly string[]): Promise<CachedContent[]> {
-    const channel = this.memory.get(channelId);
+    const channel = this.memory.get(channelId)?.entries;
     const found: CachedContent[] = [];
     const missing: string[] = [];
     for (const id of messageIds) {

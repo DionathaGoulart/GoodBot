@@ -36,22 +36,25 @@ export async function markGuildRowLeft(ctx: BotContext, guildId: string): Promis
 }
 
 /**
- * O LRU de mensagens e o intervalo de flush das estatísticas são recursos do
- * **processo**, não da guild, mas a config de cada um vive por guild. Com mais
- * de uma guild os valores conflitam, e a resolução é a que não perde dado:
- * o maior cache e o menor intervalo atendem a guild mais exigente, e sobra
- * folga para as outras.
+ * O intervalo de flush das estatísticas é um recurso do **processo** (um timer
+ * só), mas a config vive por guild. Com mais de uma guild os valores
+ * conflitam, e a resolução é a que não perde dado: o menor intervalo atende a
+ * guild mais exigente.
+ *
+ * O LRU do cache de mensagens já morou aqui, resolvido pelo **maior** valor
+ * entre as guilds. Saiu porque essa regra fazia um servidor que pedisse 1000
+ * mensagens por canal multiplicar a RAM de todos os outros; hoje cada canal usa
+ * o `perChannel` da própria guild (`MessageCacheService.record`).
  */
 export interface ProcessTuning {
-  perChannel: number;
   flushSeconds: number;
 }
 
 /**
  * Guarda o que cada guild pediu e resolve o conflito a cada mudança. É uma
- * classe, e não um `Math.max` no `ready`, porque uma guild pode entrar depois
+ * classe, e não um `Math.min` no `ready`, porque uma guild pode entrar depois
  * do boot — o registro aprova a qualquer momento: sem memória do que as outras
- * pediram, preparar a nova encolheria o cache de todas.
+ * pediram, preparar a nova mudaria o intervalo de todas.
  */
 export class ProcessTuner {
   private readonly perGuild = new Map<string, ProcessTuning>();
@@ -64,11 +67,10 @@ export class ProcessTuner {
     this.perGuild.delete(guildId);
   }
 
-  /** Aplica o resultado nos dois serviços do processo. Sem guild, não mexe. */
+  /** Aplica o resultado no serviço do processo. Sem guild, não mexe. */
   apply(ctx: BotContext): void {
     const tunings = [...this.perGuild.values()];
     if (tunings.length === 0) return;
-    ctx.messageCache.setPerChannel(Math.max(...tunings.map((t) => t.perChannel)));
     ctx.stats.setFlushInterval(Math.min(...tunings.map((t) => t.flushSeconds)));
   }
 }
@@ -100,7 +102,6 @@ export async function prepareGuild(ctx: BotContext, guild: Guild): Promise<Proce
   // Aquece o cache de config antes de aceitar interações.
   await ctx.config.warm(guild.id);
 
-  const logsConfig = await ctx.config.get(guild.id, 'logs');
   const statsConfig = await ctx.config.get(guild.id, 'stats');
 
   // Guild commands são registrados por guild: cada uma tem o seu hash, então
@@ -114,8 +115,5 @@ export async function prepareGuild(ctx: BotContext, guild: Guild): Promise<Proce
     force: FORCE_REGISTER,
   });
 
-  return {
-    perChannel: logsConfig.messageCache.perChannel,
-    flushSeconds: statsConfig.flushIntervalSeconds,
-  };
+  return { flushSeconds: statsConfig.flushIntervalSeconds };
 }

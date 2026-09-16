@@ -227,7 +227,12 @@ async function main(): Promise<void> {
     },
   });
 
-  registerGauges({ client, readQueues, startedAt: Date.now() });
+  registerGauges({
+    client,
+    readQueues,
+    readCachedChannels: () => messageCache.channelsInMemory,
+    startedAt: Date.now(),
+  });
   const databaseProbe = watchDatabase(db, alerts);
 
   const ctx: BotContext = {
@@ -382,6 +387,8 @@ async function main(): Promise<void> {
 function registerGauges(input: {
   client: Client;
   readQueues: () => { logQueue: number; messageCache: number; stats: number };
+  /** Canais no LRU do cache de mensagens: a parte da RAM que cresce com o tráfego. */
+  readCachedChannels: () => number;
   startedAt: number;
 }): void {
   metrics.queue.register(() => input.readQueues().logQueue, { queue: 'log' });
@@ -390,6 +397,7 @@ function registerGauges(input: {
   metrics.process.register(() => process.memoryUsage().rss, { kind: 'rss_bytes' });
   metrics.process.register(() => process.memoryUsage().heapUsed, { kind: 'heap_used_bytes' });
   metrics.process.register(() => Date.now() - input.startedAt, { kind: 'uptime_ms' });
+  metrics.process.register(input.readCachedChannels, { kind: 'message_cache_channels' });
   metrics.gateway.register(() => (input.client.isReady() ? 1 : 0), { kind: 'ready' });
   metrics.gateway.register(
     () => {
