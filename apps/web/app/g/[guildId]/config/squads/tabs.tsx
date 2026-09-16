@@ -280,7 +280,6 @@ export function SquadsTabs({
           <SquadsTable
             squads={overview.squads}
             games={games}
-            blocks={blocks}
             channels={overview.channels}
             channelNames={channelNames}
             timeZone={timeZone}

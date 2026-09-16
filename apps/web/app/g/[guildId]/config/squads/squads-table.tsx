@@ -8,14 +8,14 @@ import { ConfirmButton } from '@/components/config/confirm-button';
 import { DataTable, type PanelColumnDef } from '@/components/data-table';
 import { Panel } from '@/components/retro/panel';
 import { Tag } from '@/components/retro/tag';
-import { formatDate, formatSquadWindow, SQUAD_STATUS_LABEL } from '@/lib/squad-labels';
+import { describeSession, formatDate, SQUAD_STATUS_LABEL } from '@/lib/squad-labels';
 import { useGuildId } from '@/lib/use-guild-id';
 
 import { withId } from './form-data';
 import { RenameSheet, type RenameEditing } from './rename-sheet';
 
 import type { SquadGameRow } from '@/lib/squads';
-import type { SquadBlockConfig, SquadChannelUsage, SquadSummary } from '@goodbot/shared';
+import type { SquadChannelUsage, SquadSummary } from '@goodbot/shared';
 
 /** §6.7 — canais da guild contra o teto do Discord: cada squad gasta um. */
 function ChannelUsage({ usage, squads }: { usage: SquadChannelUsage; squads: number }) {
@@ -43,6 +43,12 @@ function ChannelUsage({ usage, squads }: { usage: SquadChannelUsage; squads: num
   );
 }
 
+/** Jogatina rolando ou a mais próxima: é a que ordena a coluna. */
+function nextSessionTime(squad: SquadSummary): number {
+  const next = squad.upcomingSessions[0];
+  return next ? Date.parse(next.startsAt) : Number.POSITIVE_INFINITY;
+}
+
 /**
  * A aba SQUADS: quem joga junto hoje. Arquivar e renomear passam pelo bot,
  * que tranca o canal, devolve o voice e registra a auditoria; por isso valem
@@ -51,14 +57,12 @@ function ChannelUsage({ usage, squads }: { usage: SquadChannelUsage; squads: num
 export function SquadsTable({
   squads,
   games,
-  blocks,
   channels,
   channelNames,
   timeZone,
 }: {
   squads: SquadSummary[];
   games: SquadGameRow[];
-  blocks: SquadBlockConfig[];
   channels: SquadChannelUsage | null;
   channelNames: Record<string, string>;
   timeZone: string;
@@ -109,14 +113,25 @@ export function SquadsTable({
         },
       },
       {
-        id: 'window',
-        header: 'JANELA',
-        accessorFn: (row) => row.day * 10 + row.block,
-        cell: ({ row }) => (
-          <span className="screen-meta">
-            {formatSquadWindow(row.original.day, row.original.block, blocks)}
-          </span>
-        ),
+        id: 'nextSession',
+        header: 'PRÓXIMA JOGATINA',
+        accessorFn: nextSessionTime,
+        cell: ({ row }) => {
+          const [next, ...rest] = row.original.upcomingSessions;
+          if (!next) return <span className="screen-meta">NENHUMA MARCADA</span>;
+          return (
+            <span className="flex flex-col gap-1">
+              <time className="screen-meta" dateTime={next.startsAt} title={next.startsAt}>
+                {describeSession(next, timeZone)}
+              </time>
+              {rest.length > 0 ? (
+                <span className="screen-meta">
+                  +{rest.length} {rest.length === 1 ? 'MARCADA' : 'MARCADAS'}
+                </span>
+              ) : null}
+            </span>
+          );
+        },
       },
       {
         id: 'voice',
@@ -179,7 +194,7 @@ export function SquadsTable({
         ),
       },
     ],
-    [blocks, channelNames, gameById, guildId, router, timeZone],
+    [channelNames, gameById, guildId, router, timeZone],
   );
 
   return (

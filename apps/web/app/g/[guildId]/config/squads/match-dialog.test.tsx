@@ -115,7 +115,7 @@ describe('MatchDialog', { timeout: 20_000 }, () => {
     toastError.mockReset();
   });
 
-  it('revisa pelo bot ao abrir e mostra janela e duplas', async () => {
+  it('revisa pelo bot ao abrir e mostra horário em comum e duplas', async () => {
     checkManualSquadMatchAction.mockResolvedValue({ ok: true, check: check() });
     renderDialog();
 

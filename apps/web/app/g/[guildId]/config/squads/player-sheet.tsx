@@ -20,8 +20,8 @@ import {
 import {
   formatDate,
   formatDateTime,
-  formatSquadWindow,
   SQUAD_PROFILE_STATUS_LABEL,
+  SQUAD_STATUS_LABEL,
 } from '@/lib/squad-labels';
 import { useGuildId } from '@/lib/use-guild-id';
 
@@ -230,7 +230,9 @@ export function PlayerSheet({
                       <span className="flex flex-col">
                         <span className="font-bold">{squad.name}</span>
                         <span className="screen-meta">
-                          {formatSquadWindow(squad.day, squad.block, blocks)}
+                          {squad.memberIds.length}{' '}
+                          {squad.memberIds.length === 1 ? 'MEMBRO' : 'MEMBROS'} ·{' '}
+                          {SQUAD_STATUS_LABEL[squad.status]}
                         </span>
                       </span>
                       <button

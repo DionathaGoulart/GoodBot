@@ -82,8 +82,6 @@ const DATA: SquadPlayersData = {
       gameId: GAME_ID,
       name: 'Alfa',
       status: 'open',
-      day: 6,
-      block: 2,
       textChannelId: null,
       memberIds: [ANA],
     },

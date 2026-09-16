@@ -140,7 +140,7 @@ export const CONFIG_PAGES = {
     schema: SquadsConfigSchema,
     title: 'SQUADS',
     file: 'SQUADS.CFG',
-    description: 'Squads fixos por agenda: jogos, match, canal próprio e voice na sessão.',
+    description: 'Squads fixos por agenda: jogos, match, canal próprio e voice na jogatina.',
   },
   /**
    * As permissões de comando moram em `utilities.commandOverrides`, então a

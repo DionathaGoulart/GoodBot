@@ -173,8 +173,6 @@ export async function loadSquadPlayers(
               gameId: row.gameId,
               name: row.name,
               status: row.status,
-              day: row.day,
-              block: row.block,
               textChannelId: row.textChannelId,
               memberIds: memberIds.get(row.id) ?? [],
             },

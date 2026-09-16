@@ -38,8 +38,6 @@ export interface LiveSquadRow {
   gameId: string;
   name: string;
   status: 'open' | 'full';
-  day: number;
-  block: number;
   textChannelId: string | null;
   memberIds: string[];
 }

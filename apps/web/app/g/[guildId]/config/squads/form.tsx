@@ -17,7 +17,7 @@ export function SquadsConfigForm({
 }) {
   return (
     <ConfigForm page="squads" defaultValues={values} readOnly={readOnly}>
-      <ModuleToggle description="Squads fixos: perfil com agenda, match por horário, canal próprio e voice reservado na sessão." />
+      <ModuleToggle description="Squads fixos: perfil com agenda, match por horário, canal próprio e voice reservado nas jogatinas que o squad marca." />
       <div className="grid gap-4 xl:grid-cols-2">
         <Panel title="BUSCA.CFG">
           <DiscordField
@@ -53,7 +53,7 @@ export function SquadsConfigForm({
           <NumberField name="maxSquadsPerUser" label="Squads por membro" min={1} max={5} />
         </Panel>
 
-        <Panel title="SESSAO.CFG">
+        <Panel title="JOGATINA.CFG">
           <DiscordField
             name="categoryId"
             kind="channel"
@@ -74,20 +74,35 @@ export function SquadsConfigForm({
             multiple
             channelTypes={[CHANNEL_TYPES.voice]}
             label="Voices do rodízio"
-            description="Reservados só durante a sessão de cada squad. Com todos ocupados, o squad joga sem sala e é avisado."
+            description="Reservados só durante a jogatina de cada squad. Com todos ocupados, o squad joga sem sala e é avisado."
           />
           <NumberField
             name="reminderMinutesBefore"
-            label="Lembrete antes da sessão"
-            description="Manda o Vou / Não vou e reserva o voice. 0 manda na hora."
+            label="Lembrete antes da jogatina"
+            description="Avisa o squad e reserva o voice. Jogatina marcada para dentro desse prazo já sai com sala. 0 avisa na hora."
             min={0}
             max={240}
             suffix="MIN"
           />
           <NumberField
+            name="sessionHours"
+            label="Duração da jogatina"
+            description="Depois disso o voice reservado volta para o rodízio."
+            min={1}
+            max={12}
+            suffix="HORAS"
+          />
+          <NumberField
+            name="maxUpcomingSessions"
+            label="Jogatinas marcadas por squad"
+            description="Quantas jogatinas futuras um squad pode ter ao mesmo tempo."
+            min={1}
+            max={10}
+          />
+          <NumberField
             name="inactiveWeeks"
-            label="Semanas sem ninguém confirmar"
-            description="Depois disso o squad é questionado; uma semana depois, arquivado."
+            label="Semanas sem jogatina"
+            description="Semanas seguidas sem jogatina marcada, voto Vou ou presença no voice. Depois disso o squad é questionado; uma semana depois, arquivado."
             min={1}
             max={52}
             suffix="SEMANAS"
@@ -97,9 +112,9 @@ export function SquadsConfigForm({
 
       <Panel title="GRADE.CFG">
         <p className="text-sm">
-          As faixas não passam da meia-noite. A madrugada é o começo do dia: a madrugada de sábado
-          é a noite de sexta para sábado. Mudar um horário vale também para os squads que já
-          existem.
+          A grade serve só para o match: quem marca a hora de jogar é o squad. As faixas não passam
+          da meia-noite. A madrugada é o começo do dia: a madrugada de sábado é a noite de sexta
+          para sábado. Mudar um horário vale também para os perfis que já existem.
         </p>
         {SQUAD_BLOCKS.map((key, index) => (
           <div key={key} className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">

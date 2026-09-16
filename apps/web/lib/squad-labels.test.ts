@@ -9,11 +9,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   describeManualIssue,
+  describeSession,
   fieldKeyFromLabel,
   formatDate,
   formatDateTime,
   formatMatchResult,
-  formatSquadWindow,
+  formatSessionStart,
+  formatSquadCell,
   parseOptionLines,
   SQUAD_PROFILE_STATUS_LABEL,
   summarizeAvailability,
@@ -59,7 +61,7 @@ describe('describeManualIssue', () => {
     [
       'NO_COMMON_CELL',
       [ANA, BIA],
-      'Ninguém do grupo divide o mesmo horário. Sem isso a proposta fica sem janela.',
+      'Ninguém do grupo divide o mesmo horário. Sem isso o grupo não tem quando jogar junto.',
     ],
     [
       'GROUP_OVER_SIZE',
@@ -110,13 +112,44 @@ describe('describeManualIssue', () => {
   });
 });
 
-describe('formatSquadWindow', () => {
+describe('formatSquadCell', () => {
   it('escreve dia, faixa e horário', () => {
-    expect(formatSquadWindow(6, 2, BLOCKS)).toBe('SÁB · NOITE 18H ÀS 24H');
+    expect(formatSquadCell(6, 2, BLOCKS)).toBe('SÁB · NOITE 18H ÀS 24H');
   });
 
   it('diz de que noite é a madrugada, inclusive virando a semana', () => {
-    expect(formatSquadWindow(0, 3, BLOCKS)).toBe('DOM · MADRUGADA 0H ÀS 6H (NOITE DE SÁB)');
+    expect(formatSquadCell(0, 3, BLOCKS)).toBe('DOM · MADRUGADA 0H ÀS 6H (NOITE DE SÁB)');
+  });
+});
+
+describe('formatSessionStart', () => {
+  it('escreve dia da semana, data e hora no fuso da guild', () => {
+    // 00:30 UTC de sábado ainda é sexta 21:30 em São Paulo.
+    expect(formatSessionStart('2026-09-19T00:30:00.000Z', 'America/Sao_Paulo')).toBe(
+      'SEX 18/09 21:30',
+    );
+  });
+});
+
+describe('describeSession', () => {
+  const at = '2026-09-19T00:00:00.000Z';
+
+  it('conta quem vai, no singular e no plural', () => {
+    expect(describeSession({ startsAt: at, goingCount: 0, live: false }, 'America/Sao_Paulo')).toBe(
+      'SEX 18/09 21:00 · NINGUÉM CONFIRMOU',
+    );
+    expect(describeSession({ startsAt: at, goingCount: 1, live: false }, 'America/Sao_Paulo')).toBe(
+      'SEX 18/09 21:00 · 1 VAI',
+    );
+    expect(describeSession({ startsAt: at, goingCount: 3, live: false }, 'America/Sao_Paulo')).toBe(
+      'SEX 18/09 21:00 · 3 VÃO',
+    );
+  });
+
+  it('jogatina rolando diz agora em vez da hora', () => {
+    expect(describeSession({ startsAt: at, goingCount: 2, live: true }, 'America/Sao_Paulo')).toBe(
+      'AGORA · 2 VÃO',
+    );
   });
 });
 

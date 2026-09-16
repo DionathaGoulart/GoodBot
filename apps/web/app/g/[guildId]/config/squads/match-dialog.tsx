@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { formatSquadWindow } from '@/lib/squad-labels';
+import { formatSquadCell } from '@/lib/squad-labels';
 import { useGuildId } from '@/lib/use-guild-id';
 
 import { withPayload } from './form-data';
@@ -177,10 +177,10 @@ export function MatchDialog({
               </div>
 
               <div className="flex flex-col gap-1">
-                <p className="section-label">JANELA SUGERIDA</p>
+                <p className="section-label">HORÁRIO EM COMUM</p>
                 <p className="text-sm">
                   {check.slot
-                    ? formatSquadWindow(check.slot.day, check.slot.block, blocks)
+                    ? formatSquadCell(check.slot.day, check.slot.block, blocks)
                     : 'SEM HORÁRIO EM COMUM'}
                 </p>
               </div>

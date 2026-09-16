@@ -1,12 +1,14 @@
 import {
   SQUAD_DAYS,
   fromBits,
+  toLocalDateTime,
   type RunSquadMatchResult,
   type SquadBlockConfig,
   type SquadFieldMatch,
   type SquadFieldType,
   type SquadManualIssue,
   type SquadProfileStatus,
+  type SquadSessionSummary,
   type SquadStatus,
 } from '@goodbot/shared';
 
@@ -16,8 +18,8 @@ import {
  *
  * Datas saem sempre no fuso da guild e montadas peça por peça. O servidor da
  * Vercel roda em UTC e o navegador no fuso de quem abre: um texto diferente
- * dos dois lados quebra a hidratação. E a janela de um squad é a hora da
- * guild, não a de quem lê.
+ * dos dois lados quebra a hidratação. E a hora de uma jogatina é a da guild,
+ * não a de quem lê.
  */
 
 /** Dias da grade na ordem dos bits: 0 = domingo. */
@@ -85,7 +87,7 @@ export function describeManualIssue(
     case 'IN_OPEN_PROPOSAL':
       return `${name} já está numa proposta aberta deste jogo.`;
     case 'NO_COMMON_CELL':
-      return 'Ninguém do grupo divide o mesmo horário. Sem isso a proposta fica sem janela.';
+      return 'Ninguém do grupo divide o mesmo horário. Sem isso o grupo não tem quando jogar junto.';
     case 'GROUP_OVER_SIZE':
       return `A turma é maior que o squad (${String(issue.userIds.length)} de ${String(ctx.squadSize)}): quem aceitar primeiro fica com as vagas.`;
     case 'NOT_SEARCHING':
@@ -108,11 +110,11 @@ function dayShort(day: number): string {
 }
 
 /**
- * Janela semanal de um squad: "SÁB · NOITE 18H ÀS 24H". A madrugada é o
- * começo do próprio dia, então a de sábado é a noite de sexta para sábado, e
- * o rótulo diz isso, como o embed do bot.
+ * Uma célula da grade: "SÁB · NOITE 18H ÀS 24H". A madrugada é o começo do
+ * próprio dia, então a de sábado é a noite de sexta para sábado, e o rótulo
+ * diz isso, como o embed do bot.
  */
-export function formatSquadWindow(
+export function formatSquadCell(
   day: number,
   block: number,
   blocks: readonly SquadBlockConfig[],
@@ -185,6 +187,27 @@ export function formatDate(iso: string, timeZone: string): string {
 export function formatDateTime(iso: string, timeZone: string): string {
   const { day, month, hour, minute } = partsIn(iso, timeZone);
   return `${day}/${month} ${hour}:${minute}`;
+}
+
+/** "SEX 19/09 21:00", no fuso da guild. */
+export function formatSessionStart(iso: string, timeZone: string): string {
+  const { weekday } = toLocalDateTime(new Date(iso), timeZone);
+  return `${dayShort(weekday)} ${formatDateTime(iso, timeZone)}`;
+}
+
+/** A jogatina numa linha de tabela: "SEX 19/09 21:00 · 2 VÃO" ou "AGORA · 1 VAI". */
+export function describeSession(
+  session: Pick<SquadSessionSummary, 'startsAt' | 'goingCount' | 'live'>,
+  timeZone: string,
+): string {
+  const when = session.live ? 'AGORA' : formatSessionStart(session.startsAt, timeZone);
+  const going =
+    session.goingCount === 0
+      ? 'NINGUÉM CONFIRMOU'
+      : session.goingCount === 1
+        ? '1 VAI'
+        : `${String(session.goingCount)} VÃO`;
+  return `${when} · ${going}`;
 }
 
 // ── Editor de jogo ──────────────────────────────────────────────────────────

@@ -82,7 +82,7 @@ function proposal(id: string, overrides: Partial<SquadProposalSummary> = {}): Sq
 }
 
 function squad(id: string, gameId: string, memberIds: string[]): LiveSquadRow {
-  return { id, gameId, name: id, status: 'open', day: 6, block: 2, textChannelId: null, memberIds };
+  return { id, gameId, name: id, status: 'open', textChannelId: null, memberIds };
 }
 
 function data(overrides: Partial<SquadPlayersData> = {}): SquadPlayersData {
