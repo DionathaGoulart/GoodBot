@@ -18,14 +18,13 @@ const at = (iso: string) => Date.parse(iso);
  * Um squad de A e B no fuso de São Paulo. O relógio começa na segunda,
  * 14/09/2026, meio-dia UTC (9h locais).
  */
-function jobScenario(slot: { day: number; block: number }, options: { createdAt?: Date } = {}) {
+function jobScenario(options: { createdAt?: Date } = {}) {
   const harness = createHarness();
   const game = seedGame();
   const channel = harness.guild.add(fakeTextChannel());
   const squad = seedSquad({
     gameId: game.id,
     textChannelId: channel.id,
-    ...slot,
     ...(options.createdAt ? { createdAt: options.createdAt } : {}),
   });
   seedMember(squad.id, A);
@@ -38,41 +37,50 @@ function jobScenario(slot: { day: number; block: number }, options: { createdAt?
     guildIds: () => [GUILD_ID],
     now: () => harness.clock.now,
   });
-  return { ...harness, game, channel, squad, job, run: () => job.runFor(harness.discordGuild) };
+  const schedule = (when: string) =>
+    harness.service.scheduleSession(harness.discordGuild, squad.id, A, when, 'command');
+  return { ...harness, game, channel, squad, job, schedule, run: () => job.runFor(harness.discordGuild) };
 }
-
-/** Segunda à tarde: 12h às 18h em São Paulo, 15h às 21h UTC. */
-const MONDAY_AFTERNOON = { day: 1, block: 1 };
-/** Quinta à noite: longe de tudo o que os testes de inatividade fazem. */
-const THURSDAY_NIGHT = { day: 4, block: 2 };
 
 describe('SquadsJob', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('agenda a sessão e só lembra dentro da antecedência, uma vez, com uma reserva só', async () => {
-    const s = jobScenario(MONDAY_AFTERNOON);
+  it('não marca jogatina sozinho', async () => {
+    const s = jobScenario();
+    s.clock.now = at('2026-09-19T23:00:00Z');
+
+    await s.run();
+
+    expect(store.sessions).toEqual([]);
+  });
+
+  it('lembra só dentro da antecedência, uma vez, com uma reserva só', async () => {
+    const s = jobScenario();
+    // Hoje 12h em São Paulo: 15h UTC.
+    await s.schedule('hoje 12h');
 
     s.clock.now = at('2026-09-14T14:00:00Z');
-    expect(await s.run()).toMatchObject({ scheduled: 1, reminded: 0 });
-    expect(store.sessions).toEqual([
-      expect.objectContaining({ startsAt: new Date('2026-09-14T15:00:00Z') }),
-    ]);
+    expect(await s.run()).toMatchObject({ reminded: 0 });
 
     s.clock.now = at('2026-09-14T14:40:00Z');
-    expect(await s.run()).toMatchObject({ scheduled: 1, reminded: 1 });
+    expect(await s.run()).toMatchObject({ reminded: 1 });
     s.clock.now = at('2026-09-14T14:45:00Z');
     expect(await s.run()).toMatchObject({ reminded: 0 });
 
     expect(store.sessions).toHaveLength(1);
     expect(store.sessions[0]?.voiceChannelId).toBe(s.voices[0]!.id);
-    expect(s.channel.sent).toHaveLength(1);
+    const reminders = s.channel.sent.filter((message) =>
+      String(message.payload.content).includes('começa'),
+    );
+    expect(reminders).toHaveLength(1);
     expect(s.voices[0]!.permissionOverwrites.set).toHaveBeenCalledTimes(1);
   });
 
-  it('na hora começa e move quem está em outro voice; no fim da faixa libera uma vez', async () => {
-    const s = jobScenario(MONDAY_AFTERNOON);
+  it('na hora começa e move quem está em outro voice; no fim da jogatina libera uma vez', async () => {
+    const s = jobScenario();
+    await s.schedule('hoje 12h');
     s.clock.now = at('2026-09-14T14:40:00Z');
     await s.run();
     const inOtherVoice = s.guild.putInVoice(A, s.voices[1]!.id);
@@ -81,71 +89,83 @@ describe('SquadsJob', () => {
     expect(await s.run()).toMatchObject({ started: 1, released: 0 });
     expect(inOtherVoice.setChannel).toHaveBeenCalledWith(s.voices[0]!.id, expect.any(String));
 
-    s.clock.now = at('2026-09-14T21:00:00Z');
+    // Três horas de jogatina: 15h às 18h UTC.
+    s.clock.now = at('2026-09-14T18:00:00Z');
     expect(await s.run()).toMatchObject({ started: 0, released: 1 });
-    s.clock.now = at('2026-09-14T21:05:00Z');
+    s.clock.now = at('2026-09-14T18:05:00Z');
     expect(await s.run()).toMatchObject({ released: 0 });
 
-    const monday = store.sessions.find(
-      (session) => session.startsAt.getTime() === at('2026-09-14T15:00:00Z'),
-    );
-    expect(monday?.voiceReleasedAt).not.toBeNull();
+    expect(store.sessions[0]?.voiceReleasedAt).not.toBeNull();
     expect(s.voices[0]!.permissionOverwrites.set).toHaveBeenCalledTimes(2);
   });
 
-  it('inatividade: avisa na 4ª semana, não repete no mesmo dia e arquiva uma semana depois', async () => {
-    const s = jobScenario(THURSDAY_NIGHT, { createdAt: new Date(NOW - 4 * WEEK_MS - DAY_MS) });
+  it('jogatina cancelada não é lembrada nem começa', async () => {
+    const s = jobScenario();
+    const { session } = await s.schedule('hoje 12h');
+    await s.service.cancelSession(s.discordGuild, session.id, A, 'event');
+
+    s.clock.now = at('2026-09-14T15:00:00Z');
+    expect(await s.run()).toMatchObject({ reminded: 0, started: 0 });
+  });
+
+  it('passo diário: inatividade, guias em dia e não repete no mesmo dia', async () => {
+    const s = jobScenario({ createdAt: new Date(NOW - 4 * WEEK_MS - DAY_MS) });
 
     // 9h locais: antes da hora do passo diário.
-    expect(await s.run()).toMatchObject({ daily: false });
+    expect(await s.run()).toMatchObject({ daily: false, guides: 0 });
     expect(store.squads[0]?.warnedAt).toBeNull();
 
     s.clock.now = at('2026-09-14T15:30:00Z');
-    expect(await s.run()).toMatchObject({ daily: true });
+    expect(await s.run()).toMatchObject({ daily: true, guides: 1 });
     expect(store.squads[0]?.warnedAt).not.toBeNull();
+    expect(store.squads[0]?.guideMessageId).not.toBeNull();
 
     s.clock.now += HOUR_MS;
     expect(await s.run()).toMatchObject({ daily: false });
     expect(store.squads[0]?.status).toBe('open');
 
     s.clock.now = at('2026-09-21T15:30:00Z');
-    expect(await s.run()).toMatchObject({ daily: true });
+    expect(await s.run()).toMatchObject({ daily: true, guides: 0 });
     expect(store.squads[0]?.status).toBe('archived');
   });
 
   it('módulo desligado: a guild é pulada sem tocar o banco', async () => {
-    const s = jobScenario(MONDAY_AFTERNOON);
+    const s = jobScenario();
     s.setConfig({ enabled: false });
     s.clock.now = at('2026-09-14T15:30:00Z');
 
     expect(await s.run()).toBeNull();
-    expect(repositories.upsertSquadSession).not.toHaveBeenCalled();
+    expect(repositories.listSessionsStartingBetween).not.toHaveBeenCalled();
     expect(store.meta.size).toBe(0);
   });
 
   it('um passo que falha não impede os seguintes', async () => {
-    const s = jobScenario(MONDAY_AFTERNOON);
+    const s = jobScenario();
+    await s.schedule('hoje 12h');
     vi.spyOn(s.service, 'expireProposals').mockRejectedValueOnce(new Error('banco fora'));
     s.clock.now = at('2026-09-14T14:40:00Z');
 
-    expect(await s.run()).toMatchObject({ expired: 0, scheduled: 1, reminded: 1 });
+    expect(await s.run()).toMatchObject({ expired: 0, reminded: 1 });
   });
 
   it('a passada percorre só as guilds atendidas que estão no cache', async () => {
-    const s = jobScenario(MONDAY_AFTERNOON);
+    const s = jobScenario();
+    await s.schedule('hoje 9h20');
+    s.clock.now = NOW + 10 * MINUTE_MS;
+    store.sessions[0]!.remindedAt = null;
     const job = new SquadsJob({
       db: fixtures.fakeDb,
       client: s.client,
       config: s.configService as unknown as ConfigService,
       squads: s.service,
       guildIds: () => ['900000000000000123', GUILD_ID],
-      now: () => s.clock.now + 30 * MINUTE_MS,
+      now: () => s.clock.now,
     });
 
     await job.tick();
 
     expect(s.configService.get).toHaveBeenCalledWith(GUILD_ID, 'squads');
     expect(s.configService.get).not.toHaveBeenCalledWith('900000000000000123', 'squads');
-    expect(store.sessions).toHaveLength(1);
+    expect(store.sessions[0]?.remindedAt).not.toBeNull();
   });
 });

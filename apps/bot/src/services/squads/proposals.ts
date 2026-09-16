@@ -33,13 +33,6 @@ export interface ProposalDeclineResult {
   outcome: 'declined' | 'already';
 }
 
-/**
- * Janela de reserva quando ninguém da turma tem célula marcada (as grades
- * foram zeradas entre o match e o aceite): sábado à noite, o horário mais
- * comum, que o squad pode combinar de mudar.
- */
-const FALLBACK_SLOT: SquadCell = { day: 6, block: 2 };
-
 /** Aceite sem líder: o primeiro cria o squad, os seguintes ocupam vaga. */
 export class ProposalService {
   constructor(private readonly ctx: SquadContext) {}
@@ -224,7 +217,6 @@ export class ProposalService {
     userId: string,
   ): Promise<ProposalAcceptResult> {
     const { db } = this.ctx;
-    const slot = (await this.slotFor(guild.id, proposal)) ?? FALLBACK_SLOT;
     const existing = await listSquads(db, guild.id, { gameId: game.id });
     const name = defaultSquadName(game.name, existing.length + 1);
 
@@ -235,8 +227,6 @@ export class ProposalService {
           guildId: guild.id,
           gameId: game.id,
           name,
-          day: slot.day,
-          block: slot.block,
           status: 'open',
         });
         const claimed = await claimProposalSquad(tx, guild.id, proposal.id, row.id);
@@ -263,7 +253,10 @@ export class ProposalService {
     return { outcome: 'created', squad: home };
   }
 
-  /** A célula com mais gente entre quem aceitou ou ainda não passou, relida dos perfis. */
+  /**
+   * A célula com mais gente entre quem aceitou ou ainda não passou, relida dos
+   * perfis: o "vocês batem em" da mensagem, informativo.
+   */
   private async slotFor(guildId: string, proposal: SquadProposal): Promise<SquadCell | null> {
     const ids = proposal.userIds.filter((id) => !proposal.declinedIds.includes(id));
     const profiles = await Promise.all(
@@ -292,9 +285,7 @@ export class ProposalService {
       this.ctx.embedColor(guild.id),
       getSquadGame(this.ctx.db, guild.id, proposal.gameId),
     ]);
-    const slot = squad
-      ? { day: squad.day, block: squad.block }
-      : await this.slotFor(guild.id, proposal);
+    const slot = await this.slotFor(guild.id, proposal);
     await message.edit(
       proposalMessage({
         proposal,

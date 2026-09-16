@@ -21,13 +21,19 @@ const BLOCK_RE = /^\d$/;
 
 export type SquadProposalAction = 'accept' | 'decline';
 export type SquadRequestAction = 'accept' | 'decline';
-export type SquadSessionAction = 'going' | 'notgoing';
+export type SquadSessionAction = 'going' | 'notgoing' | 'cancel' | 'repeat';
+const SESSION_ACTIONS: readonly string[] = ['going', 'notgoing', 'cancel', 'repeat'];
 export type SquadStatusAction = 'searching' | 'paused';
 
 export type SquadCustomId =
   | { kind: 'proposal'; action: SquadProposalAction; proposalId: string }
   | { kind: 'request'; action: SquadRequestAction; requestId: string }
   | { kind: 'session'; action: SquadSessionAction; sessionId: number }
+  | { kind: 'bora-open'; squadId: string }
+  | { kind: 'bora-modal'; squadId: string }
+  | { kind: 'rename-open'; squadId: string }
+  | { kind: 'rename-modal'; squadId: string }
+  | { kind: 'search'; gameId: string }
   | { kind: 'keep'; squadId: string }
   | { kind: 'leave'; squadId: string }
   | { kind: 'leave-confirm'; squadId: string }
@@ -69,6 +75,29 @@ export function sessionButtonId(action: SquadSessionAction, sessionId: number): 
     throw new RangeError(`sessionId inválido para custom_id: ${String(sessionId)}`);
   }
   return build('session', action, String(sessionId));
+}
+
+/** BORA, no guia do squad: abre o modal com o "quando". */
+export function boraButtonId(squadId: string): string {
+  return build('bora', 'open', assertUuid(squadId, 'squadId'));
+}
+
+export function boraModalId(squadId: string): string {
+  return build('bora', 'modal', assertUuid(squadId, 'squadId'));
+}
+
+/** RENOMEAR, no guia do squad: abre o modal com o nome atual. */
+export function renameButtonId(squadId: string): string {
+  return build('rename', 'open', assertUuid(squadId, 'squadId'));
+}
+
+export function renameModalId(squadId: string): string {
+  return build('rename', 'modal', assertUuid(squadId, 'squadId'));
+}
+
+/** Squads com vaga num jogo, na mensagem de perfil salvo e no guia. */
+export function searchButtonId(gameId: string): string {
+  return build('search', assertUuid(gameId, 'gameId'));
 }
 
 export function keepButtonId(squadId: string): string {
@@ -149,13 +178,22 @@ export function parseSquadCustomId(customId: string): SquadCustomId | null {
         : { kind: 'request', action: second, requestId: third };
     }
     case 'session': {
-      if (size !== 4 || (second !== 'going' && second !== 'notgoing')) return null;
+      if (size !== 4 || !second || !SESSION_ACTIONS.includes(second)) return null;
       if (!third || !SESSION_ID_RE.test(third)) return null;
       const sessionId = Number(third);
       return Number.isSafeInteger(sessionId)
-        ? { kind: 'session', action: second, sessionId }
+        ? { kind: 'session', action: second as SquadSessionAction, sessionId }
         : null;
     }
+    case 'bora':
+    case 'rename': {
+      if (size !== 4 || !isUuid(third)) return null;
+      if (second === 'open') return { kind: `${subject}-open`, squadId: third };
+      if (second === 'modal') return { kind: `${subject}-modal`, squadId: third };
+      return null;
+    }
+    case 'search':
+      return size === 3 && isUuid(second) ? { kind: 'search', gameId: second } : null;
     case 'keep':
     case 'leave':
     case 'join':

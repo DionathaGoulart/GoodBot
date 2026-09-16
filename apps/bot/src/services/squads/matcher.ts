@@ -16,8 +16,8 @@ import {
   setSquadProposalMessage,
 } from '@goodbot/db';
 import {
-  cellBit,
   DAY_MS,
+  fitsSquad,
   HOUR_MS,
   joinRequestKey,
   MIN_SQUAD_SIZE,
@@ -35,7 +35,6 @@ import type { SquadContext } from './context';
 import type { SquadGame, SquadProfile, SquadProposal } from '@goodbot/db';
 import type {
   RunSquadMatchResult,
-  SquadCell,
   SquadGroupProposal,
   SquadMatchField,
   SquadMatchProfile,
@@ -77,22 +76,23 @@ export interface VacancyCandidate {
 }
 
 /**
- * Quem cabe na vaga de um squad: tem a janela dele marcada, não bate de frente
- * num campo `hard` com nenhum membro que tenha perfil e não está em cooldown
- * com nenhum membro. Melhor nota primeiro; empate vai para o menor id.
+ * Quem cabe na vaga de um squad: dá party com os membros em alguma célula da
+ * grade (`fitsSquad`), não bate de frente num campo `hard` com nenhum membro
+ * que tenha perfil e não está em cooldown com nenhum membro. Melhor nota
+ * primeiro; empate vai para o menor id.
  */
 export function rankVacancyCandidates(input: {
-  slot: SquadCell;
+  partySize: number;
   fields: readonly SquadMatchField[];
   memberIds: readonly string[];
   memberProfiles: readonly SquadMatchProfile[];
   candidates: readonly SquadMatchProfile[];
   blockedPairs: ReadonlySet<string>;
 }): VacancyCandidate[] {
-  const bit = 1 << cellBit(input.slot.day, input.slot.block);
+  const memberMasks = input.memberProfiles.map((member) => member.availability);
   const ranked: VacancyCandidate[] = [];
   for (const candidate of input.candidates) {
-    if ((candidate.availability & bit) === 0) continue;
+    if (!fitsSquad(candidate.availability, memberMasks, input.partySize)) continue;
     const blocked = input.memberIds.some(
       (id) => id === candidate.userId || input.blockedPairs.has(pairKey(candidate.userId, id)),
     );
@@ -311,7 +311,7 @@ export class MatcherService {
       ).filter((profile): profile is SquadProfile => profile !== null);
 
       const ranked = rankVacancyCandidates({
-        slot: { day: squad.day, block: squad.block },
+        partySize: game.squadSize,
         fields: game.fields,
         memberIds: members.map((member) => member.userId),
         memberProfiles: memberProfiles.map(toMatchProfile),

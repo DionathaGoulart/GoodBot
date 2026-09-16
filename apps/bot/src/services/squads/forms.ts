@@ -1,4 +1,4 @@
-import { MAX_SQUAD_TEXT_ANSWER_LENGTH, SQUAD_DAYS } from '@goodbot/shared';
+import { MAX_NAME_LENGTH, MAX_SQUAD_TEXT_ANSWER_LENGTH, SQUAD_DAYS } from '@goodbot/shared';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -11,18 +11,26 @@ import {
 } from 'discord.js';
 
 import { SQUADS_FOOTER } from './embeds';
-import { gridSaveButtonId, gridSelectId, profileModalId } from './ids';
+import {
+  boraModalId,
+  gridSaveButtonId,
+  gridSelectId,
+  profileModalId,
+  renameModalId,
+} from './ids';
 import { SQUAD_DAY_NAMES } from './slots';
 import { infoEmbed } from '../../lib/embeds';
 
-import type { SquadGame } from '@goodbot/db';
+import type { Squad, SquadGame } from '@goodbot/db';
 import type { SquadAnswers, SquadBlockConfig, SquadGameField } from '@goodbot/shared';
 import type { BaseMessageOptions, ModalSubmitFields } from 'discord.js';
 
 /**
- * Os dois formulários do perfil: o modal com os campos do jogo e a grade de
- * horários. São separados porque o modal do Discord aceita só cinco
- * componentes, e a grade sozinha já precisa de quatro selects.
+ * Os formulários do módulo. Os dois do perfil (o modal com os campos do jogo e
+ * a grade de horários) são separados porque o modal do Discord aceita só cinco
+ * componentes, e a grade sozinha já precisa de quatro selects. Os dos botões do
+ * guia (BORA e RENOMEAR) têm um campo só: quem aperta um botão não quer
+ * preencher formulário.
  */
 
 /** Teto do Discord para o título de um modal. */
@@ -124,6 +132,54 @@ export function readProfileAnswers(
     answers[field.key] = field.type === 'tags' ? [...values] : (values[0] ?? '');
   }
   return answers;
+}
+
+// ── modais do guia ──────────────────────────────────────────────────────────
+
+/** `custom_id` do campo do modal BORA. */
+export const BORA_WHEN_FIELD = 'when';
+/** `custom_id` do campo do modal RENOMEAR. */
+export const RENAME_NAME_FIELD = 'name';
+/** Teto do "quando": `depois de amanhã às 21:30` cabe com folga. */
+const MAX_WHEN_LENGTH = 40;
+
+/** O modal do BORA: um campo, "quando", com os exemplos no placeholder. */
+export function boraModal(squad: Pick<Squad, 'id' | 'name'>): ModalBuilder {
+  return new ModalBuilder()
+    .setCustomId(boraModalId(squad.id))
+    .setTitle(`Bora jogar: ${squad.name}`.slice(0, MAX_MODAL_TITLE))
+    .setLabelComponents(
+      new LabelBuilder()
+        .setLabel('Quando?')
+        .setDescription('Hora do servidor. Eu chamo o squad e reservo uma sala.')
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId(BORA_WHEN_FIELD)
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('agora, hoje 21h, amanhã 20:30, sex 22h')
+            .setMaxLength(MAX_WHEN_LENGTH)
+            .setRequired(true),
+        ),
+    );
+}
+
+/** O modal do RENOMEAR, já com o nome atual. */
+export function renameModal(squad: Pick<Squad, 'id' | 'name'>): ModalBuilder {
+  return new ModalBuilder()
+    .setCustomId(renameModalId(squad.id))
+    .setTitle('Renomear o squad')
+    .setLabelComponents(
+      new LabelBuilder()
+        .setLabel('Nome novo')
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId(RENAME_NAME_FIELD)
+            .setStyle(TextInputStyle.Short)
+            .setMaxLength(MAX_NAME_LENGTH)
+            .setValue(squad.name.slice(0, MAX_NAME_LENGTH))
+            .setRequired(true),
+        ),
+    );
 }
 
 // ── grade de horários ───────────────────────────────────────────────────────

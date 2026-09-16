@@ -55,7 +55,7 @@ describe('SquadService: propostas', () => {
     expect(result.outcome).toBe('created');
     expect(store.squads).toHaveLength(1);
     const squad = store.squads[0]!;
-    expect(squad).toMatchObject({ status: 'open', day: 6, block: 2, name: 'Helldivers 2 #1' });
+    expect(squad).toMatchObject({ status: 'open', day: null, block: null, name: 'Helldivers 2 #1' });
     expect(s.guild.channels.create).toHaveBeenCalledTimes(1);
     expect(s.guild.channels.create.mock.calls[0]?.[0].parent).toBe(s.category.id);
 
@@ -72,7 +72,12 @@ describe('SquadService: propostas', () => {
       acceptedIds: [A],
       closedAt: null,
     });
-    expect(embedOf(channel.sent[0])?.title).toBe('> SQUAD FORMADO');
+    // O guia fixo é a primeira mensagem do canal: pinado, chamando o fundador.
+    const guide = channel.sent[0]!;
+    expect(embedOf(guide)?.title).toBe('> HELLDIVERS 2 #1');
+    expect(guide.payload.content).toBe(`<@${A}>`);
+    expect(guide.pinned).toBe(true);
+    expect(squad.guideMessageId).toBe(guide.id);
     expect(s.audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'squad.create', source: 'event', actor: A }),
     );
@@ -179,17 +184,19 @@ describe('SquadService: propostas', () => {
     expect(store.proposals[0]!.acceptedIds).toEqual([A]);
   });
 
-  it('pool cheio deixa o squad sem voice e avisa nas boas-vindas', async () => {
+  it('pool cheio deixa o squad sem voice preferido e avisa no guia', async () => {
     const s = await scenario();
     s.setConfig({ voicePoolIds: [s.voices[0]!.id] });
-    seedSquad({ gameId: s.game.id, day: 6, block: 2, voiceChannelId: s.voices[0]!.id });
+    seedSquad({ gameId: s.game.id, voiceChannelId: s.voices[0]!.id });
 
     await s.service.acceptProposal(s.discordGuild, s.proposal.id, A);
 
     const squad = store.squads.find((row) => row.textChannelId)!;
     expect(squad.voiceChannelId).toBeNull();
-    const welcome = embedOf(squadChannel(s, squad.textChannelId)!.sent[0]);
-    expect(welcome?.fields?.find((field) => field.name === 'Sala')?.value).toBe(NO_VOICE_NOTE);
+    const guide = embedOf(squadChannel(s, squad.textChannelId)!.sent[0]);
+    expect(guide?.fields?.find((field) => field.name === 'Sala preferida')?.value).toBe(
+      NO_VOICE_NOTE,
+    );
   });
 
   it('sem categoria configurada recusa antes de gravar qualquer coisa', async () => {

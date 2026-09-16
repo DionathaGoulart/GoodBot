@@ -247,7 +247,9 @@ describe('SquadService: admin tira alguém do squad', () => {
     });
 
     expect(result).toMatchObject({ archived: false, profileStatus: 'paused', notified: true });
-    const notice = embedOf(channel.sent.at(-1))?.description ?? '';
+    // Depois do aviso vem o guia, publicado porque o squad ainda não tinha.
+    const left = channel.sent.find((message) => embedOf(message)?.title === '> ALGUÉM SAIU');
+    const notice = embedOf(left)?.description ?? '';
     expect(notice).toContain(`A staff tirou <@${B}>`);
     expect(notice).not.toContain(REASON);
     expect(notice).not.toContain(ADMIN);

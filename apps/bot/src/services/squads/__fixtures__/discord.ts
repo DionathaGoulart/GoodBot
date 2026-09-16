@@ -87,6 +87,10 @@ export interface FakeMessage {
   id: string;
   payload: Record<string, unknown>;
   edit: ReturnType<typeof vi.fn>;
+  pin: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
+  pinned: boolean;
+  deleted: boolean;
 }
 
 /** Primeiro embed de uma mensagem, já como JSON. */
@@ -105,8 +109,18 @@ function fakeMessages() {
     const message: FakeMessage = {
       id: snowflake(),
       payload,
+      pinned: false,
+      deleted: false,
       edit: vi.fn(async (next: Record<string, unknown>) => {
         message.payload = { ...message.payload, ...next };
+        return message;
+      }),
+      pin: vi.fn(async (_reason?: string) => {
+        message.pinned = true;
+        return message;
+      }),
+      delete: vi.fn(async () => {
+        message.deleted = true;
         return message;
       }),
     };
@@ -115,8 +129,8 @@ function fakeMessages() {
   });
   const messages = {
     fetch: vi.fn(async (id: string) => {
-      const found = sent.find((message) => message.id === id);
-      if (!found) throw new Error('Unknown Message');
+      const found = sent.find((message) => message.id === id && !message.deleted);
+      if (!found) throw discordError('Unknown Message', 10008);
       return found;
     }),
   };
@@ -124,7 +138,12 @@ function fakeMessages() {
 }
 
 export function fakeTextChannel(
-  options: { id?: string; name?: string; overwrites?: readonly ExactOverwrite[] } = {},
+  options: {
+    id?: string;
+    name?: string;
+    overwrites?: readonly ExactOverwrite[];
+    permissions?: bigint;
+  } = {},
 ) {
   const channel = {
     id: options.id ?? snowflake(),
@@ -132,6 +151,8 @@ export function fakeTextChannel(
     type: ChannelType.GuildText as const,
     isThread: () => false,
     isTextBased: () => true,
+    /** O que o bot pode no canal; o padrão é tudo menos `Administrator`. */
+    permissionsFor: vi.fn(() => new PermissionsBitField(options.permissions ?? ALL_BUT_ADMIN)),
     permissionOverwrites: fakeOverwriteManager(options.overwrites),
     ...fakeMessages(),
     setName: vi.fn(async (name: string, _reason?: string) => {

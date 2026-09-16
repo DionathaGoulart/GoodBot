@@ -66,7 +66,8 @@ describe('SquadService: pedidos de entrada', () => {
     expect(requestRow()).toMatchObject({ status: 'accepted', decidedBy: A });
     expect(store.members.map((member) => member.userId)).toEqual([A, B, C]);
     expect(s.channel.permissionOverwrites.cache.has(C)).toBe(true);
-    expect(s.channel.sent.at(-1)?.payload.content).toBe(`<@${C}>`);
+    const joined = s.channel.sent.find((message) => embedOf(message)?.title === '> CHEGOU REFORÇO');
+    expect(joined?.payload.content).toBe(`<@${C}>`);
     expect(store.profiles.find((profile) => profile.userId === C)?.status).toBe('in_squad');
     expect(componentsOf(s.channel.sent[0])).toEqual([]);
   });

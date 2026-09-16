@@ -2,13 +2,16 @@ import { countCells } from '@goodbot/shared';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
 import {
+  boraButtonId,
   confirmLeaveButtonId,
   joinButtonId,
   keepButtonId,
   leaveButtonId,
   profileStartButtonId,
   proposalButtonId,
+  renameButtonId,
   requestButtonId,
+  searchButtonId,
   sessionButtonId,
   statusButtonId,
 } from './ids';
@@ -44,8 +47,10 @@ export const SQUADS_FOOTER = botFooter('SQUADS');
 const MAX_FIELD_VALUE = 1024;
 
 export const NO_VOICE_NOTE =
-  'Ainda sem sala fixa: o pool de voices está cheio. No dia, usem qualquer voice livre.';
+  'Sem sala preferida: o pool de voices está cheio. Na jogatina eu reservo o voice que estiver livre.';
 export const NO_RESERVED_VOICE_NOTE = 'Sem sala reservada desta vez: usem qualquer voice livre.';
+/** Quantas jogatinas o guia lista; o resto vira "e mais N". */
+export const GUIDE_SESSIONS_LISTED = 3;
 export const LEAVE_NOTICE =
   'Você saiu do squad. Seu perfil ficou pausado: para voltar a procurar, use /squad status procurando.';
 export const RENAME_LATER_NOTE =
@@ -58,7 +63,7 @@ function mentionList(ids: readonly string[], empty = 'ninguém'): string {
   return text.slice(0, MAX_FIELD_VALUE);
 }
 
-function timestamp(date: Date, style: 'F' | 'R' | 't'): string {
+function timestamp(date: Date, style: 'F' | 'f' | 'R' | 't'): string {
   return `<t:${String(Math.floor(date.getTime() / 1000))}:${style}>`;
 }
 
@@ -66,7 +71,7 @@ function slotText(
   slot: { day: number; block: number } | null,
   blocks: readonly SquadBlockConfig[],
 ): string {
-  return slot ? formatSlot(slot.day, slot.block, blocks) : 'A combinar';
+  return slot ? formatSlot(slot.day, slot.block, blocks) : 'Horários variados';
 }
 
 function buttons(...list: ButtonBuilder[]): ActionRowBuilder<ButtonBuilder>[] {
@@ -80,7 +85,7 @@ export type ProposalState = 'open' | 'closed' | 'expired';
 export interface ProposalView {
   proposal: Pick<SquadProposal, 'id' | 'userIds' | 'acceptedIds' | 'declinedIds' | 'expiresAt'>;
   game: Pick<SquadGame, 'name'>;
-  /** A janela do squad, se já existe; senão a sugerida pelas grades. */
+  /** A célula com mais gente da turma: informativo, o squad não tem horário fixo. */
   slot: { day: number; block: number } | null;
   blocks: readonly SquadBlockConfig[];
   squad: Pick<Squad, 'name' | 'textChannelId'> | null;
@@ -98,7 +103,7 @@ function proposalDescription(view: ProposalView): string {
     case 'open':
       return [
         `Vocês marcaram horários parecidos para jogar **${view.game.name}**.`,
-        'Quem topar jogar junto toda semana, clica em **Aceito**. O primeiro aceite cria o squad, e quem passar fica de fora sem problema.',
+        'Quem topar formar um squad fixo, clica em **Aceito**. O primeiro aceite cria o squad, com canal próprio, e quem passar fica de fora sem problema. Depois é só marcar as jogatinas por lá.',
         home,
       ]
         .filter(Boolean)
@@ -118,7 +123,7 @@ export function proposalMessage(view: ProposalView): BaseMessageOptions {
   const { proposal } = view;
   const decided = new Set([...proposal.acceptedIds, ...proposal.declinedIds]);
   const fields: APIEmbedField[] = [
-    { name: 'Janela', value: slotText(view.slot, view.blocks) },
+    { name: 'Vocês batem em', value: slotText(view.slot, view.blocks) },
     { name: 'Aceitaram', value: mentionList(proposal.acceptedIds), inline: true },
     { name: 'Passaram', value: mentionList(proposal.declinedIds), inline: true },
     {
@@ -160,57 +165,123 @@ export function proposalMessage(view: ProposalView): BaseMessageOptions {
 
 // ── casa do squad ───────────────────────────────────────────────────────────
 
-export interface WelcomeView {
-  squad: Pick<Squad, 'id' | 'name' | 'day' | 'block'>;
-  game: Pick<SquadGame, 'name' | 'squadSize'>;
+export interface GuideView {
+  squad: Pick<Squad, 'id' | 'name' | 'status' | 'voiceChannelId'>;
+  game: Pick<SquadGame, 'id' | 'name' | 'squadSize'>;
   memberIds: readonly string[];
-  blocks: readonly SquadBlockConfig[];
-  nextSessionAt: Date | null;
-  voiceChannelId: string | null;
+  /** Jogatinas não canceladas que ainda não acabaram, da mais próxima. */
+  upcoming: readonly Pick<SquadSession, 'startsAt' | 'goingIds'>[];
+  /** O servidor deixa estar em mais de um squad: o guia oferece procurar outro. */
+  canJoinAnother: boolean;
   embedColor: number;
+  /** Só a publicação na criação do squad chama os membros; reedição nunca pinga. */
+  mentionMembers: boolean;
 }
 
-export function squadWelcomeMessage(view: WelcomeView): BaseMessageOptions {
-  const next = view.nextSessionAt
-    ? `${timestamp(view.nextSessionAt, 'F')} (${timestamp(view.nextSessionAt, 'R')})`
-    : 'A combinar';
+function upcomingText(upcoming: GuideView['upcoming']): string {
+  if (upcoming.length === 0) return 'Nenhuma marcada. Aperte **BORA** para chamar o squad.';
+  const lines = upcoming.slice(0, GUIDE_SESSIONS_LISTED).map((session) => {
+    const going = session.goingIds.length;
+    const who =
+      going === 0 ? 'ninguém confirmou ainda' : going === 1 ? '1 vai' : `${String(going)} vão`;
+    return `${timestamp(session.startsAt, 'f')} (${timestamp(session.startsAt, 'R')}), ${who}`;
+  });
+  const rest = upcoming.length - GUIDE_SESSIONS_LISTED;
+  if (rest > 0) lines.push(`e mais ${String(rest)}`);
+  return lines.join('\n');
+}
+
+const GUIDE_HOW_TO = [
+  '• Quer jogar? Aperte **BORA** ou use `/bora hoje 21h`. Eu chamo o squad, reservo uma sala um pouco antes e, na hora, puxo quem estiver em outro voice.',
+  '• Na mensagem da jogatina tem **VOU**, **NÃO VOU** e **CANCELAR**. Depois que ela começa, **REPETIR** marca a mesma hora na semana seguinte.',
+  '• Nome do squad: **RENOMEAR**. Para sair: **SAIR DO SQUAD**.',
+].join('\n');
+
+/**
+ * O guia fixo do canal do squad: quem está, o que vem aí e os botões de tudo o
+ * que se faz no squad. O bot pina e reedita esta mensagem a cada mudança, então
+ * ela é sempre o retrato de agora. Arquivado, sobra o aviso sem botões.
+ */
+export function guideMessage(view: GuideView): BaseMessageOptions {
+  const { squad, game, memberIds } = view;
+  if (squad.status === 'archived') {
+    return {
+      content: '',
+      embeds: [
+        infoEmbed(
+          {
+            title: `${squad.name} (arquivado)`,
+            description: `Este squad de ${game.name} foi arquivado. O canal fica aberto só para leitura.`,
+            footer: SQUADS_FOOTER,
+          },
+          view.embedColor,
+        ),
+      ],
+      components: [],
+      allowedMentions: { parse: [] },
+    };
+  }
+
+  const open = game.squadSize - memberIds.length;
   const embed = infoEmbed(
     {
-      title: 'Squad formado',
-      description: `Bem-vindos ao **${view.squad.name}**! Este canal é a casa do squad de ${view.game.name}: combinem tudo por aqui.`,
+      title: squad.name,
+      description: `Casa do squad de **${game.name}**. Combinem tudo por aqui.`,
       fields: [
         {
-          name: 'Membros',
-          value: `${mentionList(view.memberIds)} (${String(view.memberIds.length)} de ${String(view.game.squadSize)})`,
-        },
-        { name: 'Janela semanal', value: slotText(view.squad, view.blocks), inline: true },
-        { name: 'Próxima sessão', value: next, inline: true },
-        {
-          name: 'Sala',
-          value: view.voiceChannelId
-            ? `<#${view.voiceChannelId}>, reservada só para vocês durante a janela.`
-            : NO_VOICE_NOTE,
+          name: `Membros (${String(memberIds.length)} de ${String(game.squadSize)})`,
+          value: mentionList(memberIds),
         },
         {
-          name: 'Como funciona',
+          name: 'Vagas',
           value:
-            'Antes de cada sessão eu chamo todo mundo com Vou / Não vou. Para mudar o nome, use /squad renomear. Para sair, use /squad sair ou o botão abaixo.',
+            open > 0
+              ? `${open === 1 ? '1 aberta' : `${String(open)} abertas`}. Quando aparecer gente com horário parecido, eu mando o pedido para cá.`
+              : 'Squad completo.',
         },
+        {
+          name: 'Sala preferida',
+          value: squad.voiceChannelId ? `<#${squad.voiceChannelId}>` : NO_VOICE_NOTE,
+        },
+        { name: 'Próximas jogatinas', value: upcomingText(view.upcoming) },
+        { name: 'Como usar', value: GUIDE_HOW_TO },
       ],
       footer: SQUADS_FOOTER,
     },
     view.embedColor,
   );
-  return {
-    content: view.memberIds.map(mention).join(' ') || undefined,
-    embeds: [embed],
-    components: buttons(
+
+  const row = [
+    new ButtonBuilder()
+      .setCustomId(boraButtonId(squad.id))
+      .setLabel('BORA')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(renameButtonId(squad.id))
+      .setLabel('RENOMEAR')
+      .setStyle(ButtonStyle.Secondary),
+  ];
+  if (view.canJoinAnother) {
+    row.push(
       new ButtonBuilder()
-        .setCustomId(leaveButtonId(view.squad.id))
-        .setLabel('SAIR DO SQUAD')
+        .setCustomId(searchButtonId(game.id))
+        .setLabel('PROCURAR OUTRO SQUAD')
         .setStyle(ButtonStyle.Secondary),
-    ),
-    allowedMentions: { users: [...view.memberIds] },
+    );
+  }
+  row.push(
+    new ButtonBuilder()
+      .setCustomId(leaveButtonId(squad.id))
+      .setLabel('SAIR DO SQUAD')
+      .setStyle(ButtonStyle.Secondary),
+  );
+
+  const mentioned = view.mentionMembers ? [...memberIds] : [];
+  return {
+    content: mentioned.map(mention).join(' '),
+    embeds: [embed],
+    components: buttons(...row),
+    allowedMentions: { users: mentioned },
   };
 }
 
@@ -389,10 +460,8 @@ export type JoinRequestState = 'pending' | 'accepted' | 'declined' | 'expired';
 
 export interface JoinRequestView {
   request: Pick<SquadJoinRequest, 'id' | 'userId' | 'declinedIds' | 'decidedBy'>;
-  squad: Pick<Squad, 'day' | 'block'>;
   game: Pick<SquadGame, 'fields'>;
   answers: SquadAnswers;
-  blocks: readonly SquadBlockConfig[];
   memberCount: number;
   state: JoinRequestState;
   embedColor: number;
@@ -413,7 +482,7 @@ function joinRequestDescription(view: JoinRequestView): string {
   const candidate = mention(view.request.userId);
   switch (view.state) {
     case 'pending':
-      return `${candidate} procura squad e joga no horário de vocês (${formatSlot(view.squad.day, view.squad.block, view.blocks)}). Basta um de vocês aceitar.`;
+      return `${candidate} procura squad e joga em horários parecidos com os de vocês. Basta um de vocês aceitar.`;
     case 'accepted':
       return view.request.decidedBy
         ? `${candidate} entrou no squad. Aceito por ${mention(view.request.decidedBy)}.`
@@ -466,62 +535,156 @@ export function joinRequestMessage(view: JoinRequestView): BaseMessageOptions {
   };
 }
 
-// ── sessão ──────────────────────────────────────────────────────────────────
+// ── jogatina ────────────────────────────────────────────────────────────────
 
-export interface ReminderView {
-  session: Pick<SquadSession, 'id' | 'startsAt' | 'endsAt' | 'goingIds' | 'notGoingIds'>;
+/**
+ * Em que pé a jogatina está. `started` vale depois do início e fica assim: a
+ * mensagem diz "começou há X" com timestamp relativo, que o Discord atualiza
+ * sozinho, e oferece REPETIR.
+ */
+export type SessionState = 'scheduled' | 'started' | 'cancelled';
+
+export interface SessionView {
+  session: Pick<
+    SquadSession,
+    | 'id'
+    | 'startsAt'
+    | 'endsAt'
+    | 'goingIds'
+    | 'notGoingIds'
+    | 'createdBy'
+    | 'cancelledBy'
+    | 'remindedAt'
+  >;
   squad: Pick<Squad, 'name'>;
   memberIds: readonly string[];
+  /** O voice reservado agora; `null` = ainda não reservou ou não conseguiu. */
   voiceChannelId: string | null;
+  state: SessionState;
+  /** Antecedência da reserva, para dizer quando a sala sai. */
+  reminderMinutesBefore: number;
   embedColor: number;
   /** Só o primeiro envio chama os membros; a edição dos votos não pinga ninguém. */
   mentionMembers: boolean;
 }
 
-export function sessionReminderMessage(view: ReminderView): BaseMessageOptions {
+function roomText(view: SessionView): string {
+  if (view.voiceChannelId) {
+    return `<#${view.voiceChannelId}>, reservada para o squad até ${timestamp(view.session.endsAt, 't')}.`;
+  }
+  if (view.session.remindedAt) return NO_RESERVED_VOICE_NOTE;
+  return view.reminderMinutesBefore > 0
+    ? `Reservo uma sala ${String(view.reminderMinutesBefore)} minutos antes.`
+    : 'Reservo uma sala na hora.';
+}
+
+function sessionDescription(view: SessionView): string {
+  const { session, squad } = view;
+  const when = `${timestamp(session.startsAt, 'F')} (${timestamp(session.startsAt, 'R')})`;
+  switch (view.state) {
+    case 'scheduled': {
+      const by = session.createdBy ? ` Quem chamou: ${mention(session.createdBy)}.` : '';
+      return `**${squad.name}** joga ${when}.${by} Vai?`;
+    }
+    case 'started':
+      return `A jogatina do **${squad.name}** começou ${timestamp(session.startsAt, 'R')}. Querem de novo na mesma hora da semana que vem? Aperte **REPETIR**.`;
+    case 'cancelled':
+      return session.cancelledBy
+        ? `A jogatina de ${timestamp(session.startsAt, 'F')} foi cancelada por ${mention(session.cancelledBy)}.`
+        : `A jogatina de ${timestamp(session.startsAt, 'F')} foi cancelada.`;
+  }
+}
+
+const SESSION_TITLE: Record<SessionState, string> = {
+  scheduled: 'Jogatina marcada',
+  started: 'Jogatina começou',
+  cancelled: 'Jogatina cancelada',
+};
+
+/** A mensagem de uma jogatina no canal do squad, com a contagem viva dos votos. */
+export function sessionMessage(view: SessionView): BaseMessageOptions {
   const { session } = view;
-  const answered = new Set([...session.goingIds, ...session.notGoingIds]);
-  const embed = infoEmbed(
-    {
-      title: 'Sessão chegando',
-      description: `A sessão do **${view.squad.name}** começa ${timestamp(session.startsAt, 'R')}, às ${timestamp(session.startsAt, 't')}. Vai jogar?`,
-      fields: [
-        {
-          name: 'Sala',
-          value: view.voiceChannelId
-            ? `<#${view.voiceChannelId}>, reservada para o squad até ${timestamp(session.endsAt, 't')}.`
-            : NO_RESERVED_VOICE_NOTE,
-        },
-        { name: 'Vão', value: mentionList(session.goingIds), inline: true },
-        { name: 'Não vão', value: mentionList(session.notGoingIds), inline: true },
-        {
-          name: 'Sem resposta',
-          value: mentionList(view.memberIds.filter((id) => !answered.has(id))),
-          inline: true,
-        },
-      ],
-      footer: SQUADS_FOOTER,
-    },
-    view.embedColor,
-  );
+  const fields: APIEmbedField[] = [];
+  if (view.state !== 'cancelled') {
+    const answered = new Set([...session.goingIds, ...session.notGoingIds]);
+    fields.push(
+      { name: 'Sala', value: roomText(view) },
+      { name: 'Vão', value: mentionList(session.goingIds), inline: true },
+      { name: 'Não vão', value: mentionList(session.notGoingIds), inline: true },
+    );
+    if (view.state === 'scheduled') {
+      fields.push({
+        name: 'Sem resposta',
+        value: mentionList(view.memberIds.filter((id) => !answered.has(id))),
+        inline: true,
+      });
+    }
+  }
+
+  const components =
+    view.state === 'scheduled'
+      ? buttons(
+          new ButtonBuilder()
+            .setCustomId(sessionButtonId('going', session.id))
+            .setLabel('VOU')
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(sessionButtonId('notgoing', session.id))
+            .setLabel('NÃO VOU')
+            .setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder()
+            .setCustomId(sessionButtonId('cancel', session.id))
+            .setLabel('CANCELAR')
+            .setStyle(ButtonStyle.Danger),
+        )
+      : view.state === 'started'
+        ? buttons(
+            new ButtonBuilder()
+              .setCustomId(sessionButtonId('repeat', session.id))
+              .setLabel('REPETIR')
+              .setStyle(ButtonStyle.Primary),
+          )
+        : [];
+
+  const mentioned = view.mentionMembers ? [...view.memberIds] : [];
   return {
-    ...(view.mentionMembers ? { content: view.memberIds.map(mention).join(' ') } : {}),
-    embeds: [embed],
-    components: buttons(
-      new ButtonBuilder()
-        .setCustomId(sessionButtonId('going', session.id))
-        .setLabel('VOU')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(sessionButtonId('notgoing', session.id))
-        .setLabel('NÃO VOU')
-        .setStyle(ButtonStyle.Secondary),
-    ),
-    allowedMentions: { users: view.mentionMembers ? [...view.memberIds] : [] },
+    content: mentioned.map(mention).join(' '),
+    embeds: [
+      infoEmbed(
+        {
+          title: SESSION_TITLE[view.state],
+          description: sessionDescription(view),
+          ...(fields.length > 0 ? { fields } : {}),
+          footer: SQUADS_FOOTER,
+        },
+        view.embedColor,
+      ),
+    ],
+    components,
+    allowedMentions: { users: mentioned },
   };
 }
 
-/** Na hora da sessão, para quem não está em voice nenhum (não dá para mover). */
+/**
+ * O lembrete de uma jogatina marcada com antecedência: chama quem não disse
+ * "não vou" e aponta a sala. É uma mensagem curta à parte, porque editar a
+ * mensagem da jogatina não notifica ninguém.
+ */
+export function sessionReminderMessage(view: {
+  userIds: readonly string[];
+  startsAt: Date;
+  voiceChannelId: string | null;
+}): BaseMessageOptions {
+  const where = view.voiceChannelId
+    ? `A sala é <#${view.voiceChannelId}>.`
+    : 'Não consegui reservar sala desta vez: usem qualquer voice livre.';
+  return {
+    content: `${view.userIds.map(mention).join(' ')} a jogatina do squad começa ${timestamp(view.startsAt, 'R')}. ${where}`,
+    allowedMentions: { users: [...view.userIds] },
+  };
+}
+
+/** Na hora da jogatina, para quem não está em voice nenhum (não dá para mover). */
 export function sessionStartMessage(view: {
   userIds: readonly string[];
   voiceChannelId: string | null;
@@ -530,7 +693,7 @@ export function sessionStartMessage(view: {
     ? `Entrem em <#${view.voiceChannelId}>.`
     : 'Escolham um voice livre.';
   return {
-    content: `${view.userIds.map(mention).join(' ')} a sessão do squad começou! ${where}`,
+    content: `${view.userIds.map(mention).join(' ')} a jogatina do squad começou! ${where}`,
     allowedMentions: { users: [...view.userIds] },
   };
 }
@@ -547,7 +710,7 @@ export function inactivityWarningMessage(view: {
       infoEmbed(
         {
           title: 'O squad ainda joga?',
-          description: `Faz ${String(view.weeks)} semanas que ninguém confirma presença no **${view.squad.name}**. Se vocês ainda jogam, cliquem em **Ainda jogamos**. Sem resposta em 7 dias, o squad é arquivado.`,
+          description: `Faz ${String(view.weeks)} semanas que o **${view.squad.name}** não marca jogatina nem aparece no voice. Se vocês ainda jogam, cliquem em **Ainda jogamos**. Sem resposta em 7 dias, o squad é arquivado.`,
           footer: SQUADS_FOOTER,
         },
         view.embedColor,
@@ -600,8 +763,8 @@ export function searchMessage(view: SearchMessageView): BaseMessageOptions {
     {
       title: 'Procurar squad',
       description: [
-        'Quer jogar sempre com o mesmo grupo, no mesmo horário, toda semana? Monte seu perfil no botão do jogo: responda as perguntas e marque os horários em que você costuma jogar.',
-        'Eu cruzo as agendas e chamo, numa conversa privada, quem joga nos mesmos horários que você. O primeiro que aceitar cria o squad, com canal próprio e sala reservada na hora de jogar.',
+        'Quer um grupo fixo para jogar? Monte seu perfil no botão do jogo: responda as perguntas e marque os horários em que você costuma jogar.',
+        'Eu cruzo as agendas e chamo, numa conversa privada, quem joga nos mesmos horários que você. O primeiro que aceitar cria o squad, com canal próprio. Lá, quando quiserem jogar, é só apertar BORA: eu chamo o grupo e reservo uma sala.',
       ].join('\n\n'),
       fields: [
         {
@@ -609,7 +772,8 @@ export function searchMessage(view: SearchMessageView): BaseMessageOptions {
           value: [
             '`/squad perfil` edita o seu perfil',
             '`/squad status` pausa ou retoma a busca',
-            '`/squad procurar` mostra squads com vaga nos seus horários',
+            '`/squad procurar` mostra squads com vaga que combinam com você',
+            '`/bora hoje 21h` marca uma jogatina do seu squad',
           ].join('\n'),
         },
       ],
@@ -646,7 +810,10 @@ export interface ProfileSavedView {
   embedColor: number;
 }
 
-/** Resposta de quem salvou a grade: o que vale agora e o botão de pausar ou retomar. */
+/**
+ * Resposta de quem salvou a grade: o que vale agora, o botão de pausar ou
+ * retomar e, para quem ainda não tem squad, o de ver os squads com vaga.
+ */
 export function profileSavedMessage(view: ProfileSavedView): BaseMessageOptions {
   const { game, profile } = view;
   const cells = countCells(profile.availability);
@@ -677,7 +844,16 @@ export function profileSavedMessage(view: ProfileSavedView): BaseMessageOptions 
             .setLabel('VOLTAR A PROCURAR')
             .setStyle(ButtonStyle.Success)
         : null;
-  return { embeds: [embed], components: toggle ? buttons(toggle) : [] };
+  const list = toggle ? [toggle] : [];
+  if (profile.status !== 'in_squad') {
+    list.push(
+      new ButtonBuilder()
+        .setCustomId(searchButtonId(game.id))
+        .setLabel('VER SQUADS COM VAGA')
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  return { embeds: [embed], components: list.length > 0 ? buttons(...list) : [] };
 }
 
 export function statusChangedText(status: SquadProfileStatus): string {
@@ -697,10 +873,9 @@ export const MAX_JOINABLE_LISTED = 5;
 export interface JoinableView {
   game: Pick<SquadGame, 'name' | 'squadSize'>;
   entries: readonly {
-    squad: Pick<Squad, 'id' | 'name' | 'day' | 'block'>;
+    squad: Pick<Squad, 'id' | 'name'>;
     memberCount: number;
   }[];
-  blocks: readonly SquadBlockConfig[];
   embedColor: number;
 }
 
@@ -712,7 +887,7 @@ export function joinableSquadsMessage(view: JoinableView): BaseMessageOptions {
         infoEmbed(
           {
             title: 'Squads com vaga',
-            description: `Nenhum squad de **${view.game.name}** tem vaga nos seus horários agora. Se você está procurando, eu mando seu perfil para um squad assim que abrir uma vaga que combine.`,
+            description: `Nenhum squad de **${view.game.name}** com vaga combina com você agora. Se você está procurando, eu mando seu perfil para um squad assim que abrir uma vaga que combine.`,
             footer: SQUADS_FOOTER,
           },
           view.embedColor,
@@ -727,10 +902,10 @@ export function joinableSquadsMessage(view: JoinableView): BaseMessageOptions {
         {
           title: 'Squads com vaga',
           description:
-            'Estes squads têm vaga e jogam num horário que você marcou. O pedido vai para o canal do squad, e basta alguém de lá aceitar.',
+            'Estes squads têm vaga e jogam em horários parecidos com os seus. O pedido vai para o canal do squad, e basta alguém de lá aceitar.',
           fields: entries.map((entry, index) => ({
             name: `${String(index + 1)}. ${entry.squad.name}`,
-            value: `${formatSlot(entry.squad.day, entry.squad.block, view.blocks)}\n${String(entry.memberCount)} de ${String(view.game.squadSize)} jogadores`,
+            value: `${String(entry.memberCount)} de ${String(view.game.squadSize)} jogadores`,
           })),
           footer: SQUADS_FOOTER,
         },
@@ -799,6 +974,32 @@ export function joinRequestDecisionText(
 
 export function voteText(going: boolean): string {
   return going ? 'Presença confirmada. Bom jogo!' : 'Anotado: você não vai desta vez.';
+}
+
+export function sessionScheduledText(result: {
+  outcome: 'created' | 'exists';
+  session: Pick<SquadSession, 'startsAt'>;
+  squad: Pick<Squad, 'textChannelId'>;
+}): string {
+  const when = `${timestamp(result.session.startsAt, 'F')} (${timestamp(result.session.startsAt, 'R')})`;
+  const where = channelOf(result.squad);
+  if (result.outcome === 'exists') {
+    return `O squad já tinha jogatina marcada para ${when}. Marquei você como VOU.`;
+  }
+  return where
+    ? `Jogatina marcada para ${when}. Chamei o squad em ${where}.`
+    : `Jogatina marcada para ${when}.`;
+}
+
+export function sessionCancelledText(outcome: 'cancelled' | 'already'): string {
+  return outcome === 'cancelled'
+    ? 'Jogatina cancelada. Avisei no canal do squad.'
+    : 'Esta jogatina já estava cancelada.';
+}
+
+export function renamedText(result: { squad: Pick<Squad, 'name'>; note: string | null }): string {
+  const done = `Squad renomeado para **${result.squad.name}**.`;
+  return result.note ? `${done} ${result.note}` : done;
 }
 
 export const KEEP_ALIVE_TEXT = 'Anotado! O squad continua ativo.';

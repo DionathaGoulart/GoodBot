@@ -1,6 +1,7 @@
-import { listSquadsForUser } from '@goodbot/db';
+import { getSquad, listSquadsForUser } from '@goodbot/db';
 
 import { SquadContext } from './context';
+import { GuideService } from './guide';
 import { ManualMatchService } from './manual';
 import { MatcherService } from './matcher';
 import { PlayerAdminService } from './players';
@@ -24,7 +25,14 @@ import type {
   PublishedSearchMessage,
   PublishSearchOptions,
 } from './search';
-import type { DueSessions, InactivityResult, RemindResult, StartResult } from './sessions';
+import type {
+  CancelResult,
+  DueSessions,
+  InactivityResult,
+  RemindResult,
+  ScheduleResult,
+  StartResult,
+} from './sessions';
 import type { ArchiveOptions, RemoveMemberResult, RenameOptions, RenameResult } from './squads';
 import type {
   Squad,
@@ -35,6 +43,7 @@ import type {
   SquadSession,
 } from '@goodbot/db';
 import type {
+  AuditSource,
   DeleteSquadProfileInput,
   EditSquadProfileAnswersInput,
   ManualMatchEvaluation,
@@ -60,14 +69,21 @@ export type {
   PublishedSearchMessage,
   PublishSearchOptions,
 } from './search';
-export type { DueSessions, InactivityResult, RemindResult, StartResult } from './sessions';
+export type {
+  CancelResult,
+  DueSessions,
+  InactivityResult,
+  RemindResult,
+  ScheduleResult,
+  StartResult,
+} from './sessions';
 export type { ArchiveOptions, RemoveMemberResult, RenameOptions, RenameResult } from './squads';
 
 /**
  * Módulo `squads`: perfil por jogo, match por agenda, propostas sem líder,
- * pedidos de entrada, casa do squad (canal privado + voice do pool) e
- * sessões semanais. Uma fachada sobre as partes em `services/squads/`;
- * comandos, botões, o job e a API falam só com ela.
+ * pedidos de entrada, casa do squad (canal privado com guia fixo + voice do
+ * pool) e jogatinas sob demanda. Uma fachada sobre as partes em
+ * `services/squads/`; comandos, botões, o job e a API falam só com ela.
  *
  * Toda leitura e escrita passa o `guildId`. Erro que a pessoa resolve vira
  * `UserFacingError`; falha do Discord que não é culpa dela fica no log e o
@@ -85,6 +101,7 @@ export class SquadService {
       squads: new SquadLifecycleService(this.ctx),
       requests: new JoinRequestService(this.ctx),
       sessions: new SessionService(this.ctx),
+      guide: new GuideService(this.ctx),
       search: new SearchService(this.ctx),
       manual: new ManualMatchService(this.ctx),
       players: new PlayerAdminService(this.ctx),
@@ -270,6 +287,10 @@ export class SquadService {
 
   // ── squads ────────────────────────────────────────────────────────────────
 
+  getSquad(guildId: string, squadId: string): Promise<Squad | null> {
+    return getSquad(this.ctx.db, guildId, squadId);
+  }
+
   /** Squads não arquivados da pessoa, na ordem em que ela entrou. */
   listSquadsForUser(guildId: string, userId: string): Promise<Squad[]> {
     return listSquadsForUser(this.ctx.db, guildId, userId);
@@ -334,13 +355,39 @@ export class SquadService {
     return this.ctx.parts.requests.expireRequests(guildId);
   }
 
-  // ── sessões ───────────────────────────────────────────────────────────────
+  // ── jogatinas ─────────────────────────────────────────────────────────────
 
-  ensureUpcomingSessions(guildId: string): Promise<SquadSession[]> {
-    return this.ctx.parts.sessions.ensureUpcoming(guildId);
+  /** `/bora` e o modal do BORA: o "quando" digitado, no fuso da guild. */
+  scheduleSession(
+    guild: Guild,
+    squadId: string,
+    userId: string,
+    when: string,
+    source: AuditSource,
+  ): Promise<ScheduleResult> {
+    return this.ctx.parts.sessions.scheduleFromText(guild, squadId, userId, when, source);
   }
 
-  /** Sessões a lembrar, começar e liberar nesta passada do job. */
+  cancelSession(
+    guild: Guild,
+    sessionId: number,
+    userId: string,
+    source: AuditSource,
+  ): Promise<CancelResult> {
+    return this.ctx.parts.sessions.cancel(guild, sessionId, userId, source);
+  }
+
+  /** REPETIR: a mesma hora na semana seguinte. */
+  repeatSession(
+    guild: Guild,
+    sessionId: number,
+    userId: string,
+    source: AuditSource,
+  ): Promise<ScheduleResult> {
+    return this.ctx.parts.sessions.repeat(guild, sessionId, userId, source);
+  }
+
+  /** Jogatinas a lembrar, começar e liberar nesta passada do job. */
   dueSessions(guildId: string): Promise<DueSessions> {
     return this.ctx.parts.sessions.due(guildId);
   }
@@ -377,5 +424,12 @@ export class SquadService {
 
   checkInactivity(guild: Guild): Promise<InactivityResult> {
     return this.ctx.parts.sessions.checkInactivity(guild);
+  }
+
+  // ── guia ──────────────────────────────────────────────────────────────────
+
+  /** Passo diário: publica o guia que falta e reedita os outros. */
+  syncGuides(guild: Guild): Promise<number> {
+    return this.ctx.parts.guide.syncAll(guild);
   }
 }

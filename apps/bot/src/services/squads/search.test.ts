@@ -29,7 +29,7 @@ function squadScenario(options: { size?: number } = {}) {
       overwrites: squadTextOverwrites({ everyoneId: GUILD_ID, botId: BOT_ID, memberIds: [A, B] }),
     }),
   );
-  const squad = seedSquad({ gameId: game.id, textChannelId: channel.id, day: 6, block: 2 });
+  const squad = seedSquad({ gameId: game.id, textChannelId: channel.id });
   for (const userId of [A, B]) {
     seedMember(squad.id, userId);
     seedProfile({ userId, gameId: game.id, availability: saturdayNight, status: 'in_squad' });

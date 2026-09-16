@@ -1,3 +1,4 @@
+import bora from './bora';
 import reactionrole from './reactionrole';
 import social from './social';
 import squad from './squad';
@@ -16,6 +17,7 @@ export const communityCommands: readonly AnyCommand[] = [
   social,
   ticket,
   squad,
+  bora,
   tag,
   tags,
 ];

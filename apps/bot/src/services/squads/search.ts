@@ -128,8 +128,8 @@ export class SearchService {
   }
 
   /**
-   * Squads `open` do jogo em que a pessoa cabe agora: vaga livre, janela
-   * marcada na grade dela, nenhum campo `hard` batendo de frente com um
+   * Squads `open` do jogo em que a pessoa cabe agora: vaga livre, grade que
+   * dá party com os membros, nenhum campo `hard` batendo de frente com um
    * membro e nenhum pedido dela para aquele squad pendente ou recente.
    * Melhor nota primeiro.
    */
@@ -246,7 +246,7 @@ export class SearchService {
       )
     ).filter((row): row is SquadProfile => row !== null);
     const [fit] = rankVacancyCandidates({
-      slot: { day: squad.day, block: squad.block },
+      partySize: game.squadSize,
       fields: game.fields,
       memberIds: members.map((member) => member.userId),
       memberProfiles: memberProfiles.map(toMatchProfile),

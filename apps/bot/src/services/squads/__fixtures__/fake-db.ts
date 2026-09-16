@@ -238,8 +238,6 @@ export const impl = {
       guildId: string;
       gameId: string;
       name: string;
-      day: number;
-      block: number;
       voiceChannelId?: string | null;
       status?: 'open' | 'full';
     },
@@ -251,8 +249,9 @@ export const impl = {
       name: input.name,
       textChannelId: null,
       voiceChannelId: input.voiceChannelId ?? null,
-      day: input.day,
-      block: input.block,
+      day: null,
+      block: null,
+      guideMessageId: null,
       status: input.status ?? 'open',
       lastConfirmedAt: null,
       warnedAt: null,
@@ -319,6 +318,18 @@ export const impl = {
     if (!row || row.status === 'archived') return null;
     row.status = 'archived';
     row.archivedAt = at;
+    return copy(row);
+  },
+  async setSquadGuideMessage(
+    _db: unknown,
+    guildId: string,
+    squadId: string,
+    messageId: string | null,
+    expected: string | null,
+  ) {
+    const row = findSquad(guildId, squadId);
+    if (!row || row.guideMessageId !== expected) return null;
+    row.guideMessageId = messageId;
     return copy(row);
   },
   async touchSquadConfirmed(_db: unknown, guildId: string, squadId: string, at: Date) {
@@ -592,19 +603,88 @@ export const impl = {
   },
 
   // ── sessões
-  async upsertSquadSession(
+  async createSquadSession(
     _db: unknown,
-    input: { guildId: string; squadId: string; startsAt: Date; endsAt: Date },
+    input: {
+      guildId: string;
+      squadId: string;
+      startsAt: Date;
+      endsAt: Date;
+      createdBy: string;
+      goingIds: string[];
+    },
   ) {
-    let row = store.sessions.find(
+    const taken = store.sessions.some(
       (s) => s.squadId === input.squadId && s.startsAt.getTime() === input.startsAt.getTime(),
     );
-    if (row) {
-      row.endsAt = input.endsAt;
-    } else {
-      row = blankSession({ ...input });
-      store.sessions.push(row);
-    }
+    if (taken) return null;
+    const row = blankSession({ ...input });
+    store.sessions.push(row);
+    return copy(row);
+  },
+  async getSquadSessionAt(_db: unknown, guildId: string, squadId: string, startsAt: Date) {
+    return maybe(
+      store.sessions.find(
+        (s) =>
+          s.guildId === guildId &&
+          s.squadId === squadId &&
+          s.startsAt.getTime() === startsAt.getTime(),
+      ),
+    );
+  },
+  async reopenSquadSession(
+    _db: unknown,
+    guildId: string,
+    sessionId: number,
+    input: { endsAt: Date; createdBy: string; goingIds: string[] },
+  ) {
+    const row = findSession(guildId, sessionId);
+    if (!row || !row.cancelledAt || (row.voiceReservedAt && !row.voiceReleasedAt)) return null;
+    Object.assign(row, {
+      ...input,
+      notGoingIds: [],
+      remindedAt: null,
+      messageId: null,
+      startedAt: null,
+      playedAt: null,
+      cancelledAt: null,
+      cancelledBy: null,
+      voiceChannelId: null,
+      voiceOverwrites: null,
+      voiceReservedAt: null,
+      voiceReleasedAt: null,
+    });
+    return copy(row);
+  },
+  async listUpcomingSessions(
+    _db: unknown,
+    guildId: string,
+    now: Date,
+    options: { squadIds?: readonly string[] } = {},
+  ) {
+    return copy(
+      store.sessions
+        .filter(
+          (s) =>
+            s.guildId === guildId &&
+            !s.cancelledAt &&
+            s.endsAt.getTime() > now.getTime() &&
+            (!options.squadIds || options.squadIds.includes(s.squadId)),
+        )
+        .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()),
+    );
+  },
+  async cancelSquadSession(_db: unknown, guildId: string, sessionId: number, by: string, at: Date) {
+    const row = findSession(guildId, sessionId);
+    if (!row || row.cancelledAt || row.startedAt) return null;
+    row.cancelledAt = at;
+    row.cancelledBy = by;
+    return copy(row);
+  },
+  async markSessionPlayed(_db: unknown, guildId: string, sessionId: number, at: Date) {
+    const row = findSession(guildId, sessionId);
+    if (!row || row.playedAt || row.cancelledAt) return null;
+    row.playedAt = at;
     return copy(row);
   },
   async getSquadSession(_db: unknown, guildId: string, sessionId: number) {
@@ -626,20 +706,15 @@ export const impl = {
     row.remindedAt = at;
     return copy(row);
   },
-  async setSessionReminderMessage(
-    _db: unknown,
-    guildId: string,
-    sessionId: number,
-    messageId: string,
-  ) {
+  async setSessionMessage(_db: unknown, guildId: string, sessionId: number, messageId: string) {
     const row = findSession(guildId, sessionId);
     if (!row) return null;
-    row.reminderMessageId = messageId;
+    row.messageId = messageId;
     return copy(row);
   },
   async markSessionStarted(_db: unknown, guildId: string, sessionId: number, at: Date) {
     const row = findSession(guildId, sessionId);
-    if (!row || row.startedAt) return null;
+    if (!row || row.startedAt || row.cancelledAt) return null;
     row.startedAt = at;
     return copy(row);
   },
@@ -652,7 +727,7 @@ export const impl = {
   ) {
     const row = findSession(guildId, sessionId);
     const target = going ? row?.goingIds : row?.notGoingIds;
-    if (!row || target?.includes(userId)) return null;
+    if (!row || row.cancelledAt || target?.includes(userId)) return null;
     if (going) {
       row.goingIds = [...row.goingIds, userId];
       row.notGoingIds = row.notGoingIds.filter((id) => id !== userId);
@@ -745,8 +820,10 @@ function blankSession(input: Partial<SquadSession> & Pick<SquadSession, 'squadId
     id: ++sessionSeq,
     guildId: GUILD_ID,
     startsAt: new Date(clock() + 30 * MINUTE_MS),
-    endsAt: new Date(clock() + 6 * HOUR_MS),
+    endsAt: new Date(clock() + 3 * HOUR_MS),
+    createdBy: null,
     remindedAt: null,
+    messageId: null,
     reminderMessageId: null,
     startedAt: null,
     goingIds: [],
@@ -755,6 +832,9 @@ function blankSession(input: Partial<SquadSession> & Pick<SquadSession, 'squadId
     voiceOverwrites: null,
     voiceReservedAt: null,
     voiceReleasedAt: null,
+    playedAt: null,
+    cancelledAt: null,
+    cancelledBy: null,
     createdAt: stamp(),
     ...input,
   };
@@ -809,8 +889,9 @@ export function seedSquad(input: Partial<Squad> & Pick<Squad, 'gameId'>): Squad 
     name: 'Squad Teste',
     textChannelId: null,
     voiceChannelId: null,
-    day: 6,
-    block: 2,
+    day: null,
+    block: null,
+    guideMessageId: null,
     status: 'open',
     lastConfirmedAt: null,
     warnedAt: null,

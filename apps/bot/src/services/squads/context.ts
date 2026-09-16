@@ -6,6 +6,7 @@ import { childLogger } from '../../logger';
 import type { AuditEntry, AuditService } from '../audit';
 import type { ConfigService } from '../config';
 import type { AdminDmKind } from './embeds';
+import type { GuideService } from './guide';
 import type { ManualMatchService } from './manual';
 import type { MatcherService } from './matcher';
 import type { PlayerAdminService } from './players';
@@ -48,6 +49,7 @@ export interface SquadParts {
   squads: SquadLifecycleService;
   requests: JoinRequestService;
   sessions: SessionService;
+  guide: GuideService;
   search: SearchService;
   manual: ManualMatchService;
   players: PlayerAdminService;
@@ -57,7 +59,8 @@ export interface SquadParts {
  * O que toda parte do módulo compartilha: dependências, relógio, leitura do
  * config e os acessos ao Discord que se repetem. As partes se chamam em
  * círculo (sair arquiva, arquivar libera o voice, aceitar um pedido põe o
- * membro), então cada uma recebe este objeto e alcança as outras por `parts`.
+ * membro, quase tudo atualiza o guia), então cada uma recebe este objeto e
+ * alcança as outras por `parts`.
  */
 export class SquadContext {
   readonly db: Db;

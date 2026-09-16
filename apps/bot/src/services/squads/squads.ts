@@ -14,7 +14,7 @@ import {
   setSquadVoiceChannel,
   touchSquadConfirmed,
 } from '@goodbot/db';
-import { nextSessionAt, SquadNameSchema, UserFacingError } from '@goodbot/shared';
+import { SquadNameSchema, UserFacingError } from '@goodbot/shared';
 import { ChannelType, OverwriteType } from 'discord.js';
 
 import { discordErrorCode, firstIssue, log, logFailure, settleWithin } from './context';
@@ -24,7 +24,6 @@ import {
   memberJoinedMessage,
   memberLeftMessage,
   RENAME_LATER_NOTE,
-  squadWelcomeMessage,
 } from './embeds';
 import { archivedTextOverwrites, SQUAD_MEMBER_TEXT_EDIT, squadTextOverwrites } from './overwrites';
 import { renderSquadChannelName } from './slots';
@@ -142,8 +141,9 @@ export class SquadLifecycleService {
 
   /**
    * Casa do squad recém-criado (depois do commit que reivindicou a proposta):
-   * membro fundador, canal privado, voice preferido e boas-vindas. Sem canal
-   * o squad não tem casa, então falha ao criá-lo arquiva a linha.
+   * membro fundador, canal privado, voice preferido e o guia fixo, que chama
+   * os membros. Sem canal o squad não tem casa, então falha ao criá-lo
+   * arquiva a linha.
    */
   async setUpHome(
     guild: Guild,
@@ -195,22 +195,7 @@ export class SquadLifecycleService {
     if (voiceId) current = (await setSquadVoiceChannel(db, guildId, squad.id, voiceId)) ?? current;
     await this.ctx.parts.profiles.markInSquad(guildId, creatorId, game.id);
 
-    const settings = await this.ctx.config.getSettings(guildId);
-    await channel
-      .send(
-        squadWelcomeMessage({
-          squad: current,
-          game,
-          memberIds,
-          blocks: config.blocks,
-          nextSessionAt: this.nextSessionStart(current, config, settings.timezone),
-          voiceChannelId: current.voiceChannelId,
-          embedColor: settings.embedColor,
-        }),
-      )
-      .catch(
-        logFailure('não foi possível dar as boas-vindas ao squad', { guildId, squadId: squad.id }),
-      );
+    await this.ctx.parts.guide.publish(guild, squad.id, { mentionMembers: true });
 
     this.ctx.record({
       guildId,
@@ -221,8 +206,6 @@ export class SquadLifecycleService {
       after: {
         name: current.name,
         gameId: game.id,
-        day: current.day,
-        block: current.block,
         textChannelId: channel.id,
         voiceChannelId: current.voiceChannelId,
       },
@@ -293,6 +276,7 @@ export class SquadLifecycleService {
         )
         .catch(logFailure('não foi possível avisar a entrada no squad', { guildId, squadId }));
     }
+    await this.ctx.parts.guide.refresh(guild, squadId);
 
     this.ctx.record({
       guildId,
@@ -376,6 +360,7 @@ export class SquadLifecycleService {
     } else if (squad.status === 'full') {
       current = (await setSquadStatus(db, guildId, squadId, 'open')) ?? squad;
     }
+    if (!archived) await this.ctx.parts.guide.refresh(guild, squadId);
 
     const profile = await this.ctx.parts.profiles.refreshStatus(guildId, userId, squad.gameId);
     return {
@@ -418,6 +403,7 @@ export class SquadLifecycleService {
     }
 
     await this.ctx.parts.sessions.releaseForSquad(guild, squadId);
+    await this.ctx.parts.guide.refresh(guild, squadId);
     await this.ctx.parts.requests.expireForSquad(guild, archived);
     await this.ctx.parts.proposals.closeForSquad(guild, squadId);
     for (const id of memberIds) {
@@ -477,6 +463,7 @@ export class SquadLifecycleService {
       before: { name: squad.name },
       after: { name: renamed.name },
     });
+    await this.ctx.parts.guide.refresh(guild, squadId);
 
     const channel = await this.ctx.textChannel(guild, renamed);
     if (!channel) return { squad: renamed, channelRenamed: false, note: null };
@@ -517,8 +504,8 @@ export class SquadLifecycleService {
   }
 
   /**
-   * O primeiro voice do pool que nenhum outro squad vivo prefere na mesma
-   * janela. `null` = pool cheio: o squad fica sem sala fixa e usa qualquer
+   * O primeiro voice do pool que nenhum outro squad vivo prefere. `null` =
+   * pool cheio: o squad fica sem sala preferida e a jogatina reserva qualquer
    * voice livre.
    */
   private async pickPreferredVoice(
@@ -530,10 +517,7 @@ export class SquadLifecycleService {
     const alive = await listSquads(this.ctx.db, guild.id, { statuses: ['open', 'full'] });
     const taken = new Set(
       alive
-        .filter(
-          (other) =>
-            other.id !== squad.id && other.day === squad.day && other.block === squad.block,
-        )
+        .filter((other) => other.id !== squad.id)
         .flatMap((other) => (other.voiceChannelId ? [other.voiceChannelId] : [])),
     );
     return (
@@ -541,16 +525,6 @@ export class SquadLifecycleService {
         (id) => !taken.has(id) && guild.channels.cache.get(id)?.type === ChannelType.GuildVoice,
       ) ?? null
     );
-  }
-
-  private nextSessionStart(squad: Squad, config: SquadsConfig, timezone: string): Date | null {
-    try {
-      return nextSessionAt(squad.day, squad.block, config.blocks, timezone, this.ctx.date())
-        .startsAt;
-    } catch (error) {
-      log.warn({ err: error, squadId: squad.id }, 'não foi possível calcular a próxima sessão');
-      return null;
-    }
   }
 
   private async grantText(channel: TextChannel, userId: string, squadName: string): Promise<void> {

@@ -33,19 +33,20 @@ export interface SquadsJobDeps {
 /** O que uma passada fez numa guild; é o que os testes leem. */
 export interface SquadsPass {
   expired: number;
-  scheduled: number;
   reminded: number;
   started: number;
   released: number;
   daily: boolean;
+  /** Guias no ar depois do passo diário; 0 fora dele. */
+  guides: number;
 }
 
 /**
  * O relógio do módulo `squads`, de 5 em 5 minutos, por guild atendida com o
- * módulo ligado. A ordem de cada passada: expira propostas e pedidos, agenda
- * a sessão da semana, lembra (e reserva o voice), começa (e move), libera o
- * voice da faixa encerrada e, uma vez por dia, cobra inatividade e roda o
- * match de novo.
+ * módulo ligado. Ele não marca jogatina (quem marca é gente, pelo `/bora`).
+ * A ordem de cada passada: expira propostas e pedidos, lembra (e reserva o
+ * voice), começa (e move), libera o voice da jogatina encerrada e, uma vez
+ * por dia, cobra inatividade, põe os guias em dia e roda o match de novo.
  *
  * Cada passo é isolado: falha num não impede os seguintes, e falha numa guild
  * não impede as outras. Rodar duas vezes seguidas não repete nada, porque a
@@ -98,29 +99,25 @@ export class SquadsJob {
     const { squads } = this.deps;
     const pass: SquadsPass = {
       expired: 0,
-      scheduled: 0,
       reminded: 0,
       started: 0,
       released: 0,
       daily: false,
+      guides: 0,
     };
 
     await this.step(guild, 'expirar propostas e pedidos', async () => {
       pass.expired =
         (await squads.expireProposals(guild.id)) + (await squads.expireRequests(guild.id));
     });
-    await this.step(guild, 'agendar sessões', async () => {
-      pass.scheduled = (await squads.ensureUpcomingSessions(guild.id)).length;
-    });
-
-    const due = await this.step(guild, 'ler sessões', () => squads.dueSessions(guild.id));
+    const due = await this.step(guild, 'ler jogatinas', () => squads.dueSessions(guild.id));
     for (const session of due?.remind ?? []) {
-      await this.step(guild, 'lembrar sessão', async () => {
+      await this.step(guild, 'lembrar jogatina', async () => {
         if (await squads.remindSession(guild, session)) pass.reminded++;
       });
     }
     for (const session of due?.start ?? []) {
-      await this.step(guild, 'começar sessão', async () => {
+      await this.step(guild, 'começar jogatina', async () => {
         if (await squads.startSession(guild, session)) pass.started++;
       });
     }
@@ -131,18 +128,18 @@ export class SquadsJob {
     }
 
     await this.step(guild, 'passo diário', async () => {
-      pass.daily = await this.daily(guild);
+      pass.daily = await this.daily(guild, pass);
     });
     return pass;
   }
 
   /**
-   * Inatividade e match, uma vez por dia local, depois de `DAILY_AT_HOUR`. O
-   * dia fica em `meta` para um restart não repetir a cobrança. A marca vai
-   * antes do trabalho: se ele falhar no meio, a próxima tentativa é amanhã,
-   * e não a cada 5 minutos.
+   * Inatividade, guias e match, uma vez por dia local, depois de
+   * `DAILY_AT_HOUR`. O dia fica em `meta` para um restart não repetir a
+   * cobrança. A marca vai antes do trabalho: se ele falhar no meio, a próxima
+   * tentativa é amanhã, e não a cada 5 minutos.
    */
-  private async daily(guild: Guild): Promise<boolean> {
+  private async daily(guild: Guild, pass: SquadsPass): Promise<boolean> {
     const { db, squads } = this.deps;
     const { timezone } = await this.deps.config.getSettings(guild.id);
     const at = new Date(this.now());
@@ -157,6 +154,10 @@ export class SquadsJob {
     if (inactivity.warned.length > 0 || inactivity.archived.length > 0) {
       log.info({ guildId: guild.id, ...inactivity }, 'inatividade de squads cobrada');
     }
+    // Depois da inatividade, para o squad arquivado agora não ganhar guia.
+    await this.step(guild, 'guias dos squads', async () => {
+      pass.guides = await squads.syncGuides(guild);
+    });
     // Perfil que chegou sem par na hora pode ter ganhado par desde então.
     for (const game of await squads.listGames(guild.id)) {
       await this.step(guild, 'match diário', () => squads.runMatch(guild.id, game.id));

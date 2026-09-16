@@ -103,7 +103,7 @@ describe('SquadService: matcher', () => {
   it('vaga aberta compatível vira pedido de entrada, não proposta', async () => {
     const s = scenario([C]);
     const channel = s.guild.add(fakeTextChannel());
-    const squad = seedSquad({ gameId: s.game.id, textChannelId: channel.id, day: 6, block: 2 });
+    const squad = seedSquad({ gameId: s.game.id, textChannelId: channel.id });
     seedMember(squad.id, A);
     seedProfile({ userId: A, gameId: s.game.id, availability: SATURDAY_NIGHT, status: 'in_squad' });
 
@@ -299,9 +299,9 @@ describe('rankVacancyCandidates', () => {
   const fields = [{ key: 'platform', type: 'select' as const, match: 'hard' as const }];
   const member = { userId: A, availability: SATURDAY_NIGHT, answers: { platform: 'PC' } };
 
-  it('exige a janela do squad, campo hard compatível e dupla fora do cooldown', () => {
+  it('exige grade que dá party com os membros, campo hard compatível e dupla fora do cooldown', () => {
     const ranked = rankVacancyCandidates({
-      slot: { day: 6, block: 2 },
+      partySize: 4,
       fields,
       memberIds: [A],
       memberProfiles: [member],

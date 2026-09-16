@@ -8,6 +8,7 @@ import {
   listSquadGames,
   listSquadMembers,
   listSquads,
+  listUpcomingSessions,
 } from '@goodbot/db';
 import {
   ArchiveSquadInputSchema,
@@ -40,7 +41,7 @@ import { validate } from '../validate';
 
 import type { ManualOutcome } from '../../services/squads';
 import type { ApiDeps, ApiEnv } from '../context';
-import type { Squad, SquadGame, SquadProfile, SquadProposal } from '@goodbot/db';
+import type { Squad, SquadGame, SquadProfile, SquadProposal, SquadSession } from '@goodbot/db';
 import type {
   DeleteSquadProfileResult,
   ManualMatchEvaluation,
@@ -55,6 +56,7 @@ import type {
   SquadProfileStatusResult,
   SquadProfileSummary,
   SquadProposalSummary,
+  SquadSessionSummary,
   SquadSummary,
 } from '@goodbot/shared';
 import type { Guild } from 'discord.js';
@@ -77,18 +79,33 @@ function toGameSummary(row: SquadGame): SquadGameSummary {
   };
 }
 
-function toSquadSummary(row: Squad, memberIds: string[]): SquadSummary {
+function toSessionSummary(row: SquadSession, now: Date): SquadSessionSummary {
+  return {
+    id: row.id,
+    startsAt: row.startsAt.toISOString(),
+    endsAt: row.endsAt.toISOString(),
+    goingCount: row.goingIds.length,
+    live: row.startsAt.getTime() <= now.getTime(),
+    createdBy: row.createdBy,
+  };
+}
+
+function toSquadSummary(
+  row: Squad,
+  memberIds: string[],
+  sessions: readonly SquadSession[],
+  now: Date,
+): SquadSummary {
   return {
     id: row.id,
     gameId: row.gameId,
     name: row.name,
     memberIds,
-    day: row.day,
-    block: row.block,
     status: row.status,
     textChannelId: row.textChannelId,
     voiceChannelId: row.voiceChannelId,
     lastConfirmedAt: row.lastConfirmedAt?.toISOString() ?? null,
+    upcomingSessions: sessions.map((session) => toSessionSummary(session, now)),
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -179,10 +196,16 @@ async function requireProfile(
 }
 
 async function summaryOf(deps: ApiDeps, guildId: string, squad: Squad): Promise<SquadSummary> {
-  const members = await listSquadMembers(deps.db, guildId, squad.id);
+  const now = new Date();
+  const [members, sessions] = await Promise.all([
+    listSquadMembers(deps.db, guildId, squad.id),
+    listUpcomingSessions(deps.db, guildId, now, { squadIds: [squad.id] }),
+  ]);
   return toSquadSummary(
     squad,
     members.map((member) => member.userId),
+    sessions,
+    now,
   );
 }
 
@@ -207,7 +230,8 @@ export function createSquadRoutes(deps: ApiDeps): Hono<ApiEnv> {
     new Hono<ApiEnv>()
       /**
        * Squads arquivados ficam de fora: a tabela do painel é de quem ainda
-       * joga, e a lista de arquivados só cresce.
+       * joga, e a lista de arquivados só cresce. Cada squad vem com as
+       * jogatinas que ainda não acabaram.
        */
       .get('/overview', async (c) => {
         const guild = c.get('guild');
@@ -218,21 +242,28 @@ export function createSquadRoutes(deps: ApiDeps): Hono<ApiEnv> {
           countSearchingProfilesByGame(deps.db, guild.id),
         ]);
 
-        const members = await listMembersOfSquads(
-          deps.db,
-          guild.id,
-          squads.map((squad) => squad.id),
-        );
+        const now = new Date();
+        const squadIds = squads.map((squad) => squad.id);
+        const [members, sessions] = await Promise.all([
+          listMembersOfSquads(deps.db, guild.id, squadIds),
+          listUpcomingSessions(deps.db, guild.id, now, { squadIds }),
+        ]);
         const memberIds = new Map<string, string[]>();
         for (const member of members) {
           const list = memberIds.get(member.squadId) ?? [];
           list.push(member.userId);
           memberIds.set(member.squadId, list);
         }
+        const upcoming = new Map<string, SquadSession[]>();
+        for (const session of sessions) {
+          upcoming.set(session.squadId, [...(upcoming.get(session.squadId) ?? []), session]);
+        }
 
         const overview: SquadOverview = {
           games: games.map(toGameSummary),
-          squads: squads.map((squad) => toSquadSummary(squad, memberIds.get(squad.id) ?? [])),
+          squads: squads.map((squad) =>
+            toSquadSummary(squad, memberIds.get(squad.id) ?? [], upcoming.get(squad.id) ?? [], now),
+          ),
           openProposals: proposals.map(toProposalSummary),
           searchingCount,
           channels: { used: countChannels(guild), limit: MAX_GUILD_CHANNELS },

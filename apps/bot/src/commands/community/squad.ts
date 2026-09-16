@@ -7,6 +7,7 @@ import { botFooter, successEmbed } from '../../lib/embeds';
 import { levelAtLeast } from '../../services/permissions';
 import {
   joinableSquadsMessage,
+  renamedText,
   searchMessagePublishedText,
   statusChangedText,
 } from '../../services/squads/embeds';
@@ -155,7 +156,7 @@ export default defineCommand({
     .addSubcommand((sub) =>
       sub
         .setName('procurar')
-        .setDescription('Lista squads com vaga nos seus horários')
+        .setDescription('Lista squads com vaga que combinam com você')
         .addStringOption((option) =>
           option.setName('jogo').setDescription('Jogo dos squads').setAutocomplete(true),
         ),
@@ -207,7 +208,7 @@ export default defineCommand({
     }
 
     await ctx.interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const config = await ctx.squads.requireConfig(ctx.guildId);
+    await ctx.squads.requireConfig(ctx.guildId);
 
     switch (sub) {
       case 'status': {
@@ -255,8 +256,7 @@ export default defineCommand({
           ctx.member.id,
           { source: 'command' },
         );
-        const done = `Squad renomeado para **${result.squad.name}**.`;
-        await ctx.interaction.editReply({ content: result.note ? `${done} ${result.note}` : done });
+        await ctx.interaction.editReply({ content: renamedText(result) });
         return;
       }
 
@@ -267,12 +267,7 @@ export default defineCommand({
         );
         const entries = await ctx.squads.listJoinableSquads(ctx.guildId, ctx.member.id, game.id);
         await ctx.interaction.editReply(
-          joinableSquadsMessage({
-            game,
-            entries,
-            blocks: config.blocks,
-            embedColor: ctx.settings.embedColor,
-          }),
+          joinableSquadsMessage({ game, entries, embedColor: ctx.settings.embedColor }),
         );
         return;
       }

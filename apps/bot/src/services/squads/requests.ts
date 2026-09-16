@@ -246,8 +246,7 @@ export class JoinRequestService {
     state: JoinRequestState,
   ): Promise<BaseMessageOptions> {
     const { db } = this.ctx;
-    const [config, embedColor, game, profile, members] = await Promise.all([
-      this.ctx.config.get(guildId, 'squads'),
+    const [embedColor, game, profile, members] = await Promise.all([
       this.ctx.embedColor(guildId),
       getSquadGame(db, guildId, squad.gameId),
       getSquadProfile(db, guildId, request.userId, squad.gameId),
@@ -255,10 +254,8 @@ export class JoinRequestService {
     ]);
     return joinRequestMessage({
       request,
-      squad,
       game: { fields: game?.fields ?? [] },
       answers: profile?.answers ?? {},
-      blocks: config.blocks,
       memberCount: members.length,
       state,
       embedColor,
