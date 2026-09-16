@@ -19,6 +19,8 @@ import {
 } from '../constants';
 import { MANUAL_MATCH_ISSUE_CODES } from '../squads/manual';
 
+import type { SquadHistory } from '../squads/history';
+
 /** Parâmetro `:squadId` das rotas de um squad. */
 export const SquadIdParamSchema = z.object({ squadId: z.uuid() });
 export type SquadIdParam = z.infer<typeof SquadIdParamSchema>;
@@ -54,6 +56,31 @@ export const SquadSessionSummarySchema = z.object({
 });
 export type SquadSessionSummary = z.infer<typeof SquadSessionSummarySchema>;
 
+/** O histórico de jogatinas de um squad (`summarizeHistory`), com a data em ISO 8601. */
+export const SquadHistorySummarySchema = z.object({
+  playedLast30d: z.number().int().min(0),
+  playedTotal: z.number().int().min(0),
+  /** Início da última jogatina que rolou; `null` = nunca jogaram. */
+  lastPlayedAt: z.iso.datetime().nullable(),
+  usualCells: z.array(
+    z.object({
+      day: z.number().int().min(0).max(SQUAD_DAYS - 1),
+      block: z.number().int().min(0).max(SQUAD_BLOCKS.length - 1),
+      count: z.number().int().positive(),
+    }),
+  ),
+  regulars: z.array(z.object({ userId: SnowflakeSchema, count: z.number().int().positive() })),
+});
+export type SquadHistorySummary = z.infer<typeof SquadHistorySummarySchema>;
+
+/** O resumo da API de volta ao tipo que `formatHistory` lê. */
+export function squadHistoryFromSummary(summary: SquadHistorySummary): SquadHistory {
+  return {
+    ...summary,
+    lastPlayedAt: summary.lastPlayedAt === null ? null : new Date(summary.lastPlayedAt),
+  };
+}
+
 /** Um squad como a API devolve: a linha de `squads` com os membros. */
 export const SquadSummarySchema = z.object({
   id: z.string(),
@@ -72,6 +99,8 @@ export const SquadSummarySchema = z.object({
    * mais distante. Default vazio: um bot anterior à v1.6 não manda o campo.
    */
   upcomingSessions: z.array(SquadSessionSummarySchema).default([]),
+  /** Default `null`: um bot anterior ao histórico não manda o campo. */
+  history: SquadHistorySummarySchema.nullable().default(null),
   createdAt: z.iso.datetime(),
 });
 export type SquadSummary = z.infer<typeof SquadSummarySchema>;
