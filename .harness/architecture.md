@@ -91,10 +91,11 @@ membros **não** é preenchido no boot: ele tem teto por
 guild e se enche pelos eventos, porque a RAM crescia com a soma dos membros de
 todos os servidores). Guild ausente vira log de erro e não impede as outras. Guild em que
 o bot está mas não atende ganha linha `pending` e fica calada; bloqueada, ele
-sai. Os dois recursos do processo (LRU de mensagens, intervalo de flush das
-stats) recebem o maior cache e o menor intervalo entre as guilds — quem resolve
-esse conflito é o `ProcessTuner`, porque desde o registro uma guild pode entrar
-depois do boot.
+sai. O intervalo de flush das stats é do processo e recebe o menor valor entre
+as guilds — quem resolve esse conflito é o `ProcessTuner`, porque desde o
+registro uma guild pode entrar depois do boot. O LRU do cache de mensagens já
+foi resolvido ali pelo maior valor e saiu: cada canal usa o `perChannel` da
+própria guild, e canal parado há 1 h deixa a memória.
 
 O `BotContext` (`src/lib/command.ts`) é o objeto que carrega os services e é
 entregue a todo comando e evento. Quem precisa de uma capacidade nova a recebe
@@ -132,7 +133,8 @@ src/
                   semana na fila, avisa, sai e marca `expired`), squads
                   (convites e votações vencidos, lembrete, voice reservado e
                   início das jogatinas, e o passo diário de inatividade,
-                  guias e match)
+                  guias e match), capacity (RAM e tamanho do banco contra
+                  as linhas de aviso, alerta no webhook)
   lib/            utilitários sem estado: embeds, template, cooldown, purge,
                   channels (onde o bot pode falar), guild-setup,
                   inviter-dm (todo o texto dos avisos a quem convidou)...
@@ -378,7 +380,7 @@ src/
                    logs, messages, misc, social, squads, stats, audit, enums,
                    relations
   repositories/    18 arquivos: uma função por consulta, nunca SQL solto fora
-drizzle/           18 migrations SQL versionadas
+drizzle/           19 migrations SQL versionadas
 ```
 
 34 tabelas. As centrais: `guilds`, `guild_registry`, `guild_settings`,
@@ -607,10 +609,14 @@ matcher (vaga) ou CONVIDAR / `/squad convidar` ─▶ JoinRequestService.invite
   ─▶ SessionService.scheduleFromText ─▶ parseWhen (shared, fuso da guild)
   ─▶ INSERT squad_sessions (quem marcou já vai) ─▶ mensagem com VOU / NÃO VOU / CANCELAR
   ─▶ GuideService.refresh ─▶ SquadsJob (5 min): lembrete + reserva do voice (snapshot na jogatina)
+     pool cheio: grava a reserva sem canal, cria o voice temporário, grava o id
+     (criação interrompida: o job reconcilia, adotando ou apagando o órfão)
   ─▶ na hora, move os membros e tira do ar a chamada pública
   ─▶ voiceStateUpdate (events/community/squads-voice.ts): quem é do squad no voice reservado
-     abre presença em squad_session_attendance e marca played_at; sair de um voice do pool fecha
-  ─▶ fim da jogatina ou voice vazio: restaura os overwrites e só então marca liberado
+     abre presença em squad_session_attendance e marca played_at; sair de um voice do pool
+     ou temporário (lista em memória, carregada do banco uma vez por guild) fecha
+  ─▶ fim da jogatina ou voice vazio: restaura os overwrites (temporário: apaga, só vazio)
+     e só então marca liberado
   ─▶ REPETIR marca a mesma hora na semana seguinte
 ```
 
@@ -652,7 +658,9 @@ Três coisas nesses caminhos não são gosto:
 - **Restaurar antes de marcar.** A liberação do voice devolve os overwrites no
   Discord e só depois grava `voice_released_at`. Na ordem inversa, uma falha
   passageira deixaria o voice do pool fechado ao `@everyone` sem nada que o
-  reabrisse.
+  reabrisse. O voice temporário segue a mesma ordem (apaga, depois marca), e
+  quem decide apagar é a coluna `voice_temporary`, nunca a ausência do canal
+  no pool.
 
 **Um match manual**
 
@@ -753,6 +761,10 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
   gerencia, senão a operação falha com `BOT_ROLE_HIERARCHY`.
 - **`moveRole` anda uma casa por chamada.** Não existe "definir posição".
 - **Migrations não rodam no boot do bot** — são um passo da CI.
+- **O backup acompanha a versão do Supabase.** `pg_dump` aborta contra servidor
+  de major maior que a dele; a imagem do serviço `backup` é `postgres:17-alpine`
+  porque o Supabase está no 17. Pelo mesmo motivo, restaure num Postgres 17: o
+  dump traz `SET transaction_timeout`, que o 16 não conhece.
 - **`INTERNAL_API_TOKEN` vive em três cofres**: `.env` da VM, GitHub Secrets e
   variáveis do projeto na Vercel. Rotacionar é trocar nos três de uma vez.
 - **`OWNER_DISCORD_ID` vale nos dois lados**: o painel confere antes de
@@ -770,5 +782,5 @@ Antes de dar qualquer trabalho por concluído:
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-134 arquivos de teste, ~1.660 casos (Vitest). Os testes de integração de
+137 arquivos de teste, ~1.680 casos (Vitest). Os testes de integração de
 repository precisam de um Postgres e são pulados sem ele.

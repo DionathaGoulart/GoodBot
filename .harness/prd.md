@@ -739,7 +739,23 @@ não notifica.
    grava o snapshot dos overwrites e só então nega `Connect` ao `@everyone` e
    libera os membros e o próprio bot. O snapshot mora na jogatina, e não em
    `channel_locks`, porque um `/lock` no mesmo voice trocaria o que a liberação
-   restaura. Com o pool todo ocupado a jogatina fica sem sala, e o lembrete diz;
+   restaura. Com o pool todo ocupado (ou vazio), cria um **voice temporário**
+   (`temporaryVoices`, ligado por padrão): um voice só da jogatina, na
+   categoria dos squads, nomeado `Jogatina · <squad>` e já trancado como uma
+   reserva. `voice_temporary` marca a linha, e é essa coluna, não "o voice
+   não está no pool", que decide apagar na liberação: tirar um voice do pool
+   no painel com a reserva viva faria apagar um canal do servidor. Sem
+   permissão para criar ou com o teto de 500 canais, e com a opção desligada,
+   a jogatina fica sem sala, e o lembrete diz. **Voice órfão:** a reserva é
+   gravada antes de pedir o canal, ainda sem id, e o id entra depois. Se o
+   Discord recusa com código, a reserva vira "sem sala" na hora; se não
+   responde, ou o bot cai entre as duas escritas, a reserva fica pendente. A
+   cada passada, o job procura, para cada pendente com mais de 2 min, um voice
+   criado logo depois da reserva (a data vem do id), com a assinatura de
+   overwrites do temporário (`@everyone` sem `Connect`, o bot com
+   `ManageChannels`) e sem dono no banco: adota se a jogatina ainda vale, apaga
+   se acabou, e sem canal a reserva vira "sem sala". Nome igual não basta, para
+   nunca apagar um voice feito à mão;
 2. manda um **lembrete** curto no canal do squad, mencionando quem não disse
    "não vou" e apontando a sala. É uma mensagem à parte porque editar a
    mensagem da jogatina não notifica ninguém.
@@ -750,7 +766,14 @@ mover quem já está em voice); quem votou "Não vou" fica em paz. No fim da
 jogatina, ou quando o voice reservado esvazia depois do início, a reserva é
 **liberada**: os overwrites voltam exatamente ao snapshot. O restore vem antes
 de marcar a reserva como liberada, para uma falha passageira do Discord ser
-tentada de novo na passada seguinte em vez de deixar o voice fechado de vez.
+tentada de novo na passada seguinte em vez de deixar o voice fechado de vez. O
+voice temporário é **apagado** em vez de restaurado, pela mesma ordem, e nunca
+com gente dentro: passado o fim com o squad ainda jogando, o job tenta de novo
+a cada 5 min e apaga quando esvaziar. Jogatina cancelada com alguém esperando
+no voice libera quando ele sai, mesmo antes do início. O evento de voz
+reconhece os temporários por uma lista em memória, carregada do banco na
+primeira pergunta de cada guild, para uma troca de canal fora do pool não
+custar query.
 
 **CANCELAR** vale só antes do início: para quem marcou, ou para qualquer membro
 enquanto ninguém além dele disse "vou". A sala reservada volta para o pool.
@@ -935,7 +958,8 @@ grava, escreve auditoria (§6.5), chama `invalidate` no bot, toast.
   de log; lista de tickets abertos/fechados com link de transcript.
 - **Tags**: tabela CRUD com editor (texto/embed), permissão de criação.
 - **Squads** (§5.11), em quatro abas. `CONFIGURAÇÃO`: canal de busca, cargo de
-  ping, categoria, nome do canal, voices do pool, prazos, duração da jogatina,
+  ping, categoria, nome do canal, voices do pool, voice temporário com o pool
+  cheio, prazos, duração da jogatina,
   jogatinas marcadas por squad e as 4 faixas da grade, com o painel da mensagem fixa (publicar ou atualizar) no topo.
   `JOGOS`: CRUD de jogo (nome, tamanho do squad de 2 a 20, quantos jogam por
   vez de 2 a 10 e nunca mais que o squad, ligado) com as até 5
@@ -1039,10 +1063,13 @@ o que ficar vazio cai no perfil global do bot.
   da config e registro dos guild commands (um hash por guild, então
   acrescentar um servidor não re-registra os outros). Guild em que o bot está
   sem estar no registro ganha linha `pending`; guild bloqueada, ele deixa.
-- Dois recursos são do **processo** e não da guild: o LRU do cache de mensagens
-  e o intervalo de flush das estatísticas. Com várias guilds vale o maior cache
-  e o menor intervalo — a guild mais exigente é atendida e as outras ganham
-  folga.
+- Um recurso é do **processo** e não da guild: o intervalo de flush das
+  estatísticas. Com várias guilds vale o menor intervalo, e a guild mais
+  exigente é atendida. O LRU do cache de mensagens **não** é mais do processo:
+  cada canal guarda até o `messageCache.perChannel` da própria guild, e canal
+  sem mensagem nova há 1 h sai da memória (o conteúdo segue no banco). Antes
+  valia o maior valor entre as guilds, e um servidor que pedisse 1000 por canal
+  multiplicava a RAM de todos.
 - O painel guarda um nível de acesso **por guild** na sessão
   (`Record<guildId, {level, checkedAt}>`). Um nível único seria furo de
   permissão: alguém pode ser dono de um servidor e nem estar no outro. Quem
@@ -1066,12 +1093,26 @@ exata só até 5.000 membros — acima disso o campo não vai, e o painel escrev
 "—". O consumo real está no `rssBytes` do `/health`; o sinal de alarme é ele
 voltar a crescer em linha reta com o número de servidores.
 
+**Capacidade.** Os dois limites que param o bot inteiro são a RAM do container
+(384 MB) e a cota do Supabase (500 MB); o que mais pesa nos dois é o cache de
+mensagens, que guarda o texto de toda mensagem por 7 dias. As linhas de aviso
+moram em `@goodbot/shared` (`BOT_MEMORY_BUDGET_BYTES` 300 MB,
+`DATABASE_WARNING_BYTES` 400 MB) e valem nos dois lugares que as leem: a tela
+Saúde do `/admin`, que marca APERTADO, e o `CapacityJob` do bot, que mede a cada
+15 min e alerta no webhook ao cruzar a linha (repete uma vez por dia enquanto
+continuar acima). A alavanca é o próprio `/admin`: a tabela de uso ordena os
+servidores por mensagens guardadas e liga ou desliga o cache de cada um. A
+escrita é a mesma config da tela de logs do servidor, com linha na auditoria
+dele.
+
 ### 7.2 Performance no free tier
 
 - **VM (Oracle E2.1.Micro, 1 OCPU / 1 GB, x86_64)**: roda só `bot` e
   `caddy`. Orçamento: bot ≤ 300 MB RSS (`mem_limit: 384m`), caddy ≤ 50 MB,
   sobrando ~500 MB para o sistema. Swap de 2 GB configurado no host, porque
-  1 GB não perdoa pico.
+  1 GB não perdoa pico. A CPU da E2.1.Micro é **1/8 de OCPU** com rajada: aguenta
+  pico, não carga alta contínua. Quem acompanha o orçamento é o `CapacityJob`
+  (§7.1).
 - **Painel (Vercel)**: `output` padrão (não `standalone`); server components
   com `fetch` paralelo; nada de trabalho pesado por request. Cold start
   importa: manter dependências do server enxutas.
@@ -1298,7 +1339,7 @@ squad_join_requests (id uuid PK, guild_id, squad_id FK, user_id, message_id, inv
                    -- `session_id`: a jogatina cuja chamada pública trouxe o pedido (entra como "vou" nela)
 squad_sessions    (id bigserial PK, guild_id, squad_id FK, starts_at, ends_at, created_by, reminded_at, message_id,
                    started_at, going_ids[], not_going_ids[], voice_channel_id,
-                   voice_overwrites jsonb, voice_reserved_at, voice_released_at, played_at, cancelled_at,
+                   voice_overwrites jsonb, voice_temporary bool, voice_reserved_at, voice_released_at, played_at, cancelled_at,
                    cancelled_by, called_at, call_channel_id, call_message_id, created_at)
                    unique (squad_id, starts_at); idx (guild_id, ends_at) where reservado e não liberado
                    -- a jogatina: `created_by` nulo = sessão semanal da v1.5; `ends_at` = início + `sessionHours`;
@@ -1444,11 +1485,11 @@ provedor, documentada em `docs/runbook.md`.
 | Drift entre schema Zod de config e jsonb salvo                    | campo `version` + migração de config na leitura                                                                                            | feito — `packages/shared/src/config` |
 | Disco cheio (logs, message_cache)                                 | retenções (§8), rotação Docker; o disco do banco agora é do Supabase (alerta de cota)                                                       | feito — `RetentionJob` com alerta na falha; `json-file` com 5×10 MB; `docker system prune` semanal no bootstrap |
 | OneDrive sincronizando `node_modules` no Windows do dev           | `.gitignore` + trabalhar via WSL (path `/mnt/c/...` já é o caso); pnpm com `node-linker=hoisted` não é necessário; documentar no CLAUDE.md | feito — CLAUDE.md |
-| **Backup do Supabase não é exportável no free tier**              | `pg_dump` próprio diário no serviço `backup` do Compose, 7 diários + 4 semanais no volume `backups`; `infra/scripts/restore.sh`             | feito — cópia externa (Object Storage + rclone) segue **opcional e não implementada** |
+| **Backup do Supabase não é exportável no free tier**              | `pg_dump` próprio diário no serviço `backup` do Compose, 7 diários + 4 semanais no volume `backups`; `infra/scripts/restore.sh`             | feito — só os schemas `public` e `drizzle` (o resto é do Supabase e quebra o restore num Postgres comum); imagem na mesma major do Supabase (17); dump sem o rodapé do `pg_dump` é descartado e alerta; o `/health` ignora arquivo < 1 KB. Cópia externa (Object Storage + rclone) segue **opcional e não implementada** |
 | **Perder o rastro do que está rodando na VM**                     | `GIT_SHA` embutido na imagem pela CI, exibido no `/health`, no card Saúde e no alerta de boot                                              | feito — `infra/docker/bot.Dockerfile` |
 | **Rate limit do painel na Vercel**                                | 60/min por IP nas rotas de auth e nas server actions de escrita                                                                             | parcial — contagem **por instância**, porque o painel é stateless e a stack não tem store compartilhado (§12); serve para cortar script, não como cota |
 | **Teto de 500 canais por servidor** (v1.5)                        | um canal de texto por squad e voice emprestado de um pool, nunca um voice por squad (§5.11)                                                | parcial: o painel mostra o contador de canais, mas nada barra squad novo perto do teto; se criar o canal falhar, o squad é arquivado na hora |
-| **Pool de voices cheio** (v1.5)                                   | a reserva pega o voice preferido do squad ou o primeiro livre; sem nenhum, a jogatina acontece sem sala e o lembrete avisa                    | parcial: não há fila nem voice extra; mais jogatinas ao mesmo tempo do que voices no pool ficam sem sala |
+| **Pool de voices cheio** (v1.5)                                   | a reserva pega o voice preferido do squad ou o primeiro livre; sem nenhum, cria um voice temporário da jogatina e o apaga no fim            | feito: `temporaryVoices`, apagado só vazio; sem permissão, no teto de 500 canais ou com a opção desligada, a jogatina fica sem sala e o lembrete avisa. Voice órfão (reinício ou Discord sem resposta no meio da criação) é resolvido pela reconciliação do job |
 | **Horário do `/bora` mal entendido** (v1.6)                       | `parseWhen` puro no fuso da guild, erro que traz exemplos, autocomplete que ecoa o que o bot entendeu antes de enviar e mensagem da jogatina com a data completa | feito: `shared/squads/when.ts`, com testes de tabela |
 | **Vaga presa em convite ou votação parada** (v1.6)                | convite e votação vencem em `proposalTtlHours`; no prazo, a votação decide com os votos que tem (um a favor sem maioria contra entra) e a vaga volta para a busca | feito: `JoinRequestService.expireDue` no job, `decideJoinVote` com testes de tabela |
 | **Chamada pública parada no canal de busca** (v1.6)               | a chamada sai do ar no início, no cancelamento e no arquivamento, com a trava no banco antes do Discord; ENTRAR confere a jogatina e tira a chamada que ficou | feito: `CallService.close` e `SearchService.requestFromCall`, com testes |

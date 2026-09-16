@@ -35,7 +35,10 @@ ssh goodbot 'cd /opt/goodbot && docker compose logs --tail 200 caddy'
 Um erro de server action aparece com o stack; um `redirect` para `/denied` não
 é erro.
 
-**Backup.** `ssh goodbot 'cd /opt/goodbot && docker compose logs backup'`.
+**Backup.** `ssh goodbot 'cd /opt/goodbot && docker compose logs backup'`. Um
+`pg_dump: error: aborting because of server version mismatch` quer dizer que o
+Supabase subiu de major: suba a imagem do serviço `backup` em
+`infra/docker-compose.yml` para a mesma versão.
 
 ---
 
@@ -60,7 +63,11 @@ funcionava.
 ## Restaurar um backup
 
 O `pg_dump` diário roda no serviço `backup` às 06:00 UTC (03:00 em São Paulo) e
-guarda **7 diários + 4 semanais** no volume `backups`.
+guarda **7 diários + 4 semanais** no volume `backups`. Ele leva só os schemas
+`public` (as tabelas) e `drizzle` (o histórico de migrations): o resto do banco
+é do Supabase (`auth`, `storage`, `supabase_vault`) e não existe num Postgres
+comum. Um dump que sai sem o rodapé `PostgreSQL database dump complete` é
+descartado e dispara o alerta.
 
 ```bash
 # 1. Ver o que existe.
@@ -69,14 +76,21 @@ ssh goodbot 'cd /opt/goodbot && docker compose exec backup ls -lah /backups'
 # 2. Trazer o dump escolhido para a máquina local.
 ssh goodbot 'cd /opt/goodbot && docker compose exec -T backup cat /backups/daily-20260907-060000.sql.gz' > dump.sql.gz
 
-# 3. Restaurar num banco DESCARTÁVEL primeiro. Sempre.
-docker compose -f infra/docker-compose.dev.yml up -d postgres
-docker compose -f infra/docker-compose.dev.yml exec postgres createdb -U goodbot goodbot_restore
-infra/scripts/restore.sh dump.sql.gz postgres://goodbot:goodbot@localhost:5432/goodbot_restore
+# 3. Restaurar num banco DESCARTÁVEL primeiro. Sempre. Postgres 17, a versão do
+#    Supabase: o Postgres 16 do docker-compose.dev.yml recusa o dump
+#    (`unrecognized configuration parameter "transaction_timeout"`).
+docker run -d --rm --name goodbot-restore -e POSTGRES_PASSWORD=restore -p 127.0.0.1:5433:5432 postgres:17-alpine
+gunzip -c dump.sql.gz | docker exec -i goodbot-restore psql -U postgres --set ON_ERROR_STOP=on --quiet
 
 # 4. Conferir que o schema está na última versão.
-DATABASE_URL=postgres://goodbot:goodbot@localhost:5432/goodbot_restore pnpm db:migrate
+DATABASE_URL=postgres://postgres:restore@localhost:5433/postgres pnpm db:migrate
+docker stop goodbot-restore
 ```
+
+O `psql` roda dentro do container de propósito: o `infra/scripts/restore.sh`
+usa o `psql` da máquina, e um cliente anterior ao 17.6 não entende o
+`\restrict` que o `pg_dump` novo escreve no dump. Para restaurar com o script,
+confira antes `psql --version`.
 
 Só depois de o restore de teste passar é que se aponta para produção. O dump é
 gerado com `--clean --if-exists`: ele **derruba** as tabelas antes de recriar.
@@ -345,24 +359,56 @@ falha com `column ... does not exist`: publique de novo a `main`.
 
 ---
 
+## RAM ou banco perto do limite
+
+O `CapacityJob` mede a cada 15 min e alerta no webhook quando a RAM do bot
+passa de **300 MB** (o container cai em 384 MB) ou o banco passa de **400 MB**
+(a cota do Supabase são 500 MB, e cheia o banco só aceita leitura). Enquanto
+continuar acima, o alerta repete uma vez por dia. Sem `ALERT_WEBHOOK_URL` no
+`.env` da VM o alerta não sai, e só o `/admin` avisa.
+
+O que mais pesa nos dois é o **cache de mensagens**: o texto de toda mensagem
+fica 7 dias no banco, e as últimas de cada canal ativo ficam na RAM.
+
+1. Abra `admin.<dominio>`. Os tiles **MEMÓRIA RSS**, **BANCO** e **CACHE DE
+   MENSAGENS** dizem qual dos limites está perto.
+2. Na tabela **USO.LOG**, os servidores vêm ordenados por mensagens guardadas.
+   Clique **DESLIGAR** no cache de mensagens dos primeiros. A mudança vale na
+   hora (o bot recebe o invalidate) e aparece na auditoria do servidor.
+3. O banco não encolhe na hora: as mensagens já guardadas saem na retenção,
+   em até 7 dias. A RAM cai em até 1 h, quando os canais parados saem da
+   memória.
+4. Um servidor pode pedir `messageCache.perChannel` alto (até 1000) na tela de
+   logs dele. Esse valor vale só para os canais dele.
+
+Quanto cabe, em ordem de grandeza: o limite fixo do Discord são **100
+servidores** para bot não verificado; o banco aguenta uns **140 mil mensagens
+por dia** somando todos os servidores com cache ligado; a RAM, algumas dezenas
+de servidores médios.
+
+---
+
 ## Checklist mensal
 
 - [ ] **Painel do dono:** `admin.<dominio>` — a tela de **Saúde** junta RAM
-      contra os 384 MB do container, guilds em cache vs registro, uso por
-      servidor e os erros recentes do processo. Comece por ela; os itens abaixo
-      são o que ela não vê.
+      contra o orçamento de 300 MB, o tamanho do banco contra a cota, o cache
+      de mensagens, guilds em cache vs registro, uso por servidor e os erros
+      recentes do processo. Comece por ela; os itens abaixo são o que ela não
+      vê.
 - [ ] **Fila:** `admin.<dominio>/fila` vazia. Servidor esperando aprovação é
       alguém com o bot mudo e sem entender por quê.
 - [ ] **Espaço em disco:** `ssh goodbot 'df -h /'` — abaixo de 80%.
 - [ ] **Memória:** `ssh goodbot 'cd /opt/goodbot && docker stats --no-stream'` —
       bot < 300 MB, total < 500 MB (a máquina tem 1 GB).
 - [ ] **Backups:** `docker compose exec backup ls -lah /backups` — o dump de
-      hoje existe e não está com 0 byte. O card **BACKUP.SYS** em
-      `/g/<guildId>/system` diz "em dia".
+      hoje existe e tem dezenas de KB. Arquivo de 20 bytes é gzip vazio: o
+      `pg_dump` falhou. O card **BACKUP.SYS** em `/g/<guildId>/system` diz "em
+      dia" e ignora arquivo abaixo de 1 KB.
 - [ ] **Restore:** uma vez por trimestre, ou depois de qualquer migration
       grande, faça o restore de teste (acima). Backup não testado não é backup.
-- [ ] **Cota do Supabase:** painel → _Settings_ → _Usage_. O free tier são
-      500 MB; acima de 400 MB, revise as retenções (PRD §8).
+- [ ] **Cota do Supabase:** o tile **BANCO** do `/admin` (é o mesmo número
+      que o Supabase compara com a cota). O free tier são 500 MB; acima de
+      400 MB o tile marca APERTADO e o bot alerta. Veja a seção abaixo.
 - [ ] **Uso da Vercel:** painel → _Usage_. Um servidor só fica muito abaixo do
       limite; um salto quer dizer que alguém achou o painel.
 - [ ] **fail2ban:** `sudo fail2ban-client status goodbot-api` — banimentos de

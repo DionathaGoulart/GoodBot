@@ -70,6 +70,12 @@ absorve o pico e escoa no ritmo permitido.
 Edição e exclusão de mensagem precisam do conteúdo anterior, que o Discord não
 manda no evento — daí a tabela `message_cache`, com prazo de retenção próprio.
 
+O cache tem duas camadas: as últimas `messageCache.perChannel` mensagens de
+cada canal ficam na memória do bot (o valor é do servidor dono do canal e não
+afeta os outros), e canal sem mensagem nova há 1 h sai dela; o banco guarda 7
+dias. É o que mais pesa no banco e na RAM, por isso o dono do bot pode
+desligá-lo por servidor no `/admin` (ver `docs/runbook.md`).
+
 ---
 
 ## Boas-vindas
@@ -277,8 +283,13 @@ Meia hora antes (`reminderMinutesBefore`) um voice livre do pool fica reservado
 marcada para daqui a pouco já sai com sala; marcada para `agora`, já começa. Na
 hora, quem está em outro voice é movido e quem não está em nenhum é chamado. No
 fim da jogatina, ou quando o voice esvazia depois do início, as permissões
-voltam exatamente ao que eram. Com o pool todo ocupado a jogatina acontece sem
-sala, e o lembrete avisa.
+voltam exatamente ao que eram. Com o pool todo ocupado, o bot cria um voice só
+para a jogatina (`Jogatina · <squad>`, na categoria dos squads, trancado do
+mesmo jeito) e o apaga quando ele esvazia depois do início, ou no fim, mas
+nunca com gente dentro. A opção fica na aba de configuração ("Voice temporário
+com o rodízio cheio"); desligada, ou sem permissão do bot para criar canal, a
+jogatina acontece sem sala e o lembrete avisa. Se o bot cair no meio da
+criação da sala, o job acha o canal que sobrou e o adota ou apaga sozinho.
 
 `CANCELAR` vale antes do início, para quem marcou ou para qualquer membro
 enquanto ninguém mais confirmou. Depois do início, a mensagem ganha `REPETIR`,
