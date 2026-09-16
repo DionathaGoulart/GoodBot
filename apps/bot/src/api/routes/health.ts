@@ -15,6 +15,13 @@ import type { Client } from 'discord.js';
 /** Um dump com mais de 48h significa que o job de backup parou (PRD §11). */
 export const BACKUP_STALE_AFTER_MS = 48 * HOUR_MS;
 
+/**
+ * Abaixo disto o arquivo não é um dump: o `gzip` de uma entrada vazia tem 20
+ * bytes, e só o schema do Goodbot comprimido passa de 30 KB. Um `pg_dump` que
+ * abortava já deixou dias de arquivos de 20 bytes marcados como "em dia".
+ */
+export const BACKUP_MIN_BYTES = 1024;
+
 /** `Status` do discord.js → o enum público do `HealthResponse`. */
 export function gatewayStatus(client: Client): HealthResponse['gateway']['status'] {
   if (client.isReady()) return 'ready';
@@ -36,8 +43,10 @@ async function databaseHealth(db: ApiDeps['db']): Promise<HealthResponse['databa
 }
 
 /**
- * O dump mais recente no volume `backups`, montado read-only no container do
- * bot. Se o diretório não existe (dev, ou VM sem o serviço `backup`), o painel
+ * O dump válido mais recente no volume `backups`, montado read-only no
+ * container do bot. Arquivo menor que `BACKUP_MIN_BYTES` não conta: sem esse
+ * filtro um dump vazio de hoje esconderia que não existe backup nenhum. Se o
+ * diretório não existe (dev, ou VM sem o serviço `backup`), o painel
  * simplesmente não mostra o card.
  */
 export async function readBackupHealth(
@@ -51,6 +60,7 @@ export async function readBackupHealth(
     let newest: { at: number; size: number } | null = null;
     for (const name of files) {
       const info = await stat(join(directory, name));
+      if (info.size < BACKUP_MIN_BYTES) continue;
       if (!newest || info.mtimeMs > newest.at) newest = { at: info.mtimeMs, size: info.size };
     }
     if (!newest) return { at: null, sizeBytes: null, fresh: false };

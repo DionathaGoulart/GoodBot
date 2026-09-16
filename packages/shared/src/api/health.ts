@@ -31,7 +31,7 @@ export type QueueHealth = z.infer<typeof QueueHealthSchema>;
 export const BackupHealthSchema = z.object({
   at: z.string().nullable(),
   sizeBytes: z.number().int().min(0).nullable(),
-  /** `false` quando o dump mais recente tem mais de 48h — ou não existe. */
+  /** `false` quando o dump válido mais recente tem mais de 48h — ou não existe. */
   fresh: z.boolean(),
 });
 export type BackupHealth = z.infer<typeof BackupHealthSchema>;

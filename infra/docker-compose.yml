@@ -110,7 +110,10 @@ services:
   # `pg_dump` diário contra o Supabase (PRD §11). O backup gerenciado do free
   # tier não é exportável — este é.
   backup:
-    image: postgres:16-alpine
+    # A major tem de ser >= a do Supabase (hoje 17): o `pg_dump` aborta com
+    # "server version mismatch" contra servidor mais novo. Quando o Supabase
+    # subir de versão, esta linha sobe junto; o `backup.sh` alerta se esquecer.
+    image: postgres:17-alpine
     container_name: goodbot-backup
     restart: unless-stopped
     # Sem `env_file`: este container não tem por que enxergar o DISCORD_TOKEN

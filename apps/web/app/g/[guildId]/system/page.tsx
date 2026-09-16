@@ -113,7 +113,7 @@ function backupRows(backup: HealthResponse['backup']): [string, string][] {
     [
       'Último dump',
       backup.at === null
-        ? 'nenhum dump encontrado'
+        ? 'nenhum dump válido'
         : new Date(backup.at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
     ],
     ['Tamanho', backup.sizeBytes === null ? '—' : formatBytes(backup.sizeBytes)],
