@@ -30,7 +30,7 @@ export interface SquadGroupProposal {
   userIds: string[];
   /** Células que todos do grupo têm marcadas; nunca zero. */
   mask: number;
-  /** A janela semanal sugerida para o squad. */
+  /** A célula com mais gente do grupo: o "vocês batem em" da proposta. */
   slot: SquadCell;
 }
 
@@ -104,6 +104,29 @@ export function hardConflicts(
   return conflicts;
 }
 
+/**
+ * O candidato cabe num squad existente pela grade: existe uma célula que ele
+ * divide com pelo menos `min(partySize, membros) - 1` membros (e nunca menos
+ * de um). O squad não tem janela fixa, então a pergunta é se dá para montar
+ * uma party com ele em algum horário, não se ele joga num horário escolhido.
+ * Squad sem nenhuma grade conhecida (perfis apagados) não barra ninguém.
+ */
+export function fitsSquad(
+  candidateMask: number,
+  memberMasks: readonly number[],
+  partySize: number,
+): boolean {
+  if (memberMasks.length === 0) return candidateMask !== 0;
+  const needed = Math.max(1, Math.min(partySize, memberMasks.length) - 1);
+  for (let rest = candidateMask; rest !== 0; rest &= rest - 1) {
+    const bit = rest & -rest;
+    let sharing = 0;
+    for (const mask of memberMasks) if (mask & bit) sharing++;
+    if (sharing >= needed) return true;
+  }
+  return false;
+}
+
 /** Uma dupla pode jogar junta: nenhum campo hard contra e ao menos uma faixa em comum. */
 export function isCompatiblePair(pair: SquadPairScore): boolean {
   return pair.hardOk && pair.commonCells >= 1;
@@ -137,9 +160,9 @@ const compareIds = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
  *    nota com eles;
  * 3. repete até não sobrar dupla compatível.
  *
- * O grupo inteiro precisa dividir uma faixa porque o squad tem uma janela só
- * por semana; compatibilidade de dupla em dupla não garante isso (A e B jogam
- * sexta, B e C sábado, A e C domingo). Cada jogador fica em no máximo um
+ * O grupo inteiro precisa dividir uma faixa porque a turma proposta precisa
+ * de pelo menos um horário em que todos joguem juntos; compatibilidade de dupla
+ * em dupla não garante isso (A e B jogam sexta, B e C sábado, A e C domingo). Cada jogador fica em no máximo um
  * grupo. Empates vão para o menor `userId` (ordem de string), então a mesma
  * entrada em qualquer ordem dá a mesma saída. Perfil repetido conta uma vez.
  */

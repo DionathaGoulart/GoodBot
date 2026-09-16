@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { toBits } from './availability';
 import {
+  fitsSquad,
   hardConflicts,
   isCompatiblePair,
   pairKey,
@@ -149,6 +150,35 @@ describe('hardConflicts', () => {
         expect(hardConflicts(FIELDS, a, b).length === 0).toBe(scoreProfiles(FIELDS, a, b).hardOk);
       }
     }
+  });
+});
+
+describe('fitsSquad', () => {
+  const both = FRIDAY_EVENING | SATURDAY_EVENING;
+
+  it('basta uma célula dividida com membros suficientes para uma party', () => {
+    // Três membros e party de 4: o candidato precisa dividir uma célula com dois.
+    const members = [FRIDAY_EVENING, FRIDAY_EVENING, SATURDAY_EVENING];
+    expect(fitsSquad(FRIDAY_EVENING, members, 4)).toBe(true);
+    expect(fitsSquad(SATURDAY_EVENING, members, 4)).toBe(false);
+    expect(fitsSquad(SUNDAY_EVENING | both, members, 4)).toBe(true);
+  });
+
+  it('party menor que o squad pede menos gente na mesma célula', () => {
+    const members = [FRIDAY_EVENING, SATURDAY_EVENING, SUNDAY_EVENING, SUNDAY_EVENING];
+    expect(fitsSquad(SATURDAY_EVENING, members, 4)).toBe(false);
+    expect(fitsSquad(SATURDAY_EVENING, members, 2)).toBe(true);
+  });
+
+  it('com um membro só, ainda exige uma célula em comum', () => {
+    expect(fitsSquad(FRIDAY_EVENING, [FRIDAY_EVENING], 4)).toBe(true);
+    expect(fitsSquad(SUNDAY_EVENING, [FRIDAY_EVENING], 4)).toBe(false);
+  });
+
+  it('sem grade de nenhum membro não barra, mas grade vazia do candidato sim', () => {
+    expect(fitsSquad(SUNDAY_EVENING, [], 4)).toBe(true);
+    expect(fitsSquad(0, [], 4)).toBe(false);
+    expect(fitsSquad(0, [both], 4)).toBe(false);
   });
 });
 
