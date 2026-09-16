@@ -15,6 +15,9 @@ const removeSquadMember = vi.fn();
 const checkSquadManualMatch = vi.fn();
 const proposeSquadManually = vi.fn();
 const getSquadGame = vi.fn();
+const listSquadGames = vi.fn();
+const updateSquadGame = vi.fn();
+const syncSquadStatusesToGroupSize = vi.fn();
 const withAudit = vi.fn();
 const revalidatePath = vi.fn();
 
@@ -40,10 +43,11 @@ vi.mock('@goodbot/db', () => ({
   listOpenSquadProposals: vi.fn(),
   listPendingJoinRequests: vi.fn(),
   listRecentProposalPairs: vi.fn(),
-  listSquadGames: vi.fn(),
+  listSquadGames: (...args: unknown[]) => listSquadGames(...args),
   listSquadProfilesByGame: vi.fn(),
   listSquads: vi.fn(),
-  updateSquadGame: vi.fn(),
+  syncSquadStatusesToGroupSize: (...args: unknown[]) => syncSquadStatusesToGroupSize(...args),
+  updateSquadGame: (...args: unknown[]) => updateSquadGame(...args),
 }));
 vi.mock('./db', () => ({ db: () => ({}) }));
 vi.mock('./audit', () => ({ withAudit: (...args: unknown[]) => withAudit(...args) }));
@@ -77,6 +81,7 @@ const {
   editPlayerAnswers,
   proposeManualSquad,
   removePlayerFromSquad,
+  saveSquadGame,
   setPlayerStatus,
 } = await import('./squads');
 
@@ -376,5 +381,57 @@ describe('match manual', () => {
 
     expect(result.ok).toBe(true);
     expect(revalidatePath).toHaveBeenCalledWith(`/g/${GUILD_ID}/config/squads`);
+  });
+});
+
+describe('jogo', () => {
+  const stored = {
+    id: GAME,
+    name: 'Helldivers 2',
+    groupSize: 4,
+    partySize: 4,
+    enabled: true,
+    fields: [],
+  };
+
+  function gameForm(sizes: { groupSize: number; partySize: number }): FormData {
+    const formData = new FormData();
+    formData.set('gameId', GAME);
+    formData.set(
+      'game',
+      JSON.stringify({ name: 'Helldivers 2', enabled: true, fields: [], ...sizes }),
+    );
+    return formData;
+  }
+
+  beforeEach(() => {
+    listSquadGames.mockResolvedValue([stored]);
+    updateSquadGame.mockImplementation((_db, _guildId, _gameId, input: object) =>
+      Promise.resolve({ ...stored, ...input }),
+    );
+  });
+
+  it('party maior que o squad volta marcada no campo e não grava', async () => {
+    const result = await saveSquadGame(GUILD_ID, gameForm({ groupSize: 3, partySize: 4 }));
+
+    expect(result).toMatchObject({ ok: false, fieldErrors: { partySize: expect.any(String) } });
+    expect(updateSquadGame).not.toHaveBeenCalled();
+  });
+
+  it('mudar o tamanho do grupo acerta a vaga dos squads vivos; mudar só a party não', async () => {
+    expect((await saveSquadGame(GUILD_ID, gameForm({ groupSize: 12, partySize: 4 }))).ok).toBe(
+      true,
+    );
+    expect(updateSquadGame).toHaveBeenCalledWith(
+      {},
+      GUILD_ID,
+      GAME,
+      expect.objectContaining({ groupSize: 12, partySize: 4 }),
+    );
+    expect(syncSquadStatusesToGroupSize).toHaveBeenCalledWith({}, GUILD_ID, GAME, 12);
+
+    syncSquadStatusesToGroupSize.mockClear();
+    expect((await saveSquadGame(GUILD_ID, gameForm({ groupSize: 4, partySize: 2 }))).ok).toBe(true);
+    expect(syncSquadStatusesToGroupSize).not.toHaveBeenCalled();
   });
 });

@@ -42,12 +42,24 @@ describe('describeManualIssue', () => {
   const LABELS: Record<string, string> = { plataforma: 'Plataforma', microfone: 'Microfone' };
   const ctx = {
     nameOf: (userId: string) => NAMES[userId] ?? userId,
-    squadSize: 2,
+    groupSize: 2,
+    partySize: 2,
     maxSquadsPerUser: 3,
     cooldownDays: 7,
     fieldLabel: (key: string) => LABELS[key] ?? key,
     squadOf: (userId: string) => (userId === ANA ? 'Alfa' : null),
   };
+
+  it('turma maior que a party mas dentro do squad diz que cabem todos', () => {
+    expect(
+      describeManualIssue(
+        { code: 'GROUP_OVER_SIZE', userIds: [ANA, BIA, CAIO] },
+        { ...ctx, groupSize: 8, partySize: 2 },
+      ),
+    ).toBe(
+      'A turma é maior que uma party (3 de 2): cabem todos no squad, mas não jogam todos na mesma partida.',
+    );
+  });
 
   it.each<[SquadManualIssue['code'], string[], string]>([
     ['PROFILE_NOT_FOUND', [ANA], 'Ana não tem perfil neste jogo.'],

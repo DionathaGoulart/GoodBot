@@ -60,8 +60,15 @@ const FIELDS: SquadGameField[] = [
 ];
 
 const GAMES: SquadGameRow[] = [
-  { id: GAME_ID, name: 'Helldivers 2', squadSize: 4, enabled: true, fields: FIELDS },
-  { id: OTHER_ID, name: 'Deep Rock Galactic', squadSize: 4, enabled: true, fields: [] },
+  { id: GAME_ID, name: 'Helldivers 2', groupSize: 4, partySize: 4, enabled: true, fields: FIELDS },
+  {
+    id: OTHER_ID,
+    name: 'Deep Rock Galactic',
+    groupSize: 4,
+    partySize: 4,
+    enabled: true,
+    fields: [],
+  },
 ];
 
 const SAT_NIGHT = toBits([{ day: 6, block: 2 }]);

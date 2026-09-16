@@ -75,6 +75,29 @@ describe('GameSheet', { timeout: 20_000 }, () => {
     expect(saveSquadGameAction).not.toHaveBeenCalled();
   });
 
+  it('squad e party vão no jogo, e party maior que o squad volta marcada', async () => {
+    saveSquadGameAction.mockResolvedValue({ ok: true });
+    renderSheet();
+    fireEvent.change(screen.getByLabelText(/^Nome/), { target: { value: 'Helldivers 2' } });
+    // O label do NumberField aponta para o wrapper do input e do sufixo.
+    const groupSize = document.querySelector('input[name="groupSize"]') as HTMLInputElement;
+    fireEvent.change(groupSize, { target: { value: '3' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'SALVAR' }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/A party não pode ser maior que o squad\./)).toBeInTheDocument(),
+    );
+    expect(saveSquadGameAction).not.toHaveBeenCalled();
+
+    fireEvent.change(groupSize, { target: { value: '12' } });
+    fireEvent.click(screen.getByRole('button', { name: 'SALVAR' }));
+
+    await waitFor(() => expect(saveSquadGameAction).toHaveBeenCalledTimes(1));
+    const [, formData] = saveSquadGameAction.mock.calls[0] as [string, FormData];
+    expect(JSON.parse(String(formData.get('game')))).toMatchObject({ groupSize: 12, partySize: 4 });
+  });
+
   it('gera a chave pela pergunta e manda uma opção por linha', async () => {
     saveSquadGameAction.mockResolvedValue({ ok: true });
     renderSheet();

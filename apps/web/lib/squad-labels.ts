@@ -54,7 +54,8 @@ export const SQUAD_PROFILE_STATUS_LABEL: Record<SquadProfileStatus, string> = {
 /** O que o texto de um bloqueio ou aviso precisa saber além da própria issue. */
 export interface ManualIssueContext {
   nameOf: (userId: string) => string;
-  squadSize: number;
+  groupSize: number;
+  partySize: number;
   maxSquadsPerUser: number;
   cooldownDays: number;
   fieldLabel: (key: string) => string;
@@ -88,8 +89,12 @@ export function describeManualIssue(
       return `${name} já está numa proposta aberta deste jogo.`;
     case 'NO_COMMON_CELL':
       return 'Ninguém do grupo divide o mesmo horário. Sem isso o grupo não tem quando jogar junto.';
-    case 'GROUP_OVER_SIZE':
-      return `A turma é maior que o squad (${String(issue.userIds.length)} de ${String(ctx.squadSize)}): quem aceitar primeiro fica com as vagas.`;
+    case 'GROUP_OVER_SIZE': {
+      const picked = issue.userIds.length;
+      return picked > ctx.groupSize
+        ? `A turma é maior que o squad (${String(picked)} de ${String(ctx.groupSize)}): quem aceitar primeiro fica com as vagas.`
+        : `A turma é maior que uma party (${String(picked)} de ${String(ctx.partySize)}): cabem todos no squad, mas não jogam todos na mesma partida.`;
+    }
     case 'NOT_SEARCHING':
       return `O perfil de ${name} está pausado, não procurando.`;
     case 'AT_SQUAD_LIMIT':

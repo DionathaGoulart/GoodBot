@@ -3,7 +3,7 @@
 import * as React from 'react';
 import {
   evaluateManualMatch,
-  MAX_SQUAD_SIZE,
+  MAX_SQUAD_GROUP_SIZE,
   type SquadBlockConfig,
   type SquadManualIssue,
   type SquadProfileStatus,
@@ -122,7 +122,7 @@ function AdminPlayers({
     () =>
       game && selected.size > 0
         ? evaluateManualMatch({
-            game: { squadSize: game.squadSize, fields: game.fields },
+            game: { partySize: game.partySize, fields: game.fields },
             maxSquadsPerUser,
             userIds: [...selected],
             people: playersPeople(players, game.id),
@@ -152,7 +152,8 @@ function AdminPlayers({
       describeManualIssue(issue, {
         nameOf,
         fieldLabel,
-        squadSize: game?.squadSize ?? 0,
+        groupSize: game?.groupSize ?? 0,
+        partySize: game?.partySize ?? 0,
         maxSquadsPerUser,
         cooldownDays,
         squadOf: (userId) => {
@@ -167,7 +168,7 @@ function AdminPlayers({
     setSelected((current) => {
       const next = new Set(current);
       if (next.has(userId)) next.delete(userId);
-      else if (next.size < MAX_SQUAD_SIZE) next.add(userId);
+      else if (next.size < MAX_SQUAD_GROUP_SIZE) next.add(userId);
       return next;
     });
   }, []);
@@ -244,7 +245,7 @@ function AdminPlayers({
           squadsById={squadsById}
           selected={selected}
           notes={notes}
-          selectionFull={selected.size >= MAX_SQUAD_SIZE}
+          selectionFull={selected.size >= MAX_SQUAD_GROUP_SIZE}
           onToggle={toggle}
           onOpen={openPlayer}
           timeZone={timeZone}

@@ -131,10 +131,15 @@ export function SquadsTabs({
         cell: ({ row }) => <span className="font-bold">{row.original.name}</span>,
       },
       {
-        accessorKey: 'squadSize',
+        accessorKey: 'groupSize',
         header: 'TAMANHO',
         cell: ({ row }) => (
-          <span className="tabular-nums">{row.original.squadSize} JOGADORES</span>
+          <span className="flex flex-col tabular-nums">
+            <span>{row.original.groupSize} JOGADORES</span>
+            {row.original.partySize < row.original.groupSize ? (
+              <span className="screen-meta">{row.original.partySize} POR VEZ</span>
+            ) : null}
+          </span>
         ),
       },
       {
@@ -185,7 +190,8 @@ export function SquadsTabs({
                   id: row.original.id,
                   game: {
                     name: row.original.name,
-                    squadSize: row.original.squadSize,
+                    groupSize: row.original.groupSize,
+                    partySize: row.original.partySize,
                     enabled: row.original.enabled,
                     fields: row.original.fields,
                   },

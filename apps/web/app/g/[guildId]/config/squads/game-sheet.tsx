@@ -5,7 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   MAX_SQUAD_FIELD_OPTIONS,
   MAX_SQUAD_GAME_FIELDS,
-  MAX_SQUAD_SIZE,
+  MAX_SQUAD_GROUP_SIZE,
+  MAX_SQUAD_PARTY_SIZE,
   MIN_SQUAD_SIZE,
   SQUAD_FIELD_MATCH,
   SQUAD_FIELD_TYPES,
@@ -55,7 +56,8 @@ import { useGuildId } from '@/lib/use-guild-id';
 
 export const EMPTY_GAME: SquadGameInput = {
   name: '',
-  squadSize: 4,
+  groupSize: 4,
+  partySize: 4,
   enabled: true,
   fields: [],
 };
@@ -362,7 +364,8 @@ export function GameSheet({
         <SheetHeader>
           <SheetTitle>{editing?.id ? 'EDITAR JOGO' : 'NOVO JOGO'}</SheetTitle>
           <SheetDescription>
-            Cada jogo tem o próprio tamanho de squad e as perguntas do perfil, que pesam no match.
+            Cada jogo tem o próprio tamanho de squad e de party e as perguntas do perfil, que pesam
+            no match.
           </SheetDescription>
         </SheetHeader>
 
@@ -374,11 +377,19 @@ export function GameSheet({
               <fieldset disabled={readOnly} className="flex flex-col gap-4">
                 <TextField name="name" label="Nome" required />
                 <NumberField
-                  name="squadSize"
-                  label="Jogadores por squad"
+                  name="groupSize"
+                  label="Tamanho do squad"
                   description="Quando o squad enche, a vaga some da busca."
                   min={MIN_SQUAD_SIZE}
-                  max={MAX_SQUAD_SIZE}
+                  max={MAX_SQUAD_GROUP_SIZE}
+                  suffix="JOGADORES"
+                />
+                <NumberField
+                  name="partySize"
+                  label="Jogam por vez"
+                  description="Quantos cabem numa partida: o match propõe turmas deste tamanho."
+                  min={MIN_SQUAD_SIZE}
+                  max={MAX_SQUAD_PARTY_SIZE}
                   suffix="JOGADORES"
                 />
                 <SwitchField

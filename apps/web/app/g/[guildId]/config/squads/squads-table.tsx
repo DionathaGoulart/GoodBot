@@ -103,7 +103,7 @@ export function SquadsTable({
         header: 'MEMBROS',
         accessorFn: (row) => row.memberIds.length,
         cell: ({ row }) => {
-          const size = gameById.get(row.original.gameId)?.squadSize;
+          const size = gameById.get(row.original.gameId)?.groupSize;
           return (
             <span className="tabular-nums">
               {row.original.memberIds.length}

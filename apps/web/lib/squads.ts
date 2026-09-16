@@ -12,6 +12,7 @@ import {
   listSquadGames,
   listSquadProfilesByGame,
   listSquads,
+  syncSquadStatusesToGroupSize,
   updateSquadGame,
 } from '@goodbot/db';
 import {
@@ -68,7 +69,8 @@ export async function loadSquadGames(guildId: string): Promise<SquadGameRow[]> {
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
-    squadSize: row.squadSize,
+    groupSize: row.groupSize,
+    partySize: row.partySize,
     enabled: row.enabled,
     fields: row.fields,
   }));
@@ -257,6 +259,12 @@ export async function saveSquadGame(guildId: string, formData: FormData): Promis
           message: 'Já existe um jogo com esse nome.',
           fieldErrors: { name: 'Nome em uso' },
         };
+  }
+
+  // O status do squad só muda quando alguém entra ou sai. Sem acertar os vivos,
+  // subir o grupo deixaria os squads que já estavam cheios fora da busca.
+  if (before && before.groupSize !== saved.groupSize) {
+    await syncSquadStatusesToGroupSize(db(), guildId, saved.id, saved.groupSize);
   }
 
   await withAudit(

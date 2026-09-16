@@ -56,7 +56,8 @@ const FIELDS: SquadGameField[] = [
 const GAME: SquadGameRow = {
   id: GAME_ID,
   name: 'Helldivers 2',
-  squadSize: 4,
+  groupSize: 4,
+  partySize: 4,
   enabled: true,
   fields: FIELDS,
 };

@@ -41,7 +41,8 @@ const nameOf = (userId: string) => NAMES[userId] ?? userId;
 const describeIssue = (issue: SquadManualIssue) =>
   describeManualIssue(issue, {
     nameOf,
-    squadSize: 4,
+    groupSize: 4,
+    partySize: 4,
     maxSquadsPerUser: 2,
     cooldownDays: 7,
     fieldLabel: (key) => key,
