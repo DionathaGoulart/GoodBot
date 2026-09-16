@@ -39,30 +39,38 @@ export const SquadGameSummarySchema = z.object({
 });
 export type SquadGameSummary = z.infer<typeof SquadGameSummarySchema>;
 
+/** Uma jogatina marcada ou rolando, como o painel mostra na tabela de squads. */
+export const SquadSessionSummarySchema = z.object({
+  id: z.number().int().positive(),
+  startsAt: z.iso.datetime(),
+  endsAt: z.iso.datetime(),
+  /** Quantos votaram "vou". */
+  goingCount: z.number().int().min(0),
+  /** Já começou e ainda não acabou. */
+  live: z.boolean(),
+  /** Quem marcou; `null` nas jogatinas do agendamento semanal antigo. */
+  createdBy: SnowflakeSchema.nullable(),
+});
+export type SquadSessionSummary = z.infer<typeof SquadSessionSummarySchema>;
+
 /** Um squad como a API devolve: a linha de `squads` com os membros. */
 export const SquadSummarySchema = z.object({
   id: z.string(),
   gameId: z.string(),
   name: z.string(),
   memberIds: z.array(SnowflakeSchema),
-  /** Janela semanal fixa: dia (0 = domingo) e índice da faixa. */
-  day: z
-    .number()
-    .int()
-    .min(0)
-    .max(SQUAD_DAYS - 1),
-  block: z
-    .number()
-    .int()
-    .min(0)
-    .max(SQUAD_BLOCKS.length - 1),
   status: z.enum(SQUAD_STATUSES),
   /** `null` = o canal ainda está sendo criado ou a criação falhou. */
   textChannelId: SnowflakeSchema.nullable(),
-  /** `null` = o pool estava cheio e o squad está sem sala reservada. */
+  /** `null` = o pool estava cheio e o squad está sem sala preferida. */
   voiceChannelId: SnowflakeSchema.nullable(),
-  /** ISO 8601 da última sessão com alguém presente ou com "vou"; `null` = nunca. */
+  /** ISO 8601 do último sinal de vida (jogatina, "vou", presença); `null` = nunca. */
   lastConfirmedAt: z.iso.datetime().nullable(),
+  /**
+   * Jogatinas não canceladas que ainda não acabaram, da mais próxima para a
+   * mais distante. Default vazio: um bot anterior à v1.6 não manda o campo.
+   */
+  upcomingSessions: z.array(SquadSessionSummarySchema).default([]),
   createdAt: z.iso.datetime(),
 });
 export type SquadSummary = z.infer<typeof SquadSummarySchema>;

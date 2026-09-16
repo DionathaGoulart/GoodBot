@@ -50,6 +50,7 @@ export const PERMISSION_BITS = {
   SendMessagesInThreads: 1n << 38n,
   ModerateMembers: 1n << 40n,
   SendPolls: 1n << 49n,
+  PinMessages: 1n << 51n,
 } as const;
 
 export type PermissionName = keyof typeof PERMISSION_BITS;
@@ -97,6 +98,7 @@ export const PERMISSION_LABELS: Record<PermissionName, string> = {
   SendMessagesInThreads: 'Enviar mensagens em tópicos',
   ModerateMembers: 'Aplicar castigo (timeout)',
   SendPolls: 'Criar enquetes',
+  PinMessages: 'Fixar mensagens',
 };
 
 /** Agrupamento da checklist do formulário de cargo (§6.4). */
@@ -135,6 +137,7 @@ export const PERMISSION_GROUPS: { label: string; permissions: PermissionName[] }
       'CreatePrivateThreads',
       'ManageThreads',
       'ManageMessages',
+      'PinMessages',
       'EmbedLinks',
       'AttachFiles',
       'ReadMessageHistory',
@@ -251,6 +254,7 @@ export const BOT_INVITE_PERMISSION_NAMES = [
   'AttachFiles',
   'ReadMessageHistory',
   'ManageMessages',
+  'PinMessages',
   'ManageChannels',
   'ManageRoles',
   'ManageGuild',

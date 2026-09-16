@@ -40,6 +40,8 @@ describe('SquadsConfigSchema', () => {
       proposalTtlHours: 72,
       reproposeCooldownDays: 14,
       reminderMinutesBefore: 30,
+      sessionHours: 3,
+      maxUpcomingSessions: 5,
       inactiveWeeks: 4,
       maxSquadsPerUser: 1,
       channelNaming: 'squad-{name}',
@@ -127,6 +129,10 @@ describe('SquadsConfigSchema', () => {
     expect(SquadsConfigSchema.safeParse({ proposalTtlHours: 721 }).success).toBe(false);
     expect(SquadsConfigSchema.safeParse({ reproposeCooldownDays: 0 }).success).toBe(true);
     expect(SquadsConfigSchema.safeParse({ reminderMinutesBefore: 241 }).success).toBe(false);
+    expect(SquadsConfigSchema.safeParse({ sessionHours: 0 }).success).toBe(false);
+    expect(SquadsConfigSchema.safeParse({ sessionHours: 13 }).success).toBe(false);
+    expect(SquadsConfigSchema.safeParse({ maxUpcomingSessions: 0 }).success).toBe(false);
+    expect(SquadsConfigSchema.safeParse({ maxUpcomingSessions: 11 }).success).toBe(false);
     expect(SquadsConfigSchema.safeParse({ inactiveWeeks: 0 }).success).toBe(false);
     expect(SquadsConfigSchema.safeParse({ maxSquadsPerUser: 6 }).success).toBe(false);
   });

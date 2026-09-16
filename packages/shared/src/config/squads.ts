@@ -70,7 +70,7 @@ export const DEFAULT_SQUAD_BLOCKS: readonly SquadBlockConfig[] = [
 /**
  * As quatro faixas, sempre na ordem de `SQUAD_BLOCKS`. O painel edita horário
  * e rótulo, nunca a chave nem a ordem: o índice é o que está gravado nas
- * grades dos perfis e na janela dos squads.
+ * grades dos perfis.
  */
 export const SquadBlocksSchema = z
   .array(SquadBlockSchema)
@@ -102,7 +102,7 @@ export const SquadsConfigSchema = z.object({
   /** Categoria onde nascem os canais de texto dos squads. */
   categoryId: NullableSnowflakeSchema,
   /**
-   * Voices reservados por sessão. É um pool, e não um voice por squad, porque
+   * Voices reservados por jogatina. É um pool, e não um voice por squad, porque
    * o Discord só deixa renomear canal duas vezes a cada dez minutos e cada
    * canal a mais pesa no teto de 500.
    */
@@ -114,9 +114,16 @@ export const SquadsConfigSchema = z.object({
   proposalTtlHours: z.number().int().min(1).max(720).default(72),
   /** A mesma dupla não é reproposta antes disso; 0 = pode repropor na hora. */
   reproposeCooldownDays: z.number().int().min(0).max(90).default(14),
-  /** Antecedência do lembrete com Vou / Não vou; 0 = na hora da sessão. */
+  /**
+   * Antecedência do lembrete e da reserva do voice; 0 = na hora da jogatina.
+   * Jogatina marcada para dentro desse prazo já sai lembrada e com sala.
+   */
   reminderMinutesBefore: z.number().int().min(0).max(240).default(30),
-  /** Semanas seguidas sem nenhum "vou" até o squad ser questionado. */
+  /** Quanto dura uma jogatina: é quando o voice reservado volta para o pool. */
+  sessionHours: z.number().int().min(1).max(12).default(3),
+  /** Jogatinas futuras que um squad pode ter marcadas ao mesmo tempo. */
+  maxUpcomingSessions: z.number().int().min(1).max(10).default(5),
+  /** Semanas seguidas sem sinal de vida (jogatina, "vou", presença) até o squad ser questionado. */
   inactiveWeeks: z.number().int().min(1).max(52).default(4),
   /** Em quantos squads uma pessoa pode estar ao mesmo tempo. */
   maxSquadsPerUser: z.number().int().min(1).max(5).default(1),
