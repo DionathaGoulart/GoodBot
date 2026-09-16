@@ -12,7 +12,7 @@ const { store, seedGame, seedMember, seedSession, seedSquad } = fixtures;
 
 function scenario(options: { channelPermissions?: bigint } = {}) {
   const harness = createHarness();
-  const game = seedGame({ squadSize: 4 });
+  const game = seedGame({ groupSize: 4, partySize: 4 });
   const channel = harness.guild.add(
     fakeTextChannel(
       options.channelPermissions === undefined ? {} : { permissions: options.channelPermissions },

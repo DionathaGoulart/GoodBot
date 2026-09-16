@@ -840,12 +840,15 @@ function blankSession(input: Partial<SquadSession> & Pick<SquadSession, 'squadId
   };
 }
 
-export function seedGame(overrides: Partial<SquadGame> = {}): SquadGame {
+/** `squadSize` fica de fora: é a coluna legada, e semear por ela não mudaria tamanho nenhum. */
+export function seedGame(overrides: Partial<Omit<SquadGame, 'squadSize'>> = {}): SquadGame {
   const game: SquadGame = {
     id: randomUUID(),
     guildId: GUILD_ID,
     name: 'Helldivers 2',
-    squadSize: 4,
+    groupSize: 4,
+    partySize: 4,
+    squadSize: null,
     enabled: true,
     fields: [
       {

@@ -153,7 +153,7 @@ export class SearchService {
     for (const squad of squads) {
       if (!squad.textChannelId || asked.has(joinRequestKey(squad.id, userId))) continue;
       const members = await listSquadMembers(db, guildId, squad.id);
-      if (members.length >= game.squadSize) continue;
+      if (members.length >= game.groupSize) continue;
       if (members.some((member) => member.userId === userId)) continue;
       const score = await this.fitScore(guildId, game, squad, members, profile);
       if (score !== null) joinable.push({ squad, memberCount: members.length, score });
@@ -181,7 +181,7 @@ export class SearchService {
     if (members.some((member) => member.userId === userId)) {
       throw new UserFacingError('Você já está neste squad.', { code: 'ALREADY_MEMBER' });
     }
-    if (squad.status === 'full' || members.length >= game.squadSize) {
+    if (squad.status === 'full' || members.length >= game.groupSize) {
       throw new UserFacingError('O squad já encheu.', { code: 'SQUAD_FULL' });
     }
     await this.ctx.parts.squads.assertCanJoinAnother(guild.id, userId, config);
@@ -246,7 +246,7 @@ export class SearchService {
       )
     ).filter((row): row is SquadProfile => row !== null);
     const [fit] = rankVacancyCandidates({
-      partySize: game.squadSize,
+      partySize: game.partySize,
       fields: game.fields,
       memberIds: members.map((member) => member.userId),
       memberProfiles: memberProfiles.map(toMatchProfile),

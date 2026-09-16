@@ -71,7 +71,8 @@ function toGameSummary(row: SquadGame): SquadGameSummary {
   return {
     id: row.id,
     name: row.name,
-    squadSize: row.squadSize,
+    groupSize: row.groupSize,
+    partySize: row.partySize,
     enabled: row.enabled,
     fields: row.fields,
     createdAt: row.createdAt.toISOString(),

@@ -176,7 +176,7 @@ export class ManualMatchService {
     }
 
     return {
-      game: { squadSize: game.squadSize, fields: game.fields },
+      game: { partySize: game.partySize, fields: game.fields },
       maxSquadsPerUser: config.maxSquadsPerUser,
       userIds,
       people: manualMatchPeople({

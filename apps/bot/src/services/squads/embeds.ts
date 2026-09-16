@@ -167,7 +167,7 @@ export function proposalMessage(view: ProposalView): BaseMessageOptions {
 
 export interface GuideView {
   squad: Pick<Squad, 'id' | 'name' | 'status' | 'voiceChannelId'>;
-  game: Pick<SquadGame, 'id' | 'name' | 'squadSize'>;
+  game: Pick<SquadGame, 'id' | 'name' | 'groupSize' | 'partySize'>;
   memberIds: readonly string[];
   /** Jogatinas não canceladas que ainda não acabaram, da mais próxima. */
   upcoming: readonly Pick<SquadSession, 'startsAt' | 'goingIds'>[];
@@ -222,14 +222,18 @@ export function guideMessage(view: GuideView): BaseMessageOptions {
     };
   }
 
-  const open = game.squadSize - memberIds.length;
+  const open = game.groupSize - memberIds.length;
+  const parties =
+    game.partySize < game.groupSize
+      ? ` Cada partida leva até ${String(game.partySize)}: quando vier mais gente, eu aviso para dividirem.`
+      : '';
   const embed = infoEmbed(
     {
       title: squad.name,
-      description: `Casa do squad de **${game.name}**. Combinem tudo por aqui.`,
+      description: `Casa do squad de **${game.name}**. Combinem tudo por aqui.${parties}`,
       fields: [
         {
-          name: `Membros (${String(memberIds.length)} de ${String(game.squadSize)})`,
+          name: `Membros (${String(memberIds.length)} de ${String(game.groupSize)})`,
           value: mentionList(memberIds),
         },
         {
@@ -288,20 +292,20 @@ export function guideMessage(view: GuideView): BaseMessageOptions {
 export interface MembershipView {
   userId: string;
   memberCount: number;
-  squadSize: number;
+  groupSize: number;
   embedColor: number;
 }
 
 /** "Entrou". Com `ping`, a pessoa é chamada: é assim que ela acha o canal novo. */
 export function memberJoinedMessage(view: MembershipView & { ping: boolean }): BaseMessageOptions {
-  const full = view.memberCount >= view.squadSize ? ' O squad está completo.' : '';
+  const full = view.memberCount >= view.groupSize ? ' O squad está completo.' : '';
   return {
     ...(view.ping ? { content: mention(view.userId) } : {}),
     embeds: [
       infoEmbed(
         {
           title: 'Chegou reforço',
-          description: `${mention(view.userId)} entrou no squad. Agora são ${String(view.memberCount)} de ${String(view.squadSize)}.${full}`,
+          description: `${mention(view.userId)} entrou no squad. Agora são ${String(view.memberCount)} de ${String(view.groupSize)}.${full}`,
           footer: SQUADS_FOOTER,
         },
         view.embedColor,
@@ -327,7 +331,7 @@ export function memberLeftMessage(
       infoEmbed(
         {
           title: 'Alguém saiu',
-          description: `${who} Agora são ${String(view.memberCount)} de ${String(view.squadSize)}, e a vaga volta para a busca.`,
+          description: `${who} Agora são ${String(view.memberCount)} de ${String(view.groupSize)}, e a vaga volta para a busca.`,
           footer: SQUADS_FOOTER,
         },
         view.embedColor,
@@ -558,6 +562,8 @@ export interface SessionView {
   >;
   squad: Pick<Squad, 'name'>;
   memberIds: readonly string[];
+  /** Quantos jogam juntos numa partida, do jogo do squad; `null` = jogo não achado. */
+  partySize: number | null;
   /** O voice reservado agora; `null` = ainda não reservou ou não conseguiu. */
   voiceChannelId: string | null;
   state: SessionState;
@@ -566,6 +572,19 @@ export interface SessionView {
   embedColor: number;
   /** Só o primeiro envio chama os membros; a edição dos votos não pinga ninguém. */
   mentionMembers: boolean;
+}
+
+/**
+ * Como quem vai cabe nas partidas. A jogatina tem um voice só, então com mais
+ * gente que a party o bot não separa ninguém: só diz quantas parties dá, e o
+ * squad se divide. `null` com menos de dois indo, quando não há party a contar.
+ */
+export function partyText(going: number, partySize: number): string | null {
+  if (going < 2) return null;
+  if (going < partySize) return `${String(going)} de ${String(partySize)}, ainda cabe gente.`;
+  if (going === partySize) return `Fechada, ${String(going)} de ${String(partySize)}.`;
+  const parties = Math.ceil(going / partySize);
+  return `Dá ${String(parties)} parties: ${String(going)} vão e cada partida leva até ${String(partySize)}. Dividam-se.`;
 }
 
 function roomText(view: SessionView): string {
@@ -619,6 +638,9 @@ export function sessionMessage(view: SessionView): BaseMessageOptions {
         inline: true,
       });
     }
+    const party =
+      view.partySize === null ? null : partyText(session.goingIds.length, view.partySize);
+    if (party) fields.push({ name: 'Party', value: party });
   }
 
   const components =
@@ -684,16 +706,26 @@ export function sessionReminderMessage(view: {
   };
 }
 
-/** Na hora da jogatina, para quem não está em voice nenhum (não dá para mover). */
+/**
+ * Na hora da jogatina, para quem não está em voice nenhum (não dá para mover).
+ * Quando quem vai passa da party, o aviso de dividir vai junto: a mensagem da
+ * jogatina também diz, mas editá-la não notifica ninguém.
+ */
 export function sessionStartMessage(view: {
   userIds: readonly string[];
   voiceChannelId: string | null;
+  goingCount: number;
+  partySize: number | null;
 }): BaseMessageOptions {
   const where = view.voiceChannelId
     ? `Entrem em <#${view.voiceChannelId}>.`
     : 'Escolham um voice livre.';
+  const split =
+    view.partySize !== null && view.goingCount > view.partySize
+      ? ` ${partyText(view.goingCount, view.partySize) ?? ''}`
+      : '';
   return {
-    content: `${view.userIds.map(mention).join(' ')} a jogatina do squad começou! ${where}`,
+    content: `${view.userIds.map(mention).join(' ')} a jogatina do squad começou! ${where}${split}`,
     allowedMentions: { users: [...view.userIds] },
   };
 }
@@ -871,7 +903,7 @@ export function statusChangedText(status: SquadProfileStatus): string {
 export const MAX_JOINABLE_LISTED = 5;
 
 export interface JoinableView {
-  game: Pick<SquadGame, 'name' | 'squadSize'>;
+  game: Pick<SquadGame, 'name' | 'groupSize'>;
   entries: readonly {
     squad: Pick<Squad, 'id' | 'name'>;
     memberCount: number;
@@ -905,7 +937,7 @@ export function joinableSquadsMessage(view: JoinableView): BaseMessageOptions {
             'Estes squads têm vaga e jogam em horários parecidos com os seus. O pedido vai para o canal do squad, e basta alguém de lá aceitar.',
           fields: entries.map((entry, index) => ({
             name: `${String(index + 1)}. ${entry.squad.name}`,
-            value: `${String(entry.memberCount)} de ${String(view.game.squadSize)} jogadores`,
+            value: `${String(entry.memberCount)} de ${String(view.game.groupSize)} jogadores`,
           })),
           footer: SQUADS_FOOTER,
         },

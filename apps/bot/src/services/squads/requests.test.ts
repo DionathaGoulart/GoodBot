@@ -13,7 +13,7 @@ const { store, seedGame, seedMember, seedProfile, seedSquad, GUILD_ID } = fixtur
 async function scenario(options: { size?: number; members?: string[] } = {}) {
   const harness = createHarness();
   const members = options.members ?? [A, B];
-  const game = seedGame({ squadSize: options.size ?? 3 });
+  const game = seedGame({ groupSize: options.size ?? 3, partySize: options.size ?? 3 });
   const channel = harness.guild.add(
     fakeTextChannel({
       overwrites: squadTextOverwrites({ everyoneId: GUILD_ID, botId: BOT_ID, memberIds: members }),

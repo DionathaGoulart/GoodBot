@@ -4,6 +4,7 @@ import {
   createSquadSession,
   getActiveSessionByVoice,
   getSquad,
+  getSquadGame,
   getSquadSession,
   getSquadSessionAt,
   listInactiveSquads,
@@ -500,7 +501,14 @@ export class SessionService {
     if (result.pinged.length > 0) {
       const channel = await this.ctx.textChannel(guild, squad);
       await channel
-        ?.send(sessionStartMessage({ userIds: result.pinged, voiceChannelId: voiceId }))
+        ?.send(
+          sessionStartMessage({
+            userIds: result.pinged,
+            voiceChannelId: voiceId,
+            goingCount: marked.goingIds.length,
+            partySize: await this.partySize(guild.id, squad),
+          }),
+        )
         .catch(
           logFailure('não foi possível chamar o squad', { guildId: guild.id, squadId: squad.id }),
         );
@@ -745,6 +753,17 @@ export class SessionService {
     return squad;
   }
 
+  /**
+   * A party do jogo lida na hora, e não guardada na jogatina: o número só
+   * aparece na mensagem, e mudar o jogo no painel deve valer para o que ainda
+   * vai ser mostrado. `null` sem jogo, o que a cascata do banco não deixa
+   * acontecer com o squad vivo.
+   */
+  private async partySize(guildId: string, squad: Squad): Promise<number | null> {
+    const game = await getSquadGame(this.ctx.db, guildId, squad.gameId);
+    return game?.partySize ?? null;
+  }
+
   private async memberIds(guildId: string, squadId: string): Promise<string[]> {
     return (await listSquadMembers(this.ctx.db, guildId, squadId)).map((member) => member.userId);
   }
@@ -790,15 +809,17 @@ export class SessionService {
     squad: Squad,
     options: { mentionMembers: boolean },
   ) {
-    const [config, embedColor, memberIds] = await Promise.all([
+    const [config, embedColor, memberIds, partySize] = await Promise.all([
       this.ctx.config.get(guild.id, 'squads'),
       this.ctx.embedColor(guild.id),
       this.memberIds(guild.id, squad.id),
+      this.partySize(guild.id, squad),
     ]);
     return sessionMessage({
       session,
       squad,
       memberIds,
+      partySize,
       voiceChannelId: isReserved(session) ? session.voiceChannelId : null,
       state: sessionState(session),
       reminderMinutesBefore: config.reminderMinutesBefore,

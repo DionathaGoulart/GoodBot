@@ -10,7 +10,7 @@ import {
   fakeThread,
   fakeVoice,
 } from './__fixtures__/discord';
-import { A, B, C, createHarness, NOW } from './__fixtures__/harness';
+import { A, B, C, createHarness, D, NOW } from './__fixtures__/harness';
 import { log } from './context';
 import { rankVacancyCandidates } from './matcher';
 
@@ -25,9 +25,9 @@ const { store, repositories, seedGame, seedMember, seedProfile, seedProposal, se
 const PING_ROLE = '700000000000000009';
 const SATURDAY_NIGHT = toBits([{ day: 6, block: 2 }]);
 
-function scenario(userIds: string[] = [A, B]) {
+function scenario(userIds: string[] = [A, B], sizes = { groupSize: 3, partySize: 3 }) {
   const harness = createHarness({ pingRoleId: PING_ROLE });
-  const game = seedGame({ squadSize: 3 });
+  const game = seedGame(sizes);
   for (const userId of userIds) {
     seedProfile({ userId, gameId: game.id, availability: SATURDAY_NIGHT });
   }
@@ -112,6 +112,33 @@ describe('SquadService: matcher', () => {
     expect(result).toEqual({ proposals: 0, joinRequests: 1 });
     expect(store.requests[0]).toMatchObject({ squadId: squad.id, userId: C, status: 'pending' });
     expect(s.search.threads.create).not.toHaveBeenCalled();
+  });
+
+  it('a proposta monta uma party, não o squad inteiro', async () => {
+    const s = scenario([A, B, C, D], { groupSize: 4, partySize: 2 });
+
+    const result = await s.service.runMatch(s.guild.id, s.game.id);
+
+    expect(result).toEqual({ proposals: 2, joinRequests: 0 });
+    expect(store.proposals.map((proposal) => proposal.userIds)).toEqual([
+      [A, B],
+      [C, D],
+    ]);
+  });
+
+  it('squad com a party completa ainda tem vaga até o tamanho do grupo', async () => {
+    const s = scenario([C, D], { groupSize: 4, partySize: 2 });
+    const channel = s.guild.add(fakeTextChannel());
+    const squad = seedSquad({ gameId: s.game.id, textChannelId: channel.id });
+    for (const userId of [A, B]) {
+      seedMember(squad.id, userId);
+      seedProfile({ userId, gameId: s.game.id, availability: SATURDAY_NIGHT, status: 'in_squad' });
+    }
+
+    const result = await s.service.runMatch(s.guild.id, s.game.id);
+
+    expect(result).toEqual({ proposals: 0, joinRequests: 2 });
+    expect(store.requests.map((request) => request.userId).sort()).toEqual([C, D]);
   });
 
   it('duas chamadas ao mesmo tempo rodam uma passada só', async () => {

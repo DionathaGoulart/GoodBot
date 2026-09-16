@@ -21,9 +21,10 @@ function customIdsOf(message: Parameters<typeof componentsOf>[0]) {
 }
 
 /** Squad aberto de sábado à noite com A e B, ambos no PC. */
-function squadScenario(options: { size?: number } = {}) {
+function squadScenario(options: { size?: number; partySize?: number } = {}) {
   const harness = createHarness();
-  const game = seedGame({ squadSize: options.size ?? 3 });
+  const groupSize = options.size ?? 3;
+  const game = seedGame({ groupSize, partySize: options.partySize ?? groupSize });
   const channel = harness.guild.add(
     fakeTextChannel({
       overwrites: squadTextOverwrites({ everyoneId: GUILD_ID, botId: BOT_ID, memberIds: [A, B] }),
@@ -101,6 +102,15 @@ describe('SquadService: squads com vaga', () => {
 
     expect(list.map((entry) => entry.squad.id)).toEqual([s.squad.id]);
     expect(list[0]?.memberCount).toBe(2);
+  });
+
+  it('a party dos membros completa não fecha o squad: a vaga vai até o tamanho do grupo', async () => {
+    const s = squadScenario({ size: 4, partySize: 2 });
+    seedProfile({ userId: C, gameId: s.game.id, availability: saturdayNight });
+
+    const list = await s.service.listJoinableSquads(GUILD_ID, C, s.game.id);
+
+    expect(list.map((entry) => entry.squad.id)).toEqual([s.squad.id]);
   });
 
   it('fora da janela do squad ou com campo hard diferente, não lista', async () => {

@@ -15,9 +15,9 @@ const ADMIN = '300000000000000010';
 const OUTSIDER = '300000000000000009';
 const SATURDAY_NIGHT = toBits([{ day: 6, block: 2 }]);
 
-function scenario(options: { squadSize?: number } = {}) {
+function scenario(options: { size?: number } = {}) {
   const harness = createHarness();
-  const game = seedGame({ squadSize: options.squadSize ?? 3 });
+  const game = seedGame({ groupSize: options.size ?? 3, partySize: options.size ?? 3 });
   const profile = (userId: string, extra: Partial<SquadProfile> = {}) =>
     seedProfile({ userId, gameId: game.id, availability: SATURDAY_NIGHT, ...extra });
   const check = (userIds: string[]) =>
@@ -39,7 +39,7 @@ describe('SquadService: revisão do match manual', () => {
   });
 
   it('proposta aberta, squad deste jogo e quem saiu do servidor bloqueiam, sem escrever nada', async () => {
-    const s = scenario({ squadSize: 4 });
+    const s = scenario({ size: 4 });
     for (const userId of [A, B, C, D]) s.profile(userId);
     seedProposal({ gameId: s.game.id, userIds: [A, OUTSIDER], threadId: '1' });
     const squad = seedSquad({ gameId: s.game.id });
@@ -59,7 +59,7 @@ describe('SquadService: revisão do match manual', () => {
   });
 
   it('teto de squads por outro jogo, cooldown, campo hard, pausado, pedido e turma grande só avisam', async () => {
-    const s = scenario({ squadSize: 3 });
+    const s = scenario({ size: 3 });
     s.profile(A);
     s.profile(B);
     s.profile(C, { answers: { platform: 'PS5' } });
@@ -123,7 +123,7 @@ describe('SquadService: propor ao grupo', () => {
   });
 
   it('turma de três: o primeiro aceite cria o squad, o segundo entra e o terceiro passa', async () => {
-    const s = scenario({ squadSize: 3 });
+    const s = scenario({ size: 3 });
     for (const userId of [A, B, C]) s.profile(userId);
     await s.propose([A, B, C]);
     const proposalId = store.proposals[0]!.id;

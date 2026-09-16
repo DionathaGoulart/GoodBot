@@ -19,10 +19,10 @@ const { store, hooks, seedGame, seedMember, seedProfile, seedProposal, seedSquad
 const SATURDAY_NIGHT = toBits([{ day: 6, block: 2 }]);
 
 async function scenario(
-  options: { squadSize?: number; userIds?: string[]; config?: Partial<SquadsConfig> } = {},
+  options: { size?: number; userIds?: string[]; config?: Partial<SquadsConfig> } = {},
 ) {
   const harness = createHarness(options.config);
-  const game = seedGame({ squadSize: options.squadSize ?? 3 });
+  const game = seedGame({ groupSize: options.size ?? 3, partySize: options.size ?? 3 });
   const userIds = options.userIds ?? [A, B, C];
   for (const userId of userIds) {
     seedProfile({ userId, gameId: game.id, availability: SATURDAY_NIGHT });
@@ -144,7 +144,7 @@ describe('SquadService: propostas', () => {
   });
 
   it('encher vira full, fecha a proposta e tranca a thread', async () => {
-    const s = await scenario({ squadSize: 2, userIds: [A, B] });
+    const s = await scenario({ size: 2, userIds: [A, B] });
 
     await s.service.acceptProposal(s.discordGuild, s.proposal.id, A);
     await s.service.acceptProposal(s.discordGuild, s.proposal.id, B);
@@ -158,7 +158,7 @@ describe('SquadService: propostas', () => {
   });
 
   it('aceite com o squad cheio é recusado e não põe ninguém', async () => {
-    const s = await scenario({ squadSize: 2 });
+    const s = await scenario({ size: 2 });
     await s.service.acceptProposal(s.discordGuild, s.proposal.id, A);
     seedMember(store.squads[0]!.id, D);
     store.squads[0]!.status = 'full';

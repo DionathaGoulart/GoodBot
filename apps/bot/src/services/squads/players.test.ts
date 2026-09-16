@@ -22,7 +22,7 @@ const SATURDAY_NIGHT = toBits([{ day: 6, block: 2 }]);
 
 function scenario() {
   const harness = createHarness();
-  const game = seedGame({ squadSize: 3 });
+  const game = seedGame({ groupSize: 3, partySize: 3 });
   const profile = (userId: string, extra: Partial<SquadProfile> = {}) =>
     seedProfile({ userId, gameId: game.id, availability: SATURDAY_NIGHT, ...extra });
   const squad = (members: string[], status: SquadStatus = 'open') => {

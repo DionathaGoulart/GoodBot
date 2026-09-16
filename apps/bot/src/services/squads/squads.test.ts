@@ -16,7 +16,7 @@ const { store, seedGame, seedMember, seedProfile, seedSquad, GUILD_ID } = fixtur
 
 function scenario(options: { size: number; members: string[]; status?: SquadStatus }) {
   const harness = createHarness();
-  const game = seedGame({ squadSize: options.size });
+  const game = seedGame({ groupSize: options.size, partySize: options.size });
   const channel = harness.guild.add(
     fakeTextChannel({
       name: 'squad-teste',

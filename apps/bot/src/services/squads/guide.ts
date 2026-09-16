@@ -43,7 +43,12 @@ export class GuideService {
     ]);
     return guideMessage({
       squad,
-      game: game ?? { id: squad.gameId, name: 'o jogo', squadSize: members.length },
+      game: game ?? {
+        id: squad.gameId,
+        name: 'o jogo',
+        groupSize: members.length,
+        partySize: members.length,
+      },
       memberIds: members.map((member) => member.userId),
       upcoming,
       canJoinAnother: config.maxSquadsPerUser > 1,

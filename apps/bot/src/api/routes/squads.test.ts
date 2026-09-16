@@ -118,7 +118,9 @@ describe('GET /guilds/:id/squads/overview', () => {
 
     expect(res.status).toBe(200);
     const overview = SquadOverviewSchema.parse(await res.json());
-    expect(overview.games.map((entry) => entry.id)).toEqual([game.id]);
+    expect(
+      overview.games.map(({ id, groupSize, partySize }) => ({ id, groupSize, partySize })),
+    ).toEqual([{ id: game.id, groupSize: 4, partySize: 4 }]);
     expect(overview.squads).toEqual([
       expect.objectContaining({ id: squad.id, memberIds: [A, B], status: 'open' }),
     ]);
@@ -272,7 +274,7 @@ describe('POST /guilds/:id/squads/games/:gameId/match', () => {
 
   it('admin roda o match e recebe quantas propostas saíram', async () => {
     const s = apiScenario();
-    const game = seedGame({ squadSize: 3 });
+    const game = seedGame({ groupSize: 3, partySize: 3 });
     for (const userId of [A, B]) {
       seedProfile({ userId, gameId: game.id, availability: SATURDAY_NIGHT });
     }

@@ -92,7 +92,7 @@ export class JoinRequestService {
     if (request.status !== 'pending') return { outcome: 'already', status: request.status };
 
     const game = await getSquadGame(db, guild.id, squad.gameId);
-    if (!game || members.length >= game.squadSize) {
+    if (!game || members.length >= game.groupSize) {
       await this.close(guild, request, squad, 'expired');
       throw new UserFacingError('O squad já encheu, então este pedido foi encerrado.', {
         code: 'SQUAD_FULL',

@@ -217,7 +217,7 @@ export class MatcherService {
 
     const joinRequests = await this.fillVacancies(guild, game, pool, blockedPairs, recentRequests);
     const groups = proposeGroups(
-      { squadSize: game.squadSize, fields: game.fields },
+      { partySize: game.partySize, fields: game.fields },
       [...pool.values()].map(toMatchProfile),
       { blockedPairs },
     );
@@ -301,7 +301,7 @@ export class MatcherService {
 
       const members = await listSquadMembers(db, guild.id, squad.id);
       const waiting = pending.filter((request) => request.squadId === squad.id).length;
-      const open = game.squadSize - members.length - waiting;
+      const open = game.groupSize - members.length - waiting;
       if (open <= 0) continue;
 
       const memberProfiles = (
@@ -311,7 +311,7 @@ export class MatcherService {
       ).filter((profile): profile is SquadProfile => profile !== null);
 
       const ranked = rankVacancyCandidates({
-        partySize: game.squadSize,
+        partySize: game.partySize,
         fields: game.fields,
         memberIds: members.map((member) => member.userId),
         memberProfiles: memberProfiles.map(toMatchProfile),

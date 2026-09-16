@@ -126,14 +126,14 @@ export class SquadLifecycleService {
   async assertJoinable(
     guildId: string,
     squadId: string,
-    game: Pick<SquadGame, 'squadSize'>,
+    game: Pick<SquadGame, 'groupSize'>,
   ): Promise<{ squad: Squad; members: SquadMember[] }> {
     const squad = await getSquad(this.ctx.db, guildId, squadId);
     if (!squad || squad.status === 'archived') {
       throw new UserFacingError('Este squad foi encerrado.', { code: 'SQUAD_ARCHIVED' });
     }
     const members = await listSquadMembers(this.ctx.db, guildId, squadId);
-    if (members.length >= game.squadSize) {
+    if (members.length >= game.groupSize) {
       throw new UserFacingError('O squad já encheu.', { code: 'SQUAD_FULL' });
     }
     return { squad, members };
@@ -238,7 +238,7 @@ export class SquadLifecycleService {
 
     const before = await listSquadMembers(db, guildId, squadId);
     if (before.some((member) => member.userId === userId)) return { squad, joined: false };
-    if (before.length >= game.squadSize) {
+    if (before.length >= game.groupSize) {
       throw new UserFacingError('O squad já encheu.', { code: 'SQUAD_FULL' });
     }
     if (!(await addSquadMember(db, { guildId, squadId, userId }))) return { squad, joined: false };
@@ -246,7 +246,7 @@ export class SquadLifecycleService {
     // Duas entradas ao mesmo tempo na última vaga passam as duas pela conta
     // acima; a ordem de chegada decide quem fica.
     const after = await listSquadMembers(db, guildId, squadId);
-    if (after.findIndex((member) => member.userId === userId) >= game.squadSize) {
+    if (after.findIndex((member) => member.userId === userId) >= game.groupSize) {
       await removeSquadMember(db, guildId, squadId, userId);
       throw new UserFacingError('O squad já encheu.', { code: 'SQUAD_FULL' });
     }
@@ -258,8 +258,8 @@ export class SquadLifecycleService {
     if (channel) await this.grantText(channel, userId, current.name);
     await this.ctx.parts.profiles.markInSquad(guildId, userId, squad.gameId);
 
-    const memberCount = Math.min(after.length, game.squadSize);
-    if (memberCount >= game.squadSize && current.status === 'open') {
+    const memberCount = Math.min(after.length, game.groupSize);
+    if (memberCount >= game.groupSize && current.status === 'open') {
       current = (await setSquadStatus(db, guildId, squadId, 'full')) ?? current;
     }
 
@@ -269,7 +269,7 @@ export class SquadLifecycleService {
           memberJoinedMessage({
             userId,
             memberCount,
-            squadSize: game.squadSize,
+            groupSize: game.groupSize,
             embedColor: await this.ctx.embedColor(guildId),
             ping: options.ping,
           }),
@@ -328,7 +328,7 @@ export class SquadLifecycleService {
             memberLeftMessage({
               userId,
               memberCount: remaining.length,
-              squadSize: game?.squadSize ?? remaining.length,
+              groupSize: game?.groupSize ?? remaining.length,
               embedColor: await this.ctx.embedColor(guildId),
               byStaff: options.removedBy !== undefined,
             }),

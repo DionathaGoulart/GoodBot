@@ -41,13 +41,15 @@ const BEFORE: ExactOverwrite[] = [
 /** Segunda, 14/09/2026, 21h em São Paulo. */
 const TONIGHT = new Date('2026-09-15T00:00:00Z');
 
-function scenario(options: { voicePermissions?: bigint; withSession?: boolean } = {}) {
+function scenario(
+  options: { voicePermissions?: bigint; withSession?: boolean; partySize?: number } = {},
+) {
   const harness = createHarness();
   const voice = harness.guild.add(
     fakeVoice({ permissions: options.voicePermissions ?? ALL_BUT_ADMIN, overwrites: BEFORE }),
   );
   harness.setConfig({ voicePoolIds: [voice.id] });
-  const game = seedGame({ squadSize: 4 });
+  const game = seedGame({ groupSize: 4, partySize: options.partySize ?? 4 });
   const channel = harness.guild.add(
     fakeTextChannel({
       overwrites: squadTextOverwrites({ everyoneId: GUILD_ID, botId: BOT_ID, memberIds: [A, B] }),
@@ -482,6 +484,33 @@ describe('SquadService: lembrete, início e presença', () => {
       (field) => field.name === 'Vão',
     );
     expect(going?.value).toBe(`<@${A}>`);
+  });
+
+  it('a contagem diz como quem vai cabe na party, e passando dela o início manda dividir', async () => {
+    const s = scenario({ partySize: 2 });
+    seedMember(s.squad.id, C);
+    await s.service.remindSession(s.discordGuild, s.session);
+    const partyField = () =>
+      embedOf(messageById(s, sessionRow().messageId))?.fields?.find(
+        (field) => field.name === 'Party',
+      );
+
+    await s.service.vote(s.discordGuild, s.session.id, A, true);
+    expect(partyField()).toBeUndefined();
+
+    await s.service.vote(s.discordGuild, s.session.id, B, true);
+    expect(partyField()?.value).toBe('Fechada, 2 de 2.');
+
+    await s.service.vote(s.discordGuild, s.session.id, C, true);
+    expect(partyField()?.value).toBe(
+      'Dá 2 parties: 3 vão e cada partida leva até 2. Dividam-se.',
+    );
+
+    await s.service.startSession(s.discordGuild, sessionRow());
+    const ping = s.channel.sent.find((message) =>
+      String(message.payload.content).includes('começou'),
+    );
+    expect(ping?.payload.content).toContain('Dá 2 parties');
   });
 
   it('inatividade avisa primeiro e arquiva depois de 7 dias sem resposta', async () => {

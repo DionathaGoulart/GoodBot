@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { adminActionDm, manualProposalNote, memberLeftMessage } from './embeds';
+import {
+  adminActionDm,
+  guideMessage,
+  manualProposalNote,
+  memberLeftMessage,
+  partyText,
+} from './embeds';
 
 import type { AdminDmKind, AdminDmView } from './embeds';
 import type { BaseMessageOptions, EmbedBuilder } from 'discord.js';
@@ -76,7 +82,7 @@ describe('copy do match manual e da saída pela staff', () => {
     const message = memberLeftMessage({
       userId: '300000000000000002',
       memberCount: 1,
-      squadSize: 2,
+      groupSize: 2,
       embedColor: 0,
       byStaff: true,
     });
@@ -92,11 +98,55 @@ describe('copy do match manual e da saída pela staff', () => {
       memberLeftMessage({
         userId: '300000000000000002',
         memberCount: 1,
-        squadSize: 2,
+        groupSize: 2,
         embedColor: 0,
         byStaff: true,
       }),
     ];
     for (const text of texts) expect(JSON.stringify(text)).not.toMatch(/[—–]/);
+  });
+});
+
+describe('party', () => {
+  it('partyText: nada com menos de dois, vaga, fechada e quantas parties dá', () => {
+    expect(partyText(0, 4)).toBeNull();
+    expect(partyText(1, 4)).toBeNull();
+    expect(partyText(3, 4)).toBe('3 de 4, ainda cabe gente.');
+    expect(partyText(4, 4)).toBe('Fechada, 4 de 4.');
+    expect(partyText(5, 4)).toBe('Dá 2 parties: 5 vão e cada partida leva até 4. Dividam-se.');
+    expect(partyText(9, 4)).toBe('Dá 3 parties: 9 vão e cada partida leva até 4. Dividam-se.');
+  });
+
+  it('o guia conta membros pelo grupo e só fala da party quando ela é menor', () => {
+    const view = (groupSize: number, partySize: number) =>
+      embedOf(
+        guideMessage({
+          squad: {
+            id: '00000000-0000-4000-8000-000000000001',
+            name: 'Os Bravos',
+            status: 'open',
+            voiceChannelId: null,
+          },
+          game: {
+            id: '00000000-0000-4000-8000-000000000002',
+            name: 'Helldivers 2',
+            groupSize,
+            partySize,
+          },
+          memberIds: ['300000000000000001', '300000000000000002'],
+          upcoming: [],
+          canJoinAnother: false,
+          embedColor: 0,
+          mentionMembers: false,
+        }),
+      );
+
+    const big = view(12, 4);
+    expect(big?.fields?.[0]?.name).toBe('Membros (2 de 12)');
+    expect(big?.fields?.[1]?.value).toMatch(/^10 abertas\./);
+    expect(big?.description).toContain('Cada partida leva até 4');
+    expect(JSON.stringify(big)).not.toMatch(/[—–]/);
+
+    expect(view(4, 4)?.description).not.toContain('Cada partida');
   });
 });
