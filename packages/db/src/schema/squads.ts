@@ -18,6 +18,7 @@ import { guilds } from './guilds';
 
 import type { LockOverwrite } from './misc';
 import type { SquadAnswers, SquadGameField } from '@goodbot/shared';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 /**
  * Toda tabela do módulo tem `guild_id`, inclusive as filhas que já chegam à
@@ -179,7 +180,21 @@ export const squadProposals = pgTable(
   ],
 );
 
-/** Pedido para entrar num squad existente: vai a todos os membros, basta um aceite. */
+/**
+ * "Aberto" (`invited` ou `pending`) escrito pelos status que não são. O
+ * `ADD VALUE 'invited'` da migration roda na mesma transação que cria os
+ * índices, e o Postgres não deixa usar um valor de enum novo antes do commit.
+ */
+const openRequest = (status: AnyPgColumn) =>
+  sql`${status} not in ('accepted', 'declined', 'expired')`;
+
+/**
+ * Entrada num squad existente, em duas fases. Na primeira o candidato recebe o
+ * convite numa thread privada do canal de busca (`invited`); ao aceitar, o
+ * pedido vai para o canal do squad e os membros votam (`pending`). Quem pede
+ * pelo `/squad procurar` já nasce `pending`, e o convite de um membro entra sem
+ * voto.
+ */
 export const squadJoinRequests = pgTable(
   'squad_join_requests',
   {
@@ -189,23 +204,40 @@ export const squadJoinRequests = pgTable(
       .notNull()
       .references(() => squads.id, { onDelete: 'cascade' }),
     userId: snowflake('user_id').notNull(),
-    /** Mensagem com os botões no canal do squad; `null` até ser enviada. */
+    /** A votação no canal do squad; `null` enquanto é só convite ou até ser enviada. */
     messageId: snowflake('message_id'),
     status: squadRequestStatusEnum('status').notNull().default('pending'),
     /**
-     * Membros que recusaram. Uma recusa é só um voto: o pedido só é recusado
-     * quando todos os membros atuais recusaram, e um aceite basta.
+     * O membro que convidou (`/squad convidar` ou CONVIDAR no guia); `null` =
+     * convite do matcher ou pedido do próprio candidato. Convite de membro
+     * entra sem voto.
      */
+    invitedBy: snowflake('invited_by'),
+    /** Thread privada do convite no canal de busca; `null` = pedido sem convite. */
+    threadId: snowflake('thread_id'),
+    /** A mensagem com ENTRAR / PASSO na thread do convite. */
+    inviteMessageId: snowflake('invite_message_id'),
+    /** Votos a favor dos membros. */
+    acceptedIds: snowflakeArray('accepted_ids'),
+    /** Votos contra. Um membro fica numa lista só: votar de novo troca de lado. */
     declinedIds: snowflakeArray('declined_ids'),
     decidedBy: snowflake('decided_by'),
+    /**
+     * `proposalTtlHours` a partir do convite; renova quando o candidato aceita
+     * e a votação começa.
+     */
+    expiresAt: timestamptz('expires_at').notNull(),
     createdAt: createdAt(),
     decidedAt: timestamptz('decided_at'),
   },
   (t) => [
-    // Um pedido pendente por pessoa e squad; depois de decidido, pode pedir de novo.
-    uniqueIndex('squad_join_requests_pending_uidx')
+    // Um convite ou pedido aberto por pessoa e squad; depois de decidido, pode de novo.
+    uniqueIndex('squad_join_requests_open_uidx')
       .on(t.squadId, t.userId)
-      .where(sql`${t.status} = 'pending'`),
+      .where(openRequest(t.status)),
+    index('squad_join_requests_open_expires_idx')
+      .on(t.guildId, t.expiresAt)
+      .where(openRequest(t.status)),
     index('squad_join_requests_guild_status_idx').on(t.guildId, t.status),
   ],
 );

@@ -18,7 +18,6 @@ import {
   createSquadJoinRequest,
   createSquadProposal,
   createSquadSession,
-  declineSquadJoinRequestBy,
   declineSquadProposal,
   decideSquadJoinRequest,
   deleteSquadProfile,
@@ -27,10 +26,12 @@ import {
   getSquadJoinRequest,
   getSquadProposal,
   getSquadSessionAt,
+  listDueJoinRequests,
   listInactiveSquads,
   listMembersOfSquads,
-  listPendingJoinRequests,
+  listOpenJoinRequests,
   listRecentJoinRequestKeys,
+  listRecentJoinRequestsFor,
   listRecentProposalPairs,
   listSessionsToRelease,
   listSquadProfilesByGame,
@@ -46,9 +47,11 @@ import {
   setSessionMessage,
   setSquadGuideMessage,
   setSquadStatus,
+  startSquadJoinVote,
   syncSquadStatusesToGroupSize,
   touchSquadConfirmed,
   upsertSquadProfile,
+  voteSquadJoinRequest,
   voteSquadSession,
 } from './squads';
 import { guilds } from '../schema/guilds';
@@ -195,82 +198,149 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
   });
 
   describe('pedidos de entrada', () => {
-    it('um pendente por pessoa e squad; depois de decidido, pode pedir de novo', async () => {
-      const squad = await newSquad('Pedidos');
-      const input = { guildId: GUILD_ID, squadId: squad.id, userId: USER_B };
+    const inHours = (hours: number) => new Date(Date.now() + hours * HOUR);
 
-      const first = await createSquadJoinRequest(db, input);
-      expect(first?.status).toBe('pending');
-      expect(await createSquadJoinRequest(db, input)).toBeNull();
+    it('um aberto por pessoa e squad, convite ou votação; depois de decidido, pode de novo', async () => {
+      const squad = await newSquad('Pedidos');
+      const base = { guildId: GUILD_ID, squadId: squad.id, userId: USER_B, expiresAt: inHours(72) };
+
+      const first = await createSquadJoinRequest(db, { ...base, status: 'invited' });
+      expect(first?.status).toBe('invited');
+      expect(await createSquadJoinRequest(db, { ...base, status: 'pending' })).toBeNull();
 
       const decided = await decideSquadJoinRequest(db, GUILD_ID, first!.id, {
         status: 'declined',
-        decidedBy: USER_A,
+        decidedBy: USER_B,
         at: new Date(),
       });
       expect(decided?.status).toBe('declined');
-      // Outro membro clica "Aceitar" logo depois: o pedido já foi decidido.
+      // O job expira o convite logo depois: ele já foi decidido.
       expect(
         await decideSquadJoinRequest(db, GUILD_ID, first!.id, {
-          status: 'accepted',
-          decidedBy: USER_C,
+          status: 'expired',
+          decidedBy: null,
           at: new Date(),
         }),
       ).toBeNull();
 
-      const again = await createSquadJoinRequest(db, input);
+      const again = await createSquadJoinRequest(db, { ...base, status: 'pending' });
       expect(again).not.toBeNull();
       expect(again?.id).not.toBe(first?.id);
-      expect((await listPendingJoinRequests(db, GUILD_ID, squad.id)).map((r) => r.id)).toEqual([
+      expect((await listOpenJoinRequests(db, GUILD_ID, squad.id)).map((r) => r.id)).toEqual([
         again?.id,
       ]);
+      expect(
+        (await listRecentJoinRequestsFor(db, GUILD_ID, squad.id, USER_B, inHours(-1))).map(
+          (r) => r.status,
+        ),
+      ).toEqual(['pending', 'declined']);
     });
 
-    it('declineSquadJoinRequestBy não repete o voto e para depois da decisão', async () => {
-      const squad = await newSquad('Recusas');
+    it('startSquadJoinVote só sai de invited, e decide respeita o from', async () => {
+      const squad = await newSquad('Fases');
+      const invite = await createSquadJoinRequest(db, {
+        guildId: GUILD_ID,
+        squadId: squad.id,
+        userId: USER_C,
+        status: 'invited',
+        invitedBy: USER_A,
+        expiresAt: inHours(1),
+      });
+      const id = invite!.id;
+      expect(invite?.invitedBy).toBe(USER_A);
+
+      const voting = await startSquadJoinVote(db, GUILD_ID, id, inHours(72));
+      expect(voting?.status).toBe('pending');
+      expect(voting?.expiresAt.getTime()).toBeGreaterThan(Date.now() + 71 * HOUR);
+      expect(await startSquadJoinVote(db, GUILD_ID, id, inHours(72))).toBeNull();
+
+      expect(
+        await decideSquadJoinRequest(db, GUILD_ID, id, {
+          status: 'expired',
+          decidedBy: null,
+          at: new Date(),
+          from: ['invited'],
+        }),
+      ).toBeNull();
+      expect((await getSquadJoinRequest(db, GUILD_ID, id))?.status).toBe('pending');
+    });
+
+    it('voteSquadJoinRequest não repete o voto, troca de lado e para depois da decisão', async () => {
+      const squad = await newSquad('Votos');
       const request = await createSquadJoinRequest(db, {
         guildId: GUILD_ID,
         squadId: squad.id,
         userId: USER_D,
+        status: 'pending',
+        expiresAt: inHours(72),
       });
       const id = request!.id;
 
-      expect((await declineSquadJoinRequestBy(db, GUILD_ID, id, USER_A))?.declinedIds).toEqual([
+      expect((await voteSquadJoinRequest(db, GUILD_ID, id, USER_A, false))?.declinedIds).toEqual([
         USER_A,
       ]);
-      expect(await declineSquadJoinRequestBy(db, GUILD_ID, id, USER_A)).toBeNull();
-      expect((await declineSquadJoinRequestBy(db, GUILD_ID, id, USER_B))?.declinedIds).toEqual([
-        USER_A,
+      expect(await voteSquadJoinRequest(db, GUILD_ID, id, USER_A, false)).toBeNull();
+      const switched = await voteSquadJoinRequest(db, GUILD_ID, id, USER_A, true);
+      expect(switched).toMatchObject({ acceptedIds: [USER_A], declinedIds: [] });
+      expect((await voteSquadJoinRequest(db, GUILD_ID, id, USER_B, false))?.declinedIds).toEqual([
         USER_B,
       ]);
 
       await decideSquadJoinRequest(db, GUILD_ID, id, {
         status: 'accepted',
-        decidedBy: USER_C,
+        decidedBy: USER_A,
         at: new Date(),
       });
-      expect(await declineSquadJoinRequestBy(db, GUILD_ID, id, USER_C)).toBeNull();
-      expect((await getSquadJoinRequest(db, GUILD_ID, id))?.declinedIds).toEqual([USER_A, USER_B]);
+      expect(await voteSquadJoinRequest(db, GUILD_ID, id, USER_C, true)).toBeNull();
+      expect(await getSquadJoinRequest(db, GUILD_ID, id)).toMatchObject({
+        acceptedIds: [USER_A],
+        declinedIds: [USER_B],
+      });
+    });
+
+    it('listDueJoinRequests: só os abertos com prazo vencido, só da guild', async () => {
+      const squad = await newSquad('Prazos');
+      const make = (userId: string, status: 'invited' | 'pending', hours: number) =>
+        createSquadJoinRequest(db, {
+          guildId: GUILD_ID,
+          squadId: squad.id,
+          userId,
+          status,
+          expiresAt: inHours(hours),
+        });
+      const invited = await make(USER_A, 'invited', -1);
+      const pending = await make(USER_B, 'pending', -2);
+      await make(USER_C, 'pending', 5);
+      const closed = await make(USER_D, 'invited', -3);
+      await decideSquadJoinRequest(db, GUILD_ID, closed!.id, {
+        status: 'declined',
+        decidedBy: USER_D,
+        at: new Date(),
+      });
+
+      const due = await listDueJoinRequests(db, GUILD_ID, new Date());
+      expect(due.filter((r) => r.squadId === squad.id).map((r) => r.id)).toEqual([
+        pending?.id,
+        invited?.id,
+      ]);
+      expect(await listDueJoinRequests(db, OTHER_GUILD_ID, new Date())).toEqual([]);
     });
 
     it('listRecentJoinRequestKeys: qualquer status desde since, sem repetir, só da guild', async () => {
       const squad = await newSquad('Chaves');
+      const base = { guildId: GUILD_ID, squadId: squad.id, expiresAt: inHours(72) };
       const first = await createSquadJoinRequest(db, {
-        guildId: GUILD_ID,
-        squadId: squad.id,
+        ...base,
         userId: USER_C,
+        status: 'pending',
       });
       await decideSquadJoinRequest(db, GUILD_ID, first!.id, {
         status: 'declined',
         decidedBy: USER_A,
         at: new Date(),
       });
-      await createSquadJoinRequest(db, { guildId: GUILD_ID, squadId: squad.id, userId: USER_C });
-      const old = await createSquadJoinRequest(db, {
-        guildId: GUILD_ID,
-        squadId: squad.id,
-        userId: USER_E,
-      });
+      await createSquadJoinRequest(db, { ...base, userId: USER_C, status: 'invited' });
+      const old = await createSquadJoinRequest(db, { ...base, userId: USER_E, status: 'pending' });
       await db
         .update(squadJoinRequests)
         .set({ createdAt: new Date(Date.now() - 30 * DAY) })

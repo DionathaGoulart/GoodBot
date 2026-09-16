@@ -1,8 +1,10 @@
 import {
   joinRequestKey,
   pairKey,
+  SQUAD_OPEN_REQUEST_STATUSES,
   type SquadAnswers,
   type SquadGameField,
+  type SquadOpenRequestStatus,
   type SquadProfileStatus,
   type SquadStatus,
 } from '@goodbot/shared';
@@ -10,6 +12,7 @@ import {
   and,
   asc,
   count,
+  desc,
   eq,
   getTableColumns,
   gt,
@@ -179,6 +182,21 @@ export async function upsertSquadProfile(
     .returning();
   if (!row) throw new Error('UPSERT em squad_profiles não retornou linha');
   return row;
+}
+
+/** Cria o perfil só quando não existe; `null` = já existia e nada mudou. */
+export async function createSquadProfileIfMissing(
+  db: DbExecutor,
+  input: UpsertSquadProfileInput,
+): Promise<SquadProfile | null> {
+  const [row] = await db
+    .insert(squadProfiles)
+    .values(input)
+    .onConflictDoNothing({
+      target: [squadProfiles.guildId, squadProfiles.userId, squadProfiles.gameId],
+    })
+    .returning();
+  return row ?? null;
 }
 
 export async function getSquadProfile(
@@ -971,13 +989,21 @@ export async function listRecentProposalPairs(
 
 // ── pedidos de entrada ──────────────────────────────────────────────────────
 
+const isOpenRequest = (): SQL =>
+  inArray(squadJoinRequests.status, [...SQUAD_OPEN_REQUEST_STATUSES]);
+
 export interface CreateSquadJoinRequestInput {
   guildId: string;
   squadId: string;
   userId: string;
+  /** `invited` = convite (fase 1); `pending` = já na votação do squad. */
+  status: SquadOpenRequestStatus;
+  /** O membro que convidou; ausente = matcher ou o próprio candidato. */
+  invitedBy?: string | null;
+  expiresAt: Date;
 }
 
-/** `null` quando a pessoa já tem um pedido pendente para este squad. */
+/** `null` quando a pessoa já tem convite ou pedido aberto para este squad. */
 export async function createSquadJoinRequest(
   db: DbExecutor,
   input: CreateSquadJoinRequestInput,
@@ -987,13 +1013,14 @@ export async function createSquadJoinRequest(
     .values(input)
     .onConflictDoNothing({
       target: [squadJoinRequests.squadId, squadJoinRequests.userId],
-      where: sql`status = 'pending'`,
+      // O mesmo predicado do índice parcial (ver `schema/squads.ts`).
+      where: sql`status not in ('accepted', 'declined', 'expired')`,
     })
     .returning();
   return row ?? null;
 }
 
-/** Grava a mensagem com os botões, enviada depois da linha (o `custom_id` leva o id). */
+/** Grava a votação no canal do squad, enviada depois da linha (o `custom_id` leva o id). */
 export async function setSquadJoinRequestMessage(
   db: DbExecutor,
   guildId: string,
@@ -1003,6 +1030,21 @@ export async function setSquadJoinRequestMessage(
   const [row] = await db
     .update(squadJoinRequests)
     .set({ messageId })
+    .where(and(eq(squadJoinRequests.guildId, guildId), eq(squadJoinRequests.id, requestId)))
+    .returning();
+  return row ?? null;
+}
+
+/** Grava a thread e a mensagem do convite, criadas depois da linha. */
+export async function setSquadJoinRequestInvite(
+  db: DbExecutor,
+  guildId: string,
+  requestId: string,
+  input: { threadId: string; inviteMessageId: string },
+): Promise<SquadJoinRequest | null> {
+  const [row] = await db
+    .update(squadJoinRequests)
+    .set(input)
     .where(and(eq(squadJoinRequests.guildId, guildId), eq(squadJoinRequests.id, requestId)))
     .returning();
   return row ?? null;
@@ -1022,25 +1064,58 @@ export async function getSquadJoinRequest(
 }
 
 /**
- * Registra a recusa de um membro. É só um voto: o pedido só vira `declined`
- * (por `decideSquadJoinRequest`) quando todos os membros atuais recusaram.
- * `null` quando nada mudou: o pedido já foi decidido ou o membro já recusou.
+ * O candidato aceitou o convite: `invited` vira `pending` e o prazo recomeça
+ * para a votação. `null` quando o convite já não estava aberto (dois cliques,
+ * ou o job expirou no mesmo instante).
  */
-export async function declineSquadJoinRequestBy(
+export async function startSquadJoinVote(
+  db: DbExecutor,
+  guildId: string,
+  requestId: string,
+  expiresAt: Date,
+): Promise<SquadJoinRequest | null> {
+  const [row] = await db
+    .update(squadJoinRequests)
+    .set({ status: 'pending', expiresAt })
+    .where(
+      and(
+        eq(squadJoinRequests.guildId, guildId),
+        eq(squadJoinRequests.id, requestId),
+        eq(squadJoinRequests.status, 'invited'),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * O voto de um membro, numa `UPDATE` só: entra na lista escolhida e sai da
+ * outra, então votar de novo troca de lado. `null` quando nada mudou: a
+ * votação acabou ou o membro já tinha votado assim.
+ */
+export async function voteSquadJoinRequest(
   db: DbExecutor,
   guildId: string,
   requestId: string,
   userId: string,
+  inFavor: boolean,
 ): Promise<SquadJoinRequest | null> {
+  const [target, other] = inFavor
+    ? [squadJoinRequests.acceptedIds, squadJoinRequests.declinedIds]
+    : [squadJoinRequests.declinedIds, squadJoinRequests.acceptedIds];
   const [row] = await db
     .update(squadJoinRequests)
-    .set({ declinedIds: appendId(squadJoinRequests.declinedIds, userId) })
+    .set(
+      inFavor
+        ? { acceptedIds: appendId(target, userId), declinedIds: removeId(other, userId) }
+        : { declinedIds: appendId(target, userId), acceptedIds: removeId(other, userId) },
+    )
     .where(
       and(
         eq(squadJoinRequests.guildId, guildId),
         eq(squadJoinRequests.id, requestId),
         eq(squadJoinRequests.status, 'pending'),
-        lacksId(squadJoinRequests.declinedIds, userId),
+        lacksId(target, userId),
       ),
     )
     .returning();
@@ -1048,15 +1123,18 @@ export async function declineSquadJoinRequestBy(
 }
 
 export interface DecideSquadJoinRequestInput {
-  /** `expired` = encerrado pelo bot (squad encheu ou foi arquivado), não por um membro. */
+  /** `expired` = ninguém decidiu a tempo, ou o bot encerrou (squad cheio ou arquivado). */
   status: 'accepted' | 'declined' | 'expired';
+  /** Quem decidiu: o candidato que passou, o membro que fechou a votação; `null` = o bot. */
   decidedBy: string | null;
   at: Date;
+  /** De que status pode sair; o padrão é qualquer um aberto. */
+  from?: readonly SquadOpenRequestStatus[];
 }
 
 /**
- * Decide o pedido enquanto ele ainda está pendente. `null` quando outro membro
- * já decidiu: dois cliques em "Aceitar" não põem a pessoa duas vezes.
+ * Fecha o pedido enquanto ele ainda está aberto. `null` quando outra decisão
+ * chegou antes: dois votos que fecham a votação não põem a pessoa duas vezes.
  */
 export async function decideSquadJoinRequest(
   db: DbExecutor,
@@ -1071,22 +1149,20 @@ export async function decideSquadJoinRequest(
       and(
         eq(squadJoinRequests.guildId, guildId),
         eq(squadJoinRequests.id, requestId),
-        eq(squadJoinRequests.status, 'pending'),
+        inArray(squadJoinRequests.status, [...(input.from ?? SQUAD_OPEN_REQUEST_STATUSES)]),
       ),
     )
     .returning();
   return row ?? null;
 }
 
-export async function listPendingJoinRequests(
+/** Convites e pedidos abertos (`invited` e `pending`), do mais antigo. */
+export async function listOpenJoinRequests(
   db: DbExecutor,
   guildId: string,
   squadId?: string,
 ): Promise<SquadJoinRequest[]> {
-  const filters: SQL[] = [
-    eq(squadJoinRequests.guildId, guildId),
-    eq(squadJoinRequests.status, 'pending'),
-  ];
+  const filters: SQL[] = [eq(squadJoinRequests.guildId, guildId), isOpenRequest()];
   if (squadId) filters.push(eq(squadJoinRequests.squadId, squadId));
   return db
     .select()
@@ -1095,11 +1171,52 @@ export async function listPendingJoinRequests(
     .orderBy(asc(squadJoinRequests.createdAt));
 }
 
+/** Abertos com o prazo vencido em `now`; o job decide cada um. */
+export async function listDueJoinRequests(
+  db: DbExecutor,
+  guildId: string,
+  now: Date,
+): Promise<SquadJoinRequest[]> {
+  return db
+    .select()
+    .from(squadJoinRequests)
+    .where(
+      and(
+        eq(squadJoinRequests.guildId, guildId),
+        isOpenRequest(),
+        lte(squadJoinRequests.expiresAt, now),
+      ),
+    )
+    .orderBy(asc(squadJoinRequests.expiresAt));
+}
+
+/** Os pedidos de uma pessoa para um squad criados em `since` ou depois, do mais novo. */
+export async function listRecentJoinRequestsFor(
+  db: DbExecutor,
+  guildId: string,
+  squadId: string,
+  userId: string,
+  since: Date,
+): Promise<SquadJoinRequest[]> {
+  return db
+    .select()
+    .from(squadJoinRequests)
+    .where(
+      and(
+        eq(squadJoinRequests.guildId, guildId),
+        eq(squadJoinRequests.squadId, squadId),
+        eq(squadJoinRequests.userId, userId),
+        gte(squadJoinRequests.createdAt, since),
+      ),
+    )
+    .orderBy(desc(squadJoinRequests.createdAt));
+}
+
 /**
  * `joinRequestKey` de todo pedido de entrada da guild criado em `since` ou
  * depois, em qualquer status, sem repetição. É o cooldown do pedido: um
- * candidato que o squad recusou (ou cujo pedido expirou) não é perguntado de
- * novo a cada passada do matcher. Quem chama calcula `since`.
+ * candidato que passou, que o squad recusou ou cujo convite expirou não é
+ * convidado de novo a cada passada do matcher. Quem chama calcula `since`.
  */
 export async function listRecentJoinRequestKeys(
   db: DbExecutor,
@@ -1111,25 +1228,6 @@ export async function listRecentJoinRequestKeys(
     .from(squadJoinRequests)
     .where(and(eq(squadJoinRequests.guildId, guildId), gte(squadJoinRequests.createdAt, since)));
   return rows.map((row) => joinRequestKey(row.squadId, row.userId));
-}
-
-/** Expira os pendentes criados antes de `before` e devolve as linhas (para editar as mensagens). */
-export async function expireSquadJoinRequestsBefore(
-  db: DbExecutor,
-  guildId: string,
-  before: Date,
-): Promise<SquadJoinRequest[]> {
-  return db
-    .update(squadJoinRequests)
-    .set({ status: 'expired', decidedAt: sql`now()` })
-    .where(
-      and(
-        eq(squadJoinRequests.guildId, guildId),
-        eq(squadJoinRequests.status, 'pending'),
-        lt(squadJoinRequests.createdAt, before),
-      ),
-    )
-    .returning();
 }
 
 // ── sessões ─────────────────────────────────────────────────────────────────
