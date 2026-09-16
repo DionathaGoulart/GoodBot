@@ -191,9 +191,23 @@ export type SquadProfileStatus = (typeof SQUAD_PROFILE_STATUSES)[number];
 export const SQUAD_STATUSES = ['open', 'full', 'archived'] as const;
 export type SquadStatus = (typeof SQUAD_STATUSES)[number];
 
-/** Pedido para entrar num squad que já existe: basta um membro aceitar. */
-export const SQUAD_REQUEST_STATUSES = ['pending', 'accepted', 'declined', 'expired'] as const;
+/**
+ * Entrada num squad que já existe, em duas fases. `invited`: o candidato
+ * recebeu o convite e ainda não respondeu. `pending`: ele aceitou (ou pediu
+ * pelo `/squad procurar`) e o squad está votando. Os outros três são o fim.
+ */
+export const SQUAD_REQUEST_STATUSES = [
+  'invited',
+  'pending',
+  'accepted',
+  'declined',
+  'expired',
+] as const;
 export type SquadRequestStatus = (typeof SQUAD_REQUEST_STATUSES)[number];
+
+/** Os status de um pedido ainda aberto: ocupa a vaga e segura o candidato. */
+export const SQUAD_OPEN_REQUEST_STATUSES = ['invited', 'pending'] as const;
+export type SquadOpenRequestStatus = (typeof SQUAD_OPEN_REQUEST_STATUSES)[number];
 
 /** As que descrevem um membro (PRD §5.5): entrada, saída e DM de boas-vindas. */
 export const MEMBER_TEMPLATE_VARIABLES = [
