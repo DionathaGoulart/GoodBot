@@ -73,10 +73,15 @@ Regras que não se dobram:
   usar um valor de `ADD VALUE` antes do commit. Escreva a condição pelos
   valores que já existiam (a `0016` cobre `invited` e `pending` com
   `status not in ('accepted', 'declined', 'expired')`).
-- **Renomear ou apagar coluna que o código publicado lê espera uma versão.** A
-  migration roda antes do deploy do bot e do painel, então a coluna velha fica
-  nula e sem escrita, e sai na migration seguinte (`squads.day`/`block` e
-  `squad_games.squad_size`).
+- **Renomear ou apagar coluna que o código publicado lê leva três deploys.** A
+  migration roda antes do deploy do bot e do painel, e o Drizzle nomeia toda
+  coluna declarada no schema em cada `select` e `returning`. Então: (1) a
+  coluna velha fica nula e sem escrita; (2) um deploy **sem migration** a tira
+  de `src/schema/*.ts`; (3) só depois dele no ar, `db:generate` escreve o
+  `DROP COLUMN`. Pular o passo 2 quebra toda query da tabela entre a migration
+  e a subida do código novo. Foi o caminho de `squads.day`/`block`,
+  `squad_games.squad_size` e `squad_sessions.reminder_message_id`, que saíram
+  na `0018`.
 - **Migration não roda no boot do bot.** É um passo da CI (`deploy.yml`), com a
   conexão direta do Supabase. Um bot que reiniciasse aplicando migration
   transformaria um restart em risco de schema.

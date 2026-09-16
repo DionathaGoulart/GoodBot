@@ -336,6 +336,13 @@ deploy terminar. O que esperar:
   pública`). O botão `ENTRAR` já não aceita ninguém e apaga a mensagem no
   primeiro clique; apagar à mão também não tem efeito colateral.
 
+A migration `0018` apaga as colunas do modelo semanal (`squads.day`/`block`,
+`squad_games.squad_size` e `squad_sessions.reminder_message_id`). Ela só pode
+subir com o bot e o painel publicados já sem essas colunas no schema, o que o
+deploy anterior fez sem migration. Se um deploy velho for refeito por cima
+dela (`workflow_dispatch` num commit antigo), toda tela e comando de squad
+falha com `column ... does not exist`: publique de novo a `main`.
+
 ---
 
 ## Checklist mensal

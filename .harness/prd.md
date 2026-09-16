@@ -1260,24 +1260,22 @@ audit_logs        (id, guild_id, actor_id, actor_tag, action, target_type, targe
                    -- append-only
 dashboard_sessions? -- não: Auth.js JWT stateless; se migrar para DB sessions, adapter Drizzle
 meta              (key PK, value jsonb)  -- hash do manifesto de comandos, versão de schema de config, etc.
-squad_games       (id uuid PK, guild_id, name, group_size, party_size, squad_size?, enabled, fields jsonb,
+squad_games       (id uuid PK, guild_id, name, group_size, party_size, enabled, fields jsonb,
                    created_at, updated_at)
                    unique (guild_id, name)
                    -- `group_size`: teto do squad; `party_size` (<= group_size): quem joga junto, o tamanho
-                   -- da turma proposta. `squad_size`: tamanho único da v1.5, nulo e sem escrita desde a
-                   -- v1.6, sai junto com `squads.day`/`block`
+                   -- da turma proposta
                    -- `fields`: até 5 perguntas {key, label, type select|tags|text, options[], required,
                    -- match hard|soft|none}; o bot lê jogos sem cache, então o painel grava sem invalidate
 squad_profiles    (guild_id, user_id, game_id FK, PK(guild_id,user_id,game_id), availability integer,
                    answers jsonb, status enum(searching|in_squad|paused), last_matched_at, created_at, updated_at)
                    idx (guild_id, game_id, status)
                    -- `availability`: máscara de 28 bits, bit = dia * 4 + faixa (domingo = 0); smallint não comporta
-squads            (id uuid PK, guild_id, game_id FK, name, text_channel_id, voice_channel_id, day?, block?,
+squads            (id uuid PK, guild_id, game_id FK, name, text_channel_id, voice_channel_id,
                    guide_message_id, status enum(open|full|archived), last_confirmed_at, warned_at, archived_at,
                    created_at, updated_at)
                    idx (guild_id, game_id, status)
-                   -- `day`/`block`: janela semanal da v1.5, nula e sem escrita desde a v1.6; sai na migration
-                   -- seguinte. `guide_message_id`: o guia fixo pinado no canal (nulo = ainda não publicado)
+                   -- `guide_message_id`: o guia fixo pinado no canal (nulo = ainda não publicado)
                    -- `text_channel_id` nulo enquanto o canal nasce: a linha vem antes, na transação que
                    -- reivindica a proposta; `voice_channel_id` é o voice preferido do pool (nulo = pool cheio)
 squad_members     (guild_id, squad_id FK, user_id, joined_at, PK(squad_id,user_id))
@@ -1299,12 +1297,12 @@ squad_join_requests (id uuid PK, guild_id, squad_id FK, user_id, message_id, inv
                    -- declined, expired)`: o `ADD VALUE 'invited'` roda na mesma transação dos índices
                    -- `session_id`: a jogatina cuja chamada pública trouxe o pedido (entra como "vou" nela)
 squad_sessions    (id bigserial PK, guild_id, squad_id FK, starts_at, ends_at, created_by, reminded_at, message_id,
-                   reminder_message_id?, started_at, going_ids[], not_going_ids[], voice_channel_id,
+                   started_at, going_ids[], not_going_ids[], voice_channel_id,
                    voice_overwrites jsonb, voice_reserved_at, voice_released_at, played_at, cancelled_at,
                    cancelled_by, called_at, call_channel_id, call_message_id, created_at)
                    unique (squad_id, starts_at); idx (guild_id, ends_at) where reservado e não liberado
                    -- a jogatina: `created_by` nulo = sessão semanal da v1.5; `ends_at` = início + `sessionHours`;
-                   -- `message_id` é a mensagem com Vou / Não vou (herdou `reminder_message_id`, que sai com `day`)
+                   -- `message_id` é a mensagem com Vou / Não vou
                    -- o snapshot do voice mora aqui, e não em channel_locks: um /lock no voice reservado
                    -- trocaria o que a liberação restaura
                    -- `called_at`: trava de uma chamada pública por jogatina (fica depois de ela sair do
