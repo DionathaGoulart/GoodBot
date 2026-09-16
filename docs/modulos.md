@@ -196,12 +196,13 @@ roda na hora.
 | `/squad perfil`          | abre o mesmo perfil do botão                                                    |
 | `/squad status`          | procurando ou pausado; procurar exige grade marcada                             |
 | `/squad procurar`        | squads com vaga nos seus horários, com botão para pedir entrada                 |
+| `/squad convidar`        | chama alguém para o seu squad; quem aceita entra sem votação                    |
 | `/squad sair`            | sai do squad; o último a sair arquiva                                           |
 | `/squad renomear`        | só quem é do squad                                                              |
 | `/squad painel`          | admin: publica ou reedita a mensagem fixa                                       |
 
 Os comandos são atalho: tudo o que eles fazem está também num botão de uma
-mensagem do bot (mensagem fixa, guia do squad, mensagem da jogatina).
+mensagem do bot (mensagem fixa, guia do squad, mensagem da jogatina, convite).
 
 **Squad e party.** Cada jogo tem dois tamanhos: o do squad, que é o grupo
 inteiro (até 20), e o da party, quem joga junto numa partida (até 10, nunca mais
@@ -215,22 +216,44 @@ grade em comum vale 1 ponto e cada resposta igual num campo "pesa no match" vale
 3; resposta diferente num campo "precisa bater" separa a dupla, e texto livre
 nunca conta. O grupo inteiro precisa dividir pelo menos uma célula, para ter um
 horário em que todos joguem juntos, e por isso a turma proposta tem no máximo uma
-party: o resto do squad chega por pedido de entrada. A mesma dupla não é proposta de novo por 14 dias
+party: o resto do squad chega por convite. A mesma dupla não é proposta de novo por 14 dias
 (`reproposeCooldownDays`). Antes de propor grupo novo, o matcher olha as vagas
 dos squads abertos: quem divide uma célula com gente suficiente do squad para
-fechar uma party vira um pedido de entrada no canal do squad, e só fica sabendo
-quando for aceito.
+fechar uma party recebe um convite para aquele squad (abaixo).
 
 **Proposta sem líder.** Cada grupo recebe uma thread privada no canal de busca,
 com `ACEITO` e `PASSO`, e mostra em que horário a turma bate (só informação: o
 squad não tem horário fixo). O primeiro aceite cria o squad, cada aceite seguinte
 ocupa uma vaga e quem passou fica de fora. Sem nenhum aceite a proposta fecha em
-72 h (`proposalTtlHours`), e o pedido de entrada vence no mesmo prazo. No pedido
-basta um membro aceitar; ele só é recusado quando todos recusam.
+72 h (`proposalTtlHours`).
+
+**Entrar num squad que já existe.** São duas fases, e ninguém entra sem os dois
+lados quererem. Primeiro o **convite**: uma thread privada no canal de busca, só
+com o candidato, mostrando o squad, os membros e o prazo, com `ENTRAR` e
+`PASSO`. O squad não fica sabendo de nada até ele aceitar. No `ENTRAR` começa a
+**votação** no canal do squad, que chama os membros, com `A FAVOR` e `CONTRA`, as
+respostas de seleção do candidato e em que horário ele joga com o grupo. Quem
+pede pelo `/squad procurar` pula o convite: o clique já é o aceite.
+
+| Votos                                  | Resultado                                 |
+| -------------------------------------- | ----------------------------------------- |
+| metade do squad ou mais a favor        | entra na hora (empate entra)              |
+| mais da metade contra                  | recusado, e o candidato é avisado na thread |
+| prazo de 72 h vencido                  | entra com um voto a favor e sem maioria contra; senão, fica de fora |
+
+Com dois membros basta um a favor; com três, dois; com sete, quatro. Dá para
+trocar o voto, e quem sai do squad no meio deixa de contar. Convite sem resposta
+vence em 72 h, e a votação tem mais 72 h a partir do `ENTRAR`. Quem passou, foi
+recusado ou deixou vencer não é chamado de novo para o mesmo squad por 14 dias.
+
+Membro convida direto com `CONVIDAR` no guia (escolhe a pessoa num select) ou
+`/squad convidar @pessoa`. É o mesmo convite, mas quem aceita entra sem
+votação, porque foi o squad que chamou, e não precisa ter perfil nem horário
+compatível.
 
 **A casa do squad.** Um canal de texto privado na categoria escolhida. A primeira
 mensagem dele é o **guia**, pinado: membros e vagas, sala preferida, próximas
-jogatinas e os botões `BORA`, `RENOMEAR`, `PROCURAR OUTRO SQUAD` (quando o
+jogatinas e os botões `BORA`, `CONVIDAR`, `RENOMEAR`, `PROCURAR OUTRO SQUAD` (quando o
 servidor deixa estar em mais de um squad) e `SAIR DO SQUAD`. O bot reedita o
 guia a cada mudança e publica de novo se alguém o apagar. Voice não se cria por
 squad: os voices do pool (os Hellpods, no Goodivers) são emprestados por
@@ -266,7 +289,7 @@ que marca a mesma hora na semana seguinte. Não há jogatina automática: a roti
 **Ciclo de vida.** Marcar jogatina, `VOU`, presença no voice reservado e
 `AINDA JOGAMOS` contam como sinal de vida. Sem nenhum por 4 semanas (`inactiveWeeks`), o squad recebe um
 aviso; sem resposta em 7 dias, é arquivado: canal só leitura, voice liberado,
-pedidos e propostas encerrados e perfis pausados.
+convites, votações e propostas encerrados e perfis pausados.
 
 Quem move tudo isso é o job `squads`, a cada 5 minutos, em cada servidor com o
 módulo ligado: lembra, reserva, começa e libera as jogatinas, mas nunca marca
@@ -283,10 +306,10 @@ foi escolhida no painel, e ninguém entra em squad sem aceitar. Pessoa sem perfi
 no jogo, fora do servidor, já num squad ou numa proposta aberta desse jogo, ou um
 grupo sem nenhum horário em comum **bloqueiam** a proposta. Perfil pausado, turma
 maior que o squad, pessoa no teto de squads, dupla proposta há menos de 14 dias,
-resposta diferente num campo "precisa bater" e pedido de entrada pendente só
+resposta diferente num campo "precisa bater" e convite ou votação de entrada aberto só
 **avisam**, e o admin marca que leu antes de confirmar. No perfil de cada pessoa
 dá para pausar ou retomar a busca, editar as respostas, apagar o perfil (não
-enquanto ela estiver num squad, numa proposta aberta ou com pedido pendente
+enquanto ela estiver num squad, numa proposta aberta ou com convite ou votação aberto
 nesse jogo) e tirar de um squad; tirar do squad funciona até com o módulo
 desligado. Cada ação pede um motivo, e a pessoa recebe uma DM dizendo que a
 staff do servidor mudou algo, com o motivo e o comando para conferir ou voltar

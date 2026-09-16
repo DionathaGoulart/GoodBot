@@ -130,8 +130,9 @@ src/
                   demo-expiry (avisa quem convidou, se despede e sai quando a
                   demo vence), pending-expiry (recusa o convite parado uma
                   semana na fila, avisa, sai e marca `expired`), squads
-                  (lembrete, voice reservado e início das jogatinas, e o
-                  passo diário de inatividade, guias e match)
+                  (convites e votações vencidos, lembrete, voice reservado e
+                  início das jogatinas, e o passo diário de inatividade,
+                  guias e match)
   lib/            utilitários sem estado: embeds, template, cooldown, purge,
                   channels (onde o bot pode falar), guild-setup,
                   inviter-dm (todo o texto dos avisos a quem convidou)...
@@ -498,7 +499,7 @@ os toca).
 
 ---
 
-## 9. Seis fluxos de ponta a ponta
+## 9. Fluxos de ponta a ponta
 
 **Um slash command (`/ban`)**
 
@@ -578,9 +579,25 @@ Quatro coisas nesse caminho não são gosto:
 botão da mensagem fixa ─▶ interactions/squads.ts ─▶ modal (respostas)
   ─▶ grade da semana (a máscara viaja no custom_id) ─▶ SquadService.saveAvailability
   ─▶ perfil `searching` ─▶ MatcherService.runFor(guild, jogo)
+  ─▶ vaga em squad `open` que cabe (fitsSquad)? convite (fluxo abaixo), senão:
   ─▶ proposeGroups (shared, puro, turma de até partySize) ─▶ thread privada + Aceito/Passo + INSERT squad_proposals
   ─▶ primeiro "Aceito": uma transação cria `squads` e reivindica a proposta
   ─▶ canal privado na categoria ─▶ GuideService.publish (guia pinado, chama os membros)
+```
+
+**Uma entrada em squad existente**
+
+```
+matcher (vaga) ou CONVIDAR / `/squad convidar` ─▶ JoinRequestService.invite
+  ─▶ INSERT squad_join_requests `invited` (o índice parcial é a trava: um aberto por pessoa e squad)
+  ─▶ thread privada no canal de busca só com o candidato ─▶ ENTRAR / PASSO
+  ─▶ ENTRAR de convite de membro: addMember, sem voto
+  ─▶ ENTRAR de convite do matcher (ou `/squad procurar`, que nasce aqui): `pending`
+     ─▶ votação no canal do squad, chamando os membros ─▶ A FAVOR / CONTRA
+     ─▶ voteSquadJoinRequest (array_append) ─▶ decideJoinVote (shared, membros de agora)
+     ─▶ aberto: reedita a contagem · decidido: `accepted` antes do addMember, ou recusa
+  ─▶ o fim aparece nas duas mensagens; a thread tranca e arquiva
+  ─▶ SquadsJob (5 min): convite vencido fecha em silêncio, votação vencida decide com os votos que tem
 ```
 
 **Uma jogatina**
@@ -598,14 +615,16 @@ botão da mensagem fixa ─▶ interactions/squads.ts ─▶ modal (respostas)
 Três coisas nesses caminhos não são gosto:
 
 - **A regra mora em `shared`, o efeito no bot.** `squads/availability.ts`,
-  `squads/match.ts`, `squads/when.ts` e `squads/zoned.ts` são puros: máscara da
-  grade, agrupamento determinístico em parties, "cabe no squad" (`fitsSquad`), o "quando"
-  do `/bora` e o relógio de parede no fuso da guild (com horário de verão). O painel e os testes usam
+  `squads/match.ts`, `squads/join-vote.ts`, `squads/when.ts` e `squads/zoned.ts`
+  são puros: máscara da grade, agrupamento determinístico em parties, "cabe no
+  squad" (`fitsSquad`), a regra da votação de entrada, o "quando" do `/bora` e o
+  relógio de parede no fuso da guild (com horário de verão). O painel e os testes usam
   as mesmas funções, sem Discord nem banco.
 - **A trava é do banco, não da memória.** Botão é clicado duas vezes e por
   várias pessoas ao mesmo tempo, e o job passa de novo a cada 5 minutos. Todo
   passo é uma `UPDATE` condicional (`claimProposalSquad`, `markSessionReminded`,
-  votos com `array_append`) antes de qualquer chamada ao Discord. O único estado
+  `startSquadJoinVote`, votos com `array_append`) antes de qualquer chamada ao
+  Discord. O único estado
   em memória é a fila compartilhada por guild e jogo do `MatcherService`
   (`withGameLock`): a passada do matcher, o match manual e apagar perfil entram
   nela, e uma tarefa na fila nunca espera `runFor` do mesmo jogo, senão espera a
@@ -699,6 +718,7 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | mexer em squads fixos             | `apps/bot/src/services/squads/` (fachada no `index.ts`) + regra pura em `shared/src/squads/` |
 | mexer na jogatina (`/bora`)       | `apps/bot/src/services/squads/sessions.ts` + "quando" em `packages/shared/src/squads/when.ts` |
 | mexer no guia fixo do squad       | `apps/bot/src/services/squads/guide.ts` (texto em `guideMessage`, `embeds.ts`) |
+| mexer no convite ou na votação de entrada | `apps/bot/src/services/squads/requests.ts` + regra em `packages/shared/src/squads/join-vote.ts` |
 | mexer no match manual             | `apps/bot/src/services/squads/manual.ts` + regra pura em `packages/shared/src/squads/manual.ts` |
 | mexer na gestão de jogadores      | `apps/bot/src/services/squads/players.ts` (texto da DM em `embeds.ts`)   |
 | entender um servidor              | `pnpm guild scan "<nome>"` → `infra/discord/<slug>/servidor.md`          |
@@ -729,5 +749,5 @@ Antes de dar qualquer trabalho por concluído:
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-115 arquivos de teste, ~1.280 casos (Vitest). Os testes de integração de
+131 arquivos de teste, ~1.600 casos (Vitest). Os testes de integração de
 repository precisam de um Postgres e são pulados sem ele.

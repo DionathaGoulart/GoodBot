@@ -68,6 +68,11 @@ Regras que não se dobram:
   `UPDATE` de backfill, `SET NOT NULL`. O `db:generate` escreve um
   `ADD COLUMN ... NOT NULL` sem default, que falha em produção no primeiro
   registro existente (a `0015`, dos tamanhos do jogo, é o exemplo).
+- **Valor novo de enum não entra em índice nem em `UPDATE` da mesma
+  migration.** O migrator aplica tudo numa transação só, e o Postgres recusa
+  usar um valor de `ADD VALUE` antes do commit. Escreva a condição pelos
+  valores que já existiam (a `0016` cobre `invited` e `pending` com
+  `status not in ('accepted', 'declined', 'expired')`).
 - **Renomear ou apagar coluna que o código publicado lê espera uma versão.** A
   migration roda antes do deploy do bot e do painel, então a coluna velha fica
   nula e sem escrita, e sai na migration seguinte (`squads.day`/`block` e

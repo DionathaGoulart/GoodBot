@@ -299,6 +299,23 @@ cadastro:
   hora; o guia mostra o tamanho novo na próxima mudança do squad ou no passo
   diário.
 
+A migration `0016` troca o pedido de entrada ("basta um aceite") pela entrada
+em duas fases: convite numa thread privada e votação no canal do squad. O que
+aparece nas primeiras horas:
+
+- **"Não consegui mandar o pedido" ou `falha ao criar pedido de entrada` no
+  log durante o deploy.** Entre a migration e a subida do bot novo, o bot
+  antigo grava pedido sem `expires_at`, que agora é obrigatório. Some quando o
+  bot novo sobe; o matcher tenta de novo na passada seguinte.
+- **Pedidos antigos viram votação.** O pedido aberto antes da migration ganhou
+  prazo de 72 h a partir de quando foi criado, e as recusas que ele já tinha
+  contam como votos contra. A mensagem ainda mostra `ACEITAR` e `RECUSAR`:
+  eles valem como `A FAVOR` e `CONTRA`, e o primeiro voto troca os botões.
+- **Convite sem thread.** Convidar exige as mesmas permissões da proposta no
+  canal de busca (`CreatePrivateThreads`, `SendMessagesInThreads` e
+  `ManageThreads`). Sem elas o matcher pula a guild com aviso no log e
+  `/squad convidar` responde que falta permissão.
+
 ---
 
 ## Checklist mensal
