@@ -7,6 +7,9 @@ import {
   confirmLeaveButtonId,
   gridSaveButtonId,
   gridSelectId,
+  inviteButtonId,
+  invitePickButtonId,
+  inviteUserSelectId,
   joinButtonId,
   keepButtonId,
   leaveButtonId,
@@ -30,8 +33,12 @@ describe('custom_id de squads', () => {
   it.each([
     [proposalButtonId('accept', UUID), { kind: 'proposal', action: 'accept', proposalId: UUID }],
     [proposalButtonId('decline', UUID), { kind: 'proposal', action: 'decline', proposalId: UUID }],
-    [requestButtonId('accept', UUID), { kind: 'request', action: 'accept', requestId: UUID }],
-    [requestButtonId('decline', UUID), { kind: 'request', action: 'decline', requestId: UUID }],
+    [requestButtonId('for', UUID), { kind: 'request', action: 'for', requestId: UUID }],
+    [requestButtonId('against', UUID), { kind: 'request', action: 'against', requestId: UUID }],
+    [inviteButtonId('accept', UUID), { kind: 'invite', action: 'accept', requestId: UUID }],
+    [inviteButtonId('pass', UUID), { kind: 'invite', action: 'pass', requestId: UUID }],
+    [invitePickButtonId(UUID), { kind: 'invite-pick', squadId: UUID }],
+    [inviteUserSelectId(UUID), { kind: 'invite-user', squadId: UUID }],
     [sessionButtonId('going', 42), { kind: 'session', action: 'going', sessionId: 42 }],
     [sessionButtonId('notgoing', 7), { kind: 'session', action: 'notgoing', sessionId: 7 }],
     [sessionButtonId('cancel', 7), { kind: 'session', action: 'cancel', sessionId: 7 }],
@@ -57,9 +64,28 @@ describe('custom_id de squads', () => {
     expect(parseSquadCustomId(id)).toEqual(parsed);
   });
 
+  it('os botões do pedido antigo (aceitar e recusar) viram voto', () => {
+    expect(parseSquadCustomId(`squad:request:accept:${UUID}`)).toEqual({
+      kind: 'request',
+      action: 'for',
+      requestId: UUID,
+    });
+    expect(parseSquadCustomId(`squad:request:decline:${UUID}`)).toEqual({
+      kind: 'request',
+      action: 'against',
+      requestId: UUID,
+    });
+  });
+
   it.each([
     '',
     'squad',
+    `squad:request:maybe:${UUID}`,
+    `squad:request:constructor:${UUID}`,
+    `squad:request:for:${UUID}:extra`,
+    `squad:invite:decline:${UUID}`,
+    'squad:invite:accept:nao-e-uuid',
+    `squad:invite:pick:${UUID}:extra`,
     'squad:proposal:accept',
     `squad:proposal:maybe:${UUID}`,
     'squad:proposal:accept:nao-e-uuid',

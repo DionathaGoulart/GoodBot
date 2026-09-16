@@ -1,4 +1,5 @@
 import {
+  createSquadProfileIfMissing,
   getSquadGame,
   getSquadProfile,
   listSquadGames,
@@ -226,6 +227,22 @@ export class ProfileService {
     if (profile?.status !== 'in_squad') return profile;
     if (await this.hasActiveSquad(guildId, userId, gameId)) return profile;
     return (await setSquadProfileStatus(db, guildId, userId, gameId, 'paused')) ?? profile;
+  }
+
+  /**
+   * Quem entra por convite de um membro pode nunca ter montado perfil: ganha
+   * um pausado e sem grade, que o bot marca `in_squad` na entrada e devolve a
+   * `paused` na saída. Perfil que já existe fica como está.
+   */
+  async ensureProfile(guildId: string, userId: string, gameId: string): Promise<void> {
+    await createSquadProfileIfMissing(this.ctx.db, {
+      guildId,
+      userId,
+      gameId,
+      availability: 0,
+      answers: {},
+      status: 'paused',
+    });
   }
 
   async markInSquad(guildId: string, userId: string, gameId: string): Promise<void> {

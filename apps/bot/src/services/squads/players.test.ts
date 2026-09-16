@@ -2,7 +2,7 @@ import { toBits } from '@goodbot/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { embedOf, fakeTextChannel } from './__fixtures__/discord';
-import { A, B, C, createHarness, D } from './__fixtures__/harness';
+import { A, B, C, createHarness, D, NOW } from './__fixtures__/harness';
 import { log } from './context';
 
 import type { Harness } from './__fixtures__/harness';
@@ -194,7 +194,13 @@ describe('SquadService: admin apaga perfil', () => {
     s.profile(C);
     seedProposal({ gameId: s.game.id, userIds: [B, C], declinedIds: [C], threadId: '1' });
     s.profile(D);
-    await impl.createSquadJoinRequest(null, { guildId: GUILD_ID, squadId: squad.id, userId: D });
+    await impl.createSquadJoinRequest(null, {
+      guildId: GUILD_ID,
+      squadId: squad.id,
+      userId: D,
+      status: 'pending',
+      expiresAt: new Date(NOW + 3_600_000),
+    });
 
     await expect(remove(s, A)).rejects.toMatchObject({ code: 'PROFILE_IN_SQUAD' });
     await expect(remove(s, B)).rejects.toMatchObject({ code: 'PROFILE_IN_PROPOSAL' });

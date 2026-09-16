@@ -6,7 +6,7 @@ import {
   getSquadProfile,
   listOpenSquadProposals,
   listOpenSquadsByGame,
-  listPendingJoinRequests,
+  listOpenJoinRequests,
   listRecentJoinRequestKeys,
   listRecentProposalPairs,
   listSearchingProfiles,
@@ -211,11 +211,18 @@ export class MatcherService {
 
     const since = new Date(this.ctx.now() - config.reproposeCooldownDays * DAY_MS);
     const blockedPairs = new Set(await listRecentProposalPairs(db, guildId, gameId, since));
-    // Pedido recusado (ou expirado) no mesmo squad dentro do cooldown: o
-    // candidato não é oferecido de novo a cada passada.
+    // Convite ou pedido no mesmo squad dentro do cooldown (passou, foi
+    // recusado ou venceu): o candidato não é convidado de novo a cada passada.
     const recentRequests = new Set(await listRecentJoinRequestKeys(db, guildId, since));
 
-    const joinRequests = await this.fillVacancies(guild, game, pool, blockedPairs, recentRequests);
+    const joinRequests = await this.fillVacancies(
+      guild,
+      channel,
+      game,
+      pool,
+      blockedPairs,
+      recentRequests,
+    );
     const groups = proposeGroups(
       { partySize: game.partySize, fields: game.fields },
       [...pool.values()].map(toMatchProfile),
@@ -246,8 +253,8 @@ export class MatcherService {
 
   /**
    * Perfis `searching` que podem receber algo agora: fora de proposta aberta
-   * deste jogo (a menos que tenham passado), sem pedido pendente num squad
-   * deste jogo e abaixo do teto de squads por pessoa.
+   * deste jogo (a menos que tenham passado), sem convite ou pedido aberto num
+   * squad deste jogo e abaixo do teto de squads por pessoa.
    */
   private async candidates(
     guildId: string,
@@ -267,7 +274,7 @@ export class MatcherService {
     }
     const squads = await listSquads(db, guildId, { gameId: game.id, statuses: ['open', 'full'] });
     const squadIds = new Set(squads.map((squad) => squad.id));
-    for (const request of await listPendingJoinRequests(db, guildId)) {
+    for (const request of await listOpenJoinRequests(db, guildId)) {
       if (squadIds.has(request.squadId)) busy.add(request.userId);
     }
 
@@ -281,9 +288,13 @@ export class MatcherService {
     return pool;
   }
 
-  /** Pedidos de entrada nos squads `open`; quem recebe um sai do `pool`. */
+  /**
+   * Convites para as vagas dos squads `open`; quem recebe um sai do `pool`.
+   * Convite aberto conta como vaga ocupada até ser respondido ou vencer.
+   */
   private async fillVacancies(
     guild: Guild,
+    channel: TextChannel,
     game: SquadGame,
     pool: Map<string, SquadProfile>,
     blockedPairs: ReadonlySet<string>,
@@ -292,7 +303,7 @@ export class MatcherService {
     const { db } = this.ctx;
     const squads = await listOpenSquadsByGame(db, guild.id, game.id);
     if (squads.length === 0) return 0;
-    const pending = await listPendingJoinRequests(db, guild.id);
+    const pending = await listOpenJoinRequests(db, guild.id);
 
     let created = 0;
     for (const squad of squads) {
@@ -324,11 +335,14 @@ export class MatcherService {
       for (const fit of ranked.slice(0, open)) {
         pool.delete(fit.userId);
         try {
-          if (await this.ctx.parts.requests.create(guild, squad, fit.userId, 'matcher')) created++;
+          const sent = await this.ctx.parts.requests.invite(guild, channel, squad, fit.userId, {
+            invitedBy: null,
+          });
+          if (sent.outcome === 'sent') created++;
         } catch (error) {
           log.error(
             { err: error, guildId: guild.id, squadId: squad.id, userId: fit.userId },
-            'falha ao criar pedido de entrada',
+            'falha ao convidar para a vaga do squad',
           );
         }
       }

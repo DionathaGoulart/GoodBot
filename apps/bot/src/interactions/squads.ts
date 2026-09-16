@@ -3,9 +3,12 @@ import { MessageFlags } from 'discord.js';
 
 import { CooldownStore } from '../lib/cooldown';
 import {
+  inviteAnswerText,
+  invitePickMessage,
+  inviteSentText,
   joinableSquadsMessage,
-  joinRequestDecisionText,
   joinRequestSentText,
+  joinVoteText,
   KEEP_ALIVE_TEXT,
   leaveConfirmMessage,
   profileSavedMessage,
@@ -83,8 +86,9 @@ async function requireLiveSquad(ctx: BotContext, guildId: string, squadId: strin
 
 /**
  * Todo componente com prefixo `squad`. As mensagens são persistentes (a
- * fixa, as propostas, o guia, as jogatinas) e a grade não guarda estado: tudo
- * o que o handler precisa vem do `custom_id` e do banco.
+ * fixa, as propostas, os convites, as votações, o guia, as jogatinas) e a
+ * grade não guarda estado: tudo o que o handler precisa vem do `custom_id` e
+ * do banco.
  */
 export async function handleSquadComponent(
   ctx: BotContext,
@@ -101,6 +105,28 @@ export async function handleSquadComponent(
     await interaction.update(
       await ctx.squads.availabilityGrid(guild.id, userId, parsed.gameId, mask),
     );
+    return true;
+  }
+  if (parsed.kind === 'invite-user') {
+    if (!interaction.isUserSelectMenu()) return false;
+    const target = interaction.users.first();
+    if (!target) {
+      throw new UserFacingError('Escolha a pessoa que você quer convidar.', { code: 'NO_USER' });
+    }
+    // Atualiza a própria mensagem do select: em erro ele continua ali para outra escolha.
+    await interaction.deferUpdate();
+    const { squad } = await ctx.squads.inviteToSquad(
+      guild,
+      parsed.squadId,
+      userId,
+      { id: target.id, bot: target.bot },
+      'event',
+    );
+    await interaction.editReply({
+      content: inviteSentText(target.id, squad),
+      components: [],
+      allowedMentions: { parse: [] },
+    });
     return true;
   }
   if (!interaction.isButton()) return false;
@@ -164,13 +190,35 @@ export async function handleSquadComponent(
 
     case 'request': {
       await interaction.deferReply(EPHEMERAL);
-      const decision =
-        parsed.action === 'accept'
-          ? await ctx.squads.acceptJoinRequest(guild, parsed.requestId, userId)
-          : await ctx.squads.declineJoinRequest(guild, parsed.requestId, userId);
-      await interaction.editReply({ content: joinRequestDecisionText(decision) });
+      const result = await ctx.squads.voteJoinRequest(
+        guild,
+        parsed.requestId,
+        userId,
+        parsed.action === 'for',
+      );
+      await interaction.editReply({ content: joinVoteText(result) });
       return true;
     }
+
+    case 'invite': {
+      // Aceitar pode pôr a pessoa no squad (canal, guia): mais que os 3 s da interação.
+      await interaction.deferReply(EPHEMERAL);
+      const result = await ctx.squads.answerInvite(
+        guild,
+        parsed.requestId,
+        userId,
+        parsed.action === 'accept',
+      );
+      await interaction.editReply({ content: inviteAnswerText(result) });
+      return true;
+    }
+
+    case 'invite-pick':
+      await interaction.reply({
+        ...invitePickMessage(await requireLiveSquad(ctx, guild.id, parsed.squadId)),
+        ...EPHEMERAL,
+      });
+      return true;
 
     case 'session': {
       await interaction.deferReply(EPHEMERAL);

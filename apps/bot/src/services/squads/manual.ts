@@ -2,7 +2,7 @@ import {
   getSquadGame,
   listMembersOfSquads,
   listOpenSquadProposals,
-  listPendingJoinRequests,
+  listOpenJoinRequests,
   listRecentProposalPairs,
   listSquadProfilesByGame,
   listSquads,
@@ -153,7 +153,7 @@ export class ManualMatchService {
       listSquadProfilesByGame(db, guild.id, game.id, { userIds }),
       listOpenSquadProposals(db, guild.id),
       listSquads(db, guild.id, { statuses: ['open', 'full'] }),
-      listPendingJoinRequests(db, guild.id),
+      listOpenJoinRequests(db, guild.id),
       listRecentProposalPairs(db, guild.id, game.id, since),
     ]);
 

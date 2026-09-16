@@ -20,14 +20,31 @@ const MASK_RE = /^(0|[1-9]\d{0,8})$/;
 const BLOCK_RE = /^\d$/;
 
 export type SquadProposalAction = 'accept' | 'decline';
-export type SquadRequestAction = 'accept' | 'decline';
+/** O voto de um membro sobre quem quer entrar. */
+export type SquadRequestAction = 'for' | 'against';
+/** A resposta do candidato ao convite. */
+export type SquadInviteAction = 'accept' | 'pass';
 export type SquadSessionAction = 'going' | 'notgoing' | 'cancel' | 'repeat';
 const SESSION_ACTIONS: readonly string[] = ['going', 'notgoing', 'cancel', 'repeat'];
+/**
+ * `accept` e `decline` são os botões do pedido antigo ("basta um aceite"),
+ * ainda no ar nos canais dos squads: viram voto, e a próxima edição da
+ * mensagem já troca os botões.
+ */
+const REQUEST_ACTIONS: ReadonlyMap<string, SquadRequestAction> = new Map([
+  ['for', 'for'],
+  ['against', 'against'],
+  ['accept', 'for'],
+  ['decline', 'against'],
+]);
 export type SquadStatusAction = 'searching' | 'paused';
 
 export type SquadCustomId =
   | { kind: 'proposal'; action: SquadProposalAction; proposalId: string }
   | { kind: 'request'; action: SquadRequestAction; requestId: string }
+  | { kind: 'invite'; action: SquadInviteAction; requestId: string }
+  | { kind: 'invite-pick'; squadId: string }
+  | { kind: 'invite-user'; squadId: string }
   | { kind: 'session'; action: SquadSessionAction; sessionId: number }
   | { kind: 'bora-open'; squadId: string }
   | { kind: 'bora-modal'; squadId: string }
@@ -66,8 +83,24 @@ export function proposalButtonId(action: SquadProposalAction, proposalId: string
   return build('proposal', action, assertUuid(proposalId, 'proposalId'));
 }
 
+/** A FAVOR / CONTRA, na votação do canal do squad. */
 export function requestButtonId(action: SquadRequestAction, requestId: string): string {
   return build('request', action, assertUuid(requestId, 'requestId'));
+}
+
+/** ENTRAR / PASSO, no convite da thread privada do candidato. */
+export function inviteButtonId(action: SquadInviteAction, requestId: string): string {
+  return build('invite', action, assertUuid(requestId, 'requestId'));
+}
+
+/** CONVIDAR, no guia do squad: abre a escolha de quem convidar. */
+export function invitePickButtonId(squadId: string): string {
+  return build('invite', 'pick', assertUuid(squadId, 'squadId'));
+}
+
+/** O select de pessoa da mensagem efêmera do CONVIDAR. */
+export function inviteUserSelectId(squadId: string): string {
+  return build('invite', 'user', assertUuid(squadId, 'squadId'));
 }
 
 export function sessionButtonId(action: SquadSessionAction, sessionId: number): string {
@@ -168,14 +201,30 @@ export function parseSquadCustomId(customId: string): SquadCustomId | null {
   const size = parts.length;
 
   switch (subject) {
-    case 'proposal':
-    case 'request': {
+    case 'proposal': {
       if (size !== 4 || (second !== 'accept' && second !== 'decline') || !isUuid(third)) {
         return null;
       }
-      return subject === 'proposal'
-        ? { kind: 'proposal', action: second, proposalId: third }
-        : { kind: 'request', action: second, requestId: third };
+      return { kind: 'proposal', action: second, proposalId: third };
+    }
+    case 'request': {
+      if (size !== 4 || !second || !isUuid(third)) return null;
+      const action = REQUEST_ACTIONS.get(second);
+      return action ? { kind: 'request', action, requestId: third } : null;
+    }
+    case 'invite': {
+      if (size !== 4 || !isUuid(third)) return null;
+      switch (second) {
+        case 'accept':
+        case 'pass':
+          return { kind: 'invite', action: second, requestId: third };
+        case 'pick':
+          return { kind: 'invite-pick', squadId: third };
+        case 'user':
+          return { kind: 'invite-user', squadId: third };
+        default:
+          return null;
+      }
     }
     case 'session': {
       if (size !== 4 || !second || !SESSION_ACTIONS.includes(second)) return null;

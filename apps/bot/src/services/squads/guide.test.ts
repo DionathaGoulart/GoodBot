@@ -148,6 +148,7 @@ describe('GuideService', () => {
     const row = componentsOf(s.channel.sent[0])[0] as { toJSON(): { components: { label?: string }[] } };
     expect(row.toJSON().components.map((button) => button.label)).toEqual([
       'BORA',
+      'CONVIDAR',
       'RENOMEAR',
       'PROCURAR OUTRO SQUAD',
       'SAIR DO SQUAD',

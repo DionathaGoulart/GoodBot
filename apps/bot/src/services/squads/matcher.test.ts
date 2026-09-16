@@ -100,7 +100,7 @@ describe('SquadService: matcher', () => {
     });
   });
 
-  it('vaga aberta compatível vira pedido de entrada, não proposta', async () => {
+  it('vaga aberta compatível vira convite numa thread só do candidato, não proposta', async () => {
     const s = scenario([C]);
     const channel = s.guild.add(fakeTextChannel());
     const squad = seedSquad({ gameId: s.game.id, textChannelId: channel.id });
@@ -110,8 +110,36 @@ describe('SquadService: matcher', () => {
     const result = await s.service.runMatch(s.guild.id, s.game.id);
 
     expect(result).toEqual({ proposals: 0, joinRequests: 1 });
-    expect(store.requests[0]).toMatchObject({ squadId: squad.id, userId: C, status: 'pending' });
-    expect(s.search.threads.create).not.toHaveBeenCalled();
+    const thread = s.search.threads.created[0]!;
+    expect(store.requests[0]).toMatchObject({
+      squadId: squad.id,
+      userId: C,
+      status: 'invited',
+      threadId: thread.id,
+    });
+    expect(thread.members.add.mock.calls.map(([id]) => id)).toEqual([C]);
+    expect(store.proposals).toEqual([]);
+    // O squad só fica sabendo quando o candidato aceitar.
+    expect(channel.sent).toEqual([]);
+  });
+
+  it('convite aberto ocupa a vaga e segura o candidato na passada seguinte', async () => {
+    const s = scenario([C, D], { groupSize: 2, partySize: 2 });
+    const channel = s.guild.add(fakeTextChannel());
+    const squad = seedSquad({ gameId: s.game.id, textChannelId: channel.id });
+    seedMember(squad.id, A);
+    seedProfile({ userId: A, gameId: s.game.id, availability: SATURDAY_NIGHT, status: 'in_squad' });
+
+    expect(await s.service.runMatch(s.guild.id, s.game.id)).toEqual({
+      proposals: 0,
+      joinRequests: 1,
+    });
+    // A vaga única foi para C; D fica sem par e sem convite.
+    expect(await s.service.runMatch(s.guild.id, s.game.id)).toEqual({
+      proposals: 0,
+      joinRequests: 0,
+    });
+    expect(store.requests.map((request) => request.userId)).toEqual([C]);
   });
 
   it('a proposta monta uma party, não o squad inteiro', async () => {

@@ -141,18 +141,22 @@ describe('SquadService: pedido manual', () => {
     vi.clearAllMocks();
   });
 
-  it('manda o pedido ao canal do squad', async () => {
+  it('pula o convite: o pedido vai direto para a votação do squad', async () => {
     const s = squadScenario();
     seedProfile({ userId: C, gameId: s.game.id, availability: saturdayNight });
 
     const sent = await s.service.requestToJoin(s.discordGuild, C, s.squad.id);
 
     expect(sent.squad.id).toBe(s.squad.id);
-    expect(store.requests).toEqual([expect.objectContaining({ userId: C, status: 'pending' })]);
+    expect(store.requests).toEqual([
+      expect.objectContaining({ userId: C, status: 'pending', threadId: null }),
+    ]);
     expect(s.channel.sent).toHaveLength(1);
+    expect(s.channel.sent[0]!.payload.content).toBe(`<@${A}> <@${B}>`);
+    expect(s.search.threads.create).not.toHaveBeenCalled();
   });
 
-  it('pedido repetido: primeiro pendente, depois de recusado em cooldown', async () => {
+  it('pedido repetido: primeiro aberto, depois de recusado em cooldown', async () => {
     const s = squadScenario();
     seedProfile({ userId: C, gameId: s.game.id, availability: saturdayNight });
     await s.service.requestToJoin(s.discordGuild, C, s.squad.id);
@@ -162,8 +166,9 @@ describe('SquadService: pedido manual', () => {
     });
 
     const requestId = store.requests[0]!.id;
-    await s.service.declineJoinRequest(s.discordGuild, requestId, A);
-    await s.service.declineJoinRequest(s.discordGuild, requestId, B);
+    await s.service.voteJoinRequest(s.discordGuild, requestId, A, false);
+    await s.service.voteJoinRequest(s.discordGuild, requestId, B, false);
+    expect(store.requests[0]!.status).toBe('declined');
 
     await expect(s.service.requestToJoin(s.discordGuild, C, s.squad.id)).rejects.toMatchObject({
       code: 'REQUEST_COOLDOWN',

@@ -69,7 +69,13 @@ describe('SquadService: revisão do match manual', () => {
     seedProposal({ gameId: s.game.id, userIds: [A, B], threadId: '1', closedAt: new Date(NOW) });
     const here = seedSquad({ gameId: s.game.id });
     seedMember(here.id, OUTSIDER);
-    await impl.createSquadJoinRequest(null, { guildId: GUILD_ID, squadId: here.id, userId: B });
+    await impl.createSquadJoinRequest(null, {
+      guildId: GUILD_ID,
+      squadId: here.id,
+      userId: B,
+      status: 'invited',
+      expiresAt: new Date(NOW + 3_600_000),
+    });
 
     const result = await s.check([D, C, B, A]);
 

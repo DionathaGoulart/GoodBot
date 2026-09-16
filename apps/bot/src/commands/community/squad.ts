@@ -6,6 +6,7 @@ import { defineCommand } from '../../lib/command';
 import { botFooter, successEmbed } from '../../lib/embeds';
 import { levelAtLeast } from '../../services/permissions';
 import {
+  inviteSentText,
   joinableSquadsMessage,
   renamedText,
   searchMessagePublishedText,
@@ -155,6 +156,17 @@ export default defineCommand({
     )
     .addSubcommand((sub) =>
       sub
+        .setName('convidar')
+        .setDescription('Chama alguém para o seu squad, sem votação')
+        .addUserOption((option) =>
+          option.setName('pessoa').setDescription('Quem convidar').setRequired(true),
+        )
+        .addStringOption((option) =>
+          option.setName('squad').setDescription('Para qual squad').setAutocomplete(true),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
         .setName('procurar')
         .setDescription('Lista squads com vaga que combinam com você')
         .addStringOption((option) =>
@@ -257,6 +269,27 @@ export default defineCommand({
           { source: 'command' },
         );
         await ctx.interaction.editReply({ content: renamedText(result) });
+        return;
+      }
+
+      case 'convidar': {
+        const squad = pickSquad(
+          await ctx.squads.listSquadsForUser(ctx.guildId, ctx.member.id),
+          ctx.interaction.options.getString('squad'),
+          ctx.interaction.channelId,
+        );
+        const target = ctx.interaction.options.getUser('pessoa', true);
+        const sent = await ctx.squads.inviteToSquad(
+          guild,
+          squad.id,
+          ctx.member.id,
+          { id: target.id, bot: target.bot },
+          'command',
+        );
+        await ctx.interaction.editReply({
+          content: inviteSentText(target.id, sent.squad),
+          allowedMentions: { parse: [] },
+        });
         return;
       }
 

@@ -31,6 +31,7 @@ describe('/squad', () => {
 
   it('tem os subcomandos do módulo', () => {
     expect((json.options ?? []).map((option) => option.name).sort()).toEqual([
+      'convidar',
       'painel',
       'perfil',
       'procurar',

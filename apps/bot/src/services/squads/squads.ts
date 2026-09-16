@@ -360,7 +360,11 @@ export class SquadLifecycleService {
     } else if (squad.status === 'full') {
       current = (await setSquadStatus(db, guildId, squadId, 'open')) ?? squad;
     }
-    if (!archived) await this.ctx.parts.guide.refresh(guild, squadId);
+    if (!archived) {
+      await this.ctx.parts.guide.refresh(guild, squadId);
+      // O voto de quem saiu deixa de contar, e metade do squad agora é menos gente.
+      await this.ctx.parts.requests.reevaluateForSquad(guild, squadId);
+    }
 
     const profile = await this.ctx.parts.profiles.refreshStatus(guildId, userId, squad.gameId);
     return {
@@ -372,8 +376,8 @@ export class SquadLifecycleService {
   }
 
   /**
-   * Arquiva: canal só leitura com aviso, voice reservado liberado, pedidos
-   * pendentes encerrados, propostas do squad fechadas e perfis sem squad
+   * Arquiva: canal só leitura com aviso, voice reservado liberado, convites e
+   * votações encerrados, propostas do squad fechadas e perfis sem squad
    * pausados. `null` quando já estava arquivado.
    */
   async archive(guild: Guild, squadId: string, options: ArchiveOptions): Promise<Squad | null> {

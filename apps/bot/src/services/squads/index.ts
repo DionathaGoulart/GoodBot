@@ -18,7 +18,7 @@ import type { MatchResult } from './matcher';
 import type { Notified } from './players';
 import type { AvailabilityResult, ProfileDraft, ProfileForm, ProfileResult } from './profiles';
 import type { ProposalAcceptResult, ProposalDeclineResult } from './proposals';
-import type { JoinRequestDecision, JoinRequestSource } from './requests';
+import type { InviteAnswer, InviteTarget, JoinVoteResult, MemberInviteSent } from './requests';
 import type {
   JoinableSquad,
   JoinRequestSent,
@@ -34,14 +34,7 @@ import type {
   StartResult,
 } from './sessions';
 import type { ArchiveOptions, RemoveMemberResult, RenameOptions, RenameResult } from './squads';
-import type {
-  Squad,
-  SquadGame,
-  SquadJoinRequest,
-  SquadProfile,
-  SquadProposal,
-  SquadSession,
-} from '@goodbot/db';
+import type { Squad, SquadGame, SquadProfile, SquadProposal, SquadSession } from '@goodbot/db';
 import type {
   AuditSource,
   DeleteSquadProfileInput,
@@ -62,7 +55,13 @@ export type { MatchResult } from './matcher';
 export type { Notified } from './players';
 export type { AvailabilityResult, ProfileDraft, ProfileForm, ProfileResult } from './profiles';
 export type { ProposalAcceptResult, ProposalDeclineResult } from './proposals';
-export type { JoinRequestDecision, JoinRequestSource } from './requests';
+export type {
+  InviteAnswer,
+  InviteResult,
+  InviteTarget,
+  JoinVoteResult,
+  MemberInviteSent,
+} from './requests';
 export type {
   JoinableSquad,
   JoinRequestSent,
@@ -81,7 +80,7 @@ export type { ArchiveOptions, RemoveMemberResult, RenameOptions, RenameResult } 
 
 /**
  * Módulo `squads`: perfil por jogo, match por agenda, propostas sem líder,
- * pedidos de entrada, casa do squad (canal privado com guia fixo + voice do
+ * entrada em squad existente (convite e votação), casa do squad (canal privado com guia fixo + voice do
  * pool) e jogatinas sob demanda. Uma fachada sobre as partes em
  * `services/squads/`; comandos, botões, o job e a API falam só com ela.
  *
@@ -324,35 +323,42 @@ export class SquadService {
     return this.ctx.parts.squads.keepAlive(guild, squadId, userId);
   }
 
-  // ── pedidos de entrada ────────────────────────────────────────────────────
+  // ── entrada em squad existente ────────────────────────────────────────────
 
-  createJoinRequest(
+  /** `/squad convidar` e o CONVIDAR do guia: convite de membro, que entra sem voto. */
+  inviteToSquad(
     guild: Guild,
-    squad: Squad,
-    candidateUserId: string,
-    source: JoinRequestSource,
-  ): Promise<SquadJoinRequest | null> {
-    return this.ctx.parts.requests.create(guild, squad, candidateUserId, source);
+    squadId: string,
+    inviterId: string,
+    target: InviteTarget,
+    source: AuditSource,
+  ): Promise<MemberInviteSent> {
+    return this.ctx.parts.requests.inviteByMember(guild, squadId, inviterId, target, source);
   }
 
-  acceptJoinRequest(
+  /** ENTRAR ou PASSO, na thread do convite. */
+  answerInvite(
+    guild: Guild,
+    requestId: string,
+    userId: string,
+    accept: boolean,
+  ): Promise<InviteAnswer> {
+    return this.ctx.parts.requests.answer(guild, requestId, userId, accept);
+  }
+
+  /** A FAVOR ou CONTRA, na votação do canal do squad. */
+  voteJoinRequest(
     guild: Guild,
     requestId: string,
     memberUserId: string,
-  ): Promise<JoinRequestDecision> {
-    return this.ctx.parts.requests.accept(guild, requestId, memberUserId);
+    inFavor: boolean,
+  ): Promise<JoinVoteResult> {
+    return this.ctx.parts.requests.vote(guild, requestId, memberUserId, inFavor);
   }
 
-  declineJoinRequest(
-    guild: Guild,
-    requestId: string,
-    memberUserId: string,
-  ): Promise<JoinRequestDecision> {
-    return this.ctx.parts.requests.decline(guild, requestId, memberUserId);
-  }
-
+  /** Convites sem resposta e votações vencidas. Devolve quantos fecharam. */
   expireRequests(guildId: string): Promise<number> {
-    return this.ctx.parts.requests.expireRequests(guildId);
+    return this.ctx.parts.requests.expireDue(guildId);
   }
 
   // ── jogatinas ─────────────────────────────────────────────────────────────

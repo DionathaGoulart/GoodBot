@@ -2,7 +2,7 @@ import {
   getSquad,
   getSquadProfile,
   listOpenSquadsByGame,
-  listPendingJoinRequests,
+  listOpenJoinRequests,
   listRecentJoinRequestKeys,
   listSquadMembers,
   setModuleConfig,
@@ -130,7 +130,7 @@ export class SearchService {
   /**
    * Squads `open` do jogo em que a pessoa cabe agora: vaga livre, grade que
    * dá party com os membros, nenhum campo `hard` batendo de frente com um
-   * membro e nenhum pedido dela para aquele squad pendente ou recente.
+   * membro e nenhum convite ou pedido dela para aquele squad aberto ou recente.
    * Melhor nota primeiro.
    */
   async listJoinable(guildId: string, userId: string, gameId: string): Promise<JoinableSquad[]> {
@@ -144,7 +144,7 @@ export class SearchService {
     const [squads, recent, pending] = await Promise.all([
       listOpenSquadsByGame(db, guildId, gameId),
       listRecentJoinRequestKeys(db, guildId, since),
-      listPendingJoinRequests(db, guildId),
+      listOpenJoinRequests(db, guildId),
     ]);
     const asked = new Set(recent);
     for (const request of pending) asked.add(joinRequestKey(request.squadId, request.userId));
@@ -167,7 +167,8 @@ export class SearchService {
   /**
    * Pedido manual para entrar num squad. Passa pelas mesmas regras da lista,
    * com uma diferença: o cooldown de dupla do matcher não vale aqui, porque
-   * foi a própria pessoa quem escolheu o squad.
+   * foi a própria pessoa quem escolheu o squad. O clique já é o aceite dela,
+   * então o pedido pula o convite e vai direto para a votação do squad.
    */
   async requestToJoin(guild: Guild, userId: string, squadId: string): Promise<JoinRequestSent> {
     const { db } = this.ctx;
@@ -187,11 +188,15 @@ export class SearchService {
     await this.ctx.parts.squads.assertCanJoinAnother(guild.id, userId, config);
     const profile = await this.requireProfile(guild.id, userId, game.id);
 
-    const pending = await listPendingJoinRequests(db, guild.id, squad.id);
-    if (pending.some((request) => request.userId === userId)) {
-      throw new UserFacingError('Seu pedido já está com o squad. Agora é com eles.', {
-        code: 'REQUEST_PENDING',
-      });
+    const open = await listOpenJoinRequests(db, guild.id, squad.id);
+    const mine = open.find((request) => request.userId === userId);
+    if (mine) {
+      throw new UserFacingError(
+        mine.status === 'invited'
+          ? 'Você já tem um convite deste squad esperando resposta: responda na conversa privada do convite.'
+          : 'Seu pedido já está com o squad. Agora é com eles.',
+        { code: 'REQUEST_PENDING' },
+      );
     }
     const since = new Date(this.ctx.now() - config.reproposeCooldownDays * DAY_MS);
     const recent = await listRecentJoinRequestKeys(db, guild.id, since);
@@ -207,15 +212,20 @@ export class SearchService {
       });
     }
 
-    const request = await this.ctx.parts.requests.create(guild, squad, userId, 'manual');
-    if (!request) {
+    const sent = await this.ctx.parts.requests.open(guild, squad, userId);
+    if (sent.outcome === 'exists') {
+      throw new UserFacingError('Seu pedido já está com o squad. Agora é com eles.', {
+        code: 'REQUEST_PENDING',
+      });
+    }
+    if (sent.outcome === 'failed') {
       log.warn({ guildId: guild.id, squadId: squad.id, userId }, 'pedido manual não saiu');
       throw new UserFacingError(
         'Não consegui mandar o pedido para o squad agora. Tente de novo mais tarde.',
         { code: 'REQUEST_FAILED' },
       );
     }
-    return { request, squad };
+    return { request: sent.request, squad };
   }
 
   private async requireProfile(

@@ -1,9 +1,12 @@
-import { countCells } from '@goodbot/shared';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { countCells, tallyJoinVote } from '@goodbot/shared';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, UserSelectMenuBuilder } from 'discord.js';
 
 import {
   boraButtonId,
   confirmLeaveButtonId,
+  inviteButtonId,
+  invitePickButtonId,
+  inviteUserSelectId,
   joinButtonId,
   keepButtonId,
   leaveButtonId,
@@ -29,6 +32,7 @@ import type {
 import type {
   SquadAnswers,
   SquadBlockConfig,
+  SquadCell,
   SquadProfileStatus,
   SquadRequestStatus,
 } from '@goodbot/shared';
@@ -194,6 +198,7 @@ function upcomingText(upcoming: GuideView['upcoming']): string {
 const GUIDE_HOW_TO = [
   '• Quer jogar? Aperte **BORA** ou use `/bora hoje 21h`. Eu chamo o squad, reservo uma sala um pouco antes e, na hora, puxo quem estiver em outro voice.',
   '• Na mensagem da jogatina tem **VOU**, **NÃO VOU** e **CANCELAR**. Depois que ela começa, **REPETIR** marca a mesma hora na semana seguinte.',
+  '• Amigo de fora? **CONVIDAR** ou `/squad convidar`: quem vocês chamam entra sem votação. Quem chega pela busca passa pelo voto de vocês.',
   '• Nome do squad: **RENOMEAR**. Para sair: **SAIR DO SQUAD**.',
 ].join('\n');
 
@@ -240,7 +245,7 @@ export function guideMessage(view: GuideView): BaseMessageOptions {
           name: 'Vagas',
           value:
             open > 0
-              ? `${open === 1 ? '1 aberta' : `${String(open)} abertas`}. Quando aparecer gente com horário parecido, eu mando o pedido para cá.`
+              ? `${open === 1 ? '1 aberta' : `${String(open)} abertas`}. Quando aparecer gente com horário parecido, eu convido e vocês votam aqui.`
               : 'Squad completo.',
         },
         {
@@ -260,6 +265,10 @@ export function guideMessage(view: GuideView): BaseMessageOptions {
       .setCustomId(boraButtonId(squad.id))
       .setLabel('BORA')
       .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(invitePickButtonId(squad.id))
+      .setLabel('CONVIDAR')
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(renameButtonId(squad.id))
       .setLabel('RENOMEAR')
@@ -458,22 +467,146 @@ export function adminActionDm(view: AdminDmView): BaseMessageOptions {
   };
 }
 
-// ── pedido de entrada ───────────────────────────────────────────────────────
+// ── entrada num squad existente ─────────────────────────────────────────────
 
-export type JoinRequestState = 'pending' | 'accepted' | 'declined' | 'expired';
+/**
+ * Em que pé está o convite, visto por quem foi convidado. `refused` junta a
+ * recusa do squad e a votação que venceu sem aprovação; `closed` é a vaga que
+ * sumiu antes (squad cheio ou arquivado, ou a pessoa no teto de squads).
+ */
+export type InviteState =
+  | 'invited'
+  | 'voting'
+  | 'joined'
+  | 'passed'
+  | 'refused'
+  | 'expired'
+  | 'closed';
 
-export interface JoinRequestView {
-  request: Pick<SquadJoinRequest, 'id' | 'userId' | 'declinedIds' | 'decidedBy'>;
-  game: Pick<SquadGame, 'fields'>;
-  answers: SquadAnswers;
-  memberCount: number;
-  state: JoinRequestState;
+export interface InviteView {
+  request: Pick<SquadJoinRequest, 'id' | 'userId' | 'invitedBy' | 'expiresAt'>;
+  squad: Pick<Squad, 'name' | 'textChannelId'>;
+  game: Pick<SquadGame, 'name' | 'groupSize'>;
+  memberIds: readonly string[];
+  state: InviteState;
   embedColor: number;
+  /** Só o primeiro envio chama o candidato; a reedição não pinga. */
+  mentionCandidate: boolean;
 }
 
+function inviteDescription(view: InviteView): string {
+  const squad = `**${view.squad.name}**`;
+  switch (view.state) {
+    case 'invited':
+      return view.request.invitedBy
+        ? `${mention(view.request.invitedBy)} chamou você para o squad ${squad} de **${view.game.name}**. Aperte **ENTRAR** e você já está dentro.`
+        : `O squad ${squad} de **${view.game.name}** tem vaga e joga em horários parecidos com os seus. Quer entrar? Aperte **ENTRAR** e o squad vota: com metade dele a favor, você entra.`;
+    case 'voting':
+      return `Pedido enviado ao ${squad}. O squad está votando, e eu aviso aqui quando decidirem.`;
+    case 'joined': {
+      const where = channelOf(view.squad);
+      return where ? `Você entrou no ${squad}. A casa do squad é ${where}.` : `Você entrou no ${squad}.`;
+    }
+    case 'passed':
+      return `Você passou neste convite para o ${squad}.`;
+    case 'refused':
+      return `Não rolou desta vez: o ${squad} não abriu a vaga para você.`;
+    case 'expired':
+      return `Este convite para o ${squad} expirou sem resposta.`;
+    case 'closed':
+      return `Este convite foi encerrado: a vaga no ${squad} não está mais disponível.`;
+  }
+}
+
+/**
+ * O convite na thread privada do candidato (a fase 1 da entrada). Mostra o
+ * squad, quem está nele e o prazo; os membros aparecem sem ser chamados.
+ */
+export function inviteMessage(view: InviteView): BaseMessageOptions {
+  const live = view.state === 'invited' || view.state === 'voting';
+  const fields: APIEmbedField[] = [];
+  if (live) {
+    fields.push(
+      { name: 'Membros', value: mentionList(view.memberIds) },
+      {
+        name: 'Tamanho',
+        value: `${String(view.memberIds.length)} de ${String(view.game.groupSize)} jogadores`,
+        inline: true,
+      },
+      { name: 'Prazo', value: timestamp(view.request.expiresAt, 'R'), inline: true },
+    );
+  }
+  const mentioned = view.mentionCandidate ? [view.request.userId] : [];
+  return {
+    content: mentioned.map(mention).join(' '),
+    embeds: [
+      infoEmbed(
+        {
+          title: 'Convite para squad',
+          description: inviteDescription(view),
+          ...(fields.length > 0 ? { fields } : {}),
+          footer: SQUADS_FOOTER,
+        },
+        view.embedColor,
+      ),
+    ],
+    components:
+      view.state === 'invited'
+        ? buttons(
+            new ButtonBuilder()
+              .setCustomId(inviteButtonId('accept', view.request.id))
+              .setLabel('ENTRAR')
+              .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+              .setCustomId(inviteButtonId('pass', view.request.id))
+              .setLabel('PASSO')
+              .setStyle(ButtonStyle.Secondary),
+          )
+        : [],
+    allowedMentions: { users: mentioned },
+  };
+}
+
+/**
+ * O fim da votação para quem esperava por ela, na thread do convite. É uma
+ * mensagem à parte porque editar o convite não notifica ninguém.
+ */
+export function candidateNoticeMessage(view: {
+  userId: string;
+  squad: Pick<Squad, 'name'>;
+  state: 'refused' | 'closed';
+}): BaseMessageOptions {
+  const text =
+    view.state === 'refused'
+      ? `não rolou desta vez: o **${view.squad.name}** não abriu a vaga para você.`
+      : `a vaga no **${view.squad.name}** não está mais disponível, então o pedido foi encerrado.`;
+  return {
+    content: `${mention(view.userId)} ${text}`,
+    allowedMentions: { users: [view.userId] },
+  };
+}
+
+export type JoinVoteState = 'open' | 'accepted' | 'declined' | 'expired' | 'closed';
+
+export interface JoinVoteView {
+  request: Pick<SquadJoinRequest, 'id' | 'userId' | 'acceptedIds' | 'declinedIds' | 'expiresAt'>;
+  memberIds: readonly string[];
+  game: Pick<SquadGame, 'fields'>;
+  answers: SquadAnswers;
+  /** A célula em que o candidato joga com mais membros; `null` = nenhuma em comum. */
+  slot: SquadCell | null;
+  blocks: readonly SquadBlockConfig[];
+  state: JoinVoteState;
+  embedColor: number;
+  /** Só o primeiro envio chama os membros; o voto reedita sem pingar. */
+  mentionMembers: boolean;
+}
+
+/** Respostas de `select` e `tags`. Texto livre fica de fora: é do perfil, não da votação. */
 function answerFields(game: Pick<SquadGame, 'fields'>, answers: SquadAnswers): APIEmbedField[] {
   const fields: APIEmbedField[] = [];
   for (const field of game.fields) {
+    if (field.type === 'text') continue;
     const value = Object.hasOwn(answers, field.key) ? answers[field.key] : undefined;
     const text = Array.isArray(value) ? value.join(', ') : (value ?? '');
     if (!text) continue;
@@ -482,40 +615,54 @@ function answerFields(game: Pick<SquadGame, 'fields'>, answers: SquadAnswers): A
   return fields;
 }
 
-function joinRequestDescription(view: JoinRequestView): string {
+function joinVoteDescription(view: JoinVoteView): string {
   const candidate = mention(view.request.userId);
   switch (view.state) {
-    case 'pending':
-      return `${candidate} procura squad e joga em horários parecidos com os de vocês. Basta um de vocês aceitar.`;
+    case 'open':
+      return `${candidate} quer entrar no squad e joga em horários parecidos com os de vocês. Votem aqui: com metade do squad a favor, entra. Se o prazo acabar, decide quem votou.`;
     case 'accepted':
-      return view.request.decidedBy
-        ? `${candidate} entrou no squad. Aceito por ${mention(view.request.decidedBy)}.`
-        : `${candidate} entrou no squad.`;
+      return `${candidate} entrou no squad pelo voto de vocês.`;
     case 'declined':
-      return `Pedido de ${candidate} recusado pelo squad.`;
+      return `O squad recusou a entrada de ${candidate}.`;
     case 'expired':
-      return `Pedido de ${candidate} encerrado sem decisão.`;
+      return `A votação sobre ${candidate} acabou no prazo sem aprovação.`;
+    case 'closed':
+      return `A votação sobre ${candidate} foi encerrada: a vaga não está mais disponível.`;
   }
 }
 
 /**
- * Pedido no canal do squad. Silencioso: ninguém é pingado, e o candidato só
- * descobre quando é aceito (o canal é privado, ele nem vê esta mensagem).
+ * A votação no canal do squad (a fase 2 da entrada), com a contagem viva. Quem
+ * votou o quê não aparece, só quantos: o voto é de cada um.
  */
-export function joinRequestMessage(view: JoinRequestView): BaseMessageOptions {
+export function joinVoteMessage(view: JoinVoteView): BaseMessageOptions {
+  const { request } = view;
+  const tally = tallyJoinVote({
+    memberIds: view.memberIds,
+    forIds: request.acceptedIds,
+    againstIds: request.declinedIds,
+  });
   const fields = answerFields(view.game, view.answers);
-  if (view.state === 'pending' && view.request.declinedIds.length > 0) {
-    fields.push({
-      name: 'Recusas',
-      value: `${String(view.request.declinedIds.length)} de ${String(view.memberCount)}`,
-    });
+  if (view.state === 'open' && view.slot) {
+    fields.push({ name: 'Joga com vocês em', value: slotText(view.slot, view.blocks) });
   }
+  const votes = `${String(tally.inFavor)} a favor, ${String(tally.against)} contra`;
+  fields.push({
+    name: 'Votos',
+    value: view.state === 'open' ? `${votes}, ${String(tally.missing)} sem votar` : votes,
+  });
+  if (view.state === 'open') {
+    fields.push({ name: 'Prazo', value: timestamp(request.expiresAt, 'R') });
+  }
+
+  const mentioned = view.mentionMembers ? [...view.memberIds] : [];
   return {
+    content: mentioned.map(mention).join(' '),
     embeds: [
       infoEmbed(
         {
           title: 'Pedido para entrar',
-          description: joinRequestDescription(view),
+          description: joinVoteDescription(view),
           fields,
           footer: SQUADS_FOOTER,
         },
@@ -523,19 +670,35 @@ export function joinRequestMessage(view: JoinRequestView): BaseMessageOptions {
       ),
     ],
     components:
-      view.state === 'pending'
+      view.state === 'open'
         ? buttons(
             new ButtonBuilder()
-              .setCustomId(requestButtonId('accept', view.request.id))
-              .setLabel('ACEITAR')
+              .setCustomId(requestButtonId('for', request.id))
+              .setLabel('A FAVOR')
               .setStyle(ButtonStyle.Success),
             new ButtonBuilder()
-              .setCustomId(requestButtonId('decline', view.request.id))
-              .setLabel('RECUSAR')
+              .setCustomId(requestButtonId('against', request.id))
+              .setLabel('CONTRA')
               .setStyle(ButtonStyle.Secondary),
           )
         : [],
-    allowedMentions: { parse: [] },
+    allowedMentions: { users: mentioned },
+  };
+}
+
+/** O passo do CONVIDAR do guia: escolher a pessoa num select, sem digitar nome. */
+export function invitePickMessage(squad: Pick<Squad, 'id' | 'name'>): BaseMessageOptions {
+  return {
+    content: `Quem você quer chamar para o **${squad.name}**? A pessoa recebe o convite numa conversa privada e entra assim que aceitar.`,
+    components: [
+      new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(
+        new UserSelectMenuBuilder()
+          .setCustomId(inviteUserSelectId(squad.id))
+          .setPlaceholder('Escolha a pessoa')
+          .setMinValues(1)
+          .setMaxValues(1),
+      ),
+    ],
   };
 }
 
@@ -934,7 +1097,7 @@ export function joinableSquadsMessage(view: JoinableView): BaseMessageOptions {
         {
           title: 'Squads com vaga',
           description:
-            'Estes squads têm vaga e jogam em horários parecidos com os seus. O pedido vai para o canal do squad, e basta alguém de lá aceitar.',
+            'Estes squads têm vaga e jogam em horários parecidos com os seus. O pedido vai para o canal do squad, e eles votam: com metade a favor, você entra.',
           fields: entries.map((entry, index) => ({
             name: `${String(index + 1)}. ${entry.squad.name}`,
             value: `${String(entry.memberCount)} de ${String(view.game.groupSize)} jogadores`,
@@ -985,22 +1148,57 @@ export function proposalDeclinedText(outcome: 'declined' | 'already'): string {
     : 'Você já tinha passado nesta proposta.';
 }
 
-export function joinRequestDecisionText(
-  decision:
-    | { outcome: 'accepted' | 'declined' | 'recorded' }
+export function inviteAnswerText(
+  result:
+    | { outcome: 'joined'; squad: Pick<Squad, 'name' | 'textChannelId'> }
+    | { outcome: 'voting' | 'passed' }
     | { outcome: 'already'; status: SquadRequestStatus },
 ): string {
-  switch (decision.outcome) {
-    case 'accepted':
-      return 'Pedido aceito. A pessoa já está no squad.';
-    case 'declined':
-      return 'Pedido recusado.';
-    case 'recorded':
-      return 'Sua recusa foi anotada. O pedido segue aberto para o resto do squad.';
+  switch (result.outcome) {
+    case 'joined': {
+      const where = channelOf(result.squad);
+      const name = `**${result.squad.name}**`;
+      return where ? `Você entrou no ${name}: ${where}.` : `Você entrou no ${name}.`;
+    }
+    case 'voting':
+      return 'Pedido enviado ao squad. Eu aviso aqui quando decidirem.';
+    case 'passed':
+      return 'Anotado: você passou neste convite.';
     case 'already':
-      if (decision.status === 'accepted') return 'Este pedido já foi aceito.';
-      if (decision.status === 'declined') return 'Este pedido já foi recusado.';
-      return 'Este pedido já foi encerrado.';
+      switch (result.status) {
+        case 'accepted':
+          return 'Você já entrou neste squad.';
+        case 'pending':
+          return 'Seu pedido já está com o squad. Eu aviso aqui quando decidirem.';
+        case 'expired':
+          return 'Este convite expirou.';
+        default:
+          return 'Este convite já foi encerrado.';
+      }
+  }
+}
+
+export function joinVoteText(
+  result:
+    | { outcome: 'recorded'; inFavor: boolean }
+    | { outcome: 'unchanged' | 'accepted' | 'declined' | 'closed' }
+    | { outcome: 'already'; status: SquadRequestStatus },
+): string {
+  switch (result.outcome) {
+    case 'recorded':
+      return result.inFavor ? 'Voto registrado: a favor.' : 'Voto registrado: contra.';
+    case 'unchanged':
+      return 'Você já tinha votado assim.';
+    case 'accepted':
+      return 'Voto registrado. Deu metade do squad a favor: a pessoa já entrou.';
+    case 'declined':
+      return 'Voto registrado. O squad recusou a entrada.';
+    case 'closed':
+      return 'Voto registrado, mas a vaga não está mais disponível: a votação foi encerrada.';
+    case 'already':
+      if (result.status === 'accepted') return 'Esta votação já acabou: a pessoa entrou.';
+      if (result.status === 'declined') return 'Esta votação já acabou: o squad recusou.';
+      return 'Esta votação já foi encerrada.';
   }
 }
 
@@ -1037,7 +1235,11 @@ export function renamedText(result: { squad: Pick<Squad, 'name'>; note: string |
 export const KEEP_ALIVE_TEXT = 'Anotado! O squad continua ativo.';
 
 export function joinRequestSentText(squad: Pick<Squad, 'name'>): string {
-  return `Pedido enviado ao **${squad.name}**. Se alguém de lá aceitar, você entra e é chamado no canal do squad.`;
+  return `Pedido enviado ao **${squad.name}**. O squad vota: com metade dele a favor, você entra e é chamado no canal do squad.`;
+}
+
+export function inviteSentText(userId: string, squad: Pick<Squad, 'name'>): string {
+  return `Convite enviado para ${mention(userId)}. A pessoa recebe o convite numa conversa privada no canal de busca e entra no **${squad.name}** assim que aceitar.`;
 }
 
 export function searchMessagePublishedText(channelId: string): string {

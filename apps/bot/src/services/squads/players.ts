@@ -4,7 +4,7 @@ import {
   getSquadGame,
   getSquadProfile,
   listOpenSquadProposals,
-  listPendingJoinRequests,
+  listOpenJoinRequests,
   listSquadMembers,
   listSquads,
   listSquadsForUser,
@@ -169,7 +169,7 @@ export class PlayerAdminService {
       }
       const live = await listSquads(db, guild.id, { gameId, statuses: ['open', 'full'] });
       const liveIds = new Set(live.map((squad) => squad.id));
-      const requests = await listPendingJoinRequests(db, guild.id);
+      const requests = await listOpenJoinRequests(db, guild.id);
       if (requests.some((request) => request.userId === userId && liveIds.has(request.squadId))) {
         throw new UserFacingError(
           'Esta pessoa tem um pedido de entrada esperando resposta num squad deste jogo.',

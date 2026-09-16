@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
-import { HOUR_MS, joinRequestKey, MINUTE_MS, pairKey } from '@goodbot/shared';
+import {
+  HOUR_MS,
+  joinRequestKey,
+  MINUTE_MS,
+  pairKey,
+  SQUAD_OPEN_REQUEST_STATUSES,
+} from '@goodbot/shared';
 import { TransactionRollbackError } from 'drizzle-orm';
 import { vi } from 'vitest';
 
@@ -15,7 +21,13 @@ import type {
   SquadProposal,
   SquadSession,
 } from '@goodbot/db';
-import type { SquadAnswers, SquadProfileStatus, SquadStatus } from '@goodbot/shared';
+import type {
+  SquadAnswers,
+  SquadOpenRequestStatus,
+  SquadProfileStatus,
+  SquadRequestStatus,
+  SquadStatus,
+} from '@goodbot/shared';
 import type { Mock } from 'vitest';
 
 /**
@@ -86,6 +98,9 @@ const findProfile = (guildId: string, userId: string, gameId: string) =>
       profile.guildId === guildId && profile.userId === userId && profile.gameId === gameId,
   );
 
+const isOpen = (status: SquadRequestStatus) =>
+  (SQUAD_OPEN_REQUEST_STATUSES as readonly string[]).includes(status);
+
 const byUserId = (a: { userId: string }, b: { userId: string }) =>
   a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0;
 
@@ -150,6 +165,28 @@ export const impl = {
       };
       store.profiles.push(row);
     }
+    return copy(row);
+  },
+  async createSquadProfileIfMissing(
+    _db: unknown,
+    input: {
+      guildId: string;
+      userId: string;
+      gameId: string;
+      availability: number;
+      answers: SquadAnswers;
+      status?: SquadProfileStatus;
+    },
+  ) {
+    if (findProfile(input.guildId, input.userId, input.gameId)) return null;
+    const row: SquadProfile = {
+      ...input,
+      status: input.status ?? 'searching',
+      lastMatchedAt: null,
+      createdAt: stamp(),
+      updatedAt: stamp(),
+    };
+    store.profiles.push(row);
     return copy(row);
   },
   async getSquadProfile(_db: unknown, guildId: string, userId: string, gameId: string) {
@@ -516,19 +553,33 @@ export const impl = {
   // ── pedidos de entrada
   async createSquadJoinRequest(
     _db: unknown,
-    input: { guildId: string; squadId: string; userId: string },
+    input: {
+      guildId: string;
+      squadId: string;
+      userId: string;
+      status: SquadOpenRequestStatus;
+      invitedBy?: string | null;
+      expiresAt: Date;
+    },
   ) {
-    const pending = store.requests.some(
-      (r) => r.squadId === input.squadId && r.userId === input.userId && r.status === 'pending',
+    const open = store.requests.some(
+      (r) => r.squadId === input.squadId && r.userId === input.userId && isOpen(r.status),
     );
-    if (pending) return null;
+    if (open) return null;
     const row: SquadJoinRequest = {
       id: randomUUID(),
-      ...input,
+      guildId: input.guildId,
+      squadId: input.squadId,
+      userId: input.userId,
       messageId: null,
-      status: 'pending',
+      status: input.status,
+      invitedBy: input.invitedBy ?? null,
+      threadId: null,
+      inviteMessageId: null,
+      acceptedIds: [],
       declinedIds: [],
       decidedBy: null,
+      expiresAt: input.expiresAt,
       createdAt: stamp(),
       decidedAt: null,
     };
@@ -546,39 +597,99 @@ export const impl = {
     row.messageId = messageId;
     return copy(row);
   },
+  async setSquadJoinRequestInvite(
+    _db: unknown,
+    guildId: string,
+    requestId: string,
+    input: { threadId: string; inviteMessageId: string },
+  ) {
+    const row = findRequest(guildId, requestId);
+    if (!row) return null;
+    Object.assign(row, input);
+    return copy(row);
+  },
   async getSquadJoinRequest(_db: unknown, guildId: string, requestId: string) {
     return maybe(findRequest(guildId, requestId));
   },
-  async declineSquadJoinRequestBy(
+  async startSquadJoinVote(_db: unknown, guildId: string, requestId: string, expiresAt: Date) {
+    const row = findRequest(guildId, requestId);
+    if (row?.status !== 'invited') return null;
+    row.status = 'pending';
+    row.expiresAt = expiresAt;
+    return copy(row);
+  },
+  async voteSquadJoinRequest(
     _db: unknown,
     guildId: string,
     requestId: string,
     userId: string,
+    inFavor: boolean,
   ) {
     const row = findRequest(guildId, requestId);
-    if (!row || row.status !== 'pending' || row.declinedIds.includes(userId)) return null;
-    row.declinedIds = [...row.declinedIds, userId];
+    const target = inFavor ? row?.acceptedIds : row?.declinedIds;
+    if (row?.status !== 'pending' || target?.includes(userId)) return null;
+    if (inFavor) {
+      row.acceptedIds = [...row.acceptedIds, userId];
+      row.declinedIds = row.declinedIds.filter((id) => id !== userId);
+    } else {
+      row.declinedIds = [...row.declinedIds, userId];
+      row.acceptedIds = row.acceptedIds.filter((id) => id !== userId);
+    }
     return copy(row);
   },
   async decideSquadJoinRequest(
     _db: unknown,
     guildId: string,
     requestId: string,
-    input: { status: 'accepted' | 'declined' | 'expired'; decidedBy: string | null; at: Date },
+    input: {
+      status: 'accepted' | 'declined' | 'expired';
+      decidedBy: string | null;
+      at: Date;
+      from?: readonly SquadOpenRequestStatus[];
+    },
   ) {
     const row = findRequest(guildId, requestId);
-    if (!row || row.status !== 'pending') return null;
+    const from: readonly string[] = input.from ?? SQUAD_OPEN_REQUEST_STATUSES;
+    if (!row || !from.includes(row.status)) return null;
     row.status = input.status;
     row.decidedBy = input.decidedBy;
     row.decidedAt = input.at;
     return copy(row);
   },
-  async listPendingJoinRequests(_db: unknown, guildId: string, squadId?: string) {
+  async listOpenJoinRequests(_db: unknown, guildId: string, squadId?: string) {
     return copy(
       store.requests.filter(
-        (r) =>
-          r.guildId === guildId && r.status === 'pending' && (!squadId || r.squadId === squadId),
+        (r) => r.guildId === guildId && isOpen(r.status) && (!squadId || r.squadId === squadId),
       ),
+    );
+  },
+  async listDueJoinRequests(_db: unknown, guildId: string, now: Date) {
+    return copy(
+      store.requests
+        .filter(
+          (r) =>
+            r.guildId === guildId && isOpen(r.status) && r.expiresAt.getTime() <= now.getTime(),
+        )
+        .sort((a, b) => a.expiresAt.getTime() - b.expiresAt.getTime()),
+    );
+  },
+  async listRecentJoinRequestsFor(
+    _db: unknown,
+    guildId: string,
+    squadId: string,
+    userId: string,
+    since: Date,
+  ) {
+    return copy(
+      store.requests
+        .filter(
+          (r) =>
+            r.guildId === guildId &&
+            r.squadId === squadId &&
+            r.userId === userId &&
+            r.createdAt.getTime() >= since.getTime(),
+        )
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
     );
   },
   async listRecentJoinRequestKeys(_db: unknown, guildId: string, since: Date) {
@@ -589,17 +700,6 @@ export const impl = {
       }
     }
     return [...keys];
-  },
-  async expireSquadJoinRequestsBefore(_db: unknown, guildId: string, before: Date) {
-    const expired = store.requests.filter(
-      (r) =>
-        r.guildId === guildId && r.status === 'pending' && r.createdAt.getTime() < before.getTime(),
-    );
-    for (const row of expired) {
-      row.status = 'expired';
-      row.decidedAt = stamp();
-    }
-    return copy(expired);
   },
 
   // ── sessões
