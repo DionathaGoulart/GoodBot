@@ -203,11 +203,19 @@ roda na hora.
 Os comandos são atalho: tudo o que eles fazem está também num botão de uma
 mensagem do bot (mensagem fixa, guia do squad, mensagem da jogatina).
 
+**Squad e party.** Cada jogo tem dois tamanhos: o do squad, que é o grupo
+inteiro (até 20), e o da party, quem joga junto numa partida (até 10, nunca mais
+que o squad). No Helldivers 2 a party é 4, e o squad pode ter 8 ou 12 que se
+dividem conforme quem aparece. Os dois ficam no cadastro do jogo, em
+**Squads > `JOGOS`** ("Tamanho do squad" e "Jogam por vez"). Subir o tamanho do
+squad reabre na hora a vaga dos squads que estavam cheios.
+
 **Match.** Só entre perfis que estão procurando, no mesmo jogo. Cada célula da
 grade em comum vale 1 ponto e cada resposta igual num campo "pesa no match" vale
 3; resposta diferente num campo "precisa bater" separa a dupla, e texto livre
 nunca conta. O grupo inteiro precisa dividir pelo menos uma célula, para ter um
-horário em que todos joguem juntos. A mesma dupla não é proposta de novo por 14 dias
+horário em que todos joguem juntos, e por isso a turma proposta tem no máximo uma
+party: o resto do squad chega por pedido de entrada. A mesma dupla não é proposta de novo por 14 dias
 (`reproposeCooldownDays`). Antes de propor grupo novo, o matcher olha as vagas
 dos squads abertos: quem divide uma célula com gente suficiente do squad para
 fechar uma party vira um pedido de entrada no canal do squad, e só fica sabendo
@@ -235,6 +243,9 @@ usa `/bora hoje 21h`. O bot entende `agora`, `hoje 21h`, `hoje 21:30`,
 autocomplete mostra o que ele entendeu antes de enviar. Quem marcou já vai. A
 mensagem da jogatina chama o squad e tem `VOU`, `NÃO VOU` e `CANCELAR`; ela dura
 3 h (`sessionHours`) e cada squad tem até 5 marcadas (`maxUpcomingSessions`).
+A contagem diz se a party fechou ("fechada, 4 de 4") ou, com mais gente que a
+party, quantas dá ("dá 2 parties: 7 vão e cada partida leva até 4"); o bot
+reserva um voice só e deixa o squad se dividir.
 Meia hora antes (`reminderMinutesBefore`) um voice livre do pool fica reservado
 (`@everyone` sem `Connect`, os membros com) e sai um lembrete curto. Jogatina
 marcada para daqui a pouco já sai com sala; marcada para `agora`, já começa. Na

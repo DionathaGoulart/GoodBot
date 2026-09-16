@@ -8,10 +8,13 @@ Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (
 > próprio squad, com `/bora` ou o botão **BORA**. A sessão semanal automática
 > saiu; **REPETIR** cobre a rotina. Cada squad ganhou um guia fixo, pinado no
 > canal, com membros, próximas jogatinas e os botões do squad, e por isso o
-> convite passou a pedir `PinMessages`. O que mudou no documento: §5.11
-> (proposta, pedido de entrada, jogatina, guia, ciclo de vida e relógio), a
-> página na §6.2, `squads` e `squad_sessions` na §8, `/bora` na §9.1, a §10 e
-> um risco na §11. O que **não** mudou: o perfil, o match manual, a gestão de
+> convite passou a pedir `PinMessages`. O jogo ganhou dois tamanhos: o do
+> squad (o grupo, até 20) e o da party (quem joga junto numa partida, até 10).
+> O match propõe uma party, o squad cresce por pedido de entrada e a jogatina
+> diz quantas parties dá. O que mudou no documento: §5.11 (tamanhos, match,
+> proposta, pedido de entrada, jogatina, guia, ciclo de vida e relógio), a
+> página na §6.2, `squad_games`, `squads` e `squad_sessions` na §8, `/bora` na
+> §9.1, a §10 e um risco na §11. O que **não** mudou: o perfil, a gestão de
 > jogadores e os outros módulos.
 
 > **v1.5: squads fixos.** Entrou o módulo `squads` (§5.11): perfil de jogador
@@ -576,12 +579,24 @@ grade ficaria no match com a agenda vazia. A grade em edição não tem estado n
 servidor: a máscara viaja no `custom_id` de cada componente, e um restart nunca
 perde uma grade pela metade.
 
+**Squad e party.** Cada jogo tem dois tamanhos. O **squad** é o grupo inteiro
+(`group_size`, de 2 a 20) e a **party** é quem joga junto numa partida
+(`party_size`, de 2 a 10, nunca maior que o squad). Um jogo de quatro por
+partida pode ter squads de doze, que se dividem conforme quem aparece na
+jogatina. Não existe entidade "clã": o squad grande é o clã. Os dois tamanhos
+são do jogo, e não do squad, porque quem sabe quantos cabem numa partida é o
+jogo. O squad enche no `group_size`; mudar esse número no painel reabre (ou
+fecha) a vaga dos squads vivos na hora, porque o status só muda sozinho quando
+alguém entra ou sai.
+
 **Match.** Por jogo, só entre perfis `searching`, fora de proposta aberta e
 abaixo do teto de squads por pessoa (`maxSquadsPerUser`, padrão 1). Cada célula
 em comum vale 1 ponto e cada resposta igual em campo `soft` vale 3; campo
 `hard` diferente impede a dupla. Um grupo precisa dividir **pelo menos uma
 célula como grupo**, porque sobreposição dupla a dupla não garante um horário
-em que todos joguem juntos. O resultado é determinístico: os mesmos perfis, em qualquer ordem,
+em que todos joguem juntos. A turma proposta tem no máximo uma **party**, e não
+o squad inteiro: um horário comum a doze agendas quase nunca existe, e as vagas
+além da party chegam por pedido de entrada. O resultado é determinístico: os mesmos perfis, em qualquer ordem,
 formam os mesmos grupos. A mesma dupla não é reproposta no mesmo jogo antes de
 `reproposeCooldownDays` (14). Antes de propor grupo novo, o matcher preenche as
 vagas dos squads `open` com pedidos de entrada (abaixo). Ele roda ao salvar a
@@ -611,7 +626,8 @@ perdida.
 `/squad procurar` lista os squads em que a pessoa cabe (vaga livre, grade que
 dá party com os membros, nenhum `hard` batendo de frente com um membro) e
 oferece o pedido. Dar party é existir uma célula que a pessoa divide com pelo
-menos `min(tamanho do squad, membros) - 1` membros (`fitsSquad`, em `shared`);
+menos `min(party, membros) - 1` membros (`fitsSquad`, em `shared`), e vaga livre
+é o squad abaixo do `group_size`;
 o matcher usa a mesma regra para preencher vaga. O pedido aparece no canal privado do squad com **Aceitar /
 Recusar**: **basta um aceite**, e ele só é recusado quando todos os membros
 recusaram. O pedido que o matcher cria sozinho é silencioso para o candidato até
@@ -661,6 +677,13 @@ atualiza o guia. Dois pedidos para o mesmo minuto viram uma jogatina só (índic
 `maxUpcomingSessions` (5) jogatinas marcadas. Marcada para dentro da
 antecedência do lembrete, a jogatina já sai com sala; marcada para `agora`, já
 começa.
+
+A contagem também diz como quem vai cabe nas partidas, com a `party_size` do
+jogo lida na hora: com dois ou mais indo, "3 de 4, ainda cabe gente", "fechada,
+4 de 4" ou, passando da party, "dá 2 parties: 7 vão e cada partida leva até 4.
+Dividam-se.". A jogatina tem um voice só: o bot não separa ninguém, só avisa, e
+o aviso de dividir vai também na chamada do início, porque editar a mensagem
+não notifica.
 
 `reminderMinutesBefore` (30) antes do início:
 
@@ -726,7 +749,7 @@ não comporta e avisa do resto:
 | `IN_SQUAD_IN_GAME`     | bloqueia | membro de squad `open` ou `full` deste jogo, ou perfil `in_squad`        |
 | `IN_OPEN_PROPOSAL`     | bloqueia | está numa proposta aberta deste jogo e não passou                        |
 | `NO_COMMON_CELL`       | bloqueia | o grupo não divide nenhuma célula: não há horário para jogarem juntos    |
-| `GROUP_OVER_SIZE`      | avisa    | turma maior que o squad: quem aceitar primeiro fica com as vagas         |
+| `GROUP_OVER_SIZE`      | avisa    | turma maior que a party; passando também do squad, quem aceitar primeiro fica com as vagas |
 | `NOT_SEARCHING`        | avisa    | o perfil está `paused`                                                   |
 | `AT_SQUAD_LIMIT`       | avisa    | no teto de squads (`maxSquadsPerUser`): o aceite recusa até sair de um   |
 | `PAIR_COOLDOWN`        | avisa    | a dupla recebeu proposta dentro de `reproposeCooldownDays`               |
@@ -826,7 +849,8 @@ grava, escreve auditoria (§6.5), chama `invalidate` no bot, toast.
 - **Squads** (§5.11), em quatro abas. `CONFIGURAÇÃO`: canal de busca, cargo de
   ping, categoria, nome do canal, voices do pool, prazos, duração da jogatina,
   jogatinas marcadas por squad e as 4 faixas da grade, com o painel da mensagem fixa (publicar ou atualizar) no topo.
-  `JOGOS`: CRUD de jogo (nome, 2 a 10 jogadores por squad, ligado) com as até 5
+  `JOGOS`: CRUD de jogo (nome, tamanho do squad de 2 a 20, quantos jogam por
+  vez de 2 a 10 e nunca mais que o squad, ligado) com as até 5
   perguntas do perfil, e o botão de rodar o match agora; apagar jogo é recusado
   enquanto ele tiver squad `open|full`, porque a cascata apagaria as linhas e
   deixaria os canais no Discord. `SQUADS`: os squads vivos com membros, próxima
@@ -1147,8 +1171,12 @@ audit_logs        (id, guild_id, actor_id, actor_tag, action, target_type, targe
                    -- append-only
 dashboard_sessions? -- não: Auth.js JWT stateless; se migrar para DB sessions, adapter Drizzle
 meta              (key PK, value jsonb)  -- hash do manifesto de comandos, versão de schema de config, etc.
-squad_games       (id uuid PK, guild_id, name, squad_size, enabled, fields jsonb, created_at, updated_at)
+squad_games       (id uuid PK, guild_id, name, group_size, party_size, squad_size?, enabled, fields jsonb,
+                   created_at, updated_at)
                    unique (guild_id, name)
+                   -- `group_size`: teto do squad; `party_size` (<= group_size): quem joga junto, o tamanho
+                   -- da turma proposta. `squad_size`: tamanho único da v1.5, nulo e sem escrita desde a
+                   -- v1.6, sai junto com `squads.day`/`block`
                    -- `fields`: até 5 perguntas {key, label, type select|tags|text, options[], required,
                    -- match hard|soft|none}; o bot lê jogos sem cache, então o painel grava sem invalidate
 squad_profiles    (guild_id, user_id, game_id FK, PK(guild_id,user_id,game_id), availability integer,

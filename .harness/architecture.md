@@ -377,7 +377,7 @@ src/
                    logs, messages, misc, social, squads, stats, audit, enums,
                    relations
   repositories/    18 arquivos: uma função por consulta, nunca SQL solto fora
-drizzle/           14 migrations SQL versionadas
+drizzle/           16 migrations SQL versionadas
 ```
 
 33 tabelas. As centrais: `guilds`, `guild_registry`, `guild_settings`,
@@ -578,7 +578,7 @@ Quatro coisas nesse caminho não são gosto:
 botão da mensagem fixa ─▶ interactions/squads.ts ─▶ modal (respostas)
   ─▶ grade da semana (a máscara viaja no custom_id) ─▶ SquadService.saveAvailability
   ─▶ perfil `searching` ─▶ MatcherService.runFor(guild, jogo)
-  ─▶ proposeGroups (shared, puro) ─▶ thread privada + Aceito/Passo + INSERT squad_proposals
+  ─▶ proposeGroups (shared, puro, turma de até partySize) ─▶ thread privada + Aceito/Passo + INSERT squad_proposals
   ─▶ primeiro "Aceito": uma transação cria `squads` e reivindica a proposta
   ─▶ canal privado na categoria ─▶ GuideService.publish (guia pinado, chama os membros)
 ```
@@ -599,7 +599,7 @@ Três coisas nesses caminhos não são gosto:
 
 - **A regra mora em `shared`, o efeito no bot.** `squads/availability.ts`,
   `squads/match.ts`, `squads/when.ts` e `squads/zoned.ts` são puros: máscara da
-  grade, agrupamento determinístico, "cabe no squad" (`fitsSquad`), o "quando"
+  grade, agrupamento determinístico em parties, "cabe no squad" (`fitsSquad`), o "quando"
   do `/bora` e o relógio de parede no fuso da guild (com horário de verão). O painel e os testes usam
   as mesmas funções, sem Discord nem banco.
 - **A trava é do banco, não da memória.** Botão é clicado duas vezes e por

@@ -64,6 +64,14 @@ Regras que não se dobram:
   migration nova.
 - **`db:push` não é usado fora de dev.** Ele altera o banco sem deixar rastro
   em `drizzle/`, e aí o próximo `db:generate` gera um diff mentiroso.
+- **Coluna `NOT NULL` nova em tabela com linhas entra em três passos**: nula,
+  `UPDATE` de backfill, `SET NOT NULL`. O `db:generate` escreve um
+  `ADD COLUMN ... NOT NULL` sem default, que falha em produção no primeiro
+  registro existente (a `0015`, dos tamanhos do jogo, é o exemplo).
+- **Renomear ou apagar coluna que o código publicado lê espera uma versão.** A
+  migration roda antes do deploy do bot e do painel, então a coluna velha fica
+  nula e sem escrita, e sai na migration seguinte (`squads.day`/`block` e
+  `squad_games.squad_size`).
 - **Migration não roda no boot do bot.** É um passo da CI (`deploy.yml`), com a
   conexão direta do Supabase. Um bot que reiniciasse aplicando migration
   transformaria um restart em risco de schema.

@@ -178,7 +178,7 @@ O match manual dos squads é em dois passos, e quem confere a confirmação é o
 bot, não a tela:
 
 1. `POST /guilds/:guildId/squads/games/:gameId/manual/check` com
-   `{ actorId, userIds }` (2 a 10 pessoas, sem repetição) não escreve nada.
+   `{ actorId, userIds }` (2 a 20 pessoas, sem repetição) não escreve nada.
    Devolve as duplas com nota, a célula em comum com mais gente (`slot`), `blocks` e
    `warnings`, cada item com uma `key` estável (`CODE`, `CODE:userId` ou
    `CODE:idA:idB`). Tem teto próprio de 60/min por guild, porque revisar não

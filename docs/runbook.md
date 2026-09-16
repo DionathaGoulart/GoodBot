@@ -287,6 +287,18 @@ se vê nas primeiras horas é diferente do normal:
   (`created_by` nulo), com lembrete, voice e votos como antes. Depois delas,
   nenhuma nova nasce sozinha.
 
+A migration `0015` dá ao jogo os dois tamanhos, squad e party, copiando o
+tamanho antigo para os dois. Nada muda para quem já joga até alguém mexer no
+cadastro:
+
+- **Criar ou editar jogo falha durante o deploy.** Entre a migration e a
+  subida do painel novo, o painel antigo grava jogo sem `group_size`. Espere o
+  deploy terminar e salve de novo.
+- **Para ter squad maior que a party**, edite o jogo em **Squads > `JOGOS`** e
+  suba "Tamanho do squad". Os squads que estavam cheios voltam para a busca na
+  hora; o guia mostra o tamanho novo na próxima mudança do squad ou no passo
+  diário.
+
 ---
 
 ## Checklist mensal
