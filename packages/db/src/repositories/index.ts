@@ -4,6 +4,7 @@ export * from './cases';
 export * from './logs';
 export * from './automod';
 export * from './message-cache';
+export * from './capacity';
 export * from './audit';
 export * from './meta';
 export * from './reminders';

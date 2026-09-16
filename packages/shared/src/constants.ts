@@ -338,6 +338,17 @@ export const STATS_HOURLY_RETENTION_DAYS = 90;
 // `social_posts` não tem retenção de propósito: podar a linha faria uma
 // publicação antiga voltar a ser "nova" no feed e ser anunciada de novo.
 
+// ── Capacidade (PRD §7.2) ───────────────────────────────────────────────────
+
+/** `mem_limit` do container do bot (`infra/docker-compose.yml`): passou, o Docker mata o processo. */
+export const BOT_MEMORY_LIMIT_BYTES = 384 * 1024 * 1024;
+/** Orçamento de RAM do bot. Acima dele o painel e o alerta avisam, antes de chegar no limite. */
+export const BOT_MEMORY_BUDGET_BYTES = 300 * 1024 * 1024;
+/** Cota do banco no free tier do Supabase. Cheio, o banco passa a só aceitar leitura. */
+export const DATABASE_QUOTA_BYTES = 500 * 1024 * 1024;
+/** A partir daqui o painel e o alerta avisam, com folga para agir antes da cota. */
+export const DATABASE_WARNING_BYTES = 400 * 1024 * 1024;
+
 // ── Redes sociais (PRD §5.8) ────────────────────────────────────────────────
 
 /** Contas por servidor. Cada conta são duas chamadas HTTP por passada. */

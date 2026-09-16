@@ -1,4 +1,4 @@
-import { createDb } from '@goodbot/db';
+import { createDb, getStorageUsage } from '@goodbot/db';
 import { subdomainUrl, VERSION } from '@goodbot/shared';
 import { sql } from 'drizzle-orm';
 
@@ -8,6 +8,7 @@ import { createClient } from './client';
 import { commands as commandList } from './commands/index';
 import { env } from './env';
 import { events } from './events/index';
+import { CapacityJob } from './jobs/capacity';
 import { DemoExpiryJob } from './jobs/demo-expiry';
 import { PendingExpiryJob } from './jobs/pending-expiry';
 import { RetentionJob } from './jobs/retention';
@@ -189,6 +190,8 @@ async function main(): Promise<void> {
       // está no feed voltar a ser "novo" e ser anunciado outra vez.
     ],
   });
+  // RAM do container e cota do Supabase: avisa antes de um dos dois parar o bot.
+  const capacity = new CapacityJob({ alerts, readStorage: () => getStorageUsage(db) });
   // A coleção nasce antes do `ctx` porque a API também a expõe (`GET /commands`).
   const commands = loadCommands(commandList);
   const readQueues = () => ({
@@ -280,6 +283,7 @@ async function main(): Promise<void> {
     demoExpiry.start();
     pendingExpiry.start();
     retention.start();
+    capacity.start();
     databaseProbe.start();
     alerts.emit({
       kind: 'boot',
@@ -319,6 +323,7 @@ async function main(): Promise<void> {
       demoExpiry.stop();
       pendingExpiry.stop();
       retention.stop();
+      capacity.stop();
       databaseProbe.stop();
       autorole.stop();
       await api.stop();
