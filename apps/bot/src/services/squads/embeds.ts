@@ -56,6 +56,21 @@ const MAX_FIELD_VALUE = 1024;
 export const NO_VOICE_NOTE =
   'Sem sala preferida: o pool de voices está cheio. Na jogatina eu reservo o voice que estiver livre.';
 export const NO_RESERVED_VOICE_NOTE = 'Sem sala reservada desta vez: usem qualquer voice livre.';
+/** O voice temporário some sozinho; quem está na jogatina precisa saber disso antes. */
+export const TEMPORARY_VOICE_NOTE =
+  'criada só para esta jogatina, some quando esvaziar depois do início';
+
+/** Teto do Discord para o nome de um canal. */
+const MAX_CHANNEL_NAME = 100;
+
+/**
+ * Nome do voice criado quando o pool está cheio. Ele nunca é renomeado (o
+ * Discord só deixa renomear duas vezes a cada dez minutos), então o nome é o
+ * do squad na hora da criação.
+ */
+export function temporaryVoiceName(squadName: string): string {
+  return `Jogatina · ${squadName}`.slice(0, MAX_CHANNEL_NAME);
+}
 /** Quantas jogatinas o guia lista; o resto vira "e mais N". */
 export const GUIDE_SESSIONS_LISTED = 3;
 export const LEAVE_NOTICE =
@@ -773,6 +788,8 @@ export interface SessionView {
   partySize: number | null;
   /** O voice reservado agora; `null` = ainda não reservou ou não conseguiu. */
   voiceChannelId: string | null;
+  /** O voice reservado foi criado só para esta jogatina e vai ser apagado. */
+  voiceTemporary: boolean;
   /**
    * CHAMAR GENTE ainda vale: antes do início, sem chamada feita, com vaga no
    * squad e lugar na party. O botão só aparece quando funciona.
@@ -802,6 +819,9 @@ export function partyText(going: number, partySize: number): string | null {
 }
 
 function roomText(view: SessionView): string {
+  if (view.voiceChannelId && view.voiceTemporary) {
+    return `<#${view.voiceChannelId}>, ${TEMPORARY_VOICE_NOTE}.`;
+  }
   if (view.voiceChannelId) {
     return `<#${view.voiceChannelId}>, reservada para o squad até ${timestamp(view.session.endsAt, 't')}.`;
   }
@@ -927,10 +947,13 @@ export function sessionReminderMessage(view: {
   userIds: readonly string[];
   startsAt: Date;
   voiceChannelId: string | null;
+  voiceTemporary?: boolean;
 }): BaseMessageOptions {
-  const where = view.voiceChannelId
-    ? `A sala é <#${view.voiceChannelId}>.`
-    : 'Não consegui reservar sala desta vez: usem qualquer voice livre.';
+  const where = !view.voiceChannelId
+    ? 'Não consegui reservar sala desta vez: usem qualquer voice livre.'
+    : view.voiceTemporary
+      ? `A sala é <#${view.voiceChannelId}>, ${TEMPORARY_VOICE_NOTE}.`
+      : `A sala é <#${view.voiceChannelId}>.`;
   return {
     content: `${view.userIds.map(mention).join(' ')} a jogatina do squad começa ${timestamp(view.startsAt, 'R')}. ${where}`,
     allowedMentions: { users: [...view.userIds] },

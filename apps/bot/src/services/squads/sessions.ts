@@ -9,6 +9,8 @@ import {
   getSquadSession,
   getSquadSessionAt,
   listInactiveSquads,
+  listLiveTemporaryVoiceIds,
+  listPendingTemporaryVoices,
   listSessionsStartingBetween,
   listSessionsToRelease,
   listSquadMembers,
@@ -22,6 +24,7 @@ import {
   reopenSquadSession,
   reserveSessionVoice,
   setSessionMessage,
+  setSessionTemporaryVoice,
   touchSquadConfirmed,
   voteSquadSession,
 } from '@goodbot/db';
@@ -31,6 +34,8 @@ import {
   HOUR_MS,
   MINUTE_MS,
   parseWhen,
+  SECOND_MS,
+  snowflakeToDate,
   UserFacingError,
   WEEK_MS,
 } from '@goodbot/shared';
@@ -45,11 +50,14 @@ import {
   sessionMessage,
   sessionReminderMessage,
   sessionStartMessage,
+  temporaryVoiceName,
 } from './embeds';
 import {
   encodeVoiceSnapshot,
+  hasTemporaryVoiceSignature,
   restoreVoiceOverwrites,
   SQUAD_VOICE_REQUIRED_BITS,
+  temporaryVoiceOverwrites,
   voiceReservationAffectedIds,
   voiceReservationOverwrites,
 } from './overwrites';
@@ -76,6 +84,17 @@ const MAX_REPEAT_WEEKS = 8;
 
 /** `DiscordAPIError` de canal inexistente: o voice foi apagado. */
 const DISCORD_UNKNOWN_CHANNEL = 10003;
+
+/**
+ * Quanto uma criação de voice temporário pode levar: o REST tem teto de 15 s e
+ * uma repetição. A reconciliação só olha reservas mais velhas que isso, para
+ * não disputar com uma criação em curso.
+ */
+export const TEMPORARY_VOICE_GRACE_MS = 2 * MINUTE_MS;
+/** Até quando uma reserva sem canal é procurada: a jogatina dura no máximo 12 h. */
+const TEMPORARY_VOICE_LOOKBACK_MS = DAY_MS;
+/** Folga entre o relógio da VM e o do Discord ao comparar a reserva com o id do canal. */
+const CLOCK_SKEW_MS = 30 * SECOND_MS;
 
 export interface RemindResult {
   session: SquadSession;
@@ -142,6 +161,14 @@ export function sessionState(session: Pick<SquadSession, 'cancelledAt' | 'starte
  * qualquer coisa no Discord.
  */
 export class SessionService {
+  /**
+   * Voices temporários de pé, por guild. O evento de voz pergunta a cada troca
+   * de canal se o canal é de squad, e fora do pool isso não pode custar uma
+   * query: a lista vem do banco na primeira pergunta de cada guild (o que cobre
+   * reinício no meio da jogatina) e depois acompanha criação e liberação.
+   */
+  private readonly temporaryVoices = new Map<string, Set<string>>();
+
   constructor(private readonly ctx: SquadContext) {}
 
   /** O "quando" digitado, lido no fuso da guild, e a jogatina marcada. */
@@ -361,6 +388,7 @@ export class SessionService {
 
     const voiceChannelId = await this.reserveVoice(guild, marked);
     const current = (await getSquadSession(db, guild.id, marked.id)) ?? marked;
+    const voiceTemporary = voiceChannelId !== null && current.voiceTemporary;
     if (!current.messageId) {
       return { session: await this.announce(guild, squad, current), voiceChannelId };
     }
@@ -372,8 +400,17 @@ export class SessionService {
       const userIds = memberIds.filter((id) => !current.notGoingIds.includes(id));
       if (channel && userIds.length > 0) {
         await channel
-          .send(sessionReminderMessage({ userIds, startsAt: current.startsAt, voiceChannelId }))
-          .catch(logFailure('falha ao enviar o lembrete', { guildId: guild.id, sessionId: current.id }));
+          .send(
+            sessionReminderMessage({
+              userIds,
+              startsAt: current.startsAt,
+              voiceChannelId,
+              voiceTemporary,
+            }),
+          )
+          .catch(
+            logFailure('falha ao enviar o lembrete', { guildId: guild.id, sessionId: current.id }),
+          );
       }
     }
     return { session: current, voiceChannelId };
@@ -383,8 +420,9 @@ export class SessionService {
    * Reserva um voice do pool para a jogatina: o preferido do squad, se ninguém
    * o segura, ou o primeiro livre. O snapshot dos overwrites é gravado antes
    * de mexer no canal, e é da jogatina (não de `channel_locks`): um `/lock` no
-   * mesmo voice não pode trocar o que a liberação restaura. Nunca lança;
-   * `null` = sem sala.
+   * mesmo voice não pode trocar o que a liberação restaura. Sem nenhum livre,
+   * cria um voice temporário (`temporaryVoices`). Nunca lança; `null` = sem
+   * sala.
    */
   async reserveVoice(guild: Guild, session: SquadSession): Promise<string | null> {
     if (session.voiceReservedAt) return isReserved(session) ? session.voiceChannelId : null;
@@ -405,6 +443,7 @@ export class SessionService {
         (id) => !held.has(id) && guild.channels.cache.get(id)?.type === ChannelType.GuildVoice,
       );
       if (!voiceId) {
+        if (config.temporaryVoices) return await this.createTemporaryVoice(guild, squad, session);
         log.info({ guildId, sessionId: session.id }, 'pool de voices cheio; jogatina sem sala');
         return null;
       }
@@ -525,6 +564,222 @@ export class SessionService {
   }
 
   /**
+   * O pool está cheio: um voice só desta jogatina, na categoria dos squads,
+   * que nasce trancado como uma reserva e é apagado na liberação.
+   *
+   * A ordem é o que impede voice órfão. A reserva é gravada **antes** de pedir
+   * o canal, ainda sem id: quem perde a corrida para outra passada nem chega a
+   * criar canal, e um reinício (ou um Discord que não responde) entre pedir o
+   * canal e gravar o id deixa rastro no banco, uma reserva temporária sem
+   * canal. A `reconcileTemporaryVoices`, no job, acha o canal que nasceu e o
+   * adota ou apaga. Nunca lança; `null` = sem sala.
+   */
+  private async createTemporaryVoice(
+    guild: Guild,
+    squad: Squad,
+    session: SquadSession,
+  ): Promise<string | null> {
+    const { db } = this.ctx;
+    const guildId = guild.id;
+    const bindings = { guildId, sessionId: session.id };
+    const config = await this.ctx.config.get(guildId, 'squads');
+    const me = guild.members.me;
+    if (!me) return null;
+
+    // Categoria apagada depois de configurada: o voice nasce na raiz.
+    const parent = config.categoryId ? guild.channels.cache.get(config.categoryId) : undefined;
+    const permissions = parent ? parent.permissionsFor(me) : me.permissions;
+    if (!permissions?.has(SQUAD_VOICE_REQUIRED_BITS)) {
+      log.warn(
+        { ...bindings, missing: permissions?.missing(SQUAD_VOICE_REQUIRED_BITS) ?? [] },
+        'pool de voices cheio e sem permissão para criar voice temporário; jogatina sem sala',
+      );
+      return null;
+    }
+
+    const claimed = await reserveSessionVoice(db, guildId, session.id, {
+      voiceChannelId: null,
+      overwrites: null,
+      temporary: true,
+      at: this.ctx.date(),
+    });
+    if (!claimed) {
+      const current = await getSquadSession(db, guildId, session.id);
+      return current && isReserved(current) ? current.voiceChannelId : null;
+    }
+
+    const memberIds = await this.memberIds(guildId, squad.id);
+    let voice: VoiceChannel;
+    try {
+      voice = await guild.channels.create({
+        name: temporaryVoiceName(squad.name),
+        type: ChannelType.GuildVoice,
+        parent: parent?.id ?? null,
+        permissionOverwrites: temporaryVoiceOverwrites({
+          everyoneId: guild.roles.everyone.id,
+          botId: me.id,
+          memberIds,
+        }),
+        reason: `Jogatina do squad ${squad.name} (pool de voices cheio)`,
+      });
+    } catch (error) {
+      if (discordErrorCode(error) !== null) {
+        // O Discord respondeu que não (teto de 500 canais, permissão): canal
+        // nenhum nasceu, e a reserva vira "sem sala" agora.
+        log.warn({ err: error, ...bindings }, 'não foi possível criar o voice temporário');
+        await releaseSessionVoice(db, guildId, session.id, this.ctx.date());
+      } else {
+        // Sem resposta (timeout, 5xx, rede): o canal pode ter nascido. A
+        // reserva fica pendente e a reconciliação decide.
+        log.warn(
+          { err: error, ...bindings },
+          'criação do voice temporário sem resposta; a reconciliação confere',
+        );
+      }
+      return null;
+    }
+
+    let recorded: SquadSession | null;
+    try {
+      recorded = await setSessionTemporaryVoice(db, guildId, session.id, voice.id);
+    } catch (error) {
+      // O canal existe e o banco não tem o id: a reserva continua pendente, e a
+      // reconciliação adota o canal na próxima passada.
+      log.error({ err: error, ...bindings }, 'falha ao gravar o voice temporário na reserva');
+      return null;
+    }
+    if (!recorded) {
+      // A reserva foi liberada enquanto o canal nascia (cancelamento).
+      await voice
+        .delete('Jogatina liberada enquanto a sala nascia')
+        .catch(logFailure('não foi possível apagar o voice temporário que sobrou', bindings));
+      return null;
+    }
+
+    this.temporaryVoices.get(guildId)?.add(voice.id);
+    this.ctx.record({
+      guildId,
+      action: 'squad.voice.reserve',
+      source: 'job',
+      target: { type: 'channel', id: voice.id },
+      after: { squadId: squad.id, sessionId: session.id, memberIds, temporary: true },
+    });
+    return voice.id;
+  }
+
+  /**
+   * Resolve as criações de voice temporário que não terminaram (ver
+   * `createTemporaryVoice`). Para cada reserva temporária sem canal, feita há
+   * mais de `TEMPORARY_VOICE_GRACE_MS`, procura o voice que pode ter nascido:
+   * criado logo depois da reserva (a data vem do próprio id), com a assinatura
+   * de overwrites do voice temporário e sem dono no banco. Achou e a jogatina
+   * ainda vale: adota. Achou e ela acabou, foi cancelada ou liberada: apaga
+   * (nunca com gente dentro). Não achou: a criação não chegou ao Discord, e a
+   * reserva vira "sem sala".
+   *
+   * O prazo de carência existe para não disputar com uma criação em curso, que
+   * leva no máximo o teto do REST com uma repetição. Devolve quantas resolveu.
+   */
+  async reconcileTemporaryVoices(guild: Guild): Promise<number> {
+    const { db } = this.ctx;
+    const now = this.ctx.now();
+    const pending = await listPendingTemporaryVoices(
+      db,
+      guild.id,
+      new Date(now - TEMPORARY_VOICE_LOOKBACK_MS),
+      new Date(now - TEMPORARY_VOICE_GRACE_MS),
+    );
+    const me = guild.members.me;
+    if (pending.length === 0 || !me) return 0;
+
+    const config = await this.ctx.config.get(guild.id, 'squads');
+    const taken = new Set([
+      ...config.voicePoolIds,
+      ...(await listLiveTemporaryVoiceIds(db, guild.id)),
+    ]);
+    const signature = { everyoneId: guild.roles.everyone.id, botId: me.id };
+    let resolved = 0;
+
+    for (const session of pending) {
+      const bindings = { guildId: guild.id, sessionId: session.id };
+      const reservedAt = session.voiceReservedAt?.getTime() ?? now;
+      const orphan = guild.channels.cache.find((channel) => {
+        if (channel.type !== ChannelType.GuildVoice || taken.has(channel.id)) return false;
+        const createdAt = snowflakeToDate(channel.id).getTime();
+        return (
+          createdAt >= reservedAt - CLOCK_SKEW_MS &&
+          createdAt <= reservedAt + TEMPORARY_VOICE_GRACE_MS &&
+          hasTemporaryVoiceSignature(currentOverwrites(channel), signature)
+        );
+      });
+
+      if (!orphan) {
+        const released =
+          isReserved(session) &&
+          (await releaseSessionVoice(db, guild.id, session.id, this.ctx.date()));
+        if (released) {
+          log.info(bindings, 'voice temporário nunca nasceu; jogatina sem sala');
+          resolved++;
+        }
+        continue;
+      }
+      taken.add(orphan.id);
+
+      const live = isReserved(session) && !session.cancelledAt && session.endsAt.getTime() > now;
+      if (live && (await setSessionTemporaryVoice(db, guild.id, session.id, orphan.id))) {
+        this.temporaryVoices.get(guild.id)?.add(orphan.id);
+        this.ctx.record({
+          guildId: guild.id,
+          action: 'squad.voice.reserve',
+          source: 'job',
+          target: { type: 'channel', id: orphan.id },
+          after: {
+            squadId: session.squadId,
+            sessionId: session.id,
+            temporary: true,
+            recovered: true,
+          },
+        });
+        log.warn({ ...bindings, voiceChannelId: orphan.id }, 'voice temporário órfão adotado');
+        const squad = await getSquad(db, guild.id, session.squadId);
+        const fresh = await getSquadSession(db, guild.id, session.id);
+        if (squad && fresh) await this.renderSession(guild, fresh, squad);
+        resolved++;
+        continue;
+      }
+
+      const outcome = await this.deleteTemporaryVoice(guild, orphan.id, bindings);
+      if (outcome === 'keep') continue;
+      if (isReserved(session)) await releaseSessionVoice(db, guild.id, session.id, this.ctx.date());
+      if (outcome === 'deleted') {
+        this.ctx.record({
+          guildId: guild.id,
+          action: 'squad.voice.release',
+          source: 'job',
+          target: { type: 'channel', id: orphan.id },
+          after: { squadId: session.squadId, sessionId: session.id, temporary: true, orphan: true },
+        });
+        log.warn({ ...bindings, voiceChannelId: orphan.id }, 'voice temporário órfão apagado');
+      }
+      resolved++;
+    }
+    return resolved;
+  }
+
+  /**
+   * O canal é um voice temporário de jogatina ainda de pé? Consulta o banco
+   * só na primeira pergunta de cada guild.
+   */
+  async isTemporaryVoice(guildId: string, channelId: string): Promise<boolean> {
+    let ids = this.temporaryVoices.get(guildId);
+    if (!ids) {
+      ids = new Set(await listLiveTemporaryVoiceIds(this.ctx.db, guildId));
+      this.temporaryVoices.set(guildId, ids);
+    }
+    return ids.has(channelId);
+  }
+
+  /**
    * Libera a reserva: os ids que ela tocou voltam ao snapshot, o resto do
    * canal fica como está. O Discord vem antes do banco: se o restore falha
    * (rate limit, 5xx, 50013 passageiro), a jogatina continua reservada e a
@@ -545,7 +800,11 @@ export class SessionService {
     const bindings = { guildId: guild.id, sessionId: current.id, voiceChannelId };
 
     let restored = false;
-    if (voiceChannelId && voiceOverwrites) {
+    if (current.voiceTemporary && voiceChannelId) {
+      const outcome = await this.deleteTemporaryVoice(guild, voiceChannelId, bindings);
+      if (outcome === 'keep') return false;
+      restored = outcome === 'deleted';
+    } else if (voiceChannelId && voiceOverwrites) {
       const voice = await this.voiceForRelease(guild, voiceChannelId);
       if (voice === 'retry') return false;
       if (voice) {
@@ -570,16 +829,57 @@ export class SessionService {
 
     const released = await releaseSessionVoice(db, guild.id, current.id, this.ctx.date());
     if (!released) return false;
+    if (current.voiceTemporary && voiceChannelId) {
+      this.temporaryVoices.get(guild.id)?.delete(voiceChannelId);
+    }
     if (restored && voiceChannelId) {
       this.ctx.record({
         guildId: guild.id,
         action: 'squad.voice.release',
         source: 'job',
         target: { type: 'channel', id: voiceChannelId },
-        after: { squadId: released.squadId, sessionId: released.id },
+        after: {
+          squadId: released.squadId,
+          sessionId: released.id,
+          ...(current.voiceTemporary ? { temporary: true } : {}),
+        },
       });
     }
     return true;
+  }
+
+  /**
+   * Apaga o voice temporário de uma reserva. `'keep'` quando ainda não dá:
+   * tem gente dentro (a jogatina passou da hora, mas ninguém é expulso de uma
+   * partida; o job tenta de novo a cada 5 min e o evento de voz, na saída do
+   * último) ou o Discord falhou por outro motivo que não canal inexistente.
+   * `'gone'` quando o canal já não existia.
+   */
+  private async deleteTemporaryVoice(
+    guild: Guild,
+    voiceChannelId: string,
+    bindings: Record<string, unknown>,
+  ): Promise<'deleted' | 'gone' | 'keep'> {
+    const voice = await this.voiceForRelease(guild, voiceChannelId);
+    if (voice === 'retry') return 'keep';
+    if (!voice) return 'gone';
+    if (
+      voice.type === ChannelType.GuildVoice &&
+      (voice as VoiceChannel).members.some((member) => !member.user.bot)
+    ) {
+      return 'keep';
+    }
+    try {
+      await voice.delete('Fim da jogatina do squad');
+      return 'deleted';
+    } catch (error) {
+      if (discordErrorCode(error) === DISCORD_UNKNOWN_CHANNEL) return 'gone';
+      log.warn(
+        { err: error, ...bindings },
+        'falha ao apagar o voice temporário; o job tenta de novo',
+      );
+      return 'keep';
+    }
   }
 
   /**
@@ -643,7 +943,10 @@ export class SessionService {
   /**
    * O voice reservado esvaziou. Depois do início da jogatina, a reserva sai
    * antes do fim, para a sala voltar ao servidor; antes do início não, porque
-   * o squad ainda está chegando. `true` quando liberou.
+   * o squad ainda está chegando. Jogatina cancelada libera a qualquer hora: é
+   * o caso de alguém ter esperado no voice temporário quando ela foi
+   * cancelada, e sem isto o canal ficaria de pé até o fim previsto. `true`
+   * quando liberou.
    */
   async releaseIfEmpty(guild: Guild, voiceChannelId: string): Promise<boolean> {
     const session = await getActiveSessionByVoice(
@@ -652,7 +955,8 @@ export class SessionService {
       voiceChannelId,
       this.ctx.date(),
     );
-    if (!session || session.startsAt.getTime() > this.ctx.now()) return false;
+    if (!session) return false;
+    if (!session.cancelledAt && session.startsAt.getTime() > this.ctx.now()) return false;
     const voice = guild.channels.cache.get(voiceChannelId);
     if (voice?.type !== ChannelType.GuildVoice) return false;
     if ((voice as VoiceChannel).members.some((member) => !member.user.bot)) return false;
@@ -859,6 +1163,7 @@ export class SessionService {
       memberIds,
       partySize: game?.partySize ?? null,
       voiceChannelId: isReserved(session) ? session.voiceChannelId : null,
+      voiceTemporary: isReserved(session) && session.voiceTemporary,
       canCall,
       callChannelId: session.callMessageId ? session.callChannelId : null,
       state: sessionState(session),

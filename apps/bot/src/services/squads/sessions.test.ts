@@ -1,21 +1,28 @@
 import { DAY_MS, HOUR_MS, MINUTE_MS, WEEK_MS } from '@goodbot/shared';
-import { OverwriteType, PermissionFlagsBits } from 'discord.js';
+import { ChannelType, OverwriteType, PermissionFlagsBits, PermissionsBitField } from 'discord.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ALL_BUT_ADMIN,
   BOT_ID,
   componentsOf,
+  discordError,
   embedOf,
   fakeTextChannel,
   fakeVoice,
   overwritesOf,
+  snowflakeAt,
 } from './__fixtures__/discord';
 import { A, B, C, createHarness, NOW } from './__fixtures__/harness';
-import { NO_RESERVED_VOICE_NOTE } from './embeds';
-import { SQUAD_VOICE_MEMBER_BITS, squadTextOverwrites } from './overwrites';
+import { NO_RESERVED_VOICE_NOTE, TEMPORARY_VOICE_NOTE } from './embeds';
+import {
+  SQUAD_VOICE_MEMBER_BITS,
+  squadTextOverwrites,
+  temporaryVoiceOverwrites,
+} from './overwrites';
+import { TEMPORARY_VOICE_GRACE_MS } from './sessions';
 
-import type { FakeMessage } from './__fixtures__/discord';
+import type { FakeMessage, FakeVoice } from './__fixtures__/discord';
 import type { ExactOverwrite } from '../../lib/overwrites';
 import type { APIActionRowComponent, APIButtonComponent } from 'discord.js';
 
@@ -179,16 +186,344 @@ describe('SquadService: reserva e liberação do voice', () => {
 
   it('voice segurado por outra reserva viva não é reservado de novo', async () => {
     const s = scenario();
-    const other = seedSquad({ gameId: s.game.id });
-    seedSession({
-      squadId: other.id,
-      voiceChannelId: s.voice.id,
-      voiceReservedAt: new Date(NOW - HOUR_MS),
-      voiceOverwrites: [],
-    });
+    // Com o voice temporário desligado, pool cheio é jogatina sem sala.
+    s.setConfig({ temporaryVoices: false });
+    fillPool(s);
 
     expect(await s.service.reserveVoice(s.discordGuild, s.session)).toBeNull();
     expect(s.voice.permissionOverwrites.set).not.toHaveBeenCalled();
+    expect(s.guild.channels.create).not.toHaveBeenCalled();
+  });
+});
+
+/** Outra jogatina viva segurando o único voice do pool do cenário. */
+function fillPool(s: ReturnType<typeof scenario>): void {
+  const other = seedSquad({ gameId: s.game.id });
+  seedSession({
+    squadId: other.id,
+    voiceChannelId: s.voice.id,
+    voiceReservedAt: new Date(NOW - HOUR_MS),
+    voiceOverwrites: [],
+  });
+}
+
+/** Cenário com o pool cheio e o voice temporário já criado para a jogatina. */
+async function withTemporaryVoice() {
+  const s = scenario();
+  fillPool(s);
+  const voiceId = await s.service.reserveVoice(s.discordGuild, s.session);
+  const temporary = s.guild.channels.cache.get(voiceId ?? '') as FakeVoice | undefined;
+  return { ...s, voiceId, temporary: temporary! };
+}
+
+describe('SquadService: voice temporário com o pool cheio', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('cria um voice trancado na categoria dos squads e grava a reserva como temporária', async () => {
+    const s = await withTemporaryVoice();
+
+    expect(s.voiceId).not.toBeNull();
+    expect(s.voiceId).not.toBe(s.voice.id);
+    expect(s.guild.channels.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: ChannelType.GuildVoice,
+        parent: s.category.id,
+        name: 'Jogatina · Squad Teste',
+      }),
+    );
+    const overwrites = overwritesOf(s.temporary.permissionOverwrites);
+    const everyone = overwrites.find((overwrite) => overwrite.id === GUILD_ID)!;
+    expect(everyone.deny & PermissionFlagsBits.Connect).toBe(PermissionFlagsBits.Connect);
+    expect(overwrites.find((overwrite) => overwrite.id === A)?.allow).toBe(SQUAD_VOICE_MEMBER_BITS);
+    const bot = overwrites.find((overwrite) => overwrite.id === BOT_ID)!;
+    expect(bot.allow & PermissionFlagsBits.ManageChannels).toBe(PermissionFlagsBits.ManageChannels);
+
+    expect(sessionRow()).toMatchObject({
+      voiceChannelId: s.voiceId,
+      voiceTemporary: true,
+      voiceOverwrites: null,
+    });
+    expect(s.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'squad.voice.reserve',
+        after: expect.objectContaining({ temporary: true }),
+      }),
+    );
+    expect(await s.service.isTemporaryVoice(GUILD_ID, s.voiceId!)).toBe(true);
+    expect(await s.service.isTemporaryVoice(GUILD_ID, s.voice.id)).toBe(false);
+  });
+
+  it('a liberação apaga o voice em vez de restaurar overwrites', async () => {
+    const s = await withTemporaryVoice();
+
+    expect(await s.service.releaseVoice(s.discordGuild, sessionRow())).toBe(true);
+
+    expect(s.temporary.delete).toHaveBeenCalledOnce();
+    expect(s.guild.channels.cache.has(s.voiceId!)).toBe(false);
+    expect(sessionRow().voiceReleasedAt).not.toBeNull();
+    expect(await s.service.isTemporaryVoice(GUILD_ID, s.voiceId!)).toBe(false);
+    expect(s.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'squad.voice.release',
+        after: expect.objectContaining({ temporary: true }),
+      }),
+    );
+  });
+
+  it('com gente dentro o voice fica de pé; esvaziou, a próxima liberação apaga', async () => {
+    const s = await withTemporaryVoice();
+    s.temporary.members.set(A, { id: A, user: { bot: false } });
+
+    expect(await s.service.releaseVoice(s.discordGuild, sessionRow())).toBe(false);
+    expect(s.temporary.delete).not.toHaveBeenCalled();
+    expect(sessionRow().voiceReleasedAt).toBeNull();
+
+    s.temporary.members.delete(A);
+    expect(await s.service.releaseVoice(s.discordGuild, sessionRow())).toBe(true);
+    expect(s.temporary.delete).toHaveBeenCalledOnce();
+  });
+
+  it('apagar que falha fica para a próxima passada; canal que já sumiu marca a liberação', async () => {
+    const s = await withTemporaryVoice();
+    s.temporary.delete.mockRejectedValueOnce(discordError('503 Service Unavailable', 0));
+
+    expect(await s.service.releaseVoice(s.discordGuild, sessionRow())).toBe(false);
+    expect(sessionRow().voiceReleasedAt).toBeNull();
+
+    s.temporary.delete.mockRejectedValueOnce(discordError('Unknown Channel', 10003));
+    expect(await s.service.releaseVoice(s.discordGuild, sessionRow())).toBe(true);
+    expect(sessionRow().voiceReleasedAt).not.toBeNull();
+  });
+
+  it('sem permissão para criar na categoria, a jogatina fica sem sala', async () => {
+    const s = scenario();
+    fillPool(s);
+    s.category.permissionsFor.mockReturnValue(
+      new PermissionsBitField(ALL_BUT_ADMIN & ~PermissionFlagsBits.ManageChannels),
+    );
+
+    expect(await s.service.reserveVoice(s.discordGuild, s.session)).toBeNull();
+    expect(s.guild.channels.create).not.toHaveBeenCalled();
+    expect(sessionRow().voiceReservedAt).toBeNull();
+  });
+
+  it('a reserva é gravada antes de pedir o canal', async () => {
+    const s = scenario();
+    fillPool(s);
+    // Foto da linha no instante em que o Discord é chamado. O `expect` fica do
+    // lado de fora: dentro do mock, o `catch` do service engoliria a falha.
+    let atCreate: { voiceTemporary: boolean; reserved: boolean } | null = null;
+    s.guild.channels.create.mockImplementationOnce(async () => {
+      atCreate = {
+        voiceTemporary: sessionRow().voiceTemporary,
+        reserved: sessionRow().voiceReservedAt !== null,
+      };
+      throw discordError('Missing Permissions', 50013);
+    });
+
+    await s.service.reserveVoice(s.discordGuild, s.session);
+    expect(atCreate).toEqual({ voiceTemporary: true, reserved: true });
+  });
+
+  it('o Discord recusa (teto de 500 canais): a reserva vira sem sala na hora', async () => {
+    const s = scenario();
+    fillPool(s);
+    s.guild.channels.create.mockRejectedValueOnce(
+      discordError('Maximum number of guild channels reached (500)', 30013),
+    );
+
+    expect(await s.service.reserveVoice(s.discordGuild, s.session)).toBeNull();
+    expect(sessionRow().voiceReleasedAt).not.toBeNull();
+  });
+
+  it('o Discord não responde: a reserva fica pendente para a reconciliação', async () => {
+    const s = scenario();
+    fillPool(s);
+    s.guild.channels.create.mockRejectedValueOnce(new Error('Request aborted'));
+
+    expect(await s.service.reserveVoice(s.discordGuild, s.session)).toBeNull();
+    expect(sessionRow()).toMatchObject({ voiceTemporary: true, voiceChannelId: null });
+    expect(sessionRow().voiceReleasedAt).toBeNull();
+  });
+
+  it('a reserva que perde a corrida nem chega a criar canal', async () => {
+    const s = scenario();
+    fillPool(s);
+    repositories.reserveSessionVoice.mockResolvedValueOnce(null);
+
+    expect(await s.service.reserveVoice(s.discordGuild, s.session)).toBeNull();
+    expect(s.guild.channels.create).not.toHaveBeenCalled();
+  });
+
+  it('reserva liberada enquanto o canal nascia: o canal novo é apagado', async () => {
+    const s = scenario();
+    fillPool(s);
+    repositories.setSessionTemporaryVoice.mockResolvedValueOnce(null);
+
+    expect(await s.service.reserveVoice(s.discordGuild, s.session)).toBeNull();
+    const created = await (s.guild.channels.create.mock.results[0]?.value as Promise<FakeVoice>);
+    expect(created.delete).toHaveBeenCalledOnce();
+  });
+
+  it('depois de um reinício o voice temporário ainda é reconhecido, pelo banco', async () => {
+    const s = scenario();
+    fillPool(s);
+    // A primeira pergunta carrega a lista (vazia); a criação entra nela sem reler.
+    expect(await s.service.isTemporaryVoice(GUILD_ID, s.voice.id)).toBe(false);
+    const voiceId = (await s.service.reserveVoice(s.discordGuild, s.session))!;
+    expect(await s.service.isTemporaryVoice(GUILD_ID, voiceId)).toBe(true);
+    expect(repositories.listLiveTemporaryVoiceIds).toHaveBeenCalledTimes(1);
+
+    (
+      s.parts.sessions as unknown as { temporaryVoices: Map<string, Set<string>> }
+    ).temporaryVoices.clear();
+    expect(await s.service.isTemporaryVoice(GUILD_ID, voiceId)).toBe(true);
+    expect(repositories.listLiveTemporaryVoiceIds).toHaveBeenCalledTimes(2);
+  });
+
+  it('o lembrete e a mensagem da jogatina avisam que a sala some', async () => {
+    const s = scenario();
+    fillPool(s);
+    store.sessions = store.sessions.filter((session) => session.id !== s.session.id);
+    await s.service.scheduleSession(s.discordGuild, s.squad.id, A, 'hoje 21h', 'command');
+    const session = store.sessions.find((row) => row.squadId === s.squad.id)!;
+    s.clock.now = TONIGHT.getTime() - 20 * MINUTE_MS;
+
+    await s.service.remindSession(s.discordGuild, session);
+
+    const reminded = store.sessions.find((row) => row.id === session.id)!;
+    const note = `<#${String(reminded.voiceChannelId)}>, ${TEMPORARY_VOICE_NOTE}.`;
+    expect(s.channel.sent.at(-1)?.payload.content).toContain(note);
+    const room = embedOf(messageById(s, reminded.messageId))?.fields?.find(
+      (field) => field.name === 'Sala',
+    );
+    expect(room?.value).toBe(note);
+  });
+});
+
+/**
+ * Cenário de uma criação interrompida: o canal nasceu no Discord, mas o id não
+ * chegou ao banco (o bot caiu ou o banco falhou entre as duas escritas).
+ */
+async function interruptedCreation() {
+  const s = scenario();
+  fillPool(s);
+  repositories.setSessionTemporaryVoice.mockRejectedValueOnce(new Error('connection terminated'));
+  expect(await s.service.reserveVoice(s.discordGuild, s.session)).toBeNull();
+  const orphan = await (s.guild.channels.create.mock.results[0]?.value as Promise<FakeVoice>);
+  expect(sessionRow()).toMatchObject({ voiceTemporary: true, voiceChannelId: null });
+  return { ...s, orphan };
+}
+
+describe('SquadService: reconciliação do voice temporário', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('dentro da carência não mexe em nada: a criação pode estar em curso', async () => {
+    const s = await interruptedCreation();
+    s.clock.now += TEMPORARY_VOICE_GRACE_MS - 1;
+
+    expect(await s.service.reconcileTemporaryVoices(s.discordGuild)).toBe(0);
+    expect(sessionRow().voiceChannelId).toBeNull();
+    expect(s.orphan.delete).not.toHaveBeenCalled();
+  });
+
+  it('jogatina ainda valendo: adota o canal órfão', async () => {
+    const s = await interruptedCreation();
+    s.clock.now += TEMPORARY_VOICE_GRACE_MS;
+
+    expect(await s.service.reconcileTemporaryVoices(s.discordGuild)).toBe(1);
+
+    expect(sessionRow().voiceChannelId).toBe(s.orphan.id);
+    expect(s.orphan.delete).not.toHaveBeenCalled();
+    expect(await s.service.isTemporaryVoice(GUILD_ID, s.orphan.id)).toBe(true);
+    expect(s.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'squad.voice.reserve',
+        after: expect.objectContaining({ recovered: true }),
+      }),
+    );
+    // Adotado, é um voice temporário como outro qualquer: a liberação apaga.
+    expect(await s.service.releaseVoice(s.discordGuild, sessionRow())).toBe(true);
+    expect(s.orphan.delete).toHaveBeenCalledOnce();
+    // E a segunda passada não acha mais nada para resolver.
+    expect(await s.service.reconcileTemporaryVoices(s.discordGuild)).toBe(0);
+  });
+
+  it('jogatina que já acabou: apaga o órfão e libera a reserva', async () => {
+    const s = await interruptedCreation();
+    s.clock.now = sessionRow().endsAt.getTime() + MINUTE_MS;
+
+    expect(await s.service.reconcileTemporaryVoices(s.discordGuild)).toBe(1);
+
+    expect(s.orphan.delete).toHaveBeenCalledOnce();
+    expect(s.guild.channels.cache.has(s.orphan.id)).toBe(false);
+    expect(sessionRow().voiceReleasedAt).not.toBeNull();
+    expect(s.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'squad.voice.release',
+        after: expect.objectContaining({ orphan: true }),
+      }),
+    );
+  });
+
+  it('órfão com gente dentro espera esvaziar', async () => {
+    const s = await interruptedCreation();
+    s.clock.now = sessionRow().endsAt.getTime() + MINUTE_MS;
+    s.orphan.members.set(A, { id: A, user: { bot: false } });
+
+    expect(await s.service.reconcileTemporaryVoices(s.discordGuild)).toBe(0);
+    expect(s.orphan.delete).not.toHaveBeenCalled();
+
+    s.orphan.members.delete(A);
+    expect(await s.service.reconcileTemporaryVoices(s.discordGuild)).toBe(1);
+    expect(s.orphan.delete).toHaveBeenCalledOnce();
+  });
+
+  it('o canal nunca nasceu: a reserva vira sem sala', async () => {
+    const s = scenario();
+    fillPool(s);
+    s.guild.channels.create.mockRejectedValueOnce(new Error('Request aborted'));
+    await s.service.reserveVoice(s.discordGuild, s.session);
+    s.clock.now += TEMPORARY_VOICE_GRACE_MS;
+
+    expect(await s.service.reconcileTemporaryVoices(s.discordGuild)).toBe(1);
+    expect(sessionRow().voiceReleasedAt).not.toBeNull();
+    expect(await s.service.reconcileTemporaryVoices(s.discordGuild)).toBe(0);
+  });
+
+  it('não confunde com voice feito à mão: sem a assinatura, ou criado fora da janela', async () => {
+    const s = scenario();
+    fillPool(s);
+    s.guild.channels.create.mockRejectedValueOnce(new Error('Request aborted'));
+    await s.service.reserveVoice(s.discordGuild, s.session);
+    const reservedAt = sessionRow().voiceReservedAt!.getTime();
+    // Mesmo nome e mesma hora, mas sem os overwrites que só o bot escreve.
+    const handmade = s.guild.add(
+      fakeVoice({ id: snowflakeAt(reservedAt + 1000), name: 'Jogatina · Squad Teste' }),
+    );
+    // Com a assinatura, mas criado muito depois da reserva.
+    const late = s.guild.add(
+      fakeVoice({
+        id: snowflakeAt(reservedAt + TEMPORARY_VOICE_GRACE_MS + 60_000),
+        overwrites: temporaryVoiceOverwrites({
+          everyoneId: GUILD_ID,
+          botId: BOT_ID,
+          memberIds: [A],
+        }),
+      }),
+    );
+    s.clock.now = sessionRow().endsAt.getTime() + MINUTE_MS;
+
+    await s.service.reconcileTemporaryVoices(s.discordGuild);
+
+    expect(handmade.delete).not.toHaveBeenCalled();
+    expect(late.delete).not.toHaveBeenCalled();
+    expect(s.guild.channels.cache.has(handmade.id)).toBe(true);
+    expect(s.guild.channels.cache.has(late.id)).toBe(true);
   });
 });
 

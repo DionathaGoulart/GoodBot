@@ -443,6 +443,16 @@ export class SquadService {
     return this.ctx.parts.sessions.releaseIfEmpty(guild, voiceChannelId);
   }
 
+  /** Job: adota ou apaga o voice temporário de uma criação que não terminou. */
+  reconcileTemporaryVoices(guild: Guild): Promise<number> {
+    return this.ctx.parts.sessions.reconcileTemporaryVoices(guild);
+  }
+
+  /** Evento de voz: o canal é um voice temporário de jogatina? Em memória depois da 1ª consulta. */
+  isTemporaryVoice(guildId: string, channelId: string): Promise<boolean> {
+    return this.ctx.parts.sessions.isTemporaryVoice(guildId, channelId);
+  }
+
   checkInactivity(guild: Guild): Promise<InactivityResult> {
     return this.ctx.parts.sessions.checkInactivity(guild);
   }

@@ -1639,9 +1639,16 @@ export async function voteSquadSession(
 }
 
 export interface ReserveSessionVoiceInput {
-  voiceChannelId: string;
-  /** Overwrites do voice antes da reserva: o que a liberação restaura. */
-  overwrites: LockOverwrite[];
+  /**
+   * `null` só no voice temporário: a reserva é gravada **antes** de o canal
+   * existir, para um reinício no meio da criação deixar rastro no banco
+   * (`listPendingTemporaryVoices`) em vez de um canal órfão sem dono.
+   */
+  voiceChannelId: string | null;
+  /** Overwrites do voice antes da reserva: o que a liberação restaura. `null` no temporário. */
+  overwrites: LockOverwrite[] | null;
+  /** Voice criado só para esta sessão: a liberação o apaga. */
+  temporary?: boolean;
   at: Date;
 }
 
@@ -1661,6 +1668,7 @@ export async function reserveSessionVoice(
     .set({
       voiceChannelId: input.voiceChannelId,
       voiceOverwrites: input.overwrites,
+      voiceTemporary: input.temporary ?? false,
       voiceReservedAt: input.at,
     })
     .where(
@@ -1729,6 +1737,84 @@ export async function getActiveSessionByVoice(
     .orderBy(asc(squadSessions.startsAt))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Grava o id do voice temporário na reserva que foi feita antes de ele existir.
+ * `null` quando a reserva já não está esperando canal: foi liberada no meio
+ * (cancelamento) ou outra chamada já gravou um id. Quem chama apaga o canal.
+ */
+export async function setSessionTemporaryVoice(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+  voiceChannelId: string,
+): Promise<SquadSession | null> {
+  const [row] = await db
+    .update(squadSessions)
+    .set({ voiceChannelId })
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.id, sessionId),
+        eq(squadSessions.voiceTemporary, true),
+        isNotNull(squadSessions.voiceReservedAt),
+        isNull(squadSessions.voiceReleasedAt),
+        isNull(squadSessions.voiceChannelId),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * Reservas de voice temporário sem canal gravado, feitas entre `from` e `to`,
+ * liberadas ou não. É o rastro de uma criação que não terminou: o bot caiu
+ * entre pedir o canal e gravar o id, ou o Discord não respondeu. A
+ * reconciliação procura o canal que pode ter nascido e o adota ou apaga.
+ */
+export async function listPendingTemporaryVoices(
+  db: DbExecutor,
+  guildId: string,
+  from: Date,
+  to: Date,
+): Promise<SquadSession[]> {
+  return db
+    .select()
+    .from(squadSessions)
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.voiceTemporary, true),
+        isNull(squadSessions.voiceChannelId),
+        gte(squadSessions.voiceReservedAt, from),
+        lte(squadSessions.voiceReservedAt, to),
+      ),
+    )
+    .orderBy(asc(squadSessions.voiceReservedAt));
+}
+
+/**
+ * Voices temporários ainda de pé: reservados e não liberados. O evento de voz
+ * carrega esta lista uma vez por guild e depois a mantém em memória, para não
+ * consultar o banco a cada troca de canal fora do pool.
+ */
+export async function listLiveTemporaryVoiceIds(
+  db: DbExecutor,
+  guildId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ voiceChannelId: squadSessions.voiceChannelId })
+    .from(squadSessions)
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.voiceTemporary, true),
+        isNotNull(squadSessions.voiceReservedAt),
+        isNull(squadSessions.voiceReleasedAt),
+      ),
+    );
+  return rows.flatMap((row) => (row.voiceChannelId ? [row.voiceChannelId] : []));
 }
 
 /** Reservas ainda presas cuja janela terminou em `now`. */

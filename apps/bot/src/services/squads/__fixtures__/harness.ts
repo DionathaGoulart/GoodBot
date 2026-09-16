@@ -27,7 +27,7 @@ export function createHarness(overrides: Partial<SquadsConfig> = {}) {
   const clock = { now: NOW };
   resetStore(() => clock.now);
 
-  const guild = fakeGuild();
+  const guild = fakeGuild({ now: () => clock.now });
   const category = guild.add(fakeCategory());
   const search = fakeSearchChannel(guild);
   const voices = [guild.add(fakeVoice()), guild.add(fakeVoice())];

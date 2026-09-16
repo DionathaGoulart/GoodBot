@@ -4,7 +4,7 @@ import { SQUAD_BLOCKS, type SquadsConfig } from '@goodbot/shared';
 
 import { ConfigForm } from '@/components/config/config-form';
 import { CHANNEL_TYPES } from '@/components/config/discord-options';
-import { DiscordField, NumberField, TextField } from '@/components/config/fields';
+import { DiscordField, NumberField, SwitchField, TextField } from '@/components/config/fields';
 import { ModuleToggle } from '@/components/config/module-toggle';
 import { Panel } from '@/components/retro/panel';
 
@@ -74,7 +74,12 @@ export function SquadsConfigForm({
             multiple
             channelTypes={[CHANNEL_TYPES.voice]}
             label="Voices do rodízio"
-            description="Reservados só durante a jogatina de cada squad. Com todos ocupados, o squad joga sem sala e é avisado."
+            description="Reservados só durante a jogatina de cada squad. Com todos ocupados, vale a opção abaixo."
+          />
+          <SwitchField
+            name="temporaryVoices"
+            label="Voice temporário com o rodízio cheio"
+            description="Cria um voice só para a jogatina, na categoria dos squads, e apaga quando ele esvazia depois do início. Desligado, o squad joga sem sala e é avisado."
           />
           <NumberField
             name="reminderMinutesBefore"

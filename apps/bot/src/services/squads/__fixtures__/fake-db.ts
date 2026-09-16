@@ -889,14 +889,66 @@ export const impl = {
     _db: unknown,
     guildId: string,
     sessionId: number,
-    input: { voiceChannelId: string; overwrites: LockOverwrite[]; at: Date },
+    input: {
+      voiceChannelId: string | null;
+      overwrites: LockOverwrite[] | null;
+      temporary?: boolean;
+      at: Date;
+    },
   ) {
     const row = findSession(guildId, sessionId);
     if (!row || row.voiceReservedAt) return null;
     row.voiceChannelId = input.voiceChannelId;
     row.voiceOverwrites = input.overwrites;
+    row.voiceTemporary = input.temporary ?? false;
     row.voiceReservedAt = input.at;
     return copy(row);
+  },
+  async setSessionTemporaryVoice(
+    _db: unknown,
+    guildId: string,
+    sessionId: number,
+    voiceChannelId: string,
+  ) {
+    const row = findSession(guildId, sessionId);
+    if (
+      !row ||
+      !row.voiceTemporary ||
+      !row.voiceReservedAt ||
+      row.voiceReleasedAt ||
+      row.voiceChannelId
+    ) {
+      return null;
+    }
+    row.voiceChannelId = voiceChannelId;
+    return copy(row);
+  },
+  async listPendingTemporaryVoices(_db: unknown, guildId: string, from: Date, to: Date) {
+    return copy(
+      store.sessions
+        .filter(
+          (s) =>
+            s.guildId === guildId &&
+            s.voiceTemporary &&
+            !s.voiceChannelId &&
+            s.voiceReservedAt &&
+            s.voiceReservedAt >= from &&
+            s.voiceReservedAt <= to,
+        )
+        .sort((a, b) => a.voiceReservedAt!.getTime() - b.voiceReservedAt!.getTime()),
+    );
+  },
+  async listLiveTemporaryVoiceIds(_db: unknown, guildId: string) {
+    return store.sessions
+      .filter(
+        (s) =>
+          s.guildId === guildId &&
+          s.voiceTemporary &&
+          s.voiceReservedAt &&
+          !s.voiceReleasedAt &&
+          s.voiceChannelId,
+      )
+      .map((s) => s.voiceChannelId as string);
   },
   async releaseSessionVoice(_db: unknown, guildId: string, sessionId: number, at: Date) {
     const row = findSession(guildId, sessionId);
@@ -1046,6 +1098,7 @@ function blankSession(input: Partial<SquadSession> & Pick<SquadSession, 'squadId
     notGoingIds: [],
     voiceChannelId: null,
     voiceOverwrites: null,
+    voiceTemporary: false,
     voiceReservedAt: null,
     voiceReleasedAt: null,
     playedAt: null,

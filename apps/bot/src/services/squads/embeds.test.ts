@@ -282,6 +282,7 @@ describe('histórico e chamada pública', () => {
       memberIds: ['300000000000000001', '300000000000000002'],
       partySize: 4,
       voiceChannelId: null,
+      voiceTemporary: false,
       canCall: true,
       callChannelId: null,
       state: 'scheduled',

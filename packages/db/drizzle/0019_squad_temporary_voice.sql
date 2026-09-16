@@ -1,0 +1,1 @@
+ALTER TABLE "squad_sessions" ADD COLUMN "voice_temporary" boolean DEFAULT false NOT NULL;

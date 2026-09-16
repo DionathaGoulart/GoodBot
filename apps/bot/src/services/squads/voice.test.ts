@@ -97,6 +97,14 @@ describe('SquadService: evento de voz', () => {
     expect(store.sessions[0]?.voiceReleasedAt).toBeNull();
   });
 
+  it('jogatina cancelada libera o voice vazio mesmo antes do início', async () => {
+    const s = await scenario(30 * MINUTE_MS);
+    store.sessions[0]!.cancelledAt = new Date(NOW);
+
+    expect(await s.service.releaseEmptyVoice(s.discordGuild, s.voice.id)).toBe(true);
+    expect(store.sessions[0]?.voiceReleasedAt).not.toBeNull();
+  });
+
   it('com gente no voice a reserva fica', async () => {
     const s = await scenario(-10 * MINUTE_MS);
     s.voice.members.set(A, { id: A, user: { bot: false } });

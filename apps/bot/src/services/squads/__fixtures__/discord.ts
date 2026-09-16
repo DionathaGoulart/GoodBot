@@ -1,3 +1,4 @@
+import { DISCORD_EPOCH_MS } from '@goodbot/shared';
 import {
   ChannelType,
   Collection,
@@ -22,6 +23,13 @@ export const BOT_ID = '100000000000000000';
 
 let seq = 0n;
 export const snowflake = (): string => String(600000000000000000n + ++seq);
+
+/**
+ * Snowflake com a data de criação embutida, como os ids que o Discord dá a um
+ * canal novo. A reconciliação de voice temporário lê a data do id.
+ */
+export const snowflakeAt = (ms: number): string =>
+  String(((BigInt(ms) - DISCORD_EPOCH_MS) << 22n) + ++seq);
 
 interface CachedOverwrite {
   id: string;
@@ -193,22 +201,35 @@ export type FakeThread = ReturnType<typeof fakeThread>;
 export const ALL_BUT_ADMIN = PermissionsBitField.All & ~PermissionFlagsBits.Administrator;
 
 export function fakeVoice(
-  options: { permissions?: bigint; overwrites?: readonly ExactOverwrite[] } = {},
+  options: {
+    id?: string;
+    name?: string;
+    permissions?: bigint;
+    overwrites?: readonly ExactOverwrite[];
+  } = {},
 ) {
   return {
-    id: snowflake(),
+    id: options.id ?? snowflake(),
+    name: options.name ?? 'voice',
     type: ChannelType.GuildVoice as const,
     isThread: () => false,
     permissionsFor: vi.fn(() => new PermissionsBitField(options.permissions ?? ALL_BUT_ADMIN)),
     permissionOverwrites: fakeOverwriteManager(options.overwrites),
     /** Quem está conectado agora. */
     members: new Collection<string, { id: string; user: { bot: boolean } }>(),
+    /** O `channels.create` da guild falsa troca por um que tira o canal do cache. */
+    delete: vi.fn(async (_reason?: string) => undefined),
   };
 }
 export type FakeVoice = ReturnType<typeof fakeVoice>;
 
-export function fakeCategory() {
-  return { id: snowflake(), type: ChannelType.GuildCategory as const, isThread: () => false };
+export function fakeCategory(options: { permissions?: bigint } = {}) {
+  return {
+    id: snowflake(),
+    type: ChannelType.GuildCategory as const,
+    isThread: () => false,
+    permissionsFor: vi.fn(() => new PermissionsBitField(options.permissions ?? ALL_BUT_ADMIN)),
+  };
 }
 
 interface FakeVoiceState {
@@ -221,7 +242,9 @@ export function discordError(message: string, code: number, extra: Record<string
   return Object.assign(new Error(message), { code, ...extra });
 }
 
-export function fakeGuild() {
+/** `now` dá aos canais criados um id com a data do relógio do teste. */
+export function fakeGuild(options: { now?: () => number } = {}) {
+  const clock = options.now;
   const cache = new Collection<string, { id: string }>();
   const voiceStates = new Collection<string, FakeVoiceState>();
   /** Quem `leave` tirou; o resto conta como membro. */
@@ -258,6 +281,18 @@ export function fakeGuild() {
           parent?: string | null;
           permissionOverwrites?: readonly ExactOverwrite[];
         }) => {
+          if (options.type === ChannelType.GuildVoice) {
+            const voice = fakeVoice({
+              id: clock ? snowflakeAt(clock()) : undefined,
+              name: options.name,
+              overwrites: options.permissionOverwrites,
+            });
+            voice.delete.mockImplementation(async () => {
+              cache.delete(voice.id);
+            });
+            cache.set(voice.id, voice);
+            return voice;
+          }
           const channel = fakeTextChannel({
             name: options.name,
             overwrites: options.permissionOverwrites,

@@ -162,6 +162,44 @@ export function voiceReservationOverwrites(
 }
 
 /**
+ * Overwrites de um voice temporário. Ele nasce já trancado como um voice do
+ * pool durante a reserva (partindo de nenhum overwrite, porque o canal é
+ * novo), e o bot ganha `ManageChannels` nele para conseguir apagá-lo no fim
+ * mesmo que o cargo dele perca a permissão na categoria.
+ */
+export function temporaryVoiceOverwrites(targets: SquadOverwriteTargets): ExactOverwrite[] {
+  const next = voiceReservationOverwrites([], targets);
+  if (!targets.botId) return next;
+  return allowOverwriteBits(next, {
+    id: targets.botId,
+    type: OverwriteType.Member,
+    bits: PermissionFlagsBits.ManageChannels,
+  });
+}
+
+/**
+ * O voice tem os overwrites que só `temporaryVoiceOverwrites` escreve:
+ * `@everyone` sem `Connect` e o bot com `ManageChannels` num overwrite de
+ * membro. É a impressão digital que a reconciliação usa para não confundir um
+ * voice órfão com um canal que alguém criou à mão com o mesmo nome.
+ */
+export function hasTemporaryVoiceSignature(
+  overwrites: readonly ExactOverwrite[],
+  targets: { everyoneId: string; botId: string },
+): boolean {
+  const everyone = overwrites.find((overwrite) => overwrite.id === targets.everyoneId);
+  const bot = overwrites.find(
+    (overwrite) => overwrite.id === targets.botId && overwrite.type === OverwriteType.Member,
+  );
+  return (
+    everyone !== undefined &&
+    (everyone.deny & SQUAD_VOICE_LOCK_BITS) === SQUAD_VOICE_LOCK_BITS &&
+    bot !== undefined &&
+    (bot.allow & PermissionFlagsBits.ManageChannels) === PermissionFlagsBits.ManageChannels
+  );
+}
+
+/**
  * `type` de uma entrada do snapshot que diz "este id não tinha overwrite antes
  * da reserva". O `OverwriteType` do Discord só tem 0 e 1.
  */

@@ -267,13 +267,21 @@ export const squadSessions = pgTable(
     startedAt: timestamptz('started_at'),
     goingIds: snowflakeArray('going_ids'),
     notGoingIds: snowflakeArray('not_going_ids'),
-    /** O voice do pool reservado para esta sessão; `null` = nada reservado. */
+    /** O voice reservado para esta sessão (do pool ou temporário); `null` = nada reservado. */
     voiceChannelId: snowflake('voice_channel_id'),
     /**
      * Overwrites que o voice tinha antes da reserva, para a liberação
-     * restaurar exatamente o que existia. `null` = nada reservado.
+     * restaurar exatamente o que existia. `null` = nada reservado, ou voice
+     * temporário, que não tem o que restaurar.
      */
     voiceOverwrites: jsonb('voice_overwrites').$type<LockOverwrite[]>(),
+    /**
+     * O voice foi criado só para esta sessão, porque o pool estava cheio. A
+     * liberação **apaga** o canal em vez de restaurar overwrites. É uma coluna,
+     * e não "o voice não está no pool": tirar um voice do pool no painel com a
+     * reserva viva faria a liberação apagar um canal do servidor.
+     */
+    voiceTemporary: boolean('voice_temporary').notNull().default(false),
     voiceReservedAt: timestamptz('voice_reserved_at'),
     voiceReleasedAt: timestamptz('voice_released_at'),
     /**

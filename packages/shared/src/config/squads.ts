@@ -108,6 +108,12 @@ export const SquadsConfigSchema = z.object({
    * canal a mais pesa no teto de 500.
    */
   voicePoolIds: SnowflakeListSchema,
+  /**
+   * Sem voice livre no pool, cria um voice só para a jogatina, na categoria dos
+   * squads, e apaga quando ele esvazia depois do início (ou no fim). Desligado,
+   * a jogatina fica sem sala e o lembrete avisa.
+   */
+  temporaryVoices: z.boolean().default(true),
   /** Cargo pingado quando uma proposta sai. */
   pingRoleId: NullableSnowflakeSchema,
   blocks: SquadBlocksSchema,
