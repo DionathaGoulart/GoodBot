@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   bigserial,
   boolean,
   index,
@@ -217,6 +218,16 @@ export const squadJoinRequests = pgTable(
     threadId: snowflake('thread_id'),
     /** A mensagem com ENTRAR / PASSO na thread do convite. */
     inviteMessageId: snowflake('invite_message_id'),
+    /**
+     * A jogatina cuja chamada pública (CHAMAR GENTE) trouxe o pedido; `null` =
+     * veio do matcher, de um membro ou do `/squad procurar`. `set null`: a
+     * jogatina some com o squad, e o pedido já decidido continua valendo para
+     * o cooldown.
+     */
+    sessionId: bigint('session_id', { mode: 'number' }).references(
+      (): AnyPgColumn => squadSessions.id,
+      { onDelete: 'set null' },
+    ),
     /** Votos a favor dos membros. */
     acceptedIds: snowflakeArray('accepted_ids'),
     /** Votos contra. Um membro fica numa lista só: votar de novo troca de lado. */
@@ -294,6 +305,15 @@ export const squadSessions = pgTable(
     playedAt: timestamptz('played_at'),
     cancelledAt: timestamptz('cancelled_at'),
     cancelledBy: snowflake('cancelled_by'),
+    /**
+     * Quando alguém apertou CHAMAR GENTE. É a trava de "uma chamada por
+     * jogatina": gravado antes de postar no canal de busca.
+     */
+    calledAt: timestamptz('called_at'),
+    /** Onde a chamada pública foi postada; o canal de busca pode mudar depois. */
+    callChannelId: snowflake('call_channel_id'),
+    /** A chamada pública no ar; volta a `null` quando ela é apagada no início da jogatina. */
+    callMessageId: snowflake('call_message_id'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -303,5 +323,31 @@ export const squadSessions = pgTable(
       .on(t.guildId, t.endsAt)
       .where(sql`${t.voiceReservedAt} is not null and ${t.voiceReleasedAt} is null`),
     index('squad_sessions_guild_starts_idx').on(t.guildId, t.startsAt),
+  ],
+);
+
+/**
+ * Quem do squad esteve no voice reservado de uma jogatina, e de quando a
+ * quando. Uma linha por entrada: sair e voltar abre outra. É a presença de
+ * verdade que o histórico conta, porque "vou" não prova que a pessoa foi.
+ *
+ * Gravada pelo evento de voz. Linha sem `left_at` é quem ainda está, ou quem
+ * saiu com o bot fora do ar; o histórico só olha quem esteve, não quanto
+ * tempo.
+ */
+export const squadSessionAttendance = pgTable(
+  'squad_session_attendance',
+  {
+    guildId: guildRef(),
+    sessionId: bigint('session_id', { mode: 'number' })
+      .notNull()
+      .references(() => squadSessions.id, { onDelete: 'cascade' }),
+    userId: snowflake('user_id').notNull(),
+    joinedAt: timestamptz('joined_at').notNull(),
+    leftAt: timestamptz('left_at'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sessionId, t.userId, t.joinedAt] }),
+    index('squad_session_attendance_guild_user_idx').on(t.guildId, t.userId),
   ],
 );

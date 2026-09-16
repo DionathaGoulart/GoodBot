@@ -10,7 +10,11 @@ import {
   archiveSquad,
   cancelSquadSession,
   claimProposalSquad,
+  claimSessionCall,
+  closeSessionAttendance,
+  closeSessionCall,
   closeSquadProposal,
+  countPlayedSessions,
   countSearchingProfilesByGame,
   countSquadsForUser,
   createSquad,
@@ -30,9 +34,12 @@ import {
   listInactiveSquads,
   listMembersOfSquads,
   listOpenJoinRequests,
+  listOpenSessionCalls,
+  listPlayedSessions,
   listRecentJoinRequestKeys,
   listRecentJoinRequestsFor,
   listRecentProposalPairs,
+  listSessionAttendance,
   listSessionsToRelease,
   listSquadProfilesByGame,
   listSquads,
@@ -41,9 +48,12 @@ import {
   markSessionPlayed,
   markSessionReminded,
   markSessionStarted,
+  openSessionAttendance,
+  releaseSessionCall,
   releaseSessionVoice,
   reopenSquadSession,
   reserveSessionVoice,
+  setSessionCallMessage,
   setSessionMessage,
   setSquadGuideMessage,
   setSquadStatus,
@@ -649,6 +659,124 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
 
       await releaseSessionVoice(db, GUILD_ID, session.id, at(HOUR));
       expect(await getActiveSessionByVoice(db, GUILD_ID, voiceId, at(HOUR))).toBeNull();
+    });
+
+    it('chamada pública: uma por jogatina, desfeita se não saiu, sai do ar uma vez', async () => {
+      const session = await newSession('Chamada');
+      const at = new Date();
+      expect(await claimSessionCall(db, OTHER_GUILD_ID, session.id, at)).toBeNull();
+      expect((await claimSessionCall(db, GUILD_ID, session.id, at))?.calledAt).not.toBeNull();
+      expect(await claimSessionCall(db, GUILD_ID, session.id, at)).toBeNull();
+
+      // Não chegou ao Discord: a trava sai e dá para chamar de novo.
+      expect((await releaseSessionCall(db, GUILD_ID, session.id))?.calledAt).toBeNull();
+      await claimSessionCall(db, GUILD_ID, session.id, at);
+      const posted = await setSessionCallMessage(db, GUILD_ID, session.id, {
+        channelId: '400000000000000021',
+        messageId: '400000000000000022',
+      });
+      expect(posted).toMatchObject({
+        callChannelId: '400000000000000021',
+        callMessageId: '400000000000000022',
+      });
+      // Com a mensagem no ar, a trava não se desfaz.
+      expect(await releaseSessionCall(db, GUILD_ID, session.id)).toBeNull();
+      expect(
+        (await listOpenSessionCalls(db, GUILD_ID, { squadId: session.squadId })).map((row) => row.id),
+      ).toEqual([session.id]);
+
+      expect(await closeSessionCall(db, GUILD_ID, session.id, '400000000000000099')).toBeNull();
+      const closed = await closeSessionCall(db, GUILD_ID, session.id, '400000000000000022');
+      expect(closed?.callMessageId).toBeNull();
+      expect(closed?.calledAt).not.toBeNull();
+      expect(await closeSessionCall(db, GUILD_ID, session.id, '400000000000000022')).toBeNull();
+      expect(await listOpenSessionCalls(db, GUILD_ID, { squadId: session.squadId })).toEqual([]);
+      expect(await claimSessionCall(db, GUILD_ID, session.id, at)).toBeNull();
+    });
+
+    it('jogatina começada ou cancelada não ganha chamada, e reabrir zera a chamada', async () => {
+      const started = await newSession('Chamada tarde');
+      await markSessionStarted(db, GUILD_ID, started.id, new Date());
+      expect(await claimSessionCall(db, GUILD_ID, started.id, new Date())).toBeNull();
+
+      const cancelled = await newSession('Chamada cancelada');
+      await claimSessionCall(db, GUILD_ID, cancelled.id, new Date());
+      await cancelSquadSession(db, GUILD_ID, cancelled.id, USER_A, new Date());
+      const reopened = await reopenSquadSession(db, GUILD_ID, cancelled.id, {
+        endsAt: cancelled.endsAt,
+        createdBy: USER_A,
+        goingIds: [USER_A],
+      });
+      expect(reopened).toMatchObject({ calledAt: null, callChannelId: null, callMessageId: null });
+      expect(await claimSessionCall(db, GUILD_ID, cancelled.id, new Date())).not.toBeNull();
+    });
+
+    it('histórico: só as que rolaram desde since, com totais por squad', async () => {
+      const squad = await newSquad('Histórico');
+      const other = await newSquad('Histórico vazio');
+      const at = (days: number) => new Date(Date.now() - days * DAY);
+      const session = async (days: number, played: boolean, cancel = false) => {
+        const startsAt = at(days);
+        const row = await createSquadSession(db, {
+          guildId: GUILD_ID,
+          squadId: squad.id,
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + 3 * HOUR),
+          createdBy: USER_A,
+          goingIds: [USER_A],
+        });
+        if (!row) throw new Error('jogatina não criada');
+        if (played) await markSessionPlayed(db, GUILD_ID, row.id, startsAt);
+        if (cancel) await cancelSquadSession(db, GUILD_ID, row.id, USER_A, startsAt);
+        return row;
+      };
+      const recent = await session(2, true);
+      const old = await session(120, true);
+      await session(3, false);
+      const cancelled = await session(5, false, true);
+
+      const listed = await listPlayedSessions(db, GUILD_ID, [squad.id, other.id], at(90));
+      expect(listed.map((row) => row.id)).toEqual([recent.id]);
+      expect(await listPlayedSessions(db, GUILD_ID, [], at(90))).toEqual([]);
+      expect(await listPlayedSessions(db, OTHER_GUILD_ID, [squad.id], at(90))).toEqual([]);
+      expect(await markSessionPlayed(db, GUILD_ID, cancelled.id, new Date())).toBeNull();
+
+      const totals = await countPlayedSessions(db, GUILD_ID, [squad.id, other.id]);
+      expect(totals).toEqual([{ squadId: squad.id, played: 2, lastPlayedAt: recent.startsAt }]);
+      expect(old.startsAt.getTime()).toBeLessThan(recent.startsAt.getTime());
+      expect(await countPlayedSessions(db, GUILD_ID, [])).toEqual([]);
+
+      const request = await createSquadJoinRequest(db, {
+        guildId: GUILD_ID,
+        squadId: squad.id,
+        userId: USER_E,
+        status: 'pending',
+        sessionId: recent.id,
+        expiresAt: new Date(Date.now() + DAY),
+      });
+      expect(request?.sessionId).toBe(recent.id);
+    });
+
+    it('presença: uma linha por entrada, fecha as abertas da pessoa e lista sem repetir', async () => {
+      const session = await newSession('Presença');
+      const joinedAt = new Date();
+      const input = { guildId: GUILD_ID, sessionId: session.id, userId: USER_B, joinedAt };
+      expect(await openSessionAttendance(db, input)).toBe(true);
+      expect(await openSessionAttendance(db, input)).toBe(false);
+      await openSessionAttendance(db, { ...input, joinedAt: new Date(joinedAt.getTime() + 1_000) });
+      await openSessionAttendance(db, { ...input, userId: USER_C });
+
+      expect(await closeSessionAttendance(db, OTHER_GUILD_ID, USER_B, new Date())).toBe(0);
+      expect(await closeSessionAttendance(db, GUILD_ID, USER_B, new Date())).toBe(2);
+      expect(await closeSessionAttendance(db, GUILD_ID, USER_B, new Date())).toBe(0);
+
+      const rows = await listSessionAttendance(db, GUILD_ID, [session.id]);
+      expect(rows.sort((a, b) => (a.userId < b.userId ? -1 : 1))).toEqual([
+        { sessionId: session.id, userId: USER_B },
+        { sessionId: session.id, userId: USER_C },
+      ]);
+      expect(await listSessionAttendance(db, GUILD_ID, [])).toEqual([]);
+      expect(await listSessionAttendance(db, OTHER_GUILD_ID, [session.id])).toEqual([]);
     });
   });
 

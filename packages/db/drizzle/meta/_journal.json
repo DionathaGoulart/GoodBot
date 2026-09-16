@@ -120,6 +120,13 @@
       "when": 1789560116623,
       "tag": "0016_squad_join_vote",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789561520795,
+      "tag": "0017_squad_history_and_calls",
+      "breakpoints": true
     }
   ]
 }

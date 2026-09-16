@@ -37,6 +37,7 @@ import {
   squadProfiles,
   squadProposals,
   squads,
+  squadSessionAttendance,
   squadSessions,
 } from '../schema/squads';
 
@@ -1000,6 +1001,8 @@ export interface CreateSquadJoinRequestInput {
   status: SquadOpenRequestStatus;
   /** O membro que convidou; ausente = matcher ou o próprio candidato. */
   invitedBy?: string | null;
+  /** A jogatina cuja chamada pública trouxe o pedido. */
+  sessionId?: number | null;
   expiresAt: Date;
 }
 
@@ -1311,6 +1314,9 @@ export async function reopenSquadSession(
       playedAt: null,
       cancelledAt: null,
       cancelledBy: null,
+      calledAt: null,
+      callChannelId: null,
+      callMessageId: null,
       voiceChannelId: null,
       voiceOverwrites: null,
       voiceReservedAt: null,
@@ -1473,6 +1479,108 @@ export async function cancelSquadSession(
     )
     .returning();
   return row ?? null;
+}
+
+/**
+ * A trava do CHAMAR GENTE: uma chamada pública por jogatina, e só antes do
+ * início. Gravada antes de postar no canal de busca. `null` quando já houve
+ * chamada, a jogatina começou ou foi cancelada.
+ */
+export async function claimSessionCall(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+  at: Date,
+): Promise<SquadSession | null> {
+  const [row] = await db
+    .update(squadSessions)
+    .set({ calledAt: at })
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.id, sessionId),
+        isNull(squadSessions.calledAt),
+        isNull(squadSessions.startedAt),
+        isNull(squadSessions.cancelledAt),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/** Grava onde a chamada pública foi postada, depois da trava. */
+export async function setSessionCallMessage(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+  input: { channelId: string; messageId: string },
+): Promise<SquadSession | null> {
+  const [row] = await db
+    .update(squadSessions)
+    .set({ callChannelId: input.channelId, callMessageId: input.messageId })
+    .where(and(eq(squadSessions.guildId, guildId), eq(squadSessions.id, sessionId)))
+    .returning();
+  return row ?? null;
+}
+
+/** Desfaz a trava da chamada que não chegou ao Discord: dá para chamar de novo. */
+export async function releaseSessionCall(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+): Promise<SquadSession | null> {
+  const [row] = await db
+    .update(squadSessions)
+    .set({ calledAt: null, callChannelId: null, callMessageId: null })
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.id, sessionId),
+        isNull(squadSessions.callMessageId),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * Tira a chamada do ar: `call_message_id` volta a `null` e `called_at` fica,
+ * para a jogatina não ser chamada de novo. `null` quando outra chamada já
+ * tirou (início e cancelamento ao mesmo tempo apagam a mensagem uma vez).
+ */
+export async function closeSessionCall(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+  messageId: string,
+): Promise<SquadSession | null> {
+  const [row] = await db
+    .update(squadSessions)
+    .set({ callMessageId: null })
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.id, sessionId),
+        eq(squadSessions.callMessageId, messageId),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/** Jogatinas com chamada pública no ar, de um squad ou da guild. */
+export async function listOpenSessionCalls(
+  db: DbExecutor,
+  guildId: string,
+  options: { squadId?: string } = {},
+): Promise<SquadSession[]> {
+  const filters: SQL[] = [eq(squadSessions.guildId, guildId), isNotNull(squadSessions.callMessageId)];
+  if (options.squadId) filters.push(eq(squadSessions.squadId, options.squadId));
+  return db
+    .select()
+    .from(squadSessions)
+    .where(and(...filters))
+    .orderBy(asc(squadSessions.startsAt));
 }
 
 /** O primeiro sinal de que a jogatina rolou. `null` quando já estava marcada. */
@@ -1641,4 +1749,141 @@ export async function listSessionsToRelease(
       ),
     )
     .orderBy(asc(squadSessions.endsAt));
+}
+
+// ── histórico ───────────────────────────────────────────────────────────────
+
+/** Jogatina que rolou: tem `played_at` e não foi cancelada. */
+const playedSession = (): SQL =>
+  and(isNotNull(squadSessions.playedAt), isNull(squadSessions.cancelledAt)) as SQL;
+
+/**
+ * As jogatinas que rolaram desde `since`, dos squads pedidos, da mais antiga
+ * para a mais recente. Lista vazia de squads não consulta nada.
+ */
+export async function listPlayedSessions(
+  db: DbExecutor,
+  guildId: string,
+  squadIds: readonly string[],
+  since: Date,
+): Promise<SquadSession[]> {
+  if (squadIds.length === 0) return [];
+  return db
+    .select()
+    .from(squadSessions)
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        inArray(squadSessions.squadId, [...squadIds]),
+        playedSession(),
+        gte(squadSessions.startsAt, since),
+      ),
+    )
+    .orderBy(asc(squadSessions.startsAt));
+}
+
+export interface PlayedSessionTotals {
+  squadId: string;
+  played: number;
+  /** O início da última jogatina que rolou. */
+  lastPlayedAt: Date | null;
+}
+
+/** Quantas jogatinas cada squad já jogou, sem janela. Squad que nunca jogou fica de fora. */
+export async function countPlayedSessions(
+  db: DbExecutor,
+  guildId: string,
+  squadIds: readonly string[],
+): Promise<PlayedSessionTotals[]> {
+  if (squadIds.length === 0) return [];
+  const rows = await db
+    .select({
+      squadId: squadSessions.squadId,
+      played: count(),
+      lastPlayedAt: sql<Date | string | null>`max(${squadSessions.startsAt})`,
+    })
+    .from(squadSessions)
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        inArray(squadSessions.squadId, [...squadIds]),
+        playedSession(),
+      ),
+    )
+    .groupBy(squadSessions.squadId);
+  // `max()` num `sql` cru volta como texto do driver, não como `Date`.
+  return rows.map((row) => ({
+    squadId: row.squadId,
+    played: Number(row.played),
+    lastPlayedAt: row.lastPlayedAt === null ? null : new Date(row.lastPlayedAt),
+  }));
+}
+
+export interface OpenAttendanceInput {
+  guildId: string;
+  sessionId: number;
+  userId: string;
+  joinedAt: Date;
+}
+
+/**
+ * Alguém do squad entrou no voice reservado. Uma linha por entrada; o mesmo
+ * instante duas vezes (evento repetido) não duplica.
+ */
+export async function openSessionAttendance(
+  db: DbExecutor,
+  input: OpenAttendanceInput,
+): Promise<boolean> {
+  const rows = await db
+    .insert(squadSessionAttendance)
+    .values(input)
+    .onConflictDoNothing()
+    .returning({ sessionId: squadSessionAttendance.sessionId });
+  return rows.length > 0;
+}
+
+/**
+ * A pessoa saiu de um voice do pool: fecha as entradas abertas dela na guild.
+ * Por pessoa, e não por jogatina, porque ela só está num voice por vez e a
+ * reserva pode ter sido liberada antes da saída. Devolve quantas fechou.
+ */
+export async function closeSessionAttendance(
+  db: DbExecutor,
+  guildId: string,
+  userId: string,
+  at: Date,
+): Promise<number> {
+  const rows = await db
+    .update(squadSessionAttendance)
+    .set({ leftAt: at })
+    .where(
+      and(
+        eq(squadSessionAttendance.guildId, guildId),
+        eq(squadSessionAttendance.userId, userId),
+        isNull(squadSessionAttendance.leftAt),
+      ),
+    )
+    .returning({ sessionId: squadSessionAttendance.sessionId });
+  return rows.length;
+}
+
+/** Quem esteve em cada jogatina, uma linha por pessoa e jogatina. */
+export async function listSessionAttendance(
+  db: DbExecutor,
+  guildId: string,
+  sessionIds: readonly number[],
+): Promise<{ sessionId: number; userId: string }[]> {
+  if (sessionIds.length === 0) return [];
+  return db
+    .selectDistinct({
+      sessionId: squadSessionAttendance.sessionId,
+      userId: squadSessionAttendance.userId,
+    })
+    .from(squadSessionAttendance)
+    .where(
+      and(
+        eq(squadSessionAttendance.guildId, guildId),
+        inArray(squadSessionAttendance.sessionId, [...sessionIds]),
+      ),
+    );
 }

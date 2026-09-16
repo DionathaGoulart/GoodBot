@@ -24,6 +24,7 @@ import {
   squadProfiles,
   squadProposals,
   squads,
+  squadSessionAttendance,
   squadSessions,
 } from './squads';
 import { statBuckets } from './stats';
@@ -62,6 +63,7 @@ export const guildsRelations = relations(guilds, ({ one, many }) => ({
   squadProposals: many(squadProposals),
   squadJoinRequests: many(squadJoinRequests),
   squadSessions: many(squadSessions),
+  squadSessionAttendance: many(squadSessionAttendance),
 }));
 
 export const guildSettingsRelations = relations(guildSettings, ({ one }) => ({
@@ -170,9 +172,22 @@ export const squadProposalsRelations = relations(squadProposals, ({ one }) => ({
 export const squadJoinRequestsRelations = relations(squadJoinRequests, ({ one }) => ({
   guild: one(guilds, { fields: [squadJoinRequests.guildId], references: [guilds.id] }),
   squad: one(squads, { fields: [squadJoinRequests.squadId], references: [squads.id] }),
+  session: one(squadSessions, {
+    fields: [squadJoinRequests.sessionId],
+    references: [squadSessions.id],
+  }),
 }));
 
-export const squadSessionsRelations = relations(squadSessions, ({ one }) => ({
+export const squadSessionsRelations = relations(squadSessions, ({ one, many }) => ({
   guild: one(guilds, { fields: [squadSessions.guildId], references: [guilds.id] }),
   squad: one(squads, { fields: [squadSessions.squadId], references: [squads.id] }),
+  attendance: many(squadSessionAttendance),
+}));
+
+export const squadSessionAttendanceRelations = relations(squadSessionAttendance, ({ one }) => ({
+  guild: one(guilds, { fields: [squadSessionAttendance.guildId], references: [guilds.id] }),
+  session: one(squadSessions, {
+    fields: [squadSessionAttendance.sessionId],
+    references: [squadSessions.id],
+  }),
 }));
