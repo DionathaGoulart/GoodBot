@@ -41,7 +41,7 @@ vi.mock('@goodbot/db', () => ({
   getSquadGame: (...args: unknown[]) => getSquadGame(...args),
   listMembersOfSquads: vi.fn(),
   listOpenSquadProposals: vi.fn(),
-  listPendingJoinRequests: vi.fn(),
+  listOpenJoinRequests: vi.fn(),
   listRecentProposalPairs: vi.fn(),
   listSquadGames: (...args: unknown[]) => listSquadGames(...args),
   listSquadProfilesByGame: vi.fn(),

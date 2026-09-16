@@ -106,7 +106,7 @@ export function describeManualIssue(
       return `${name} e ${ctx.nameOf(second)} responderam diferente em ${listJoin(fields)}, que ${fields.length > 1 ? 'precisam' : 'precisa'} bater.`;
     }
     case 'PENDING_JOIN_REQUEST':
-      return `${name} tem um pedido de entrada esperando resposta.`;
+      return `${name} tem um convite ou pedido de entrada esperando resposta.`;
   }
 }
 
@@ -274,7 +274,9 @@ export function formatMatchResult({ proposals, joinRequests }: RunSquadMatchResu
   }
   if (joinRequests > 0) {
     parts.push(
-      joinRequests === 1 ? '1 pedido de entrada' : `${String(joinRequests)} pedidos de entrada`,
+      joinRequests === 1
+        ? '1 convite para squad com vaga'
+        : `${String(joinRequests)} convites para squads com vaga`,
     );
   }
   return `${parts.join(' e ')}.`;

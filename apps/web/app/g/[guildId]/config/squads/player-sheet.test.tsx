@@ -88,7 +88,7 @@ const DATA: SquadPlayersData = {
     },
   ],
   pendingRequests: [
-    { id: 'r1', squadId: ALFA, userId: ANA, createdAt: '2026-09-12T12:00:00.000Z' },
+    { id: 'r1', squadId: ALFA, userId: ANA, status: 'pending', createdAt: '2026-09-12T12:00:00.000Z' },
   ],
   cooldownPairs: {},
   members: {},
@@ -188,7 +188,7 @@ describe('PlayerSheet', { timeout: 20_000 }, () => {
 
   it.each<[string, Partial<PlayerRow>, string]>([
     ['proposta aberta', { openProposalIds: ['p1'] }, 'EM PROPOSTA ABERTA: ESPERE ELA FECHAR OU EXPIRAR'],
-    ['pedido pendente', { pendingRequestSquadIds: [ALFA] }, 'COM PEDIDO DE ENTRADA ESPERANDO RESPOSTA'],
+    ['pedido pendente', { pendingRequestSquadIds: [ALFA] }, 'COM CONVITE OU PEDIDO DE ENTRADA ABERTO'],
   ])('apagar fica desabilitado com o motivo quando há %s', (_label, overrides, reason) => {
     renderSheet(player(overrides));
 

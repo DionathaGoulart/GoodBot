@@ -146,8 +146,20 @@ describe('buildPlayerRows', () => {
           proposal('p2', { gameId: OTHER_GAME, userIds: [CAU] }),
         ],
         pendingRequests: [
-          { id: 'r1', squadId: ALFA, userId: CAU, createdAt: '2026-09-12T12:00:00.000Z' },
-          { id: 'r2', squadId: BRAVO, userId: CAU, createdAt: '2026-09-12T12:00:00.000Z' },
+          {
+            id: 'r1',
+            squadId: ALFA,
+            userId: CAU,
+            status: 'invited',
+            createdAt: '2026-09-12T12:00:00.000Z',
+          },
+          {
+            id: 'r2',
+            squadId: BRAVO,
+            userId: CAU,
+            status: 'pending',
+            createdAt: '2026-09-12T12:00:00.000Z',
+          },
         ],
       }),
       GAME,

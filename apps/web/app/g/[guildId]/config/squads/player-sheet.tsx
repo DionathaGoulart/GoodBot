@@ -53,7 +53,7 @@ function answerText(field: SquadGameField, player: PlayerRow): string | null {
 function deleteBlocker(player: PlayerRow): string | null {
   if (player.inSquadInGame) return 'EM SQUAD DESTE JOGO: TIRE DO SQUAD ANTES DE APAGAR';
   if (player.openProposalIds.length > 0) return 'EM PROPOSTA ABERTA: ESPERE ELA FECHAR OU EXPIRAR';
-  if (player.pendingRequestSquadIds.length > 0) return 'COM PEDIDO DE ENTRADA ESPERANDO RESPOSTA';
+  if (player.pendingRequestSquadIds.length > 0) return 'COM CONVITE OU PEDIDO DE ENTRADA ABERTO';
   return null;
 }
 
@@ -280,14 +280,15 @@ export function PlayerSheet({
               )}
             </Section>
 
-            <Section title="PEDIDOS PENDENTES">
+            <Section title="CONVITES E PEDIDOS">
               {requests.length === 0 ? (
                 <p className="screen-meta">NENHUM</p>
               ) : (
                 <ul className="flex flex-col gap-1">
                   {requests.map((entry) => (
                     <li key={entry.id} className="screen-meta">
-                      {squadName(entry.squadId).toUpperCase()} · DESDE{' '}
+                      {squadName(entry.squadId).toUpperCase()} ·{' '}
+                      {entry.status === 'invited' ? 'CONVITE SEM RESPOSTA' : 'EM VOTAÇÃO NO SQUAD'} · DESDE{' '}
                       {formatDate(entry.createdAt, timeZone)}
                     </li>
                   ))}

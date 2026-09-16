@@ -87,7 +87,7 @@ describe('describeManualIssue', () => {
       'Bia já está no máximo de squads do servidor (3). Se aceitar, o bot só deixa entrar depois que sair de outro.',
     ],
     ['PAIR_COOLDOWN', [ANA, BIA], 'Ana e Bia receberam proposta juntos há menos de 7 dias.'],
-    ['PENDING_JOIN_REQUEST', [CAIO], 'Caio tem um pedido de entrada esperando resposta.'],
+    ['PENDING_JOIN_REQUEST', [CAIO], 'Caio tem um convite ou pedido de entrada esperando resposta.'],
   ])('%s', (code, userIds, text) => {
     expect(describeManualIssue({ code, userIds }, ctx)).toBe(text);
   });
@@ -232,10 +232,13 @@ describe('formatMatchResult', () => {
     expect(formatMatchResult({ proposals: 0, joinRequests: 0 })).toMatch(/^Nenhum par novo/);
   });
 
-  it('conta propostas e pedidos no singular e no plural', () => {
+  it('conta propostas e convites no singular e no plural', () => {
     expect(formatMatchResult({ proposals: 1, joinRequests: 0 })).toBe('1 proposta aberta.');
+    expect(formatMatchResult({ proposals: 0, joinRequests: 1 })).toBe(
+      '1 convite para squad com vaga.',
+    );
     expect(formatMatchResult({ proposals: 2, joinRequests: 3 })).toBe(
-      '2 propostas abertas e 3 pedidos de entrada.',
+      '2 propostas abertas e 3 convites para squads com vaga.',
     );
   });
 });

@@ -10,6 +10,7 @@ import {
   type SquadFieldMatch,
   type SquadFieldType,
   type SquadGameField,
+  type SquadOpenRequestStatus,
   type SquadProfileStatus,
   type SquadProposalSummary,
 } from '@goodbot/shared';
@@ -42,10 +43,12 @@ export interface LiveSquadRow {
   memberIds: string[];
 }
 
+/** Convite (`invited`, esperando a pessoa) ou pedido em votação (`pending`, esperando o squad). */
 export interface PendingRequestRow {
   id: string;
   squadId: string;
   userId: string;
+  status: SquadOpenRequestStatus;
   createdAt: string;
 }
 
@@ -83,7 +86,7 @@ export interface PlayerRow extends PlayerProfileRow {
   squadIds: string[];
   /** Propostas abertas deste jogo em que a pessoa não passou. */
   openProposalIds: string[];
-  /** Squads vivos deste jogo com pedido de entrada pendente dela. */
+  /** Squads vivos deste jogo com convite ou pedido de entrada aberto dela. */
   pendingRequestSquadIds: string[];
   /** Squads vivos em todos os jogos: é o que `maxSquadsPerUser` conta. */
   activeSquadCount: number;

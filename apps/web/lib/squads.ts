@@ -7,7 +7,7 @@ import {
   getSquadGame,
   listMembersOfSquads,
   listOpenSquadProposals,
-  listPendingJoinRequests,
+  listOpenJoinRequests,
   listRecentProposalPairs,
   listSquadGames,
   listSquadProfilesByGame,
@@ -123,7 +123,7 @@ export async function loadSquadPlayers(
     Promise.all(games.map((game) => listSquadProfilesByGame(db(), guildId, game.id))),
     listOpenSquadProposals(db(), guildId),
     listSquads(db(), guildId, { statuses: ['open', 'full'] }),
-    listPendingJoinRequests(db(), guildId),
+    listOpenJoinRequests(db(), guildId),
     Promise.all(games.map((game) => listRecentProposalPairs(db(), guildId, game.id, since))),
   ]);
   const profiles = perGame.flat();
@@ -184,6 +184,8 @@ export async function loadSquadPlayers(
       id: row.id,
       squadId: row.squadId,
       userId: row.userId,
+      // A consulta só traz abertos: o que não é convite está em votação.
+      status: row.status === 'invited' ? ('invited' as const) : ('pending' as const),
       createdAt: row.createdAt.toISOString(),
     })),
     cooldownPairs: Object.fromEntries(
