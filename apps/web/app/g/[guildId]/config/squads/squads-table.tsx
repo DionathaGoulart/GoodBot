@@ -2,6 +2,13 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  formatHistory,
+  squadHistoryFromSummary,
+  type SquadBlockConfig,
+  type SquadChannelUsage,
+  type SquadSummary,
+} from '@goodbot/shared';
 
 import { archiveSquadAction } from '@/app/actions/squads';
 import { ConfirmButton } from '@/components/config/confirm-button';
@@ -15,7 +22,6 @@ import { withId } from './form-data';
 import { RenameSheet, type RenameEditing } from './rename-sheet';
 
 import type { SquadGameRow } from '@/lib/squads';
-import type { SquadChannelUsage, SquadSummary } from '@goodbot/shared';
 
 /** §6.7 — canais da guild contra o teto do Discord: cada squad gasta um. */
 function ChannelUsage({ usage, squads }: { usage: SquadChannelUsage; squads: number }) {
@@ -59,13 +65,21 @@ export function SquadsTable({
   games,
   channels,
   channelNames,
+  blocks,
   timeZone,
+  loadedAt,
 }: {
   squads: SquadSummary[];
   games: SquadGameRow[];
   channels: SquadChannelUsage | null;
   channelNames: Record<string, string>;
+  blocks: SquadBlockConfig[];
   timeZone: string;
+  /**
+   * Quando o servidor leu o overview. O "há 3 dias" do histórico conta daqui:
+   * um `Date.now()` no render daria um texto no servidor e outro no navegador.
+   */
+  loadedAt: number;
 }) {
   const guildId = useGuildId();
   const router = useRouter();
@@ -134,6 +148,25 @@ export function SquadsTable({
         },
       },
       {
+        id: 'history',
+        header: 'HISTÓRICO',
+        // Squad que joga mais no mês sobe; sem dado do bot fica por último.
+        accessorFn: (row) => row.history?.playedLast30d ?? -1,
+        cell: ({ row }) => {
+          const { history } = row.original;
+          if (!history) return <span className="screen-meta">SEM DADO DO BOT</span>;
+          return (
+            <span className="block max-w-xs text-sm leading-relaxed">
+              {formatHistory(squadHistoryFromSummary(history), {
+                now: new Date(loadedAt),
+                timeZone,
+                blocks,
+              })}
+            </span>
+          );
+        },
+      },
+      {
         id: 'voice',
         header: 'VOICE',
         enableSorting: false,
@@ -194,7 +227,7 @@ export function SquadsTable({
         ),
       },
     ],
-    [channelNames, gameById, guildId, router, timeZone],
+    [blocks, channelNames, gameById, guildId, loadedAt, router, timeZone],
   );
 
   return (

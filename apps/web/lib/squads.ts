@@ -61,6 +61,8 @@ export interface SquadsOverviewData {
   /** `null` com o bot fora do ar: o contador sai do cache do gateway. */
   channels: SquadChannelUsage | null;
   error: string | null;
+  /** Quando o painel leu: é o "agora" das datas relativas, igual no servidor e no navegador. */
+  loadedAt: number;
 }
 
 /** Jogos vêm do banco: a aba JOGOS funciona com o bot fora do ar. */
@@ -81,6 +83,7 @@ export async function loadSquadGames(guildId: string): Promise<SquadGameRow[]> {
  * canais reais da guild (o teto de 500 é do servidor inteiro).
  */
 export async function loadSquadsOverview(guildId: string): Promise<SquadsOverviewData> {
+  const loadedAt = Date.now();
   try {
     const overview = await internalApi().squadsOverview(guildId);
     return {
@@ -88,12 +91,14 @@ export async function loadSquadsOverview(guildId: string): Promise<SquadsOvervie
       openProposals: overview.openProposals,
       channels: overview.channels,
       error: null,
+      loadedAt,
     };
   } catch (error) {
     return {
       squads: [],
       openProposals: [],
       channels: null,
+      loadedAt,
       error:
         error instanceof InternalApiError
           ? `O bot não respondeu: ${error.message}`

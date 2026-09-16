@@ -288,7 +288,9 @@ export function SquadsTabs({
             games={games}
             channels={overview.channels}
             channelNames={channelNames}
+            blocks={blocks}
             timeZone={timeZone}
+            loadedAt={overview.loadedAt}
           />
         </TabsContent>
 
