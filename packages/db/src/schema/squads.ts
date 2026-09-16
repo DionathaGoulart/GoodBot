@@ -37,8 +37,17 @@ export const squadGames = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     guildId: guildRef(),
     name: text('name').notNull(),
-    /** Jogadores por squad; a faixa válida é a do `SquadGameInputSchema`. */
-    squadSize: integer('squad_size').notNull(),
+    /** Teto do squad inteiro; a faixa válida é a do `SquadGameInputSchema`. */
+    groupSize: integer('group_size').notNull(),
+    /** Quantos jogam juntos numa partida (`<= group_size`): a turma que o match propõe. */
+    partySize: integer('party_size').notNull(),
+    /**
+     * @deprecated Tamanho único do modelo antigo, copiado para `group_size` e
+     * `party_size` na migration. Não é mais escrito; fica nulo por uma versão
+     * para o bot e o painel publicados não quebrarem antes do deploy novo, e
+     * sai junto com `squads.day`/`block`.
+     */
+    squadSize: integer('squad_size'),
     enabled: boolean('enabled').notNull().default(true),
     /** Perguntas do perfil (no máximo 5, o que cabe num modal). */
     fields: jsonb('fields').$type<SquadGameField[]>().notNull().default([]),

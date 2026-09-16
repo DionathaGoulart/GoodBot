@@ -46,6 +46,7 @@ import {
   setSessionMessage,
   setSquadGuideMessage,
   setSquadStatus,
+  syncSquadStatusesToGroupSize,
   touchSquadConfirmed,
   upsertSquadProfile,
   voteSquadSession,
@@ -106,7 +107,8 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
     const created = await createSquadGame(db, {
       guildId: GUILD_ID,
       name: 'Helldivers 2',
-      squadSize: 4,
+      groupSize: 4,
+      partySize: 4,
     });
     if (!created) throw new Error('jogo de teste não foi criado');
     game = created;
@@ -120,7 +122,12 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
   describe('jogos e escopo de guild', () => {
     it('nome repetido na guild devolve null', async () => {
       expect(
-        await createSquadGame(db, { guildId: GUILD_ID, name: 'Helldivers 2', squadSize: 2 }),
+        await createSquadGame(db, {
+          guildId: GUILD_ID,
+          name: 'Helldivers 2',
+          groupSize: 2,
+          partySize: 2,
+        }),
       ).toBeNull();
     });
 
@@ -136,7 +143,7 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
   describe('perfis', () => {
     /** Jogo próprio por teste: os contadores dos outros blocos olham o jogo principal. */
     async function profileGame(guildId: string, name: string): Promise<SquadGame> {
-      const created = await createSquadGame(db, { guildId, name, squadSize: 3 });
+      const created = await createSquadGame(db, { guildId, name, groupSize: 3, partySize: 3 });
       if (!created) throw new Error(`jogo de teste ${name} não foi criado`);
       return created;
     }
@@ -360,12 +367,14 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       const pairsGame = await createSquadGame(db, {
         guildId: GUILD_ID,
         name: 'Jogo das duplas',
-        squadSize: 3,
+        groupSize: 3,
+        partySize: 3,
       });
       const otherGame = await createSquadGame(db, {
         guildId: GUILD_ID,
         name: 'Outro jogo',
-        squadSize: 2,
+        groupSize: 2,
+        partySize: 2,
       });
 
       await newProposal([USER_A, USER_B, USER_C], pairsGame!.id);
@@ -585,6 +594,46 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect(await setSquadGuideMessage(db, OTHER_GUILD_ID, squad.id, null, '300000000000000011')).toBeNull();
     });
 
+    it('syncSquadStatusesToGroupSize reabre ou fecha a vaga pelo tamanho novo, só no jogo', async () => {
+      const sized = await createSquadGame(db, {
+        guildId: GUILD_ID,
+        name: 'Tamanho do grupo',
+        groupSize: 2,
+        partySize: 2,
+      });
+      if (!sized) throw new Error('jogo de tamanho não foi criado');
+      const squadOf = async (name: string, userIds: string[], status: 'open' | 'full') => {
+        const squad = await createSquad(db, { guildId: GUILD_ID, gameId: sized.id, name });
+        for (const userId of userIds) {
+          await addSquadMember(db, { guildId: GUILD_ID, squadId: squad.id, userId });
+        }
+        return (await setSquadStatus(db, GUILD_ID, squad.id, status))!;
+      };
+      const pair = await squadOf('Dupla cheia', [USER_A, USER_B], 'full');
+      const trio = await squadOf('Trio aberto', [USER_A, USER_B, USER_C], 'open');
+      const solo = await squadOf('Solo', [USER_D], 'open');
+      const archived = await squadOf('Arquivado cheio', [USER_A, USER_B], 'full');
+      await archiveSquad(db, GUILD_ID, archived.id, new Date());
+      const otherGame = await newSquad('Outro jogo cheio');
+      for (const userId of [USER_A, USER_B]) {
+        await addSquadMember(db, { guildId: GUILD_ID, squadId: otherGame.id, userId });
+      }
+      await setSquadStatus(db, GUILD_ID, otherGame.id, 'full');
+
+      const grown = await syncSquadStatusesToGroupSize(db, GUILD_ID, sized.id, 3);
+      expect(grown.sort((a, b) => a.id.localeCompare(b.id))).toEqual(
+        [
+          { id: pair.id, status: 'open' },
+          { id: trio.id, status: 'full' },
+        ].sort((a, b) => a.id.localeCompare(b.id)),
+      );
+      expect(await syncSquadStatusesToGroupSize(db, GUILD_ID, sized.id, 3)).toEqual([]);
+      expect((await getSquad(db, GUILD_ID, solo.id))?.status).toBe('open');
+      expect((await getSquad(db, GUILD_ID, archived.id))?.status).toBe('archived');
+      expect((await getSquad(db, GUILD_ID, otherGame.id))?.status).toBe('full');
+      expect(await syncSquadStatusesToGroupSize(db, OTHER_GUILD_ID, sized.id, 10)).toEqual([]);
+    });
+
     it('countSquadsForUser ignora arquivados', async () => {
       const active = await newSquad('Ativo');
       const archived = await newSquad('Arquivado');
@@ -658,7 +707,8 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       const other = await createSquadGame(db, {
         guildId: GUILD_ID,
         name: 'Contagem',
-        squadSize: 2,
+        groupSize: 2,
+        partySize: 2,
       });
       if (!other) throw new Error('jogo de contagem não foi criado');
       const profiles = [

@@ -20,6 +20,7 @@ import {
   lt,
   lte,
   ne,
+  notInArray,
   or,
   sql,
   type SQL,
@@ -73,7 +74,8 @@ const removeId = (column: AnyPgColumn, id: string): SQL =>
 export interface CreateSquadGameInput {
   guildId: string;
   name: string;
-  squadSize: number;
+  groupSize: number;
+  partySize: number;
   enabled?: boolean;
   fields?: SquadGameField[];
 }
@@ -429,6 +431,41 @@ export async function setSquadStatus(
     .where(and(eq(squads.guildId, guildId), eq(squads.id, squadId), ne(squads.status, 'archived')))
     .returning();
   return row ?? null;
+}
+
+/**
+ * Põe `open`/`full` dos squads vivos de um jogo de acordo com um tamanho de
+ * grupo novo. O status só muda quando alguém entra ou sai, então sem isto subir
+ * o grupo de 4 para 8 deixaria fora da busca, para sempre, todo squad que já
+ * estava cheio; e descer deixaria vaga aberta num squad que já passou do teto.
+ * Duas `UPDATE`s condicionais: repetir não muda nada. Devolve os que mudaram.
+ */
+export async function syncSquadStatusesToGroupSize(
+  db: DbExecutor,
+  guildId: string,
+  gameId: string,
+  groupSize: number,
+): Promise<Array<Pick<Squad, 'id' | 'status'>>> {
+  const atCapacity = db
+    .select({ squadId: squadMembers.squadId })
+    .from(squadMembers)
+    .where(eq(squadMembers.guildId, guildId))
+    .groupBy(squadMembers.squadId)
+    .having(sql`count(*) >= ${groupSize}`);
+  const ofGame = and(eq(squads.guildId, guildId), eq(squads.gameId, gameId));
+  const changed = { id: squads.id, status: squads.status };
+
+  const reopened = await db
+    .update(squads)
+    .set({ status: 'open', updatedAt: sql`now()` })
+    .where(and(ofGame, eq(squads.status, 'full'), notInArray(squads.id, atCapacity)))
+    .returning(changed);
+  const filled = await db
+    .update(squads)
+    .set({ status: 'full', updatedAt: sql`now()` })
+    .where(and(ofGame, eq(squads.status, 'open'), inArray(squads.id, atCapacity)))
+    .returning(changed);
+  return [...reopened, ...filled];
 }
 
 export async function renameSquad(
