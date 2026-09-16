@@ -183,3 +183,19 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
 - Cargos sem nenhuma permissão — etiqueta ou alvo de override, sem poder próprio: General, PC, PS5, Xbox, Democracia, Vídeos, Lives, Eventos, Boletins, Files.
 - Fora do alcance do `guild.yaml` — existem no servidor e o apply não os toca: sugestões-de-vídeo (fórum), pergunte-ao-goodivers (fórum), loadouts-e-tier-lists (fórum).
 - Emojis, stickers, eventos, webhooks e threads não entram nesta varredura nem no `guild.yaml`; continuam intactos.
+
+## Configuração manual
+
+> Fica fora do `guild.yaml` e da API do bot: é feita à mão no Discord. Um
+> `pnpm guild scan --force` reescreve este arquivo, então copie esta seção de
+> volta depois.
+
+### Guia do Servidor
+
+Configurações do servidor → Onboarding → Guia do Servidor → tarefas para novos
+membros.
+
+- **Ache seu squad**, apontando para `#procurar-esquadrão` (ação de ver o
+  canal, porque só o Goodbot escreve lá). Substitui o antigo "Monte seu perfil
+  de esquadrão": o botão do jogo na mensagem fixada monta o perfil e já procura
+  squad.
