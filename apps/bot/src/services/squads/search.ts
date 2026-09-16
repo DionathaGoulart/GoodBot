@@ -1,6 +1,7 @@
 import {
   getSquad,
   getSquadProfile,
+  getSquadSession,
   listOpenSquadsByGame,
   listOpenJoinRequests,
   listRecentJoinRequestKeys,
@@ -15,8 +16,15 @@ import { searchMessage } from './embeds';
 import { rankVacancyCandidates, toMatchProfile } from './matcher';
 
 import type { SquadContext } from './context';
-import type { Squad, SquadGame, SquadJoinRequest, SquadMember, SquadProfile } from '@goodbot/db';
-import type { AuditSource } from '@goodbot/shared';
+import type {
+  Squad,
+  SquadGame,
+  SquadJoinRequest,
+  SquadMember,
+  SquadProfile,
+  SquadSession,
+} from '@goodbot/db';
+import type { AuditSource, SquadsConfig } from '@goodbot/shared';
 import type { Guild, Message, TextChannel } from 'discord.js';
 
 const DISCORD_MISSING_ACCESS = 50001;
@@ -26,6 +34,8 @@ export interface JoinableSquad {
   squad: Squad;
   memberCount: number;
   score: number;
+  /** `formatHistory` do squad: quem procura quer saber se o squad joga de verdade. */
+  history: string;
 }
 
 export interface PublishedSearchMessage {
@@ -44,7 +54,14 @@ export interface JoinRequestSent {
   squad: Squad;
 }
 
-/** O que a pessoa faz por conta própria: a mensagem fixa, a lista de vagas e o pedido manual. */
+export interface CallRequestSent extends JoinRequestSent {
+  session: SquadSession;
+}
+
+/**
+ * O que a pessoa faz por conta própria: a mensagem fixa, a lista de vagas, o
+ * pedido manual e o ENTRAR de uma chamada pública.
+ */
 export class SearchService {
   constructor(private readonly ctx: SquadContext) {}
 
@@ -149,15 +166,23 @@ export class SearchService {
     const asked = new Set(recent);
     for (const request of pending) asked.add(joinRequestKey(request.squadId, request.userId));
 
-    const joinable: JoinableSquad[] = [];
+    const fits: Omit<JoinableSquad, 'history'>[] = [];
     for (const squad of squads) {
       if (!squad.textChannelId || asked.has(joinRequestKey(squad.id, userId))) continue;
       const members = await listSquadMembers(db, guildId, squad.id);
       if (members.length >= game.groupSize) continue;
       if (members.some((member) => member.userId === userId)) continue;
       const score = await this.fitScore(guildId, game, squad, members, profile);
-      if (score !== null) joinable.push({ squad, memberCount: members.length, score });
+      if (score !== null) fits.push({ squad, memberCount: members.length, score });
     }
+    const histories = await this.ctx.parts.history.load(
+      guildId,
+      fits.map((fit) => fit.squad.id),
+    );
+    const joinable = fits.map((fit) => ({
+      ...fit,
+      history: histories.get(fit.squad.id)?.text ?? '',
+    }));
     return joinable.sort(
       (a, b) =>
         b.score - a.score || (a.squad.name < b.squad.name ? -1 : a.squad.name > b.squad.name ? 1 : 0),
@@ -179,16 +204,75 @@ export class SearchService {
     }
     const game = await this.ctx.parts.profiles.requireGame(guild.id, squad.gameId);
     const members = await listSquadMembers(db, guild.id, squad.id);
+    await this.assertCanAsk(guild.id, squad, game, members, userId, config);
+    const profile = await this.requireProfile(guild.id, userId, game.id);
+    if ((await this.fitScore(guild.id, game, squad, members, profile)) === null) {
+      throw new UserFacingError('Seus horários ou respostas não combinam com este squad.', {
+        code: 'NOT_COMPATIBLE',
+      });
+    }
+    return { request: await this.sendRequest(guild, squad, userId), squad };
+  }
+
+  /**
+   * ENTRAR na chamada pública de uma jogatina: o mesmo pedido em votação do
+   * `/squad procurar`, com duas diferenças. Não exige perfil nem grade que
+   * combine, porque a pessoa respondeu a uma jogatina com dia e hora (o
+   * horário já bate); e o pedido guarda a jogatina, para a votação dizer de
+   * onde a pessoa veio e quem entra já ficar como "vou" nela. Chamada de
+   * jogatina que começou ou foi cancelada sai do ar no clique.
+   */
+  async requestFromCall(guild: Guild, userId: string, sessionId: number): Promise<CallRequestSent> {
+    const { db } = this.ctx;
+    const config = await this.ctx.requireConfig(guild.id);
+    const session = await getSquadSession(db, guild.id, sessionId);
+    if (!session) {
+      throw new UserFacingError('Esta jogatina não existe mais.', { code: 'SESSION_NOT_FOUND' });
+    }
+    const squad = await getSquad(db, guild.id, session.squadId);
+    const over =
+      !squad ||
+      squad.status === 'archived' ||
+      session.cancelledAt !== null ||
+      session.startedAt !== null ||
+      session.startsAt.getTime() <= this.ctx.now();
+    if (over) {
+      await this.ctx.parts.calls.close(guild, session);
+      throw new UserFacingError(
+        'Esta chamada acabou: a jogatina já começou, foi cancelada ou o squad foi encerrado.',
+        { code: 'CALL_CLOSED' },
+      );
+    }
+    const game = await this.ctx.parts.profiles.requireGame(guild.id, squad.gameId);
+    const members = await listSquadMembers(db, guild.id, squad.id);
+    await this.assertCanAsk(guild.id, squad, game, members, userId, config);
+    const request = await this.sendRequest(guild, squad, userId, session.id);
+    return { request, squad, session };
+  }
+
+  /**
+   * O que vale para todo pedido feito pela própria pessoa: não ser do squad,
+   * vaga livre, teto de squads, nenhum convite ou pedido aberto para o mesmo
+   * squad e nenhum recente dentro do cooldown.
+   */
+  private async assertCanAsk(
+    guildId: string,
+    squad: Squad,
+    game: SquadGame,
+    members: readonly SquadMember[],
+    userId: string,
+    config: SquadsConfig,
+  ): Promise<void> {
+    const { db } = this.ctx;
     if (members.some((member) => member.userId === userId)) {
       throw new UserFacingError('Você já está neste squad.', { code: 'ALREADY_MEMBER' });
     }
     if (squad.status === 'full' || members.length >= game.groupSize) {
       throw new UserFacingError('O squad já encheu.', { code: 'SQUAD_FULL' });
     }
-    await this.ctx.parts.squads.assertCanJoinAnother(guild.id, userId, config);
-    const profile = await this.requireProfile(guild.id, userId, game.id);
+    await this.ctx.parts.squads.assertCanJoinAnother(guildId, userId, config);
 
-    const open = await listOpenJoinRequests(db, guild.id, squad.id);
+    const open = await listOpenJoinRequests(db, guildId, squad.id);
     const mine = open.find((request) => request.userId === userId);
     if (mine) {
       throw new UserFacingError(
@@ -199,20 +283,27 @@ export class SearchService {
       );
     }
     const since = new Date(this.ctx.now() - config.reproposeCooldownDays * DAY_MS);
-    const recent = await listRecentJoinRequestKeys(db, guild.id, since);
+    const recent = await listRecentJoinRequestKeys(db, guildId, since);
     if (recent.includes(joinRequestKey(squad.id, userId))) {
       throw new UserFacingError(
         'Você já pediu para entrar neste squad há pouco tempo. Tente outro squad.',
         { code: 'REQUEST_COOLDOWN' },
       );
     }
-    if ((await this.fitScore(guild.id, game, squad, members, profile)) === null) {
-      throw new UserFacingError('Seus horários ou respostas não combinam com este squad.', {
-        code: 'NOT_COMPATIBLE',
-      });
-    }
+  }
 
-    const sent = await this.ctx.parts.requests.open(guild, squad, userId);
+  private async sendRequest(
+    guild: Guild,
+    squad: Squad,
+    userId: string,
+    sessionId?: number,
+  ): Promise<SquadJoinRequest> {
+    const sent = await this.ctx.parts.requests.open(
+      guild,
+      squad,
+      userId,
+      sessionId === undefined ? {} : { sessionId },
+    );
     if (sent.outcome === 'exists') {
       throw new UserFacingError('Seu pedido já está com o squad. Agora é com eles.', {
         code: 'REQUEST_PENDING',
@@ -225,7 +316,7 @@ export class SearchService {
         { code: 'REQUEST_FAILED' },
       );
     }
-    return { request: sent.request, squad };
+    return sent.request;
   }
 
   private async requireProfile(

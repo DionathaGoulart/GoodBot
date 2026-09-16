@@ -407,6 +407,7 @@ export class SquadLifecycleService {
     }
 
     await this.ctx.parts.sessions.releaseForSquad(guild, squadId);
+    await this.ctx.parts.calls.closeForSquad(guild, squadId);
     await this.ctx.parts.guide.refresh(guild, squadId);
     await this.ctx.parts.requests.expireForSquad(guild, archived);
     await this.ctx.parts.proposals.closeForSquad(guild, squadId);

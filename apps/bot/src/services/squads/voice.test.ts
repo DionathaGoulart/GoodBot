@@ -53,6 +53,27 @@ describe('SquadService: evento de voz', () => {
 
     expect(await s.service.confirmVoicePresence(s.discordGuild, s.voice.id, C)).toBe(false);
     expect(store.squads[0]?.lastConfirmedAt).toBeNull();
+    expect(store.attendance).toEqual([]);
+  });
+
+  it('a presença no voice reservado abre uma linha por entrada, e sair fecha', async () => {
+    const s = await scenario(-10 * MINUTE_MS);
+
+    await s.service.confirmVoicePresence(s.discordGuild, s.voice.id, A);
+    expect(store.attendance).toEqual([
+      expect.objectContaining({ sessionId: store.sessions[0]!.id, userId: A, leftAt: null }),
+    ]);
+    expect(store.sessions[0]?.playedAt).toEqual(new Date(NOW));
+
+    s.clock.now += 20 * MINUTE_MS;
+    expect(await s.service.recordVoiceLeave(s.discordGuild, A)).toBe(1);
+    expect(store.attendance[0]?.leftAt).toEqual(new Date(NOW + 20 * MINUTE_MS));
+    expect(await s.service.recordVoiceLeave(s.discordGuild, A)).toBe(0);
+
+    // Voltou: outra linha, e a primeira continua fechada.
+    s.clock.now += 5 * MINUTE_MS;
+    await s.service.confirmVoicePresence(s.discordGuild, s.voice.id, A);
+    expect(store.attendance.map((row) => row.leftAt === null)).toEqual([false, true]);
   });
 
   it('voice sem reserva viva não conta como sessão', async () => {

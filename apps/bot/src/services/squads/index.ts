@@ -1,7 +1,9 @@
 import { getSquad, listSquadsForUser } from '@goodbot/db';
 
+import { CallService } from './calls';
 import { SquadContext } from './context';
 import { GuideService } from './guide';
+import { HistoryService } from './history';
 import { ManualMatchService } from './manual';
 import { MatcherService } from './matcher';
 import { PlayerAdminService } from './players';
@@ -12,7 +14,9 @@ import { SearchService } from './search';
 import { SessionService } from './sessions';
 import { SquadLifecycleService } from './squads';
 
+import type { CallSent } from './calls';
 import type { SquadServiceDeps } from './context';
+import type { SquadHistoryView } from './history';
 import type { ManualOutcome } from './manual';
 import type { MatchResult } from './matcher';
 import type { Notified } from './players';
@@ -20,6 +24,7 @@ import type { AvailabilityResult, ProfileDraft, ProfileForm, ProfileResult } fro
 import type { ProposalAcceptResult, ProposalDeclineResult } from './proposals';
 import type { InviteAnswer, InviteTarget, JoinVoteResult, MemberInviteSent } from './requests';
 import type {
+  CallRequestSent,
   JoinableSquad,
   JoinRequestSent,
   PublishedSearchMessage,
@@ -49,7 +54,9 @@ import type {
 } from '@goodbot/shared';
 import type { BaseMessageOptions, Guild } from 'discord.js';
 
+export type { CallSent } from './calls';
 export type { SquadServiceDeps } from './context';
+export type { SquadHistoryView } from './history';
 export type { ManualOutcome } from './manual';
 export type { MatchResult } from './matcher';
 export type { Notified } from './players';
@@ -63,6 +70,7 @@ export type {
   MemberInviteSent,
 } from './requests';
 export type {
+  CallRequestSent,
   JoinableSquad,
   JoinRequestSent,
   PublishedSearchMessage,
@@ -81,7 +89,7 @@ export type { ArchiveOptions, RemoveMemberResult, RenameOptions, RenameResult } 
 /**
  * Módulo `squads`: perfil por jogo, match por agenda, propostas sem líder,
  * entrada em squad existente (convite e votação), casa do squad (canal privado com guia fixo + voice do
- * pool) e jogatinas sob demanda. Uma fachada sobre as partes em
+ * pool), jogatinas sob demanda com chamada pública e o histórico delas. Uma fachada sobre as partes em
  * `services/squads/`; comandos, botões, o job e a API falam só com ela.
  *
  * Toda leitura e escrita passa o `guildId`. Erro que a pessoa resolve vira
@@ -100,6 +108,8 @@ export class SquadService {
       squads: new SquadLifecycleService(this.ctx),
       requests: new JoinRequestService(this.ctx),
       sessions: new SessionService(this.ctx),
+      calls: new CallService(this.ctx),
+      history: new HistoryService(this.ctx),
       guide: new GuideService(this.ctx),
       search: new SearchService(this.ctx),
       manual: new ManualMatchService(this.ctx),
@@ -423,6 +433,11 @@ export class SquadService {
     return this.ctx.parts.sessions.confirmPresence(guild, voiceChannelId, userId);
   }
 
+  /** Evento de voz: quem saiu de um voice do pool fecha a presença aberta. */
+  recordVoiceLeave(guild: Guild, userId: string): Promise<number> {
+    return this.ctx.parts.sessions.recordLeave(guild, userId);
+  }
+
   /** Evento de voz: voice reservado vazio depois do início libera a reserva. */
   releaseEmptyVoice(guild: Guild, voiceChannelId: string): Promise<boolean> {
     return this.ctx.parts.sessions.releaseIfEmpty(guild, voiceChannelId);
@@ -430,6 +445,38 @@ export class SquadService {
 
   checkInactivity(guild: Guild): Promise<InactivityResult> {
     return this.ctx.parts.sessions.checkInactivity(guild);
+  }
+
+  // ── chamada pública e histórico ───────────────────────────────────────────
+
+  /** CHAMAR GENTE na mensagem da jogatina. */
+  callForPlayers(
+    guild: Guild,
+    sessionId: number,
+    userId: string,
+    source: AuditSource,
+  ): Promise<CallSent> {
+    return this.ctx.parts.calls.call(guild, sessionId, userId, source);
+  }
+
+  /** CHAMAR GENTE no guia: a próxima jogatina com lugar. */
+  callForNextSession(
+    guild: Guild,
+    squadId: string,
+    userId: string,
+    source: AuditSource,
+  ): Promise<CallSent> {
+    return this.ctx.parts.calls.callNext(guild, squadId, userId, source);
+  }
+
+  /** ENTRAR na chamada pública: pedido de entrada em votação, ligado à jogatina. */
+  requestFromCall(guild: Guild, userId: string, sessionId: number): Promise<CallRequestSent> {
+    return this.ctx.parts.search.requestFromCall(guild, userId, sessionId);
+  }
+
+  /** O histórico de jogatinas de cada squad pedido (o painel lê por aqui). */
+  historyFor(guildId: string, squadIds: readonly string[]): Promise<Map<string, SquadHistoryView>> {
+    return this.ctx.parts.history.load(guildId, squadIds);
   }
 
   // ── guia ──────────────────────────────────────────────────────────────────

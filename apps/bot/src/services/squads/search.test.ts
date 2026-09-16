@@ -102,6 +102,7 @@ describe('SquadService: squads com vaga', () => {
 
     expect(list.map((entry) => entry.squad.id)).toEqual([s.squad.id]);
     expect(list[0]?.memberCount).toBe(2);
+    expect(list[0]?.history).toBe('Ainda não jogaram.');
   });
 
   it('a party dos membros completa não fecha o squad: a vaga vai até o tamanho do grupo', async () => {

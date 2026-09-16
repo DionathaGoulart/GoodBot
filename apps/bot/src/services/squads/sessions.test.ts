@@ -215,7 +215,7 @@ describe('SquadService: marcar jogatina', () => {
     const announce = messageById(s, sessionRow().messageId)!;
     expect(announce.payload.content).toBe(`<@${A}> <@${B}>`);
     expect(embedOf(announce)?.title).toBe('> JOGATINA MARCADA');
-    expect(buttonLabels(announce)).toEqual(['VOU', 'NÃO VOU', 'CANCELAR']);
+    expect(buttonLabels(announce)).toEqual(['VOU', 'NÃO VOU', 'CHAMAR GENTE', 'CANCELAR']);
     expect(squadRow().lastConfirmedAt).not.toBeNull();
     expect(s.audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'squad.session.schedule', source: 'command', actor: A }),
@@ -386,7 +386,7 @@ describe('SquadService: lembrete, início e presença', () => {
     expect(second).toBeNull();
     const message = messageById(s, sessionRow().messageId)!;
     expect(message.payload.content).toBe(`<@${A}> <@${B}>`);
-    expect(buttonLabels(message)).toEqual(['VOU', 'NÃO VOU', 'CANCELAR']);
+    expect(buttonLabels(message)).toEqual(['VOU', 'NÃO VOU', 'CHAMAR GENTE', 'CANCELAR']);
   });
 
   it('jogatina anunciada ganha a sala na mensagem e um lembrete curto para quem não recusou', async () => {

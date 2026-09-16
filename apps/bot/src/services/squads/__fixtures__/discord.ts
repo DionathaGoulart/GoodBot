@@ -133,6 +133,11 @@ function fakeMessages() {
       if (!found) throw discordError('Unknown Message', 10008);
       return found;
     }),
+    delete: vi.fn(async (id: string) => {
+      const found = sent.find((message) => message.id === id && !message.deleted);
+      if (!found) throw discordError('Unknown Message', 10008);
+      found.deleted = true;
+    }),
   };
   return { sent, send, messages };
 }

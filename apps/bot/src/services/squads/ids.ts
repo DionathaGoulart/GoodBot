@@ -46,6 +46,9 @@ export type SquadCustomId =
   | { kind: 'invite-pick'; squadId: string }
   | { kind: 'invite-user'; squadId: string }
   | { kind: 'session'; action: SquadSessionAction; sessionId: number }
+  | { kind: 'call'; sessionId: number }
+  | { kind: 'call-next'; squadId: string }
+  | { kind: 'enter'; sessionId: number }
   | { kind: 'bora-open'; squadId: string }
   | { kind: 'bora-modal'; squadId: string }
   | { kind: 'rename-open'; squadId: string }
@@ -103,11 +106,30 @@ export function inviteUserSelectId(squadId: string): string {
   return build('invite', 'user', assertUuid(squadId, 'squadId'));
 }
 
-export function sessionButtonId(action: SquadSessionAction, sessionId: number): string {
+function assertSessionId(sessionId: number): string {
   if (!Number.isSafeInteger(sessionId) || sessionId < 1) {
     throw new RangeError(`sessionId inválido para custom_id: ${String(sessionId)}`);
   }
-  return build('session', action, String(sessionId));
+  return String(sessionId);
+}
+
+export function sessionButtonId(action: SquadSessionAction, sessionId: number): string {
+  return build('session', action, assertSessionId(sessionId));
+}
+
+/** CHAMAR GENTE, na mensagem da jogatina: posta esta jogatina no canal de busca. */
+export function callButtonId(sessionId: number): string {
+  return build('call', 'session', assertSessionId(sessionId));
+}
+
+/** CHAMAR GENTE, no guia do squad: chama gente para a próxima jogatina com lugar. */
+export function callNextButtonId(squadId: string): string {
+  return build('call', 'next', assertUuid(squadId, 'squadId'));
+}
+
+/** ENTRAR, na chamada pública do canal de busca: pede para entrar no squad da jogatina. */
+export function enterButtonId(sessionId: number): string {
+  return build('enter', assertSessionId(sessionId));
 }
 
 /** BORA, no guia do squad: abre o modal com o "quando". */
@@ -188,6 +210,13 @@ function parseMask(value: string | undefined): number | null {
 const isUuid = (value: string | undefined): value is string =>
   value !== undefined && UUID_RE.test(value);
 
+/** `squad_sessions.id` de um `custom_id`; `null` fora do formato. */
+function parseSessionId(value: string | undefined): number | null {
+  if (!value || !SESSION_ID_RE.test(value)) return null;
+  const sessionId = Number(value);
+  return Number.isSafeInteger(sessionId) ? sessionId : null;
+}
+
 /**
  * Lê um `custom_id` do módulo. `null` para qualquer coisa fora do formato:
  * mensagem antiga, prefixo de outro módulo ou id adulterado. Quem roteia
@@ -228,11 +257,21 @@ export function parseSquadCustomId(customId: string): SquadCustomId | null {
     }
     case 'session': {
       if (size !== 4 || !second || !SESSION_ACTIONS.includes(second)) return null;
-      if (!third || !SESSION_ID_RE.test(third)) return null;
-      const sessionId = Number(third);
-      return Number.isSafeInteger(sessionId)
-        ? { kind: 'session', action: second as SquadSessionAction, sessionId }
-        : null;
+      const sessionId = parseSessionId(third);
+      return sessionId === null
+        ? null
+        : { kind: 'session', action: second as SquadSessionAction, sessionId };
+    }
+    case 'call': {
+      if (size !== 4) return null;
+      if (second === 'next') return isUuid(third) ? { kind: 'call-next', squadId: third } : null;
+      if (second !== 'session') return null;
+      const sessionId = parseSessionId(third);
+      return sessionId === null ? null : { kind: 'call', sessionId };
+    }
+    case 'enter': {
+      const sessionId = size === 3 ? parseSessionId(second) : null;
+      return sessionId === null ? null : { kind: 'enter', sessionId };
     }
     case 'bora':
     case 'rename': {

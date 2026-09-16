@@ -3,7 +3,7 @@ import { PermissionFlagsBits } from 'discord.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ALL_BUT_ADMIN, componentsOf, embedOf, fakeTextChannel } from './__fixtures__/discord';
-import { A, B, createHarness, NOW } from './__fixtures__/harness';
+import { A, B, C, createHarness, NOW } from './__fixtures__/harness';
 
 const fixtures = await vi.hoisted(async () => import('./__fixtures__/fake-db'));
 vi.mock('@goodbot/db', () => fixtures.repositories);
@@ -46,7 +46,47 @@ describe('GuideService', () => {
     expect(embedOf(message)?.title).toBe('> OS BRAVOS');
     expect(fieldOf(message, 'Membros (2 de 4)')).toBe(`<@${A}>, <@${B}>`);
     expect(fieldOf(message, 'Vagas')).toContain('2 abertas');
-    expect(componentsOf(message)).toHaveLength(1);
+    expect(fieldOf(message, 'Histórico')).toBe('Ainda não jogaram.');
+    expect(componentsOf(message)).toHaveLength(2);
+  });
+
+  it('o histórico conta só o que rolou e cita só quem ainda é do squad', async () => {
+    const s = scenario();
+    // Sexta, 11/09, e sábado, 12/09, às 21h em São Paulo; a de domingo não rolou.
+    const friday = seedSession({
+      squadId: s.squad.id,
+      startsAt: new Date('2026-09-12T00:00:00Z'),
+      endsAt: new Date('2026-09-12T03:00:00Z'),
+      goingIds: [A, B],
+      playedAt: new Date('2026-09-12T00:05:00Z'),
+    });
+    seedSession({
+      squadId: s.squad.id,
+      startsAt: new Date('2026-09-13T00:00:00Z'),
+      endsAt: new Date('2026-09-13T03:00:00Z'),
+      goingIds: [A, C],
+      playedAt: new Date('2026-09-13T00:05:00Z'),
+    });
+    seedSession({
+      squadId: s.squad.id,
+      startsAt: new Date('2026-09-06T00:00:00Z'),
+      endsAt: new Date('2026-09-06T03:00:00Z'),
+      goingIds: [A, B],
+    });
+    // Na sexta, só A apareceu no voice: o "vou" de B não conta.
+    store.attendance.push({
+      guildId: s.squad.guildId,
+      sessionId: friday.id,
+      userId: A,
+      joinedAt: new Date('2026-09-12T00:05:00Z'),
+      leftAt: null,
+    });
+
+    await s.parts.guide.publish(s.discordGuild, s.squad.id, { mentionMembers: false });
+
+    expect(fieldOf(s.channel.sent[0], 'Histórico')).toBe(
+      `2 jogatinas no último mês. Última há 2 dias.\nQuem mais aparece: <@${A}>.`,
+    );
   });
 
   it('sem PinMessages no canal, o guia sai sem pin', async () => {
@@ -145,13 +185,12 @@ describe('GuideService', () => {
 
     await s.parts.guide.publish(s.discordGuild, s.squad.id, { mentionMembers: false });
 
-    const row = componentsOf(s.channel.sent[0])[0] as { toJSON(): { components: { label?: string }[] } };
-    expect(row.toJSON().components.map((button) => button.label)).toEqual([
-      'BORA',
-      'CONVIDAR',
-      'RENOMEAR',
-      'PROCURAR OUTRO SQUAD',
-      'SAIR DO SQUAD',
+    const rows = componentsOf(s.channel.sent[0]) as {
+      toJSON(): { components: { label?: string }[] };
+    }[];
+    expect(rows.map((row) => row.toJSON().components.map((button) => button.label))).toEqual([
+      ['BORA', 'CHAMAR GENTE', 'CONVIDAR'],
+      ['RENOMEAR', 'PROCURAR OUTRO SQUAD', 'SAIR DO SQUAD'],
     ]);
   });
 });

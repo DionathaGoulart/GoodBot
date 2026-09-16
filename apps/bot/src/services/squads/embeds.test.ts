@@ -3,12 +3,18 @@ import { describe, expect, it } from 'vitest';
 import {
   adminActionDm,
   guideMessage,
+  inviteMessage,
+  joinableSquadsMessage,
+  joinVoteMessage,
   manualProposalNote,
   memberLeftMessage,
   partyText,
+  publicCallMessage,
+  sessionMessage,
 } from './embeds';
+import { parseSquadCustomId } from './ids';
 
-import type { AdminDmKind, AdminDmView } from './embeds';
+import type { AdminDmKind, AdminDmView, GuideView, JoinVoteView, SessionView } from './embeds';
 import type { BaseMessageOptions, EmbedBuilder } from 'discord.js';
 
 const REASON = 'Motivo escrito pelo admin.';
@@ -136,6 +142,7 @@ describe('party', () => {
           memberIds: ['300000000000000001', '300000000000000002'],
           upcoming: [],
           canJoinAnother: false,
+          history: { text: 'Ainda não jogaram.', regularIds: [] },
           embedColor: 0,
           mentionMembers: false,
         }),
@@ -148,5 +155,174 @@ describe('party', () => {
     expect(JSON.stringify(big)).not.toMatch(/[—–]/);
 
     expect(view(4, 4)?.description).not.toContain('Cada partida');
+  });
+});
+
+const SQUAD_ID = '00000000-0000-4000-8000-000000000001';
+const GAME_ID = '00000000-0000-4000-8000-000000000002';
+const HISTORY = '6 jogatinas no último mês, geralmente sexta e sábado à noite. Última há 3 dias.';
+
+/** Os `custom_id` de cada linha de botões, já lidos pelo parser. */
+function rowsOf(message: BaseMessageOptions) {
+  const rows = message.components as unknown as {
+    toJSON: () => { components: { custom_id: string }[] };
+  }[];
+  return rows.map(
+    (row) => row.toJSON().components.map((button) => parseSquadCustomId(button.custom_id)?.kind),
+  );
+}
+
+describe('histórico e chamada pública', () => {
+  const guide = (overrides: Partial<GuideView> = {}) =>
+    guideMessage({
+      squad: { id: SQUAD_ID, name: 'Os Bravos', status: 'open', voiceChannelId: null },
+      game: { id: GAME_ID, name: 'Helldivers 2', groupSize: 8, partySize: 4 },
+      memberIds: ['300000000000000001', '300000000000000002'],
+      upcoming: [],
+      canJoinAnother: true,
+      history: { text: HISTORY, regularIds: ['300000000000000002', '300000000000000001'] },
+      embedColor: 0,
+      mentionMembers: false,
+      ...overrides,
+    });
+
+  it('o guia mostra o histórico e quem mais aparece, e ensina o CHAMAR GENTE', () => {
+    const embed = embedOf(guide());
+    const history = embed?.fields?.find((field) => field.name === 'Histórico');
+    expect(history?.value).toBe(
+      `${HISTORY}\nQuem mais aparece: <@300000000000000002>, <@300000000000000001>.`,
+    );
+    expect(embed?.fields?.find((field) => field.name === 'Como usar')?.value).toContain(
+      '**CHAMAR GENTE**',
+    );
+    const quiet = embedOf(guide({ history: { text: 'Ainda não jogaram.', regularIds: [] } }));
+    expect(quiet?.fields?.find((field) => field.name === 'Histórico')?.value).toBe(
+      'Ainda não jogaram.',
+    );
+    expect(JSON.stringify(embed)).not.toMatch(/[—–]/);
+  });
+
+  it('o guia divide os botões em jogar e cuidar do squad', () => {
+    expect(rowsOf(guide())).toEqual([
+      ['bora-open', 'call-next', 'invite-pick'],
+      ['rename-open', 'search', 'leave'],
+    ]);
+    expect(rowsOf(guide({ canJoinAnother: false }))[1]).toEqual(['rename-open', 'leave']);
+  });
+
+  it('o convite mostra o histórico enquanto está aberto', () => {
+    const view = {
+      request: {
+        id: '00000000-0000-4000-8000-000000000003',
+        userId: '300000000000000009',
+        invitedBy: null,
+        expiresAt: new Date('2026-09-17T12:00:00Z'),
+      },
+      squad: { name: 'Os Bravos', textChannelId: null },
+      game: { name: 'Helldivers 2', groupSize: 8 },
+      memberIds: ['300000000000000001'],
+      history: HISTORY,
+      embedColor: 0,
+      mentionCandidate: false,
+    } as const;
+    const open = embedOf(inviteMessage({ ...view, state: 'invited' }));
+    expect(open?.fields?.find((field) => field.name === 'Histórico')?.value).toBe(HISTORY);
+    const done = embedOf(inviteMessage({ ...view, state: 'joined' }));
+    expect(done?.fields ?? []).toEqual([]);
+  });
+
+  it('a lista do /squad procurar leva o histórico de cada squad', () => {
+    const embed = embedOf(
+      joinableSquadsMessage({
+        game: { name: 'Helldivers 2', groupSize: 8 },
+        entries: [{ squad: { id: SQUAD_ID, name: 'Os Bravos' }, memberCount: 3, history: HISTORY }],
+        embedColor: 0,
+      }),
+    );
+    expect(embed?.fields?.[0]?.value).toBe(`3 de 8 jogadores. ${HISTORY}`);
+  });
+
+  it('a chamada pública: quando, party, squad, histórico e ENTRAR, sem chamar ninguém', () => {
+    const startsAt = new Date('2026-09-18T00:00:00Z');
+    const message = publicCallMessage({
+      session: { id: 42, startsAt },
+      squad: { name: 'Os Bravos' },
+      game: { name: 'Helldivers 2', groupSize: 8, partySize: 4 },
+      memberCount: 3,
+      history: HISTORY,
+      embedColor: 0,
+    });
+    const embed = embedOf(message);
+    expect(embed?.title).toBe('> BORA JOGAR HELLDIVERS 2?');
+    expect(embed?.description).toContain('**Os Bravos**');
+    expect(embed?.description).toContain(`<t:${String(startsAt.getTime() / 1000)}:F>`);
+    expect(embed?.description).toContain('cada partida leva até 4');
+    expect(embed?.fields).toEqual([
+      { name: 'Squad', value: '3 de 8 jogadores' },
+      { name: 'Histórico', value: HISTORY },
+    ]);
+    expect(rowsOf(message)).toEqual([['enter']]);
+    expect(message.allowedMentions).toEqual({ parse: [] });
+    expect(JSON.stringify(embed)).not.toMatch(/[—–]/);
+  });
+
+  it('a jogatina só oferece CHAMAR GENTE quando dá, e mostra a chamada aberta', () => {
+    const view: SessionView = {
+      session: {
+        id: 7,
+        startsAt: new Date('2026-09-18T00:00:00Z'),
+        endsAt: new Date('2026-09-18T03:00:00Z'),
+        goingIds: ['300000000000000001'],
+        notGoingIds: [],
+        createdBy: '300000000000000001',
+        cancelledBy: null,
+        remindedAt: null,
+      },
+      squad: { name: 'Os Bravos' },
+      memberIds: ['300000000000000001', '300000000000000002'],
+      partySize: 4,
+      voiceChannelId: null,
+      canCall: true,
+      callChannelId: null,
+      state: 'scheduled',
+      reminderMinutesBefore: 30,
+      embedColor: 0,
+      mentionMembers: false,
+    };
+    expect(rowsOf(sessionMessage(view))).toEqual([['session', 'session', 'call', 'session']]);
+    const called = sessionMessage({ ...view, canCall: false, callChannelId: '400000000000000001' });
+    expect(rowsOf(called)).toEqual([['session', 'session', 'session']]);
+    expect(embedOf(called)?.fields?.find((field) => field.name === 'Chamada')?.value).toContain(
+      '<#400000000000000001>',
+    );
+    const started = sessionMessage({ ...view, state: 'started', callChannelId: '400000000000000001' });
+    expect(embedOf(started)?.fields?.some((field) => field.name === 'Chamada')).toBe(false);
+  });
+
+  it('a votação de quem veio pela chamada diz de qual jogatina', () => {
+    const startsAt = new Date('2026-09-18T00:00:00Z');
+    const view: Omit<JoinVoteView, 'session'> = {
+      request: {
+        id: '00000000-0000-4000-8000-000000000003',
+        userId: '300000000000000009',
+        acceptedIds: [],
+        declinedIds: [],
+        expiresAt: new Date('2026-09-17T12:00:00Z'),
+      },
+      memberIds: ['300000000000000001', '300000000000000002'],
+      game: { fields: [] },
+      answers: {},
+      slot: null,
+      blocks: [],
+      state: 'open',
+      embedColor: 0,
+      mentionMembers: false,
+    };
+    expect(embedOf(joinVoteMessage({ ...view, session: { startsAt } }))?.description).toContain(
+      `respondeu à chamada da jogatina de <t:${String(startsAt.getTime() / 1000)}:f>`,
+    );
+    expect(embedOf(joinVoteMessage({ ...view, session: null }))?.description).toContain(
+      'joga em horários parecidos',
+    );
   });
 });

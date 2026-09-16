@@ -1,8 +1,10 @@
-import { UserFacingError } from '@goodbot/shared';
+import { isUserFacingError, UserFacingError } from '@goodbot/shared';
 import { MessageFlags } from 'discord.js';
 
 import { CooldownStore } from '../lib/cooldown';
 import {
+  callRequestSentText,
+  callSentText,
   inviteAnswerText,
   invitePickMessage,
   inviteSentText,
@@ -86,7 +88,8 @@ async function requireLiveSquad(ctx: BotContext, guildId: string, squadId: strin
 
 /**
  * Todo componente com prefixo `squad`. As mensagens são persistentes (a
- * fixa, as propostas, os convites, as votações, o guia, as jogatinas) e a
+ * fixa, as propostas, os convites, as votações, o guia, as jogatinas e as
+ * chamadas públicas) e a
  * grade não guarda estado: tudo o que o handler precisa vem do `custom_id` e
  * do banco.
  */
@@ -247,6 +250,34 @@ export async function handleSquadComponent(
         }
       }
       return false;
+    }
+
+    case 'call':
+    case 'call-next': {
+      // Postar a chamada lê o histórico e escreve no canal de busca: mais que 3 s.
+      await interaction.deferReply(EPHEMERAL);
+      const result =
+        parsed.kind === 'call'
+          ? await ctx.squads.callForPlayers(guild, parsed.sessionId, userId, 'event')
+          : await ctx.squads.callForNextSession(guild, parsed.squadId, userId, 'event');
+      await interaction.editReply({ content: callSentText(result) });
+      return true;
+    }
+
+    case 'enter': {
+      await interaction.deferReply(EPHEMERAL);
+      try {
+        const result = await ctx.squads.requestFromCall(guild, userId, parsed.sessionId);
+        await interaction.editReply({ content: callRequestSentText(result) });
+      } catch (error) {
+        // Chamada que ficou no ar (apagar falhou no início): o clique a tira
+        // dali, mesmo quando o banco já dizia que ela tinha saído.
+        if (isUserFacingError(error) && error.code === 'CALL_CLOSED') {
+          await interaction.message.delete().catch(() => null);
+        }
+        throw error;
+      }
+      return true;
     }
 
     // Modal exige a interação intacta: nada de adiar antes do `showModal`.

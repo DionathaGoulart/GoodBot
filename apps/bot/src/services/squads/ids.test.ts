@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 import {
   boraButtonId,
   boraModalId,
+  callButtonId,
+  callNextButtonId,
   confirmLeaveButtonId,
+  enterButtonId,
   gridSaveButtonId,
   gridSelectId,
   inviteButtonId,
@@ -43,6 +46,9 @@ describe('custom_id de squads', () => {
     [sessionButtonId('notgoing', 7), { kind: 'session', action: 'notgoing', sessionId: 7 }],
     [sessionButtonId('cancel', 7), { kind: 'session', action: 'cancel', sessionId: 7 }],
     [sessionButtonId('repeat', 9), { kind: 'session', action: 'repeat', sessionId: 9 }],
+    [callButtonId(11), { kind: 'call', sessionId: 11 }],
+    [callNextButtonId(UUID), { kind: 'call-next', squadId: UUID }],
+    [enterButtonId(12), { kind: 'enter', sessionId: 12 }],
     [boraButtonId(UUID), { kind: 'bora-open', squadId: UUID }],
     [boraModalId(UUID), { kind: 'bora-modal', squadId: UUID }],
     [renameButtonId(UUID), { kind: 'rename-open', squadId: UUID }],
@@ -96,6 +102,16 @@ describe('custom_id de squads', () => {
     'squad:session:going:abc',
     'squad:session:going:12345678901234567',
     'squad:session:maybe:3',
+    'squad:call:session:0',
+    'squad:call:session:abc',
+    'squad:call:session:3:extra',
+    `squad:call:next:${UUID}:extra`,
+    'squad:call:next:nao-e-uuid',
+    'squad:call:squad:3',
+    'squad:call:3',
+    'squad:enter:0',
+    'squad:enter:abc',
+    'squad:enter:3:extra',
     `squad:bora:start:${UUID}`,
     `squad:bora:open:${UUID}:extra`,
     'squad:rename:modal:nao-e-uuid',
@@ -129,6 +145,9 @@ describe('custom_id de squads', () => {
     expect(() => keepButtonId('')).toThrow(RangeError);
     expect(() => sessionButtonId('going', 0)).toThrow(RangeError);
     expect(() => sessionButtonId('going', 1.5)).toThrow(RangeError);
+    expect(() => callButtonId(0)).toThrow(RangeError);
+    expect(() => callNextButtonId('x')).toThrow(RangeError);
+    expect(() => enterButtonId(-3)).toThrow(RangeError);
     expect(() => gridSelectId(UUID, 4, 0)).toThrow(RangeError);
     expect(() => gridSaveButtonId(UUID, -1)).toThrow(RangeError);
     expect(() => gridSaveButtonId(UUID, FULL + 1)).toThrow(RangeError);

@@ -1,6 +1,7 @@
 import {
   cancelSquadSession,
   clearSquadWarned,
+  closeSessionAttendance,
   createSquadSession,
   getActiveSessionByVoice,
   getSquad,
@@ -16,6 +17,7 @@ import {
   markSessionReminded,
   markSessionStarted,
   markSquadWarned,
+  openSessionAttendance,
   releaseSessionVoice,
   reopenSquadSession,
   reserveSessionVoice,
@@ -36,6 +38,7 @@ import { ChannelType } from 'discord.js';
 
 import { currentOverwrites, snapshotOverwrites } from '../../lib/overwrites';
 import { isLockable } from '../locks';
+import { callBlocker } from './calls';
 import { discordErrorCode, log, logFailure } from './context';
 import {
   inactivityWarningMessage,
@@ -54,7 +57,7 @@ import {
 import type { LockableChannel } from '../locks';
 import type { SquadContext } from './context';
 import type { SessionState } from './embeds';
-import type { Squad, SquadSession } from '@goodbot/db';
+import type { Squad, SquadGame, SquadSession } from '@goodbot/db';
 import type { AuditSource } from '@goodbot/shared';
 import type { Guild, VoiceChannel } from 'discord.js';
 
@@ -274,6 +277,7 @@ export class SessionService {
       target: { type: 'squad', id: squad.id },
       after: { sessionId: cancelled.id, startsAt: cancelled.startsAt.toISOString() },
     });
+    await this.ctx.parts.calls.close(guild, cancelled);
     if (isReserved(cancelled)) await this.release(guild, cancelled);
     await this.renderSession(guild, cancelled, squad);
     await this.ctx.parts.guide.refresh(guild, squad.id);
@@ -473,6 +477,8 @@ export class SessionService {
     const { db } = this.ctx;
     const marked = await markSessionStarted(db, guild.id, session.id, this.ctx.date());
     if (!marked) return null;
+    // Chamada pública é para antes do início: sai do ar mesmo com o squad arquivado.
+    await this.ctx.parts.calls.close(guild, marked);
 
     const result: StartResult = { moved: [], pinged: [] };
     const squad = await getSquad(db, guild.id, marked.squadId);
@@ -506,7 +512,7 @@ export class SessionService {
             userIds: result.pinged,
             voiceChannelId: voiceId,
             goingCount: marked.goingIds.length,
-            partySize: await this.partySize(guild.id, squad),
+            partySize: (await this.game(guild.id, squad))?.partySize ?? null,
           }),
         )
         .catch(
@@ -602,9 +608,9 @@ export class SessionService {
 
   /**
    * Alguém entrou num voice. Se é o voice reservado de uma jogatina viva e a
-   * pessoa é do squad, é a prova mais forte de que o squad joga: a jogatina
-   * rolou, vale como sinal de vida e desfaz o aviso de inatividade. `true`
-   * quando contou.
+   * pessoa é do squad, é a prova mais forte de que o squad joga: a presença
+   * entra no histórico, a jogatina rolou, vale como sinal de vida e desfaz o
+   * aviso de inatividade. `true` quando contou.
    */
   async confirmPresence(guild: Guild, voiceChannelId: string, userId: string): Promise<boolean> {
     const { db } = this.ctx;
@@ -612,10 +618,26 @@ export class SessionService {
     if (!session || session.cancelledAt) return false;
     const members = await this.memberIds(guild.id, session.squadId);
     if (!members.includes(userId)) return false;
+    await openSessionAttendance(db, {
+      guildId: guild.id,
+      sessionId: session.id,
+      userId,
+      joinedAt: this.ctx.date(),
+    });
     await markSessionPlayed(db, guild.id, session.id, this.ctx.date());
     await touchSquadConfirmed(db, guild.id, session.squadId, this.ctx.date());
     await clearSquadWarned(db, guild.id, session.squadId);
     return true;
+  }
+
+  /**
+   * Alguém saiu de um voice do pool: a presença aberta dela termina aqui.
+   * Fecha por pessoa, e não pela jogatina do voice, porque a reserva pode já
+   * ter sido liberada (e aí o voice não aponta mais para jogatina nenhuma).
+   * Quem nem era do squad não tem presença aberta, e a `UPDATE` não pega nada.
+   */
+  async recordLeave(guild: Guild, userId: string): Promise<number> {
+    return closeSessionAttendance(this.ctx.db, guild.id, userId, this.ctx.date());
   }
 
   /**
@@ -679,6 +701,18 @@ export class SessionService {
     await this.renderSession(guild, updated, squad);
     await this.ctx.parts.guide.refresh(guild, squad.id);
     return updated;
+  }
+
+  /** Reedita a mensagem de uma jogatina com o estado atual (a chamada pública mudou). Nunca lança. */
+  async refresh(guild: Guild, sessionId: number): Promise<void> {
+    try {
+      const session = await getSquadSession(this.ctx.db, guild.id, sessionId);
+      if (!session) return;
+      const squad = await getSquad(this.ctx.db, guild.id, session.squadId);
+      if (squad) await this.renderSession(guild, session, squad);
+    } catch (error) {
+      log.warn({ err: error, guildId: guild.id, sessionId }, 'falha ao atualizar a jogatina');
+    }
   }
 
   /**
@@ -754,14 +788,13 @@ export class SessionService {
   }
 
   /**
-   * A party do jogo lida na hora, e não guardada na jogatina: o número só
-   * aparece na mensagem, e mudar o jogo no painel deve valer para o que ainda
-   * vai ser mostrado. `null` sem jogo, o que a cascata do banco não deixa
-   * acontecer com o squad vivo.
+   * O jogo lido na hora, e não guardado na jogatina: party e tamanho do squad
+   * só aparecem na mensagem, e mudar o jogo no painel deve valer para o que
+   * ainda vai ser mostrado. `null` sem jogo, o que a cascata do banco não
+   * deixa acontecer com o squad vivo.
    */
-  private async partySize(guildId: string, squad: Squad): Promise<number | null> {
-    const game = await getSquadGame(this.ctx.db, guildId, squad.gameId);
-    return game?.partySize ?? null;
+  private async game(guildId: string, squad: Squad): Promise<SquadGame | null> {
+    return getSquadGame(this.ctx.db, guildId, squad.gameId);
   }
 
   private async memberIds(guildId: string, squadId: string): Promise<string[]> {
@@ -809,18 +842,25 @@ export class SessionService {
     squad: Squad,
     options: { mentionMembers: boolean },
   ) {
-    const [config, embedColor, memberIds, partySize] = await Promise.all([
+    const [config, embedColor, memberIds, game] = await Promise.all([
       this.ctx.config.get(guild.id, 'squads'),
       this.ctx.embedColor(guild.id),
       this.memberIds(guild.id, squad.id),
-      this.partySize(guild.id, squad),
+      this.game(guild.id, squad),
     ]);
+    const canCall =
+      game !== null &&
+      config.searchChannelId !== null &&
+      squad.status !== 'archived' &&
+      callBlocker(session, { now: this.ctx.now(), memberCount: memberIds.length, game }) === null;
     return sessionMessage({
       session,
       squad,
       memberIds,
-      partySize,
+      partySize: game?.partySize ?? null,
       voiceChannelId: isReserved(session) ? session.voiceChannelId : null,
+      canCall,
+      callChannelId: session.callMessageId ? session.callChannelId : null,
       state: sessionState(session),
       reminderMinutesBefore: config.reminderMinutesBefore,
       embedColor,

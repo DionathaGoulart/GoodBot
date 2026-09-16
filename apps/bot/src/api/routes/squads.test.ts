@@ -22,7 +22,8 @@ import type { ApiDeps } from '../context';
 const fixtures = await vi.hoisted(async () => import('../../services/squads/__fixtures__/fake-db'));
 vi.mock('@goodbot/db', () => fixtures.repositories);
 
-const { store, seedGame, seedMember, seedProfile, seedProposal, seedSquad, GUILD_ID } = fixtures;
+const { store, seedGame, seedMember, seedProfile, seedProposal, seedSession, seedSquad, GUILD_ID } =
+  fixtures;
 
 const TOKEN = 'a'.repeat(64);
 const ADMIN = '300000000000000010';
@@ -128,6 +129,34 @@ describe('GET /guilds/:id/squads/overview', () => {
     expect(overview.searchingCount).toEqual({ [game.id]: 2 });
     // Categoria, canal de busca, dois voices e o canal do squad; a thread não conta.
     expect(overview.channels).toEqual({ used: 5, limit: 500 });
+  });
+
+  it('cada squad traz o histórico das jogatinas que rolaram', async () => {
+    const s = apiScenario();
+    const { squad } = withSquad(s);
+    // Sábado, 12/09, 21h em São Paulo.
+    const startsAt = new Date('2026-09-13T00:00:00Z');
+    seedSession({
+      squadId: squad.id,
+      startsAt,
+      endsAt: new Date(startsAt.getTime() + 3 * 3_600_000),
+      goingIds: [A, B],
+      playedAt: startsAt,
+    });
+
+    const res = await s.app.request(`/guilds/${GUILD_ID}/squads/overview`, { headers: auth });
+
+    const [summary] = SquadOverviewSchema.parse(await res.json()).squads;
+    expect(summary?.history).toEqual({
+      playedLast30d: 1,
+      playedTotal: 1,
+      lastPlayedAt: startsAt.toISOString(),
+      usualCells: [{ day: 6, block: 2, count: 1 }],
+      regulars: [
+        { userId: A, count: 1 },
+        { userId: B, count: 1 },
+      ],
+    });
   });
 });
 

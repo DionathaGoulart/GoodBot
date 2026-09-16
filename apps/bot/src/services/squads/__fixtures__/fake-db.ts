@@ -20,6 +20,7 @@ import type {
   SquadProfile,
   SquadProposal,
   SquadSession,
+  SquadSessionAttendance,
 } from '@goodbot/db';
 import type {
   SquadAnswers,
@@ -47,6 +48,7 @@ export interface FakeStore {
   proposals: SquadProposal[];
   requests: SquadJoinRequest[];
   sessions: SquadSession[];
+  attendance: SquadSessionAttendance[];
   meta: Map<string, unknown>;
 }
 
@@ -58,6 +60,7 @@ const emptyStore = (): FakeStore => ({
   proposals: [],
   requests: [],
   sessions: [],
+  attendance: [],
   meta: new Map(),
 });
 
@@ -559,6 +562,7 @@ export const impl = {
       userId: string;
       status: SquadOpenRequestStatus;
       invitedBy?: string | null;
+      sessionId?: number | null;
       expiresAt: Date;
     },
   ) {
@@ -576,6 +580,7 @@ export const impl = {
       invitedBy: input.invitedBy ?? null,
       threadId: null,
       inviteMessageId: null,
+      sessionId: input.sessionId ?? null,
       acceptedIds: [],
       declinedIds: [],
       decidedBy: null,
@@ -749,6 +754,9 @@ export const impl = {
       playedAt: null,
       cancelledAt: null,
       cancelledBy: null,
+      calledAt: null,
+      callChannelId: null,
+      callMessageId: null,
       voiceChannelId: null,
       voiceOverwrites: null,
       voiceReservedAt: null,
@@ -780,6 +788,48 @@ export const impl = {
     row.cancelledAt = at;
     row.cancelledBy = by;
     return copy(row);
+  },
+  async claimSessionCall(_db: unknown, guildId: string, sessionId: number, at: Date) {
+    const row = findSession(guildId, sessionId);
+    if (!row || row.calledAt || row.startedAt || row.cancelledAt) return null;
+    row.calledAt = at;
+    return copy(row);
+  },
+  async setSessionCallMessage(
+    _db: unknown,
+    guildId: string,
+    sessionId: number,
+    input: { channelId: string; messageId: string },
+  ) {
+    const row = findSession(guildId, sessionId);
+    if (!row) return null;
+    row.callChannelId = input.channelId;
+    row.callMessageId = input.messageId;
+    return copy(row);
+  },
+  async releaseSessionCall(_db: unknown, guildId: string, sessionId: number) {
+    const row = findSession(guildId, sessionId);
+    if (!row || row.callMessageId) return null;
+    Object.assign(row, { calledAt: null, callChannelId: null, callMessageId: null });
+    return copy(row);
+  },
+  async closeSessionCall(_db: unknown, guildId: string, sessionId: number, messageId: string) {
+    const row = findSession(guildId, sessionId);
+    if (row?.callMessageId !== messageId) return null;
+    row.callMessageId = null;
+    return copy(row);
+  },
+  async listOpenSessionCalls(_db: unknown, guildId: string, options: { squadId?: string } = {}) {
+    return copy(
+      store.sessions
+        .filter(
+          (s) =>
+            s.guildId === guildId &&
+            s.callMessageId !== null &&
+            (!options.squadId || s.squadId === options.squadId),
+        )
+        .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()),
+    );
   },
   async markSessionPlayed(_db: unknown, guildId: string, sessionId: number, at: Date) {
     const row = findSession(guildId, sessionId);
@@ -870,6 +920,75 @@ export const impl = {
       .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
     return maybe(found[0]);
   },
+  // ── histórico
+  async listPlayedSessions(
+    _db: unknown,
+    guildId: string,
+    squadIds: readonly string[],
+    since: Date,
+  ) {
+    return copy(
+      store.sessions
+        .filter(
+          (s) =>
+            s.guildId === guildId &&
+            squadIds.includes(s.squadId) &&
+            s.playedAt !== null &&
+            s.cancelledAt === null &&
+            s.startsAt.getTime() >= since.getTime(),
+        )
+        .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()),
+    );
+  },
+  async countPlayedSessions(_db: unknown, guildId: string, squadIds: readonly string[]) {
+    const totals = new Map<string, { squadId: string; played: number; lastPlayedAt: Date | null }>();
+    for (const s of store.sessions) {
+      if (s.guildId !== guildId || !squadIds.includes(s.squadId)) continue;
+      if (s.playedAt === null || s.cancelledAt !== null) continue;
+      const row = totals.get(s.squadId) ?? { squadId: s.squadId, played: 0, lastPlayedAt: null };
+      row.played++;
+      if (!row.lastPlayedAt || s.startsAt > row.lastPlayedAt) row.lastPlayedAt = s.startsAt;
+      totals.set(s.squadId, row);
+    }
+    return copy([...totals.values()]);
+  },
+  async openSessionAttendance(
+    _db: unknown,
+    input: { guildId: string; sessionId: number; userId: string; joinedAt: Date },
+  ) {
+    const taken = store.attendance.some(
+      (a) =>
+        a.sessionId === input.sessionId &&
+        a.userId === input.userId &&
+        a.joinedAt.getTime() === input.joinedAt.getTime(),
+    );
+    if (taken) return false;
+    store.attendance.push({ ...input, leftAt: null });
+    return true;
+  },
+  async closeSessionAttendance(_db: unknown, guildId: string, userId: string, at: Date) {
+    let closed = 0;
+    for (const a of store.attendance) {
+      if (a.guildId === guildId && a.userId === userId && a.leftAt === null) {
+        a.leftAt = at;
+        closed++;
+      }
+    }
+    return closed;
+  },
+  async listSessionAttendance(_db: unknown, guildId: string, sessionIds: readonly number[]) {
+    const seen = new Set<string>();
+    const rows: { sessionId: number; userId: string }[] = [];
+    for (const a of store.attendance) {
+      if (a.guildId !== guildId || !sessionIds.includes(a.sessionId)) continue;
+      const key = `${String(a.sessionId)}:${a.userId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({ sessionId: a.sessionId, userId: a.userId });
+    }
+    return rows;
+  },
+
   async listSessionsToRelease(_db: unknown, guildId: string, now: Date) {
     return copy(
       store.sessions.filter(
@@ -935,6 +1054,9 @@ function blankSession(input: Partial<SquadSession> & Pick<SquadSession, 'squadId
     playedAt: null,
     cancelledAt: null,
     cancelledBy: null,
+    calledAt: null,
+    callChannelId: null,
+    callMessageId: null,
     createdAt: stamp(),
     ...input,
   };

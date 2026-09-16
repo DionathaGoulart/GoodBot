@@ -39,7 +39,7 @@ import {
 } from '../middleware/rate-limit';
 import { validate } from '../validate';
 
-import type { ManualOutcome } from '../../services/squads';
+import type { ManualOutcome, SquadHistoryView } from '../../services/squads';
 import type { ApiDeps, ApiEnv } from '../context';
 import type { Squad, SquadGame, SquadProfile, SquadProposal, SquadSession } from '@goodbot/db';
 import type {
@@ -49,6 +49,7 @@ import type {
   RemoveSquadMemberResult,
   RunSquadMatchResult,
   SquadGameSummary,
+  SquadHistorySummary,
   SquadManualCheck,
   SquadManualProposalResult,
   SquadOverview,
@@ -91,10 +92,17 @@ function toSessionSummary(row: SquadSession, now: Date): SquadSessionSummary {
   };
 }
 
+function toHistorySummary(view: SquadHistoryView | undefined): SquadHistorySummary | null {
+  if (!view) return null;
+  const { summary } = view;
+  return { ...summary, lastPlayedAt: summary.lastPlayedAt?.toISOString() ?? null };
+}
+
 function toSquadSummary(
   row: Squad,
   memberIds: string[],
   sessions: readonly SquadSession[],
+  history: SquadHistoryView | undefined,
   now: Date,
 ): SquadSummary {
   return {
@@ -107,6 +115,7 @@ function toSquadSummary(
     voiceChannelId: row.voiceChannelId,
     lastConfirmedAt: row.lastConfirmedAt?.toISOString() ?? null,
     upcomingSessions: sessions.map((session) => toSessionSummary(session, now)),
+    history: toHistorySummary(history),
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -198,14 +207,16 @@ async function requireProfile(
 
 async function summaryOf(deps: ApiDeps, guildId: string, squad: Squad): Promise<SquadSummary> {
   const now = new Date();
-  const [members, sessions] = await Promise.all([
+  const [members, sessions, history] = await Promise.all([
     listSquadMembers(deps.db, guildId, squad.id),
     listUpcomingSessions(deps.db, guildId, now, { squadIds: [squad.id] }),
+    deps.squads.historyFor(guildId, [squad.id]),
   ]);
   return toSquadSummary(
     squad,
     members.map((member) => member.userId),
     sessions,
+    history.get(squad.id),
     now,
   );
 }
@@ -232,7 +243,7 @@ export function createSquadRoutes(deps: ApiDeps): Hono<ApiEnv> {
       /**
        * Squads arquivados ficam de fora: a tabela do painel é de quem ainda
        * joga, e a lista de arquivados só cresce. Cada squad vem com as
-       * jogatinas que ainda não acabaram.
+       * jogatinas que ainda não acabaram e o histórico das que rolaram.
        */
       .get('/overview', async (c) => {
         const guild = c.get('guild');
@@ -245,9 +256,10 @@ export function createSquadRoutes(deps: ApiDeps): Hono<ApiEnv> {
 
         const now = new Date();
         const squadIds = squads.map((squad) => squad.id);
-        const [members, sessions] = await Promise.all([
+        const [members, sessions, histories] = await Promise.all([
           listMembersOfSquads(deps.db, guild.id, squadIds),
           listUpcomingSessions(deps.db, guild.id, now, { squadIds }),
+          deps.squads.historyFor(guild.id, squadIds),
         ]);
         const memberIds = new Map<string, string[]>();
         for (const member of members) {
@@ -263,7 +275,13 @@ export function createSquadRoutes(deps: ApiDeps): Hono<ApiEnv> {
         const overview: SquadOverview = {
           games: games.map(toGameSummary),
           squads: squads.map((squad) =>
-            toSquadSummary(squad, memberIds.get(squad.id) ?? [], upcoming.get(squad.id) ?? [], now),
+            toSquadSummary(
+              squad,
+              memberIds.get(squad.id) ?? [],
+              upcoming.get(squad.id) ?? [],
+              histories.get(squad.id),
+              now,
+            ),
           ),
           openProposals: proposals.map(toProposalSummary),
           searchingCount,

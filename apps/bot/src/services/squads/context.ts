@@ -5,8 +5,10 @@ import { childLogger } from '../../logger';
 
 import type { AuditEntry, AuditService } from '../audit';
 import type { ConfigService } from '../config';
+import type { CallService } from './calls';
 import type { AdminDmKind } from './embeds';
 import type { GuideService } from './guide';
+import type { HistoryService } from './history';
 import type { ManualMatchService } from './manual';
 import type { MatcherService } from './matcher';
 import type { PlayerAdminService } from './players';
@@ -49,6 +51,8 @@ export interface SquadParts {
   squads: SquadLifecycleService;
   requests: JoinRequestService;
   sessions: SessionService;
+  calls: CallService;
+  history: HistoryService;
   guide: GuideService;
   search: SearchService;
   manual: ManualMatchService;

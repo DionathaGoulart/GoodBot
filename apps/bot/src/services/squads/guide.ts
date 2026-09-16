@@ -25,7 +25,7 @@ export interface PublishGuideOptions {
 
 /**
  * O guia fixo de cada squad: a primeira mensagem do canal, pinada, com quem
- * está, as próximas jogatinas e os botões do squad. Toda mudança que ele
+ * está, as próximas jogatinas, o histórico e os botões do squad. Toda mudança que ele
  * mostra chama `refresh`, que reedita (ou publica de novo, se sumiu). Nada
  * aqui lança: o guia é consequência do que aconteceu, não condição.
  */
@@ -34,13 +34,15 @@ export class GuideService {
 
   async render(guildId: string, squad: Squad, options: PublishGuideOptions): Promise<BaseMessageOptions> {
     const { db } = this.ctx;
-    const [config, embedColor, game, members, upcoming] = await Promise.all([
+    const [config, embedColor, game, members, upcoming, history] = await Promise.all([
       this.ctx.config.get(guildId, 'squads'),
       this.ctx.embedColor(guildId),
       getSquadGame(db, guildId, squad.gameId),
       listSquadMembers(db, guildId, squad.id),
       listUpcomingSessions(db, guildId, this.ctx.date(), { squadIds: [squad.id] }),
+      this.ctx.parts.history.one(guildId, squad.id),
     ]);
+    const memberIds = members.map((member) => member.userId);
     return guideMessage({
       squad,
       game: game ?? {
@@ -49,9 +51,16 @@ export class GuideService {
         groupSize: members.length,
         partySize: members.length,
       },
-      memberIds: members.map((member) => member.userId),
+      memberIds,
       upcoming,
       canJoinAnother: config.maxSquadsPerUser > 1,
+      // Só quem ainda é do squad: citar quem saiu no guia de quem ficou confunde.
+      history: {
+        text: history.text,
+        regularIds: history.summary.regulars
+          .map((regular) => regular.userId)
+          .filter((userId) => memberIds.includes(userId)),
+      },
       embedColor,
       mentionMembers: options.mentionMembers,
     });

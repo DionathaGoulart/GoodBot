@@ -6,6 +6,7 @@ import {
   getSquadGame,
   getSquadJoinRequest,
   getSquadProfile,
+  getSquadSession,
   listDueJoinRequests,
   listOpenJoinRequests,
   listRecentJoinRequestsFor,
@@ -160,20 +161,32 @@ export class JoinRequestService {
     }
   }
 
-  /** O pedido do `/squad procurar`: já nasce na votação, sem convite. */
-  async open(guild: Guild, squad: Squad, candidateId: string): Promise<InviteResult> {
+  /**
+   * O pedido do `/squad procurar` e do ENTRAR de uma chamada pública: já nasce
+   * na votação, sem convite. `sessionId` é a jogatina da chamada.
+   */
+  async open(
+    guild: Guild,
+    squad: Squad,
+    candidateId: string,
+    options: { sessionId?: number } = {},
+  ): Promise<InviteResult> {
     const request = await createSquadJoinRequest(this.ctx.db, {
       guildId: guild.id,
       squadId: squad.id,
       userId: candidateId,
       status: 'pending',
+      sessionId: options.sessionId ?? null,
       expiresAt: await this.deadline(guild.id),
     });
     if (!request) return { outcome: 'exists' };
     const bindings = { guildId: guild.id, squadId: squad.id, requestId: request.id };
     try {
       const posted = await this.postVote(guild, request, squad);
-      log.info({ ...bindings, source: 'search' }, 'pedido de entrada em votação');
+      log.info(
+        { ...bindings, source: options.sessionId ? 'call' : 'search' },
+        'pedido de entrada em votação',
+      );
       return { outcome: 'sent', request: posted };
     } catch (error) {
       log.warn({ err: error, ...bindings }, 'pedido de entrada sem mensagem');
@@ -539,12 +552,30 @@ export class JoinRequestService {
         { source: 'event', ping: true, ...(actorId ? { actorId } : {}) },
       );
       await this.finish(guild, decided, joined, { vote: 'accepted', invite: 'joined' });
+      if (decided.sessionId) await this.goingAfterCall(guild, decided.sessionId, request.userId);
       return { outcome: 'joined', squad: joined };
     } catch (error) {
       if (isUserFacingError(error)) {
         await this.finish(guild, decided, squad, { vote: 'closed', invite: 'closed' });
       }
       throw error;
+    }
+  }
+
+  /**
+   * Quem entrou pela chamada pública de uma jogatina já fica como "vou" nela:
+   * foi para jogar essa que a pessoa pediu. Jogatina que começou, acabou ou
+   * foi cancelada enquanto o squad votava fica como está. Nunca lança.
+   */
+  private async goingAfterCall(guild: Guild, sessionId: number, userId: string): Promise<void> {
+    try {
+      await this.ctx.parts.sessions.vote(guild, sessionId, userId, true);
+    } catch (error) {
+      if (isUserFacingError(error)) return;
+      log.warn(
+        { err: error, guildId: guild.id, sessionId, userId },
+        'não foi possível marcar presença na jogatina da chamada',
+      );
     }
   }
 
@@ -700,12 +731,13 @@ export class JoinRequestService {
     mentionMembers: boolean,
   ): Promise<BaseMessageOptions> {
     const { db } = this.ctx;
-    const [config, embedColor, game, profile, members] = await Promise.all([
+    const [config, embedColor, game, profile, members, session] = await Promise.all([
       this.ctx.config.get(guildId, 'squads'),
       this.ctx.embedColor(guildId),
       getSquadGame(db, guildId, squad.gameId),
       getSquadProfile(db, guildId, request.userId, squad.gameId),
       listSquadMembers(db, guildId, squad.id),
+      request.sessionId ? getSquadSession(db, guildId, request.sessionId) : null,
     ]);
     const memberProfiles = await Promise.all(
       members.map((member) => getSquadProfile(db, guildId, member.userId, squad.gameId)),
@@ -721,6 +753,7 @@ export class JoinRequestService {
       game: { fields: game?.fields ?? [] },
       answers: profile?.answers ?? {},
       slot: slot ? { day: slot.day, block: slot.block } : null,
+      session,
       blocks: config.blocks,
       state,
       embedColor,
@@ -736,16 +769,18 @@ export class JoinRequestService {
     mentionCandidate: boolean,
   ): Promise<BaseMessageOptions> {
     const { db } = this.ctx;
-    const [embedColor, game, members] = await Promise.all([
+    const [embedColor, game, members, history] = await Promise.all([
       this.ctx.embedColor(guildId),
       getSquadGame(db, guildId, squad.gameId),
       listSquadMembers(db, guildId, squad.id),
+      this.ctx.parts.history.one(guildId, squad.id),
     ]);
     return inviteMessage({
       request,
       squad,
       game: game ?? { name: 'o jogo', groupSize: members.length },
       memberIds: members.map((member) => member.userId),
+      history: history.text,
       state,
       embedColor,
       mentionCandidate,
