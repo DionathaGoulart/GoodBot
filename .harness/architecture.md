@@ -34,7 +34,7 @@ pelo próprio bot, que é o único processo com uma sessão de gateway aberta.
                            │ Drizzle
                    ┌───────▼────────┐
                    │ Postgres       │  (Supabase em produção,
-                   │ 33 tabelas     │   Docker local em dev)
+                   │ 34 tabelas     │   Docker local em dev)
                    └────────────────┘
 ```
 
@@ -153,7 +153,7 @@ fino: valida entrada, chama um service, responde. Os principais:
 | `AutomodService`          | avalia mensagem contra as regras ligadas                   |
 | `StatsService`            | acumula buckets em memória e faz flush periódico           |
 | `TicketService`           | abertura, transcript e fechamento                          |
-| `SquadService`            | squads fixos: perfil, match, propostas, casa, guia, jogatinas |
+| `SquadService`            | squads fixos: perfil, match, propostas, casa, guia, jogatinas, chamada pública, histórico |
 | `ReactionRoleService`     | painéis por botão, menu ou reação                          |
 | `AuditService`            | trilha do que o bot e o painel fizeram                     |
 | `Scheduler`               | executa `scheduled_actions` (tempban, lembrete, unlock)    |
@@ -378,14 +378,14 @@ src/
                    logs, messages, misc, social, squads, stats, audit, enums,
                    relations
   repositories/    18 arquivos: uma função por consulta, nunca SQL solto fora
-drizzle/           16 migrations SQL versionadas
+drizzle/           18 migrations SQL versionadas
 ```
 
-33 tabelas. As centrais: `guilds`, `guild_registry`, `guild_settings`,
+34 tabelas. As centrais: `guilds`, `guild_registry`, `guild_settings`,
 `module_configs`, `cases`,
 `audit_logs`, `automod_rules`, `automod_hits`, `scheduled_actions`,
 `stat_buckets`, `tickets`, `reaction_role_panels`, `social_accounts`, `squads`
-(as sete do módulo começam por `squad_`).
+(as oito do módulo começam por `squad_`).
 
 Fluxo obrigatório ao mexer no schema:
 
@@ -607,24 +607,43 @@ matcher (vaga) ou CONVIDAR / `/squad convidar` ─▶ JoinRequestService.invite
   ─▶ SessionService.scheduleFromText ─▶ parseWhen (shared, fuso da guild)
   ─▶ INSERT squad_sessions (quem marcou já vai) ─▶ mensagem com VOU / NÃO VOU / CANCELAR
   ─▶ GuideService.refresh ─▶ SquadsJob (5 min): lembrete + reserva do voice (snapshot na jogatina)
-  ─▶ na hora, move os membros ─▶ voiceStateUpdate (events/community/squads-voice.ts) marca played_at
+  ─▶ na hora, move os membros e tira do ar a chamada pública
+  ─▶ voiceStateUpdate (events/community/squads-voice.ts): quem é do squad no voice reservado
+     abre presença em squad_session_attendance e marca played_at; sair de um voice do pool fecha
   ─▶ fim da jogatina ou voice vazio: restaura os overwrites e só então marca liberado
   ─▶ REPETIR marca a mesma hora na semana seguinte
+```
+
+**Uma chamada pública e o histórico**
+
+```
+CHAMAR GENTE na jogatina (ou no guia: a próxima que aceita) ─▶ CallService.call
+  ─▶ callBlocker: antes do início, sem chamada, vaga no squad, lugar na party
+  ─▶ claimSessionCall (called_at) ─▶ post no canal de busca com ENTRAR ─▶ grava canal e mensagem
+     (a mensagem que não sai desfaz a trava) ─▶ a mensagem da jogatina perde o botão
+  ─▶ ENTRAR ─▶ SearchService.requestFromCall: sem perfil nem grade, mesmas travas do procurar
+  ─▶ JoinRequestService.open com session_id ─▶ votação "respondeu à chamada" ─▶ entrou: "vou" na jogatina
+  ─▶ início, cancelamento ou arquivamento: closeSessionCall e apaga a mensagem
+
+guia, convite, /squad procurar, chamada e overview da API ─▶ HistoryService.load(squadIds)
+  ─▶ três leituras: jogatinas que rolaram (90 dias), totais por squad, presença dessas jogatinas
+  ─▶ summarizeHistory + formatHistory (shared, fuso e faixas da guild)
 ```
 
 Três coisas nesses caminhos não são gosto:
 
 - **A regra mora em `shared`, o efeito no bot.** `squads/availability.ts`,
-  `squads/match.ts`, `squads/join-vote.ts`, `squads/when.ts` e `squads/zoned.ts`
-  são puros: máscara da grade, agrupamento determinístico em parties, "cabe no
-  squad" (`fitsSquad`), a regra da votação de entrada, o "quando" do `/bora` e o
-  relógio de parede no fuso da guild (com horário de verão). O painel e os testes usam
+  `squads/match.ts`, `squads/join-vote.ts`, `squads/when.ts`, `squads/history.ts`
+  e `squads/zoned.ts` são puros: máscara da grade, agrupamento determinístico em
+  parties, "cabe no squad" (`fitsSquad`), a regra da votação de entrada, o
+  "quando" do `/bora`, o resumo e a frase do histórico e o relógio de parede no
+  fuso da guild (com horário de verão). O painel e os testes usam
   as mesmas funções, sem Discord nem banco.
 - **A trava é do banco, não da memória.** Botão é clicado duas vezes e por
   várias pessoas ao mesmo tempo, e o job passa de novo a cada 5 minutos. Todo
   passo é uma `UPDATE` condicional (`claimProposalSquad`, `markSessionReminded`,
-  `startSquadJoinVote`, votos com `array_append`) antes de qualquer chamada ao
-  Discord. O único estado
+  `startSquadJoinVote`, `claimSessionCall`, `closeSessionCall`, votos com
+  `array_append`) antes de qualquer chamada ao Discord. O único estado
   em memória é a fila compartilhada por guild e jogo do `MatcherService`
   (`withGameLock`): a passada do matcher, o match manual e apagar perfil entram
   nela, e uma tarefa na fila nunca espera `runFor` do mesmo jogo, senão espera a
@@ -719,6 +738,8 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | mexer na jogatina (`/bora`)       | `apps/bot/src/services/squads/sessions.ts` + "quando" em `packages/shared/src/squads/when.ts` |
 | mexer no guia fixo do squad       | `apps/bot/src/services/squads/guide.ts` (texto em `guideMessage`, `embeds.ts`) |
 | mexer no convite ou na votação de entrada | `apps/bot/src/services/squads/requests.ts` + regra em `packages/shared/src/squads/join-vote.ts` |
+| mexer no CHAMAR GENTE (chamada pública) | `apps/bot/src/services/squads/calls.ts` (ENTRAR em `search.ts`, texto em `publicCallMessage`) |
+| mexer no histórico de jogatinas   | `apps/bot/src/services/squads/history.ts` (leitura) + `packages/shared/src/squads/history.ts` (resumo e frase) |
 | mexer no match manual             | `apps/bot/src/services/squads/manual.ts` + regra pura em `packages/shared/src/squads/manual.ts` |
 | mexer na gestão de jogadores      | `apps/bot/src/services/squads/players.ts` (texto da DM em `embeds.ts`)   |
 | entender um servidor              | `pnpm guild scan "<nome>"` → `infra/discord/<slug>/servidor.md`          |
@@ -749,5 +770,5 @@ Antes de dar qualquer trabalho por concluído:
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-131 arquivos de teste, ~1.600 casos (Vitest). Os testes de integração de
+134 arquivos de teste, ~1.660 casos (Vitest). Os testes de integração de
 repository precisam de um Postgres e são pulados sem ele.

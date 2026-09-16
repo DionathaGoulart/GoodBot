@@ -33,7 +33,7 @@ comandos, eventos e rotas chamam uma função de repository, nunca montam query.
 | Utilidades    | `polls`, `reminders`                                                                                                                     |
 | Estatísticas  | `stat_buckets`                                                                                                                           |
 | Redes sociais | `social_accounts`, `social_posts`                                                                                                        |
-| Squads        | `squad_games`, `squad_profiles`, `squads`, `squad_members`, `squad_proposals`, `squad_join_requests`, `squad_sessions`                   |
+| Squads        | `squad_games`, `squad_profiles`, `squads`, `squad_members`, `squad_proposals`, `squad_join_requests`, `squad_sessions`, `squad_session_attendance` |
 
 Duas convenções que valem em todas:
 

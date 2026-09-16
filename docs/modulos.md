@@ -202,7 +202,8 @@ roda na hora.
 | `/squad painel`          | admin: publica ou reedita a mensagem fixa                                       |
 
 Os comandos são atalho: tudo o que eles fazem está também num botão de uma
-mensagem do bot (mensagem fixa, guia do squad, mensagem da jogatina, convite).
+mensagem do bot (mensagem fixa, guia do squad, mensagem da jogatina, chamada
+pública, convite).
 
 **Squad e party.** Cada jogo tem dois tamanhos: o do squad, que é o grupo
 inteiro (até 20), e o da party, quem joga junto numa partida (até 10, nunca mais
@@ -229,11 +230,12 @@ ocupa uma vaga e quem passou fica de fora. Sem nenhum aceite a proposta fecha em
 
 **Entrar num squad que já existe.** São duas fases, e ninguém entra sem os dois
 lados quererem. Primeiro o **convite**: uma thread privada no canal de busca, só
-com o candidato, mostrando o squad, os membros e o prazo, com `ENTRAR` e
-`PASSO`. O squad não fica sabendo de nada até ele aceitar. No `ENTRAR` começa a
+com o candidato, mostrando o squad, os membros, o histórico e o prazo, com
+`ENTRAR` e `PASSO`. O squad não fica sabendo de nada até ele aceitar. No `ENTRAR` começa a
 **votação** no canal do squad, que chama os membros, com `A FAVOR` e `CONTRA`, as
 respostas de seleção do candidato e em que horário ele joga com o grupo. Quem
-pede pelo `/squad procurar` pula o convite: o clique já é o aceite.
+pede pelo `/squad procurar` ou pelo `ENTRAR` de uma chamada pública pula o
+convite: o clique já é o aceite.
 
 | Votos                                  | Resultado                                 |
 | -------------------------------------- | ----------------------------------------- |
@@ -253,8 +255,9 @@ compatível.
 
 **A casa do squad.** Um canal de texto privado na categoria escolhida. A primeira
 mensagem dele é o **guia**, pinado: membros e vagas, sala preferida, próximas
-jogatinas e os botões `BORA`, `CONVIDAR`, `RENOMEAR`, `PROCURAR OUTRO SQUAD` (quando o
-servidor deixa estar em mais de um squad) e `SAIR DO SQUAD`. O bot reedita o
+jogatinas, o histórico com quem mais aparece e os botões em duas linhas: `BORA`,
+`CHAMAR GENTE` e `CONVIDAR` em cima; `RENOMEAR`, `PROCURAR OUTRO SQUAD` (quando o
+servidor deixa estar em mais de um squad) e `SAIR DO SQUAD` embaixo. O bot reedita o
 guia a cada mudança e publica de novo se alguém o apagar. Voice não se cria por
 squad: os voices do pool (os Hellpods, no Goodivers) são emprestados por
 jogatina, porque o Discord só deixa renomear canal duas vezes a cada dez minutos
@@ -282,6 +285,22 @@ enquanto ninguém mais confirmou. Depois do início, a mensagem ganha `REPETIR`,
 que marca a mesma hora na semana seguinte. Não há jogatina automática: a rotina
 é o `REPETIR`.
 
+**Chamar gente de fora.** Faltou gente na party? `CHAMAR GENTE`, na mensagem da
+jogatina ou no guia (que pega a próxima jogatina com lugar), posta a jogatina no
+canal de busca com o histórico do squad e um botão `ENTRAR`. Quem aperta vira
+pedido de entrada e o squad vota, como no `/squad procurar`, mas sem precisar de
+perfil: a pessoa respondeu a uma jogatina com dia e hora. Quem entra já fica
+como `VOU` nela. Uma chamada por jogatina, só antes do início, com vaga no squad
+e lugar na party (o botão some quando não dá). A chamada é apagada quando a
+jogatina começa, é cancelada ou o squad é arquivado.
+
+**Histórico.** O bot anota quem do squad entra no voice reservado de cada
+jogatina e resume o que rolou: "6 jogatinas no último mês, geralmente sexta e
+sábado à noite. Última há 3 dias." ou "Ainda não jogaram.". A frase aparece no
+convite, no `/squad procurar`, no guia (com quem mais aparece), na chamada
+pública e no painel. Só conta jogatina em que alguém do squad apareceu no voice
+(ou, sem sala, que começou com dois `VOU`); marcar e ninguém ir não entra.
+
 > O retrato das permissões do voice mora em `squad_sessions`, não em
 > `channel_locks`: um `/lock` num voice reservado trocaria o que a liberação
 > restaura.
@@ -289,7 +308,8 @@ que marca a mesma hora na semana seguinte. Não há jogatina automática: a roti
 **Ciclo de vida.** Marcar jogatina, `VOU`, presença no voice reservado e
 `AINDA JOGAMOS` contam como sinal de vida. Sem nenhum por 4 semanas (`inactiveWeeks`), o squad recebe um
 aviso; sem resposta em 7 dias, é arquivado: canal só leitura, voice liberado,
-convites, votações e propostas encerrados e perfis pausados.
+chamadas públicas apagadas, convites, votações e propostas encerrados e perfis
+pausados.
 
 Quem move tudo isso é o job `squads`, a cada 5 minutos, em cada servidor com o
 módulo ligado: lembra, reserva, começa e libera as jogatinas, mas nunca marca

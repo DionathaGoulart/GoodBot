@@ -316,6 +316,26 @@ aparece nas primeiras horas:
   `ManageThreads`). Sem elas o matcher pula a guild com aviso no log e
   `/squad convidar` responde que falta permissão.
 
+A migration `0017` guarda a presença no voice reservado
+(`squad_session_attendance`) e a chamada pública (`CHAMAR GENTE`). É só tabela
+nova e coluna nula, então o bot e o painel antigos seguem funcionando até o
+deploy terminar. O que esperar:
+
+- **Todo squad começa "Ainda não jogaram." ou com pouco histórico.** A presença
+  só é gravada a partir do deploy; as jogatinas que já tinham `played_at`
+  contam com quem disse `VOU`. O guia de cada squad ganha o histórico e o botão
+  `CHAMAR GENTE` na próxima mudança ou no passo diário.
+- **Coluna HISTÓRICO com `SEM DADO DO BOT`.** O painel novo subiu antes do bot
+  novo. Some quando o bot termina de subir.
+- **`CHAMAR GENTE` responde que não consegue postar no canal de busca.** O bot
+  precisa ver, escrever e mandar embed no canal de busca, como na mensagem
+  fixa. O log mostra `chamada pública pulada: faltam permissões no canal de
+  busca` com o que falta.
+- **Chamada que ficou no canal depois do início.** Acontece se apagar a
+  mensagem falhar no Discord (o log diz `não foi possível apagar a chamada
+  pública`). O botão `ENTRAR` já não aceita ninguém e apaga a mensagem no
+  primeiro clique; apagar à mão também não tem efeito colateral.
+
 ---
 
 ## Checklist mensal

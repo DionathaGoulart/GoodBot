@@ -14,12 +14,18 @@ Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (
 > jogatina diz quantas parties dá. Entrar num squad que já existe virou
 > convite e votação: o candidato recebe o convite numa thread privada e
 > aceita, e o squad vota (empate entra); quem os membros convidam com
-> **CONVIDAR** ou `/squad convidar` entra sem voto. O que mudou no documento:
-> §5.11 (tamanhos, match, proposta, entrada, jogatina, guia, ciclo de vida e
-> relógio), a página na §6.2, `squad_games`, `squads`, `squad_join_requests` e
-> `squad_sessions` na §8, `/bora` e `/squad convidar` na §9.1, a §10 e um
-> risco na §11. O que **não** mudou: o perfil, a gestão de jogadores e os
-> outros módulos.
+> **CONVIDAR** ou `/squad convidar` entra sem voto. Cada squad passou a ter
+> **histórico**: o bot registra quem aparece no voice reservado, e o convite,
+> o `/squad procurar`, o guia, a chamada pública e o painel dizem quantas
+> jogatinas rolaram, quando o squad costuma jogar e quem mais aparece. E a
+> jogatina ganhou **CHAMAR GENTE**, que anuncia a jogatina no canal de busca
+> para quem não é do squad pedir para entrar. O que mudou no documento:
+> §5.11 (tamanhos, match, proposta, entrada, jogatina, chamada pública,
+> histórico, guia, ciclo de vida e relógio), a página na §6.2, `squad_games`,
+> `squads`, `squad_join_requests`, `squad_sessions` e
+> `squad_session_attendance` na §8, `/bora`, `/squad convidar` e os botões
+> novos na §9.1, a §10 e dois riscos na §11. O que **não** mudou: o perfil, a
+> gestão de jogadores e os outros módulos.
 
 > **v1.5: squads fixos.** Entrou o módulo `squads` (§5.11): perfil de jogador
 > com a agenda da semana, match por horário, proposta sem líder, canal privado
@@ -634,15 +640,15 @@ Nenhum dos dois lados recebe alguém que não escolheu.
    divide com pelo menos `min(party, membros) - 1` membros (`fitsSquad`, em
    `shared`), nenhum `hard` batendo de frente com um membro e o squad abaixo do
    `group_size`. O convite abre uma thread **privada** no canal de busca, só
-   com o candidato, que mostra o squad, os membros e o prazo, com **ENTRAR /
-   PASSO**. Até ele responder, o squad não fica sabendo de nada. Convite
+   com o candidato, que mostra o squad, os membros, o histórico e o prazo, com
+   **ENTRAR / PASSO**. Até ele responder, o squad não fica sabendo de nada. Convite
    aberto ocupa a vaga na conta do matcher e tira o candidato da busca.
 2. **Votação.** No ENTRAR, o pedido vai para o canal do squad chamando os
    membros, com **A FAVOR / CONTRA**, as respostas de seleção do candidato
    (texto livre fica de fora), a célula em que ele joga com mais membros e a
    contagem, sem dizer quem votou o quê. A thread do convite tranca e fica só
-   para o aviso do resultado. Quem pede pelo `/squad procurar` pula a fase 1:
-   o clique já é o aceite dele.
+   para o aviso do resultado. Quem pede pelo `/squad procurar` ou pelo ENTRAR
+   de uma chamada pública (abaixo) pula a fase 1: o clique já é o aceite dele.
 
 A regra do voto (`decideJoinVote`, em `shared`) conta só os membros de agora, e
 empate entra, porque vaga parada custa mais que um membro que metade do grupo
@@ -682,9 +688,11 @@ tem teto de 500 canais (o painel mostra o contador). O nome do squad vai no
 canal de texto e nos embeds; voice do pool **nunca** é renomeado.
 
 **Guia fixo.** A primeira mensagem do canal do squad, pinada: membros e vagas,
-sala preferida, próximas jogatinas (quando e quantos vão), um "como usar" e os
-botões **BORA**, **CONVIDAR**, **RENOMEAR**, **PROCURAR OUTRO SQUAD** (só
-quando `maxSquadsPerUser` passa de 1) e **SAIR DO SQUAD**. Ele nasce junto com o
+sala preferida, próximas jogatinas (quando e quantos vão), o histórico com
+quem mais aparece (só quem ainda é do squad), um "como usar" e os botões em
+duas linhas, porque seis não cabem numa: **BORA**, **CHAMAR GENTE** e
+**CONVIDAR** em cima; **RENOMEAR**, **PROCURAR OUTRO SQUAD** (só quando
+`maxSquadsPerUser` passa de 1) e **SAIR DO SQUAD** embaixo. Ele nasce junto com o
 canal, chamando os membros, e é reeditado a cada mudança que mostra: entrada e
 saída de membro, jogatina marcada, votada, começada ou cancelada, nome novo e
 arquivamento (que o troca por um aviso sem botões). Guia apagado é publicado de
@@ -696,8 +704,8 @@ e o log avisa.
 
 A regra do módulo é **botão antes de comando**: toda ação do fluxo está num
 botão, select ou modal de uma mensagem que o bot já deixou na frente da pessoa
-(guia, jogatina, proposta, convite, votação, mensagem fixa). O comando é atalho, nunca o único
-caminho.
+(guia, jogatina, chamada pública, proposta, convite, votação, mensagem fixa). O
+comando é atalho, nunca o único caminho.
 
 **Jogatina.** Quem marca é gente: `/bora [quando] [squad]` ou o botão **BORA**
 do guia, que abre um modal com um campo só. O "quando" é texto livre lido no
@@ -752,12 +760,50 @@ primeira semana que ainda não passou). Não existe agendamento automático:
 repetir é a rotina. `played_at` marca a jogatina que rolou, na primeira presença
 de um membro no voice reservado ou, sem sala, no início com dois "vou".
 
+**Chamada pública.** Sobrou lugar na party? **CHAMAR GENTE**, na mensagem da
+jogatina ou no guia (que escolhe a próxima jogatina que aceita chamada), posta
+a jogatina no canal de busca: o squad, o jogo, quando, o tamanho da party, o
+tamanho do squad, o histórico e **ENTRAR**. Ela não traz a contagem de quem
+vai, que mudaria a cada voto sem a mensagem acompanhar, e não chama ninguém:
+quem lê o canal de busca está lá para isso. Vale só antes do início, uma por
+jogatina, com vaga no squad e lugar na party; o botão só aparece na mensagem
+da jogatina quando essas condições valem, e a mensagem passa a dizer onde a
+chamada está aberta. A trava é `called_at`, gravada antes de postar: a
+mensagem que não sai desfaz a trava, e dá para chamar de novo.
+
+ENTRAR é o pedido de entrada do `/squad procurar`, com duas diferenças. Não
+exige perfil nem grade que combine, porque a pessoa respondeu a uma jogatina
+com dia e hora; e o pedido guarda a jogatina (`session_id`), para a votação
+dizer "respondeu à chamada da jogatina de sexta 21h" em vez de "joga em
+horários parecidos", e para quem entra já ficar como "vou" nela. O resto é o
+mesmo: não ser do squad, vaga, teto de squads, nenhum pedido aberto e o
+cooldown. A chamada **sai do ar** (a mensagem é apagada) quando a jogatina
+começa, é cancelada ou o squad é arquivado; um ENTRAR atrasado numa chamada
+que ficou no ar responde que ela acabou e a tira dali.
+
+**Histórico.** O bot registra a presença de verdade: cada entrada de um membro
+no voice reservado de uma jogatina viva abre uma linha em
+`squad_session_attendance`, e sair de um voice do pool a fecha (por pessoa,
+porque a reserva pode ter sido liberada antes da saída; sair e voltar abre
+outra). Só conta jogatina que **rolou** (`played_at`), porque marcar e ninguém
+aparecer não é histórico. `summarizeHistory`, em `shared`, resume por squad:
+jogatinas no último mês e no total, a última, as três células da grade (dia e
+faixa do início, no fuso da guild) com mais jogatinas e os cinco que mais
+estiveram. Quem esteve é quem apareceu no voice; jogatina sem ninguém
+registrado (sem sala, ou o bot fora do ar na hora) conta quem disse "vou". O
+detalhe olha 90 dias; total e última olham tudo. `formatHistory` escreve a
+frase curta que o convite, o `/squad procurar`, o guia, a chamada pública e o
+painel mostram: "6 jogatinas no último mês, geralmente sexta e sábado à
+noite. Última há 3 dias." ou "Ainda não jogaram.". "Geralmente" só entra com
+duas jogatinas ou mais na mesma célula, e o "há 3 dias" é em dias do
+calendário da guild.
+
 **Ciclo de vida.** Contam como sinal de vida: marcar jogatina, "Vou", a
 presença de um membro no voice reservado (de uma hora antes do início até o fim
 da jogatina) e o botão **Ainda jogamos**. Squad sem sinal por `inactiveWeeks` (4) semanas recebe um
 aviso; sem resposta em mais 7 dias, é **arquivado**: canal só leitura, voice
-liberado, convites, votações e propostas encerrados, perfis pausados e o guia trocado pelo
-aviso de arquivado. Sair do squad reabre
+liberado, chamadas públicas fora do ar, convites, votações e propostas encerrados, perfis
+pausados e o guia trocado pelo aviso de arquivado. Sair do squad reabre
 a vaga (`full` volta a `open`); o último a sair arquiva.
 
 **O relógio.** Um job a cada 5 minutos, por guild atendida com o módulo ligado,
@@ -825,7 +871,8 @@ staff, mas nunca o motivo.
 **Permissões.** O módulo depende de `CreatePrivateThreads` (threads da
 proposta e do convite para squad), `Connect` e `Speak` (reserva do voice) e
 `PinMessages` (guia), além de `ManageChannels`, `ManageRoles` e `MoveMembers`,
-que o convite do bot já pedia. Sem elas ele não quebra: o match, a reserva e o
+que o convite do bot já pedia. A chamada pública só precisa de ver, escrever e
+mandar embed no canal de busca, o mesmo que a mensagem fixa. Sem elas ele não quebra: o match, a reserva e o
 pin conferem antes e pulam com aviso no log (§10), e `/squad convidar` explica
 que falta permissão no canal de busca.
 
@@ -895,7 +942,8 @@ grava, escreve auditoria (§6.5), chama `invalidate` no bot, toast.
   perguntas do perfil, e o botão de rodar o match agora; apagar jogo é recusado
   enquanto ele tiver squad `open|full`, porque a cascata apagaria as linhas e
   deixaria os canais no Discord. `SQUADS`: os squads vivos com membros, próxima
-  jogatina (quando e quantos vão, e quantas mais estão marcadas), voice e
+  jogatina (quando e quantos vão, e quantas mais estão marcadas), o histórico
+  (a frase do `formatHistory`, ordenável pelas jogatinas do último mês), voice e
   último sinal de vida, o contador de canais do servidor (teto de 500) e
   as ações de renomear e arquivar. `JOGADORES` (no lugar da antiga
   `PROCURANDO`), por jogo: todos os perfis em qualquer status, com nome e
@@ -1240,7 +1288,7 @@ squad_proposals   (id uuid PK, guild_id, game_id FK, user_ids[], thread_id, mess
                    -- `user_ids` é a turma, que o cooldown de dupla consulta; `set null` porque a proposta
                    -- continua valendo para o cooldown depois que o squad some
 squad_join_requests (id uuid PK, guild_id, squad_id FK, user_id, message_id, invited_by, thread_id,
-                   invite_message_id, accepted_ids[], declined_ids[],
+                   invite_message_id, session_id FK set null, accepted_ids[], declined_ids[],
                    status enum(invited|pending|accepted|declined|expired), decided_by, expires_at,
                    created_at, decided_at)
                    unique (squad_id, user_id) where aberto; idx (guild_id, expires_at) where aberto
@@ -1249,22 +1297,31 @@ squad_join_requests (id uuid PK, guild_id, squad_id FK, user_id, message_id, inv
                    -- `declined_ids` são os votos a favor e contra; `invited_by` preenchido = convite de
                    -- membro, que entra sem voto. "Aberto" é escrito como `status not in (accepted,
                    -- declined, expired)`: o `ADD VALUE 'invited'` roda na mesma transação dos índices
+                   -- `session_id`: a jogatina cuja chamada pública trouxe o pedido (entra como "vou" nela)
 squad_sessions    (id bigserial PK, guild_id, squad_id FK, starts_at, ends_at, created_by, reminded_at, message_id,
                    reminder_message_id?, started_at, going_ids[], not_going_ids[], voice_channel_id,
                    voice_overwrites jsonb, voice_reserved_at, voice_released_at, played_at, cancelled_at,
-                   cancelled_by, created_at)
+                   cancelled_by, called_at, call_channel_id, call_message_id, created_at)
                    unique (squad_id, starts_at); idx (guild_id, ends_at) where reservado e não liberado
                    -- a jogatina: `created_by` nulo = sessão semanal da v1.5; `ends_at` = início + `sessionHours`;
                    -- `message_id` é a mensagem com Vou / Não vou (herdou `reminder_message_id`, que sai com `day`)
                    -- o snapshot do voice mora aqui, e não em channel_locks: um /lock no voice reservado
                    -- trocaria o que a liberação restaura
+                   -- `called_at`: trava de uma chamada pública por jogatina (fica depois de ela sair do
+                   -- ar); `call_message_id` volta a nulo quando a mensagem é apagada no início
+squad_session_attendance (guild_id, session_id FK cascade, user_id, joined_at, left_at,
+                   PK(session_id, user_id, joined_at))
+                   idx (guild_id, user_id)
+                   -- presença no voice reservado, uma linha por entrada; é o que o histórico conta.
+                   -- `left_at` nulo = ainda no voice, ou saiu com o bot fora do ar
 ```
 
 Relações principais: `guilds 1—N cases`, `cases 1—0..1 scheduled_actions`,
 `automod_rules 1—N automod_hits`, `automod_rules 1—N cases`,
 `reaction_role_panels 1—N items`, `ticket_types 1—N tickets`, `ticket_panels
 N—N ticket_types` (array), `squad_games 1—N squad_profiles|squads|squad_proposals`,
-`squads 1—N squad_members|squad_join_requests|squad_sessions`, tudo `N—1 guilds`.
+`squads 1—N squad_members|squad_join_requests|squad_sessions`,
+`squad_sessions 1—N squad_session_attendance`, tudo `N—1 guilds`.
 Toda tabela de squad tem `guild_id`, inclusive as filhas que chegam à guild pelo
 squad: um uuid vindo de `custom_id` ou da URL nunca alcança o squad de outro
 servidor.
@@ -1291,9 +1348,10 @@ re-verifica (o registro é dica de UI, não segurança).
 No módulo `squads` (§5.11), `/squad` e `/bora` são de `member`, com duas
 exceções: `/squad painel` (publicar a mensagem fixa) é de `admin`, e
 `/squad renomear` e `/squad convidar` exigem ser do squad. `/bora`, os botões da
-jogatina (VOU, NÃO VOU, CANCELAR, REPETIR), o CONVIDAR do guia e a votação de
-entrada (A FAVOR, CONTRA) exigem ser do squad; ENTRAR e PASSO só valem para
-quem foi convidado. Pela API do bot, publicar a mensagem fixa, rodar o match,
+jogatina (VOU, NÃO VOU, CANCELAR, REPETIR, CHAMAR GENTE), o CONVIDAR e o CHAMAR
+GENTE do guia e a votação de entrada (A FAVOR, CONTRA) exigem ser do squad;
+ENTRAR e PASSO do convite só valem para quem foi convidado, e o ENTRAR da
+chamada pública vale para qualquer membro do servidor que não seja do squad. Pela API do bot, publicar a mensagem fixa, rodar o match,
 o match manual (revisar e propor ao grupo) e a gestão de perfis (pausar,
 retomar, editar respostas e apagar) são de `admin`, e tirar alguém de um squad
 também; arquivar e renomear squad são de `mod`. Arquivar, renomear e tirar do
@@ -1395,6 +1453,8 @@ provedor, documentada em `docs/runbook.md`.
 | **Pool de voices cheio** (v1.5)                                   | a reserva pega o voice preferido do squad ou o primeiro livre; sem nenhum, a jogatina acontece sem sala e o lembrete avisa                    | parcial: não há fila nem voice extra; mais jogatinas ao mesmo tempo do que voices no pool ficam sem sala |
 | **Horário do `/bora` mal entendido** (v1.6)                       | `parseWhen` puro no fuso da guild, erro que traz exemplos, autocomplete que ecoa o que o bot entendeu antes de enviar e mensagem da jogatina com a data completa | feito: `shared/squads/when.ts`, com testes de tabela |
 | **Vaga presa em convite ou votação parada** (v1.6)                | convite e votação vencem em `proposalTtlHours`; no prazo, a votação decide com os votos que tem (um a favor sem maioria contra entra) e a vaga volta para a busca | feito: `JoinRequestService.expireDue` no job, `decideJoinVote` com testes de tabela |
+| **Chamada pública parada no canal de busca** (v1.6)               | a chamada sai do ar no início, no cancelamento e no arquivamento, com a trava no banco antes do Discord; ENTRAR confere a jogatina e tira a chamada que ficou | feito: `CallService.close` e `SearchService.requestFromCall`, com testes |
+| **Histórico que mente** (v1.6)                                    | só conta jogatina com `played_at`; quem esteve sai da presença no voice, e "vou" só vale quando ninguém foi registrado; "geralmente" pede duas jogatinas na célula | parcial: presença perdida com o bot fora do ar cai no "vou"; ninguém confere quanto tempo a pessoa ficou |
 | **Voice do pool preso com `Connect` negado** (v1.5)               | snapshot dos overwrites na sessão; o restore no Discord vem antes de marcar a sessão como liberada, e o job tenta de novo a cada 5 min     | feito: `SessionService.release`, com teste |
 
 ## 12. Decisões arquiteturais (com justificativa)
