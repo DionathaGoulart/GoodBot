@@ -99,6 +99,13 @@
       "when": 1789393422762,
       "tag": "0013_squads",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789556033333,
+      "tag": "0014_squad_sessions_on_demand",
+      "breakpoints": true
     }
   ]
 }

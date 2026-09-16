@@ -336,8 +336,6 @@ export interface CreateSquadInput {
   guildId: string;
   gameId: string;
   name: string;
-  day: number;
-  block: number;
   /** Voice preferido do pool; `null` = pool cheio. */
   voiceChannelId?: string | null;
   status?: Exclude<SquadStatus, 'archived'>;
@@ -462,7 +460,33 @@ export async function archiveSquad(
   return row ?? null;
 }
 
-/** Um "vou" ou alguém no voice: o squad está vivo. */
+/**
+ * Grava o guia fixo do squad só se o valor gravado ainda é `expected`. Dois
+ * refresh ao mesmo tempo, com o guia sumido, publicariam dois guias: quem
+ * perde recebe `null` e apaga a mensagem que acabou de mandar.
+ */
+export async function setSquadGuideMessage(
+  db: DbExecutor,
+  guildId: string,
+  squadId: string,
+  messageId: string | null,
+  expected: string | null,
+): Promise<Squad | null> {
+  const [row] = await db
+    .update(squads)
+    .set({ guideMessageId: messageId, updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(squads.guildId, guildId),
+        eq(squads.id, squadId),
+        expected === null ? isNull(squads.guideMessageId) : eq(squads.guideMessageId, expected),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/** Uma jogatina marcada, um "vou" ou alguém no voice: o squad está vivo. */
 export async function touchSquadConfirmed(
   db: DbExecutor,
   guildId: string,
@@ -1073,32 +1097,100 @@ export async function expireSquadJoinRequestsBefore(
 
 // ── sessões ─────────────────────────────────────────────────────────────────
 
-export interface UpsertSquadSessionInput {
+export interface CreateSquadSessionInput {
   guildId: string;
   squadId: string;
   startsAt: Date;
   endsAt: Date;
+  createdBy: string;
+  /** Quem marca já vai: nasce com o próprio "vou". */
+  goingIds: string[];
 }
 
 /**
- * A sessão da semana, criada uma vez por `(squad_id, starts_at)`. Rodar de
- * novo devolve a mesma linha (com `ends_at` acompanhando a faixa do config).
+ * Marca uma jogatina. `null` quando o squad já tem uma no mesmo minuto
+ * (`(squad_id, starts_at)` é único): dois `/bora` iguais viram um só, e quem
+ * chama lê a existente com `getSquadSessionAt`.
  */
-export async function upsertSquadSession(
+export async function createSquadSession(
   db: DbExecutor,
-  input: UpsertSquadSessionInput,
-): Promise<SquadSession> {
+  input: CreateSquadSessionInput,
+): Promise<SquadSession | null> {
   const [row] = await db
     .insert(squadSessions)
     .values(input)
-    .onConflictDoUpdate({
-      target: [squadSessions.squadId, squadSessions.startsAt],
-      set: { endsAt: input.endsAt },
-      setWhere: eq(squadSessions.guildId, input.guildId),
-    })
+    .onConflictDoNothing({ target: [squadSessions.squadId, squadSessions.startsAt] })
     .returning();
-  if (!row) throw new Error('UPSERT em squad_sessions não retornou linha');
-  return row;
+  return row ?? null;
+}
+
+export async function getSquadSessionAt(
+  db: DbExecutor,
+  guildId: string,
+  squadId: string,
+  startsAt: Date,
+): Promise<SquadSession | null> {
+  const [row] = await db
+    .select()
+    .from(squadSessions)
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.squadId, squadId),
+        eq(squadSessions.startsAt, startsAt),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+export interface ReopenSquadSessionInput {
+  endsAt: Date;
+  createdBy: string;
+  goingIds: string[];
+}
+
+/**
+ * Marca de novo uma jogatina cancelada no mesmo minuto: a linha é a mesma (o
+ * índice único não deixa outra), com votos, lembrete, início e reserva
+ * zerados. `null` quando ela não está cancelada ou a reserva antiga ainda não
+ * foi devolvida ao pool: zerar o snapshot antes da liberação deixaria o voice
+ * trancado.
+ */
+export async function reopenSquadSession(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+  input: ReopenSquadSessionInput,
+): Promise<SquadSession | null> {
+  const [row] = await db
+    .update(squadSessions)
+    .set({
+      endsAt: input.endsAt,
+      createdBy: input.createdBy,
+      goingIds: input.goingIds,
+      notGoingIds: [],
+      remindedAt: null,
+      messageId: null,
+      startedAt: null,
+      playedAt: null,
+      cancelledAt: null,
+      cancelledBy: null,
+      voiceChannelId: null,
+      voiceOverwrites: null,
+      voiceReservedAt: null,
+      voiceReleasedAt: null,
+    })
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.id, sessionId),
+        isNotNull(squadSessions.cancelledAt),
+        or(isNull(squadSessions.voiceReservedAt), isNotNull(squadSessions.voiceReleasedAt)),
+      ),
+    )
+    .returning();
+  return row ?? null;
 }
 
 export async function getSquadSession(
@@ -1155,8 +1247,8 @@ export async function markSessionReminded(
   return row ?? null;
 }
 
-/** Grava a mensagem do lembrete, que os votos editam. */
-export async function setSessionReminderMessage(
+/** Grava a mensagem da jogatina, que os votos editam. */
+export async function setSessionMessage(
   db: DbExecutor,
   guildId: string,
   sessionId: number,
@@ -1164,13 +1256,16 @@ export async function setSessionReminderMessage(
 ): Promise<SquadSession | null> {
   const [row] = await db
     .update(squadSessions)
-    .set({ reminderMessageId: messageId })
+    .set({ messageId })
     .where(and(eq(squadSessions.guildId, guildId), eq(squadSessions.id, sessionId)))
     .returning();
   return row ?? null;
 }
 
-/** `null` quando a sessão já começou: os membros são movidos para o voice uma vez só. */
+/**
+ * `null` quando a jogatina já começou ou foi cancelada: os membros são movidos
+ * para o voice uma vez só, e nunca para uma jogatina que não vai acontecer.
+ */
 export async function markSessionStarted(
   db: DbExecutor,
   guildId: string,
@@ -1185,6 +1280,82 @@ export async function markSessionStarted(
         eq(squadSessions.guildId, guildId),
         eq(squadSessions.id, sessionId),
         isNull(squadSessions.startedAt),
+        isNull(squadSessions.cancelledAt),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * Jogatinas não canceladas que ainda não acabaram em `now`, da mais próxima
+ * para a mais distante. Com `squadIds`, só as desses squads (lista vazia não
+ * consulta nada).
+ */
+export async function listUpcomingSessions(
+  db: DbExecutor,
+  guildId: string,
+  now: Date,
+  options: { squadIds?: readonly string[] } = {},
+): Promise<SquadSession[]> {
+  const filters: SQL[] = [
+    eq(squadSessions.guildId, guildId),
+    isNull(squadSessions.cancelledAt),
+    gt(squadSessions.endsAt, now),
+  ];
+  if (options.squadIds) {
+    if (options.squadIds.length === 0) return [];
+    filters.push(inArray(squadSessions.squadId, [...options.squadIds]));
+  }
+  return db
+    .select()
+    .from(squadSessions)
+    .where(and(...filters))
+    .orderBy(asc(squadSessions.startsAt));
+}
+
+/**
+ * Cancela a jogatina que ainda não começou. `null` quando ela já estava
+ * cancelada ou já começou: dois cliques em CANCELAR editam a mensagem uma vez.
+ */
+export async function cancelSquadSession(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+  by: string,
+  at: Date,
+): Promise<SquadSession | null> {
+  const [row] = await db
+    .update(squadSessions)
+    .set({ cancelledAt: at, cancelledBy: by })
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.id, sessionId),
+        isNull(squadSessions.cancelledAt),
+        isNull(squadSessions.startedAt),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/** O primeiro sinal de que a jogatina rolou. `null` quando já estava marcada. */
+export async function markSessionPlayed(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+  at: Date,
+): Promise<SquadSession | null> {
+  const [row] = await db
+    .update(squadSessions)
+    .set({ playedAt: at })
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.id, sessionId),
+        isNull(squadSessions.playedAt),
+        isNull(squadSessions.cancelledAt),
       ),
     )
     .returning();
@@ -1193,7 +1364,8 @@ export async function markSessionStarted(
 
 /**
  * "Vou" (`going = true`) ou "Não vou": entra numa lista e sai da outra, numa
- * `UPDATE` só. `null` quando o voto já era esse (ou a sessão não existe).
+ * `UPDATE` só. `null` quando o voto já era esse, a jogatina foi cancelada ou
+ * não existe.
  */
 export async function voteSquadSession(
   db: DbExecutor,
@@ -1215,6 +1387,7 @@ export async function voteSquadSession(
       and(
         eq(squadSessions.guildId, guildId),
         eq(squadSessions.id, sessionId),
+        isNull(squadSessions.cancelledAt),
         lacksId(target, userId),
       ),
     )
@@ -1283,7 +1456,7 @@ export async function releaseSessionVoice(
   return row ?? null;
 }
 
-/** Antecedência com que o voice reservado já conta como "da sessão" (a reserva sai no lembrete). */
+/** Antecedência com que o voice reservado já conta como "da jogatina" (a reserva sai no lembrete). */
 const ACTIVE_SESSION_LEAD_MS = 60 * 60_000;
 
 /**

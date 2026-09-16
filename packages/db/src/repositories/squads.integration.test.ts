@@ -8,6 +8,7 @@ import {
   acceptSquadProposal,
   addSquadMember,
   archiveSquad,
+  cancelSquadSession,
   claimProposalSquad,
   closeSquadProposal,
   countSearchingProfilesByGame,
@@ -16,6 +17,7 @@ import {
   createSquadGame,
   createSquadJoinRequest,
   createSquadProposal,
+  createSquadSession,
   declineSquadJoinRequestBy,
   declineSquadProposal,
   decideSquadJoinRequest,
@@ -24,6 +26,7 @@ import {
   getSquad,
   getSquadJoinRequest,
   getSquadProposal,
+  getSquadSessionAt,
   listInactiveSquads,
   listMembersOfSquads,
   listPendingJoinRequests,
@@ -33,15 +36,18 @@ import {
   listSquadProfilesByGame,
   listSquads,
   listSquadsForUser,
+  listUpcomingSessions,
+  markSessionPlayed,
   markSessionReminded,
   markSessionStarted,
   releaseSessionVoice,
+  reopenSquadSession,
   reserveSessionVoice,
-  setSessionReminderMessage,
+  setSessionMessage,
+  setSquadGuideMessage,
   setSquadStatus,
   touchSquadConfirmed,
   upsertSquadProfile,
-  upsertSquadSession,
   voteSquadSession,
 } from './squads';
 import { guilds } from '../schema/guilds';
@@ -78,7 +84,7 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
   let game: SquadGame;
 
   const newSquad = (name: string) =>
-    createSquad(db, { guildId: GUILD_ID, gameId: game.id, name, day: 5, block: 2 });
+    createSquad(db, { guildId: GUILD_ID, gameId: game.id, name });
 
   const newProposal = (userIds: string[], gameId = game.id) =>
     createSquadProposal(db, {
@@ -296,8 +302,6 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
               guildId: GUILD_ID,
               gameId: game.id,
               name,
-              day: 1,
-              block: 2,
             });
             const claimed = await claimProposalSquad(tx, GUILD_ID, proposal.id, squad.id);
             if (!claimed) tx.rollback();
@@ -395,30 +399,38 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
     const newSession = async (name: string) => {
       const squad = await newSquad(name);
       const startsAt = new Date(Date.now() + DAY);
-      return upsertSquadSession(db, {
+      const session = await createSquadSession(db, {
         guildId: GUILD_ID,
         squadId: squad.id,
         startsAt,
-        endsAt: new Date(startsAt.getTime() + 6 * HOUR),
+        endsAt: new Date(startsAt.getTime() + 3 * HOUR),
+        createdBy: USER_A,
+        goingIds: [USER_A],
       });
+      if (!session) throw new Error('jogatina não criada');
+      return session;
     };
 
-    it('upsert é idempotente e o voto troca entre vou e não vou', async () => {
+    it('o mesmo minuto não cria duas jogatinas, e o voto troca entre vou e não vou', async () => {
       const session = await newSession('Votos');
-      const again = await upsertSquadSession(db, {
-        guildId: GUILD_ID,
-        squadId: session.squadId,
-        startsAt: session.startsAt,
-        endsAt: session.endsAt,
-      });
-      expect(again.id).toBe(session.id);
+      expect(session.goingIds).toEqual([USER_A]);
+      expect(
+        await createSquadSession(db, {
+          guildId: GUILD_ID,
+          squadId: session.squadId,
+          startsAt: session.startsAt,
+          endsAt: session.endsAt,
+          createdBy: USER_B,
+          goingIds: [USER_B],
+        }),
+      ).toBeNull();
+      expect(
+        (await getSquadSessionAt(db, GUILD_ID, session.squadId, session.startsAt))?.id,
+      ).toBe(session.id);
+      expect(await getSquadSessionAt(db, OTHER_GUILD_ID, session.squadId, session.startsAt)).toBeNull();
 
-      let row = await voteSquadSession(db, GUILD_ID, session.id, USER_A, true);
-      expect(row?.goingIds).toEqual([USER_A]);
-      expect(row?.notGoingIds).toEqual([]);
       expect(await voteSquadSession(db, GUILD_ID, session.id, USER_A, true)).toBeNull();
-
-      row = await voteSquadSession(db, GUILD_ID, session.id, USER_A, false);
+      let row = await voteSquadSession(db, GUILD_ID, session.id, USER_A, false);
       expect(row?.goingIds).toEqual([]);
       expect(row?.notGoingIds).toEqual([USER_A]);
 
@@ -427,18 +439,69 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect(row?.notGoingIds).toEqual([USER_A]);
     });
 
+    it('cancelar trava votos, some das próximas e reabre no mesmo minuto', async () => {
+      const session = await newSession('Cancelar');
+      const now = new Date();
+      expect((await listUpcomingSessions(db, GUILD_ID, now, { squadIds: [session.squadId] })).map((row) => row.id)).toEqual([session.id]);
+
+      const cancelled = await cancelSquadSession(db, GUILD_ID, session.id, USER_A, now);
+      expect(cancelled?.cancelledBy).toBe(USER_A);
+      expect(await cancelSquadSession(db, GUILD_ID, session.id, USER_A, now)).toBeNull();
+      expect(await voteSquadSession(db, GUILD_ID, session.id, USER_B, true)).toBeNull();
+      expect(await markSessionPlayed(db, GUILD_ID, session.id, now)).toBeNull();
+      expect(await listUpcomingSessions(db, GUILD_ID, now, { squadIds: [session.squadId] })).toEqual([]);
+      expect(await listUpcomingSessions(db, GUILD_ID, now, { squadIds: [] })).toEqual([]);
+
+      const reopened = await reopenSquadSession(db, GUILD_ID, session.id, {
+        endsAt: session.endsAt,
+        createdBy: USER_B,
+        goingIds: [USER_B],
+      });
+      expect(reopened).toMatchObject({
+        id: session.id,
+        cancelledAt: null,
+        createdBy: USER_B,
+        goingIds: [USER_B],
+        notGoingIds: [],
+      });
+      expect(
+        await reopenSquadSession(db, GUILD_ID, session.id, {
+          endsAt: session.endsAt,
+          createdBy: USER_B,
+          goingIds: [USER_B],
+        }),
+      ).toBeNull();
+    });
+
+    it('não reabre enquanto a reserva cancelada ainda segura o voice', async () => {
+      const session = await newSession('Reserva presa');
+      await reserveSessionVoice(db, GUILD_ID, session.id, {
+        voiceChannelId: '400000000000000011',
+        overwrites: [],
+        at: new Date(),
+      });
+      await cancelSquadSession(db, GUILD_ID, session.id, USER_A, new Date());
+      const input = { endsAt: session.endsAt, createdBy: USER_A, goingIds: [USER_A] };
+      expect(await reopenSquadSession(db, GUILD_ID, session.id, input)).toBeNull();
+      await releaseSessionVoice(db, GUILD_ID, session.id, new Date());
+      expect((await reopenSquadSession(db, GUILD_ID, session.id, input))?.voiceReservedAt).toBeNull();
+    });
+
+    it('jogatina começada não cancela, e rolou marca uma vez', async () => {
+      const session = await newSession('Rolou');
+      await markSessionStarted(db, GUILD_ID, session.id, new Date());
+      expect(await cancelSquadSession(db, GUILD_ID, session.id, USER_A, new Date())).toBeNull();
+      expect(await markSessionPlayed(db, GUILD_ID, session.id, new Date())).not.toBeNull();
+      expect(await markSessionPlayed(db, GUILD_ID, session.id, new Date())).toBeNull();
+    });
+
     it('lembrete e início acontecem uma vez só', async () => {
       const session = await newSession('Lembrete');
       expect(await markSessionReminded(db, GUILD_ID, session.id, new Date())).not.toBeNull();
       expect(await markSessionReminded(db, GUILD_ID, session.id, new Date())).toBeNull();
 
-      const withMessage = await setSessionReminderMessage(
-        db,
-        GUILD_ID,
-        session.id,
-        '300000000000000001',
-      );
-      expect(withMessage?.reminderMessageId).toBe('300000000000000001');
+      const withMessage = await setSessionMessage(db, GUILD_ID, session.id, '300000000000000001');
+      expect(withMessage?.messageId).toBe('300000000000000001');
 
       expect(await markSessionStarted(db, GUILD_ID, session.id, new Date())).not.toBeNull();
       expect(await markSessionStarted(db, GUILD_ID, session.id, new Date())).toBeNull();
@@ -511,6 +574,17 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
   });
 
   describe('squads e membros', () => {
+    it('o guia só é gravado sobre o valor esperado', async () => {
+      const squad = await newSquad('Guia');
+      expect((await setSquadGuideMessage(db, GUILD_ID, squad.id, '300000000000000010', null))?.guideMessageId).toBe('300000000000000010');
+      expect(await setSquadGuideMessage(db, GUILD_ID, squad.id, '300000000000000011', null)).toBeNull();
+      expect(
+        (await setSquadGuideMessage(db, GUILD_ID, squad.id, '300000000000000011', '300000000000000010'))
+          ?.guideMessageId,
+      ).toBe('300000000000000011');
+      expect(await setSquadGuideMessage(db, OTHER_GUILD_ID, squad.id, null, '300000000000000011')).toBeNull();
+    });
+
     it('countSquadsForUser ignora arquivados', async () => {
       const active = await newSquad('Ativo');
       const archived = await newSquad('Arquivado');

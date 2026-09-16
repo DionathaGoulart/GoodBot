@@ -76,7 +76,7 @@ export const squadProfiles = pgTable(
   ],
 );
 
-/** Um squad fixo: mesmo grupo, mesma janela semanal. */
+/** Um squad fixo: o mesmo grupo, que marca jogatina quando quer. */
 export const squads = pgTable(
   'squads',
   {
@@ -95,9 +95,16 @@ export const squads = pgTable(
     textChannelId: snowflake('text_channel_id'),
     /** Voice preferido do pool; `null` = o pool estava cheio. */
     voiceChannelId: snowflake('voice_channel_id'),
-    /** Janela semanal fixa: dia (0 = domingo) e índice da faixa. */
-    day: smallint('day').notNull(),
-    block: smallint('block').notNull(),
+    /**
+     * Janela semanal do modelo antigo (dia, 0 = domingo, e índice da faixa).
+     * Não é mais escrita: squad não tem horário fixo, quem marca é a jogatina.
+     * Fica nula por uma versão para o painel publicado não quebrar antes do
+     * deploy novo, e sai na migration seguinte.
+     */
+    day: smallint('day'),
+    block: smallint('block'),
+    /** O guia fixo (pinado) no canal do squad; `null` = ainda não publicado. */
+    guideMessageId: snowflake('guide_message_id'),
     status: squadStatusEnum('status').notNull().default('open'),
     /** Último "vou" ou presença no voice; é o relógio da inatividade. */
     lastConfirmedAt: timestamptz('last_confirmed_at'),
@@ -195,8 +202,9 @@ export const squadJoinRequests = pgTable(
 );
 
 /**
- * Uma sessão semanal de um squad. Alimenta o lembrete com Vou / Não vou e a
- * reserva do voice do pool.
+ * Uma jogatina de um squad, marcada por um membro (`/bora` ou botão BORA).
+ * Alimenta a mensagem com Vou / Não vou, o lembrete e a reserva do voice do
+ * pool.
  *
  * O snapshot dos overwrites do voice mora aqui, e não em `channel_locks`:
  * aquela tabela é do `/lock` (um lock por canal), e um `/lock` num Hellpod
@@ -212,10 +220,17 @@ export const squadSessions = pgTable(
       .notNull()
       .references(() => squads.id, { onDelete: 'cascade' }),
     startsAt: timestamptz('starts_at').notNull(),
-    /** Fim da janela: é quando o job libera o voice. */
+    /** `starts_at + sessionHours`: é quando o job libera o voice. */
     endsAt: timestamptz('ends_at').notNull(),
+    /** Quem marcou; `null` = sessão do agendamento semanal antigo. */
+    createdBy: snowflake('created_by'),
     remindedAt: timestamptz('reminded_at'),
-    /** Mensagem do lembrete; os votos editam a contagem dela. */
+    /** A mensagem da jogatina no canal do squad; os votos editam a contagem dela. */
+    messageId: snowflake('message_id'),
+    /**
+     * @deprecated Mensagem do lembrete do modelo semanal, copiada para
+     * `message_id` na migration. Sai junto com `squads.day`/`block`.
+     */
     reminderMessageId: snowflake('reminder_message_id'),
     /** Quando o bot moveu os membros para o voice; trava contra mover duas vezes. */
     startedAt: timestamptz('started_at'),
@@ -230,9 +245,18 @@ export const squadSessions = pgTable(
     voiceOverwrites: jsonb('voice_overwrites').$type<LockOverwrite[]>(),
     voiceReservedAt: timestamptz('voice_reserved_at'),
     voiceReleasedAt: timestamptz('voice_released_at'),
+    /**
+     * Primeiro sinal de que a jogatina rolou: alguém do squad no voice
+     * reservado, ou o início com dois "vou" quando não há sala. É o que o
+     * histórico conta.
+     */
+    playedAt: timestamptz('played_at'),
+    cancelledAt: timestamptz('cancelled_at'),
+    cancelledBy: snowflake('cancelled_by'),
     createdAt: createdAt(),
   },
   (t) => [
+    // Dois `/bora` para o mesmo minuto viram uma jogatina só.
     uniqueIndex('squad_sessions_squad_starts_uidx').on(t.squadId, t.startsAt),
     index('squad_sessions_to_release_idx')
       .on(t.guildId, t.endsAt)
