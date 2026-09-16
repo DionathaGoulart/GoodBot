@@ -6,8 +6,9 @@ import {
   MAX_SQUAD_FIELD_LABEL_LENGTH,
   MAX_SQUAD_FIELD_OPTIONS,
   MAX_SQUAD_GAME_FIELDS,
+  MAX_SQUAD_GROUP_SIZE,
   MAX_SQUAD_OPTION_LENGTH,
-  MAX_SQUAD_SIZE,
+  MAX_SQUAD_PARTY_SIZE,
   MAX_SQUAD_TEXT_ANSWER_LENGTH,
   MIN_SQUAD_SIZE,
   SQUAD_AVAILABILITY_MAX,
@@ -236,11 +237,24 @@ export type SquadGameFieldInput = z.input<typeof SquadGameFieldSchema>;
 export const SquadGameInputSchema = z
   .object({
     name: z.string().trim().min(1, 'Informe o nome do jogo.').max(MAX_NAME_LENGTH),
-    squadSize: z
+    /** Teto do squad inteiro. */
+    groupSize: z
       .number()
       .int()
       .min(MIN_SQUAD_SIZE, `Um squad tem pelo menos ${String(MIN_SQUAD_SIZE)} jogadores.`)
-      .max(MAX_SQUAD_SIZE, `Um squad tem no máximo ${String(MAX_SQUAD_SIZE)} jogadores.`),
+      .max(
+        MAX_SQUAD_GROUP_SIZE,
+        `Um squad tem no máximo ${String(MAX_SQUAD_GROUP_SIZE)} jogadores.`,
+      ),
+    /** Quantos jogam juntos numa partida; é o tamanho da turma que o match propõe. */
+    partySize: z
+      .number()
+      .int()
+      .min(MIN_SQUAD_SIZE, `Uma party tem pelo menos ${String(MIN_SQUAD_SIZE)} jogadores.`)
+      .max(
+        MAX_SQUAD_PARTY_SIZE,
+        `Uma party tem no máximo ${String(MAX_SQUAD_PARTY_SIZE)} jogadores.`,
+      ),
     enabled: z.boolean().default(true),
     fields: z
       .array(SquadGameFieldSchema)
@@ -251,6 +265,17 @@ export const SquadGameInputSchema = z
       .default([]),
   })
   .superRefine((game, ctx) => {
+    if (
+      typeof game.partySize === 'number' &&
+      typeof game.groupSize === 'number' &&
+      game.partySize > game.groupSize
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'A party não pode ser maior que o squad.',
+        path: ['partySize'],
+      });
+    }
     const seen = new Set<string>();
     (Array.isArray(game.fields) ? game.fields : []).forEach((field, index) => {
       const key = field?.key;

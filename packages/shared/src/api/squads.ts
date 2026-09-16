@@ -10,7 +10,7 @@ import {
 } from '../config/squads';
 import {
   MAX_REASON_LENGTH,
-  MAX_SQUAD_SIZE,
+  MAX_SQUAD_GROUP_SIZE,
   MIN_SQUAD_SIZE,
   SQUAD_BLOCKS,
   SQUAD_DAYS,
@@ -31,7 +31,8 @@ export type SquadGameIdParam = z.infer<typeof SquadGameIdParamSchema>;
 export const SquadGameSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
-  squadSize: z.number().int(),
+  groupSize: z.number().int(),
+  partySize: z.number().int(),
   enabled: z.boolean(),
   fields: z.array(SquadGameFieldSchema),
   createdAt: z.iso.datetime(),
@@ -194,11 +195,14 @@ export type SquadProfileSummary = z.infer<typeof SquadProfileSummarySchema>;
 
 const uniqueIds = (ids: readonly string[]) => new Set(ids).size === ids.length;
 
-/** A turma escolhida pelo admin, sem repetição. */
+/**
+ * A turma escolhida pelo admin, sem repetição. O teto é o do maior squad, e
+ * não o da party: turma maior que a party do jogo só avisa (`GROUP_OVER_SIZE`).
+ */
 export const PickedUserIdsSchema = z
   .array(SnowflakeSchema)
   .min(MIN_SQUAD_SIZE, 'Escolha pelo menos duas pessoas.')
-  .max(MAX_SQUAD_SIZE, `Escolha no máximo ${String(MAX_SQUAD_SIZE)} pessoas.`)
+  .max(MAX_SQUAD_GROUP_SIZE, `Escolha no máximo ${String(MAX_SQUAD_GROUP_SIZE)} pessoas.`)
   .refine(uniqueIds, 'Pessoa repetida na seleção.');
 
 /** As `key`s dos avisos que o admin leu e aceitou. */

@@ -147,7 +147,12 @@ describe('SquadsConfigSchema', () => {
 });
 
 describe('SquadGameInputSchema', () => {
-  const game = { name: 'Helldivers 2', squadSize: 4, fields: [PLATFORM, MODES, NOTE] };
+  const game = {
+    name: 'Helldivers 2',
+    groupSize: 8,
+    partySize: 4,
+    fields: [PLATFORM, MODES, NOTE],
+  };
 
   it('aceita um jogo com campos e aplica os defaults', () => {
     const parsed = SquadGameInputSchema.parse(game);
@@ -236,10 +241,27 @@ describe('SquadGameInputSchema', () => {
     ).toBe(false);
   });
 
-  it('squad tem de 2 a 10 jogadores', () => {
-    expect(SquadGameInputSchema.safeParse({ ...game, squadSize: 1 }).success).toBe(false);
-    expect(SquadGameInputSchema.safeParse({ ...game, squadSize: 11 }).success).toBe(false);
-    expect(SquadGameInputSchema.safeParse({ ...game, squadSize: 2 }).success).toBe(true);
+  it('squad tem de 2 a 20 jogadores, e a party de 2 a 10', () => {
+    const size = (groupSize: number, partySize: number) =>
+      SquadGameInputSchema.safeParse({ ...game, groupSize, partySize }).success;
+    expect(size(1, 1)).toBe(false);
+    expect(size(2, 2)).toBe(true);
+    expect(size(20, 10)).toBe(true);
+    expect(size(21, 4)).toBe(false);
+    expect(size(20, 11)).toBe(false);
+    expect(size(12, 1)).toBe(false);
+  });
+
+  it('a party não passa do squad, e o erro aponta a party', () => {
+    expect(SquadGameInputSchema.safeParse({ ...game, groupSize: 4, partySize: 4 }).success).toBe(
+      true,
+    );
+    const result = SquadGameInputSchema.safeParse({ ...game, groupSize: 3, partySize: 4 });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]).toMatchObject({
+      path: ['partySize'],
+      message: 'A party não pode ser maior que o squad.',
+    });
   });
 
   it('entrada malformada vira erro de validação, não exceção', () => {
@@ -253,7 +275,8 @@ describe('SquadGameInputSchema', () => {
 describe('validateAnswers', () => {
   const fields = SquadGameInputSchema.parse({
     name: 'Helldivers 2',
-    squadSize: 4,
+    groupSize: 4,
+    partySize: 4,
     fields: [PLATFORM, MODES, NOTE],
   }).fields;
 

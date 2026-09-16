@@ -419,9 +419,15 @@ export type SquadFieldMatch = (typeof SQUAD_FIELD_MATCH)[number];
  */
 export const SQUAD_MATCH_WEIGHTS = { cell: 1, soft: 3 } as const;
 
-/** Tamanho de um squad: de uma dupla até dez jogadores. */
+/**
+ * Tamanhos de um jogo. O **grupo** é o squad inteiro; a **party** é quem joga
+ * junto numa partida. Um jogo de quatro por partida comporta um squad de doze
+ * que se divide conforme quem aparece na jogatina. O match propõe uma party;
+ * as vagas além dela chegam por pedido de entrada. Os dois começam numa dupla.
+ */
 export const MIN_SQUAD_SIZE = 2;
-export const MAX_SQUAD_SIZE = 10;
+export const MAX_SQUAD_PARTY_SIZE = 10;
+export const MAX_SQUAD_GROUP_SIZE = 20;
 /**
  * Campos por jogo. O teto vem do Discord: um modal tem no máximo cinco
  * componentes, e as perguntas do jogo cabem num modal só.

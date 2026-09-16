@@ -67,7 +67,7 @@ export interface ManualMatchPerson extends SquadMatchProfile {
 }
 
 export interface ManualMatchInput {
-  game: { squadSize: number; fields: readonly SquadMatchField[] };
+  game: { partySize: number; fields: readonly SquadMatchField[] };
   maxSquadsPerUser: number;
   /** A seleção do admin; repetido conta uma vez. */
   userIds: readonly string[];
@@ -161,7 +161,9 @@ export function evaluateManualMatch(input: ManualMatchInput): ManualMatchEvaluat
     }
   }
 
-  if (userIds.length > input.game.squadSize) {
+  // A proposta monta uma party, como a do match automático. Turma maior não
+  // joga toda na mesma partida, e passando do squad sobra gente sem vaga.
+  if (userIds.length > input.game.partySize) {
     issues.push(issue('GROUP_OVER_SIZE', null, [...userIds]));
   }
 

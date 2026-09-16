@@ -46,7 +46,7 @@ function person(userId: string, overrides: Partial<ManualMatchPerson> = {}): Man
 
 function evaluate(people: ManualMatchPerson[], overrides: Partial<ManualMatchInput> = {}) {
   return evaluateManualMatch({
-    game: { squadSize: 4, fields: FIELDS },
+    game: { partySize: 4, fields: FIELDS },
     maxSquadsPerUser: 1,
     userIds: people.map((entry) => entry.userId),
     people: new Map(people.map((entry) => [entry.userId, entry])),
@@ -90,9 +90,9 @@ describe('evaluateManualMatch', () => {
     });
   });
 
-  it('turma maior que o squad só avisa', () => {
+  it('turma maior que a party só avisa', () => {
     const result = evaluate([person(A), person(B), person(C)], {
-      game: { squadSize: 2, fields: FIELDS },
+      game: { partySize: 2, fields: FIELDS },
     });
 
     expect(result.blocks).toEqual([]);
@@ -238,7 +238,7 @@ describe('evaluateManualMatch', () => {
         person(B, { inGuild: false, pendingRequestSquadIds: ['s'] }),
         person(A, { status: 'paused' }),
       ],
-      { game: { squadSize: 2, fields: FIELDS } },
+      { game: { partySize: 2, fields: FIELDS } },
     );
 
     const order = [...result.blocks, ...result.warnings].map((entry) =>
@@ -263,7 +263,7 @@ describe('evaluateManualMatch', () => {
     const expected = evaluate(people, { cooldownPairs: new Set([pairKey(A, B)]) });
 
     const shuffled = evaluateManualMatch({
-      game: { squadSize: 4, fields: FIELDS },
+      game: { partySize: 4, fields: FIELDS },
       maxSquadsPerUser: 1,
       userIds: [C, A, B, A],
       people: new Map([...people].reverse().map((entry) => [entry.userId, entry])),

@@ -18,9 +18,10 @@ const FRIDAY_EVENING = toBits([{ day: 5, block: 2 }]);
 const SATURDAY_EVENING = toBits([{ day: 6, block: 2 }]);
 const SUNDAY_EVENING = toBits([{ day: 0, block: 2 }]);
 
-const { fields: FIELDS, squadSize: SQUAD_SIZE } = SquadGameInputSchema.parse({
+const { fields: FIELDS, partySize: PARTY_SIZE } = SquadGameInputSchema.parse({
   name: 'Helldivers 2',
-  squadSize: 4,
+  groupSize: 8,
+  partySize: 4,
   fields: [
     { key: 'platform', label: 'Plataforma', type: 'select', options: ['PC', 'PS5'], match: 'hard' },
     {
@@ -190,16 +191,16 @@ describe('pairKey', () => {
 });
 
 describe('proposeGroups', () => {
-  const game = { squadSize: SQUAD_SIZE, fields: FIELDS };
+  const game = { partySize: PARTY_SIZE, fields: FIELDS };
 
-  it('respeita o tamanho do squad', () => {
+  it('propõe no máximo uma party', () => {
     const five = [A, B, C, D, E].map((id) => profile(id, SATURDAY_EVENING));
     const groups = proposeGroups(game, five);
     expect(groups).toHaveLength(1);
     expect(groups[0]!.userIds).toEqual([A, B, C, D]);
 
     const six = [A, B, C, D, E, F].map((id) => profile(id, SATURDAY_EVENING));
-    expect(proposeGroups({ ...game, squadSize: 3 }, six).map((group) => group.userIds)).toEqual([
+    expect(proposeGroups({ ...game, partySize: 3 }, six).map((group) => group.userIds)).toEqual([
       [A, B, C],
       [D, E, F],
     ]);
@@ -232,7 +233,7 @@ describe('proposeGroups', () => {
       profile(B, FRIDAY_EVENING | SUNDAY_EVENING),
       profile(C, SATURDAY_EVENING | SUNDAY_EVENING),
     ];
-    const groups = proposeGroups({ ...game, squadSize: 3 }, people);
+    const groups = proposeGroups({ ...game, partySize: 3 }, people);
     expect(groups).toEqual([{ userIds: [A, B], mask: FRIDAY_EVENING, slot: { day: 5, block: 2 } }]);
   });
 
@@ -244,7 +245,7 @@ describe('proposeGroups', () => {
       profile(D, SATURDAY_EVENING | SUNDAY_EVENING, { mic: 'Sim', difficulty: '9' }),
       profile(E, SATURDAY_EVENING, { mic: 'Sim' }),
     ];
-    const groups = proposeGroups({ ...game, squadSize: 3 }, people);
+    const groups = proposeGroups({ ...game, partySize: 3 }, people);
     expect(groups.map((group) => group.userIds)).toEqual([
       [C, D, E],
       [A, B],
@@ -254,7 +255,7 @@ describe('proposeGroups', () => {
 
   it('cada jogador fica em um grupo só', () => {
     const people = [A, B, C, D, E].map((id) => profile(id, SATURDAY_EVENING));
-    const ids = proposeGroups({ ...game, squadSize: 2 }, people).flatMap((group) => group.userIds);
+    const ids = proposeGroups({ ...game, partySize: 2 }, people).flatMap((group) => group.userIds);
     expect(ids).toHaveLength(4);
     expect(new Set(ids).size).toBe(ids.length);
   });
@@ -265,7 +266,7 @@ describe('proposeGroups', () => {
       profile(B, SATURDAY_EVENING | SUNDAY_EVENING),
       profile(C, SUNDAY_EVENING | SATURDAY_EVENING),
     ];
-    const [group] = proposeGroups({ ...game, squadSize: 3 }, people);
+    const [group] = proposeGroups({ ...game, partySize: 3 }, people);
     expect(group!.mask).toBe(SATURDAY_EVENING | SUNDAY_EVENING);
     expect(group!.slot).toEqual({ day: 0, block: 2 });
   });
@@ -292,7 +293,7 @@ describe('proposeGroups', () => {
     );
   });
 
-  it('recusa tamanho de squad menor que uma dupla', () => {
-    expect(() => proposeGroups({ ...game, squadSize: 1 }, [])).toThrow(RangeError);
+  it('recusa party menor que uma dupla', () => {
+    expect(() => proposeGroups({ ...game, partySize: 1 }, [])).toThrow(RangeError);
   });
 });

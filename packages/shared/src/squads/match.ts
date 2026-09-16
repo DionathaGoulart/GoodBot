@@ -155,24 +155,27 @@ const compareIds = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
  * determinística:
  *
  * 1. a semente é a dupla compatível de maior nota entre quem ainda está livre;
- * 2. o grupo cresce, até `squadSize`, pelo candidato compatível com todos os
+ * 2. o grupo cresce, até `partySize`, pelo candidato compatível com todos os
  *    membros que mantém alguma faixa em comum com o grupo inteiro e soma mais
  *    nota com eles;
  * 3. repete até não sobrar dupla compatível.
  *
  * O grupo inteiro precisa dividir uma faixa porque a turma proposta precisa
  * de pelo menos um horário em que todos joguem juntos; compatibilidade de dupla
- * em dupla não garante isso (A e B jogam sexta, B e C sábado, A e C domingo). Cada jogador fica em no máximo um
- * grupo. Empates vão para o menor `userId` (ordem de string), então a mesma
- * entrada em qualquer ordem dá a mesma saída. Perfil repetido conta uma vez.
+ * em dupla não garante isso (A e B jogam sexta, B e C sábado, A e C domingo).
+ * A turma é uma party, e não o squad inteiro: um horário comum a doze agendas
+ * quase nunca existe, e as vagas além da party chegam depois, por pedido de
+ * entrada (`fitsSquad`). Cada jogador fica em no máximo um grupo. Empates vão
+ * para o menor `userId` (ordem de string), então a mesma entrada em qualquer
+ * ordem dá a mesma saída. Perfil repetido conta uma vez.
  */
 export function proposeGroups(
-  game: { squadSize: number; fields: readonly SquadMatchField[] },
+  game: { partySize: number; fields: readonly SquadMatchField[] },
   profiles: readonly SquadMatchProfile[],
   options: ProposeGroupsOptions = {},
 ): SquadGroupProposal[] {
-  if (!Number.isInteger(game.squadSize) || game.squadSize < MIN_SQUAD_SIZE) {
-    throw new RangeError(`Tamanho de squad inválido: ${String(game.squadSize)}.`);
+  if (!Number.isInteger(game.partySize) || game.partySize < MIN_SQUAD_SIZE) {
+    throw new RangeError(`Tamanho de party inválido: ${String(game.partySize)}.`);
   }
   const blocked = options.blockedPairs ?? new Set<string>();
 
@@ -209,7 +212,7 @@ export function proposeGroups(
     const members = [seed.i, seed.j];
     let mask = people[seed.i]!.availability & people[seed.j]!.availability;
 
-    while (members.length < game.squadSize) {
+    while (members.length < game.partySize) {
       let best = -1;
       let bestGain = -1;
       for (let candidate = 0; candidate < count; candidate++) {
