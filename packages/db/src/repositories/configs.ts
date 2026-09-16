@@ -90,6 +90,19 @@ export async function getAllModuleConfigs(
 }
 
 /**
+ * O config de um módulo em todas as guilds que têm linha gravada. Guild sem
+ * linha fica de fora e usa o default. Cruza servidores, então é só para o
+ * painel do dono do bot (ver `usageByGuild`).
+ */
+export async function listModuleConfigs<M extends Module>(
+  db: DbExecutor,
+  module: M,
+): Promise<Map<string, ModuleConfig<M>>> {
+  const rows = await db.select().from(moduleConfigs).where(eq(moduleConfigs.module, module));
+  return new Map(rows.map((row) => [row.guildId, toResult(module, row).config]));
+}
+
+/**
  * Valida e grava (upsert) o config de um módulo. Lança `ZodError` se o input
  * for inválido — o chamador (painel/comando) converte em erro para o usuário.
  * Garante a linha em `guilds` (FK) sem sobrescrever nome/owner existentes.

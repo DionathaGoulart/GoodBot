@@ -1,4 +1,4 @@
-import { BROADCAST_CONFIRMATION, InternalApiError } from '@goodbot/shared';
+import { BROADCAST_CONFIRMATION, DEFAULT_LOGS_CONFIG, InternalApiError } from '@goodbot/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AdminGuildRow } from './admin';
@@ -11,6 +11,10 @@ const GUILD_ID = '200000000000000002';
 const setGuildStatus = vi.fn();
 const leaveGuild = vi.fn();
 const broadcastApi = vi.fn();
+const getModuleConfig = vi.fn();
+const setModuleConfig = vi.fn();
+const invalidateConfig = vi.fn();
+const withAudit = vi.fn();
 
 vi.mock('server-only', () => ({}));
 vi.mock('./db', () => ({ db: () => ({}) }));
@@ -26,17 +30,20 @@ vi.mock('@goodbot/db', async () => {
     listGuildRegistry: () => Promise.resolve([]),
     usageByGuild: () => Promise.resolve([]),
     setGuildStatus: (...args: unknown[]) => setGuildStatus(...args),
+    getModuleConfig: (...args: unknown[]) => getModuleConfig(...args),
+    setModuleConfig: (...args: unknown[]) => setModuleConfig(...args),
   };
 });
+vi.mock('./audit', () => ({ withAudit: (...args: unknown[]) => withAudit(...args) }));
 vi.mock('./internal-api', () => ({
-  internalApi: () => ({ admin: { leaveGuild, broadcast: broadcastApi } }),
+  internalApi: () => ({ admin: { leaveGuild, broadcast: broadcastApi }, invalidateConfig }),
 }));
 vi.mock('./auth/owner', () => ({
   requireBotOwner: () =>
     Promise.resolve({ user: { id: OWNER, name: 'dono#1', image: null } }),
 }));
 
-const { approveGuild, blockGuild, broadcast, queueOf } = await import('./admin');
+const { approveGuild, blockGuild, broadcast, queueOf, setMessageCache } = await import('./admin');
 
 function row(overrides: Partial<AdminGuildRow>): AdminGuildRow {
   return {
@@ -52,6 +59,7 @@ function row(overrides: Partial<AdminGuildRow>): AdminGuildRow {
     note: null,
     live: null,
     usage: { commands: 0, messages: 0 },
+    messageCache: { logs: true, enabled: true, stored: 0 },
     ...overrides,
   };
 }
@@ -66,6 +74,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   setGuildStatus.mockResolvedValue({ guildId: GUILD_ID });
   leaveGuild.mockResolvedValue({ guildId: GUILD_ID, name: 'Servidor', announced: true });
+  getModuleConfig.mockResolvedValue({
+    config: {
+      ...DEFAULT_LOGS_CONFIG,
+      enabled: true,
+      messageCache: { enabled: true, perChannel: 500 },
+    },
+  });
+  setModuleConfig.mockResolvedValue(undefined);
+  invalidateConfig.mockResolvedValue({ ok: true });
+  withAudit.mockResolvedValue(undefined);
 });
 
 describe('queueOf', () => {
@@ -181,5 +199,61 @@ describe('broadcast', () => {
 
     expect(result.ok).toBe(false);
     expect(broadcastApi).not.toHaveBeenCalled();
+  });
+});
+
+describe('setMessageCache', () => {
+  it('desliga só o cache, preserva o resto da config e deixa rastro na auditoria', async () => {
+    const result = await setMessageCache(form({ guildId: GUILD_ID, enabled: 'false' }));
+
+    expect(result.ok).toBe(true);
+    const gravado = setModuleConfig.mock.calls[0] as [
+      unknown,
+      string,
+      string,
+      typeof DEFAULT_LOGS_CONFIG,
+      string,
+    ];
+    expect(gravado[1]).toBe(GUILD_ID);
+    expect(gravado[2]).toBe('logs');
+    expect(gravado[3].enabled).toBe(true);
+    expect(gravado[3].messageCache).toEqual({ enabled: false, perChannel: 500 });
+    expect(gravado[4]).toBe(OWNER);
+    // A equipe do servidor precisa ver na auditoria de lá quem mexeu.
+    expect(withAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: OWNER, guildId: GUILD_ID }),
+      'config.logs.update',
+      { type: 'module', id: 'logs' },
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(invalidateConfig).toHaveBeenCalledWith(GUILD_ID, { module: 'logs' });
+  });
+
+  it('já no estado pedido, não grava nem audita', async () => {
+    const result = await setMessageCache(form({ guildId: GUILD_ID, enabled: 'true' }));
+
+    expect(result.ok).toBe(true);
+    expect(setModuleConfig).not.toHaveBeenCalled();
+    expect(withAudit).not.toHaveBeenCalled();
+  });
+
+  it('o bot fora não desfaz a gravação', async () => {
+    invalidateConfig.mockRejectedValue(
+      new InternalApiError('O bot não respondeu.', { status: 503, code: 'UNAVAILABLE' }),
+    );
+
+    const result = await setMessageCache(form({ guildId: GUILD_ID, enabled: 'false' }));
+
+    expect(result.ok).toBe(true);
+    expect(result.message).toContain('5 minutos');
+    expect(setModuleConfig).toHaveBeenCalledOnce();
+  });
+
+  it('recusa sem servidor', async () => {
+    const result = await setMessageCache(form({ enabled: 'false' }));
+
+    expect(result.ok).toBe(false);
+    expect(getModuleConfig).not.toHaveBeenCalled();
   });
 });

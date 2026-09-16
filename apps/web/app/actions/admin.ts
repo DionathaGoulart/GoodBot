@@ -7,6 +7,7 @@ import {
   leaveGuild,
   resyncCommands,
   setMaintenance,
+  setMessageCache,
 } from '@/lib/admin';
 
 import type { BroadcastOutcome, MaintenanceOutcome, ResyncOutcome } from '@/lib/admin';
@@ -40,4 +41,8 @@ export async function setMaintenanceAction(formData: FormData): Promise<Maintena
 
 export async function resyncCommandsAction(formData: FormData): Promise<ResyncOutcome> {
   return resyncCommands(formData);
+}
+
+export async function setMessageCacheAction(formData: FormData): Promise<ActionResult> {
+  return setMessageCache(formData);
 }

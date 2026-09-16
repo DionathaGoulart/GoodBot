@@ -1,3 +1,11 @@
+import {
+  BOT_MEMORY_BUDGET_BYTES,
+  BOT_MEMORY_LIMIT_BYTES,
+  DATABASE_QUOTA_BYTES,
+  DATABASE_WARNING_BYTES,
+  MESSAGE_CACHE_RETENTION_DAYS,
+} from '@goodbot/shared';
+
 import { Panel } from '@/components/retro/panel';
 import { ScreenHeader } from '@/components/retro/screen-header';
 import { EmptyState, ErrorState } from '@/components/retro/states';
@@ -7,6 +15,8 @@ import { requireBotOwner } from '@/lib/auth/owner';
 import { loadAdminGuilds, loadAdminSystem, queueOf, USAGE_WINDOW_MS } from '@/lib/admin';
 import { formatBytes, formatUptime } from '@/lib/system';
 
+import { MessageCacheToggle } from './message-cache-toggle';
+
 import type { AdminGuildRow } from '@/lib/admin';
 import type { HealthResponse } from '@goodbot/shared';
 
@@ -15,29 +25,28 @@ export const metadata = { title: 'Saúde · Admin · Goodbot' };
 // Estado de agora: nada aqui pode ser prerenderizado nem cacheado.
 export const dynamic = 'force-dynamic';
 
-/** O container tem 384 MB (`infra/docker-compose.yml`); é esse o teto real. */
-const CONTAINER_MEMORY_BYTES = 384 * 1024 * 1024;
-
-/** A partir daqui a RAM deixa de ser número e vira aviso. */
-const MEMORY_WARNING_RATIO = 0.8;
-
 /**
  * "Saúde e uso". É a tela que avisa quando a VM está chegando no limite — por
- * isso a memória tem faixa e não só valor, e por isso "guilds em cache vs
- * esperadas" fica ao lado dela: as duas contam a mesma história de capacidade
- * por ângulos diferentes.
+ * isso a memória e o banco têm linha de aviso e não só valor, e por isso "guilds
+ * em cache vs esperadas" fica ao lado deles: todos contam a mesma história de
+ * capacidade por ângulos diferentes.
+ *
+ * As linhas são as mesmas do `CapacityJob` do bot (`@goodbot/shared`): o que
+ * aparece APERTADO aqui é o que dispara o alerta no webhook.
  */
 export default async function AdminPage() {
   await requireBotOwner();
 
-  const [{ health, diagnostics, maintenance, roundTripMs, error }, { rows, botError }] =
+  const [{ health, diagnostics, maintenance, storage, roundTripMs, error }, { rows, botError }] =
     await Promise.all([loadAdminSystem(), loadAdminGuilds()]);
 
   const dias = Math.round(USAGE_WINDOW_MS / (24 * 60 * 60 * 1000));
   const atendidos = rows.filter((row) => row.served);
   const fila = queueOf(rows);
   const rss = health?.process?.rssBytes ?? null;
-  const memoriaApertada = rss !== null && rss > CONTAINER_MEMORY_BYTES * MEMORY_WARNING_RATIO;
+  const memoriaApertada = rss !== null && rss >= BOT_MEMORY_BUDGET_BYTES;
+  const bancoApertado = storage !== null && storage.databaseBytes >= DATABASE_WARNING_BYTES;
+  const guardadas = rows.reduce((total, row) => total + row.messageCache.stored, 0);
 
   return (
     <>
@@ -65,7 +74,7 @@ export default async function AdminPage() {
         </Panel>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <StatTile
               label="SERVIDORES ATENDIDOS"
               value={String(atendidos.length)}
@@ -77,8 +86,26 @@ export default async function AdminPage() {
               hint={
                 rss === null
                   ? undefined
-                  : `${String(Math.round((rss / CONTAINER_MEMORY_BYTES) * 100))}% de 384 MB${memoriaApertada ? ', APERTADO' : ''}`
+                  : memoriaApertada
+                    ? `APERTADO: acima do orçamento de ${formatBytes(BOT_MEMORY_BUDGET_BYTES)}, o container cai em ${formatBytes(BOT_MEMORY_LIMIT_BYTES)}`
+                    : `orçamento ${formatBytes(BOT_MEMORY_BUDGET_BYTES)} · container ${formatBytes(BOT_MEMORY_LIMIT_BYTES)}`
               }
+            />
+            <StatTile
+              label="BANCO"
+              value={storage === null ? '—' : formatBytes(storage.databaseBytes)}
+              hint={
+                storage === null
+                  ? 'o Postgres não respondeu'
+                  : bancoApertado
+                    ? `APERTADO: cota de ${formatBytes(DATABASE_QUOTA_BYTES)}, cheia vira só leitura`
+                    : `${String(Math.round((storage.databaseBytes / DATABASE_QUOTA_BYTES) * 100))}% da cota de ${formatBytes(DATABASE_QUOTA_BYTES)} · aviso em ${formatBytes(DATABASE_WARNING_BYTES)}`
+              }
+            />
+            <StatTile
+              label="CACHE DE MENSAGENS"
+              value={storage === null ? '—' : formatBytes(storage.messageCacheBytes)}
+              hint={`${String(guardadas)} mensagens guardadas · ${String(MESSAGE_CACHE_RETENTION_DAYS)} dias`}
             />
             <StatTile
               label="GUILDS EM CACHE"
@@ -102,7 +129,8 @@ export default async function AdminPage() {
 
           <Panel title="USO.LOG">
             <p className="screen-meta">
-              COMANDOS E MENSAGENS POR SERVIDOR NOS ÚLTIMOS {dias} DIAS
+              COMANDOS E MENSAGENS POR SERVIDOR NOS ÚLTIMOS {dias} DIAS. O CACHE DE MENSAGENS É O
+              QUE MAIS PESA NO BANCO E NA RAM: DESLIGUE NOS SERVIDORES QUE MAIS GUARDAM
             </p>
             {botError !== null ? (
               <p className="screen-meta">
@@ -128,30 +156,42 @@ export default async function AdminPage() {
   );
 }
 
-/** Uso por servidor, do que mais usou para o que menos usou. */
+/**
+ * Uso por servidor. A ordem é por mensagens guardadas, depois vistas: quem
+ * abre esta tabela atrás de capacidade quer o maior peso na primeira linha.
+ */
 function UsoTable({ rows }: { rows: readonly AdminGuildRow[] }) {
   const usados = [...rows]
-    .filter((row) => row.usage.commands > 0 || row.usage.messages > 0)
-    .sort((a, b) => b.usage.commands - a.usage.commands || b.usage.messages - a.usage.messages);
+    .filter(
+      (row) => row.usage.commands > 0 || row.usage.messages > 0 || row.messageCache.stored > 0,
+    )
+    .sort(
+      (a, b) =>
+        b.messageCache.stored - a.messageCache.stored ||
+        b.usage.messages - a.usage.messages ||
+        b.usage.commands - a.usage.commands,
+    );
 
   if (usados.length === 0) {
     return (
       <EmptyState
         title="SEM USO"
-        description="Nenhum servidor registrou comando ou mensagem na janela."
+        description="Nenhum servidor registrou comando ou mensagem na janela, nem tem mensagem guardada."
       />
     );
   }
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[32rem] border-collapse text-sm">
+      <table className="w-full min-w-[48rem] border-collapse text-sm">
         <thead>
           <tr className="border-b-2 border-base-300 bg-base-100 text-left">
             <th className="section-label px-3 py-2">Servidor</th>
             <th className="section-label px-3 py-2 text-right">Comandos</th>
             <th className="section-label px-3 py-2 text-right">Mensagens</th>
             <th className="section-label px-3 py-2 text-right">Membros</th>
+            <th className="section-label px-3 py-2 text-right">Guardadas</th>
+            <th className="section-label px-3 py-2 text-right">Cache de mensagens</th>
           </tr>
         </thead>
         <tbody>
@@ -165,6 +205,10 @@ function UsoTable({ rows }: { rows: readonly AdminGuildRow[] }) {
               <td className="px-3 py-2 text-right tabular-nums">{row.usage.messages}</td>
               <td className="px-3 py-2 text-right tabular-nums">
                 {row.live ? row.live.memberCount : '—'}
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums">{row.messageCache.stored}</td>
+              <td className="px-3 py-2 text-right">
+                <MessageCacheToggle guildId={row.guildId} cache={row.messageCache} />
               </td>
             </tr>
           ))}

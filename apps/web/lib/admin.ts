@@ -3,21 +3,29 @@ import 'server-only';
 import {
   BROADCAST_CONFIRMATION,
   DAY_MS,
+  DEFAULT_LOGS_CONFIG,
   MAX_EMBED_DESCRIPTION_LENGTH,
   MAX_EMBED_TITLE_LENGTH,
   MAX_REASON_LENGTH,
 } from '@goodbot/shared';
 import {
+  getModuleConfig,
+  getStorageUsage,
   isGuildServed,
   listGuildRegistry,
+  listModuleConfigs,
+  messageCacheByGuild,
   setGuildStatus,
+  setModuleConfig,
   usageByGuild,
   type GuildRegistryEntry,
+  type StorageUsage,
 } from '@goodbot/db';
 import { revalidatePath } from 'next/cache';
 import { cache } from 'react';
 
 import { failure } from './action-error';
+import { withAudit } from './audit';
 import { requireBotOwner } from './auth/owner';
 import { db } from './db';
 import { internalApi } from './internal-api';
@@ -47,13 +55,16 @@ import type {
  * O que **exige** o bot é o que só ele pode fazer: sair de um servidor, mandar
  * um aviso, re-registrar comandos, ligar a manutenção.
  *
- * Nada aqui escreve em `audit_logs`, e isso é decisão, não esquecimento:
+ * Quase nada aqui escreve em `audit_logs`, e isso é decisão, não esquecimento:
  * aquela tabela tem `guild_id NOT NULL` com FK para `guilds`, e metade destas
  * ações não tem guild (broadcast, manutenção) ou acontece numa guild que ainda
  * não tem linha lá (a fila é feita de servidores `pending`, que o bot nunca
  * preparou). A trilha de aprovar e bloquear fica onde ela é o próprio dado —
  * `status`, `approved_at` e `note` no registro —, e o que o bot executa ele
  * loga em `warn` com quem pediu.
+ *
+ * A exceção é `setMessageCache`: ela muda a config de um servidor, e quem
+ * cuida dele precisa conseguir ver na auditoria de lá quem mexeu.
  */
 
 /** Janela do "uso" da tabela de servidores. */
@@ -62,6 +73,16 @@ export const USAGE_WINDOW_MS = 7 * DAY_MS;
 export interface AdminGuildUsage {
   commands: number;
   messages: number;
+}
+
+/** O cache de mensagens de um servidor, que é o que mais pesa no banco e na RAM. */
+export interface AdminMessageCache {
+  /** O módulo de logs está ligado. Sem ele o cache não grava, ligado ou não. */
+  logs: boolean;
+  /** `logs.messageCache.enabled`: o que o botão do `/admin` liga e desliga. */
+  enabled: boolean;
+  /** Mensagens guardadas agora (a retenção é de 7 dias). */
+  stored: number;
 }
 
 export interface AdminGuildRow {
@@ -84,6 +105,7 @@ export interface AdminGuildRow {
   /** O que o bot sabe agora; `null` quando ele não está (ou não respondeu). */
   live: AdminGuildLive | null;
   usage: AdminGuildUsage;
+  messageCache: AdminMessageCache;
 }
 
 export interface AdminGuildsView {
@@ -107,9 +129,11 @@ function iso(value: Date | null): string | null {
  * conserta as coisas, não.
  */
 export const loadAdminGuilds = cache(async (): Promise<AdminGuildsView> => {
-  const [entries, usage] = await Promise.all([
+  const [entries, usage, cached, logsConfigs] = await Promise.all([
     listGuildRegistry(db()),
     usageByGuild(db(), new Date(Date.now() - USAGE_WINDOW_MS)),
+    messageCacheByGuild(db()),
+    listModuleConfigs(db(), 'logs'),
   ]);
 
   let live = new Map<string, AdminGuildLive>();
@@ -122,11 +146,13 @@ export const loadAdminGuilds = cache(async (): Promise<AdminGuildsView> => {
   }
 
   const usageById = new Map(usage.map((row) => [row.guildId, row]));
+  const storedById = new Map(cached.map((row) => [row.guildId, row.messages]));
   const now = new Date();
 
   const rows = entries
     .map((entry: GuildRegistryEntry): AdminGuildRow => {
       const stats = usageById.get(entry.guildId);
+      const logs = logsConfigs.get(entry.guildId) ?? DEFAULT_LOGS_CONFIG;
       return {
         guildId: entry.guildId,
         status: entry.status,
@@ -143,6 +169,11 @@ export const loadAdminGuilds = cache(async (): Promise<AdminGuildsView> => {
         note: entry.note,
         live: live.get(entry.guildId) ?? null,
         usage: { commands: stats?.commands ?? 0, messages: stats?.messages ?? 0 },
+        messageCache: {
+          logs: logs.enabled,
+          enabled: logs.messageCache.enabled,
+          stored: storedById.get(entry.guildId) ?? 0,
+        },
       };
     })
     .sort((a, b) => {
@@ -175,6 +206,8 @@ export interface AdminSystemView {
   health: HealthResponse | null;
   diagnostics: AdminDiagnostics | null;
   maintenance: MaintenanceState | null;
+  /** Tamanho do banco, lido direto do Postgres: aparece mesmo com o bot fora. */
+  storage: StorageUsage | null;
   roundTripMs: number | null;
   error: string | null;
 }
@@ -186,10 +219,11 @@ export interface AdminSystemView {
 export async function loadAdminSystem(): Promise<AdminSystemView> {
   const api = internalApi();
   const start = performance.now();
-  const [health, diagnostics, maintenance] = await Promise.all([
+  const [health, diagnostics, maintenance, storage] = await Promise.all([
     api.health().catch((error: unknown) => ({ error })),
     api.admin.diagnostics().catch(() => null),
     api.admin.maintenance().catch(() => null),
+    getStorageUsage(db()).catch(() => null),
   ]);
 
   if (health !== null && typeof health === 'object' && 'error' in health) {
@@ -197,6 +231,7 @@ export async function loadAdminSystem(): Promise<AdminSystemView> {
       health: null,
       diagnostics: null,
       maintenance: null,
+      storage,
       roundTripMs: null,
       error: failure(health.error).message ?? 'O bot não respondeu.',
     };
@@ -206,6 +241,7 @@ export async function loadAdminSystem(): Promise<AdminSystemView> {
     health,
     diagnostics,
     maintenance,
+    storage,
     roundTripMs: Math.round(performance.now() - start),
     error: null,
   };
@@ -354,6 +390,65 @@ export async function leaveGuild(formData: FormData): Promise<ActionResult> {
   } catch (error) {
     return failure(error, 'O bot não respondeu; ele continua no servidor.');
   }
+}
+
+/**
+ * Liga ou desliga o cache de mensagens de um servidor, pelo dono do bot.
+ *
+ * É a alavanca de capacidade: o `message_cache` guarda o texto de toda
+ * mensagem por 7 dias e é o que enche a cota do Supabase, e o LRU dele é a
+ * parte da RAM que cresce com o tráfego. Desligar num servidor grande alivia
+ * os dois. O preço é do servidor: o log de mensagem apagada ou editada sai sem
+ * o texto antigo quando a mensagem já não está no cache do discord.js.
+ *
+ * Escreve a mesma config que a tela de logs do servidor escreve. A equipe de
+ * lá vê o valor novo, vê na auditoria quem mudou e pode religar; se isso virar
+ * briga, a conversa é outra (bloquear). As mensagens já guardadas não são
+ * apagadas: saem sozinhas na retenção, e um `DELETE` agora não devolveria
+ * espaço à cota antes do vacuum.
+ */
+export async function setMessageCache(formData: FormData): Promise<ActionResult> {
+  const session = await requireBotOwner();
+  const guildId = readGuildId(formData);
+  if (!guildId) return { ok: false, message: 'Servidor inválido.' };
+  const enabled = formData.get('enabled') === 'true';
+
+  const { config: before } = await getModuleConfig(db(), guildId, 'logs');
+  if (before.messageCache.enabled === enabled) {
+    return {
+      ok: true,
+      message: enabled ? 'O cache já estava ligado.' : 'O cache já estava desligado.',
+    };
+  }
+  const after = { ...before, messageCache: { ...before.messageCache, enabled } };
+
+  try {
+    await setModuleConfig(db(), guildId, 'logs', after, session.user.id);
+  } catch (error) {
+    return failure(error, 'Não deu para gravar a config do servidor.');
+  }
+  await withAudit(
+    { id: session.user.id, tag: session.user.name, guildId },
+    'config.logs.update',
+    { type: 'module', id: 'logs' },
+    before,
+    after,
+  );
+  revalidateAdmin();
+
+  // Sem o invalidate o bot só vê a mudança quando o cache de config expira.
+  try {
+    await internalApi().invalidateConfig(guildId, { module: 'logs' });
+  } catch {
+    return {
+      ok: true,
+      message: 'Gravado, mas o bot não respondeu: ele aplica sozinho em até 5 minutos.',
+    };
+  }
+  return {
+    ok: true,
+    message: enabled ? 'Cache de mensagens ligado.' : 'Cache de mensagens desligado.',
+  };
 }
 
 export interface BroadcastOutcome extends ActionResult {
