@@ -8,7 +8,6 @@ import {
   jsonb,
   pgTable,
   primaryKey,
-  smallint,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -43,13 +42,6 @@ export const squadGames = pgTable(
     groupSize: integer('group_size').notNull(),
     /** Quantos jogam juntos numa partida (`<= group_size`): a turma que o match propõe. */
     partySize: integer('party_size').notNull(),
-    /**
-     * @deprecated Tamanho único do modelo antigo, copiado para `group_size` e
-     * `party_size` na migration. Não é mais escrito; fica nulo por uma versão
-     * para o bot e o painel publicados não quebrarem antes do deploy novo, e
-     * sai junto com `squads.day`/`block`.
-     */
-    squadSize: integer('squad_size'),
     enabled: boolean('enabled').notNull().default(true),
     /** Perguntas do perfil (no máximo 5, o que cabe num modal). */
     fields: jsonb('fields').$type<SquadGameField[]>().notNull().default([]),
@@ -106,14 +98,6 @@ export const squads = pgTable(
     textChannelId: snowflake('text_channel_id'),
     /** Voice preferido do pool; `null` = o pool estava cheio. */
     voiceChannelId: snowflake('voice_channel_id'),
-    /**
-     * Janela semanal do modelo antigo (dia, 0 = domingo, e índice da faixa).
-     * Não é mais escrita: squad não tem horário fixo, quem marca é a jogatina.
-     * Fica nula por uma versão para o painel publicado não quebrar antes do
-     * deploy novo, e sai na migration seguinte.
-     */
-    day: smallint('day'),
-    block: smallint('block'),
     /** O guia fixo (pinado) no canal do squad; `null` = ainda não publicado. */
     guideMessageId: snowflake('guide_message_id'),
     status: squadStatusEnum('status').notNull().default('open'),
@@ -279,11 +263,6 @@ export const squadSessions = pgTable(
     remindedAt: timestamptz('reminded_at'),
     /** A mensagem da jogatina no canal do squad; os votos editam a contagem dela. */
     messageId: snowflake('message_id'),
-    /**
-     * @deprecated Mensagem do lembrete do modelo semanal, copiada para
-     * `message_id` na migration. Sai junto com `squads.day`/`block`.
-     */
-    reminderMessageId: snowflake('reminder_message_id'),
     /** Quando o bot moveu os membros para o voice; trava contra mover duas vezes. */
     startedAt: timestamptz('started_at'),
     goingIds: snowflakeArray('going_ids'),

@@ -289,8 +289,6 @@ export const impl = {
       name: input.name,
       textChannelId: null,
       voiceChannelId: input.voiceChannelId ?? null,
-      day: null,
-      block: null,
       guideMessageId: null,
       status: input.status ?? 'open',
       lastConfirmedAt: null,
@@ -1043,7 +1041,6 @@ function blankSession(input: Partial<SquadSession> & Pick<SquadSession, 'squadId
     createdBy: null,
     remindedAt: null,
     messageId: null,
-    reminderMessageId: null,
     startedAt: null,
     goingIds: [],
     notGoingIds: [],
@@ -1062,15 +1059,13 @@ function blankSession(input: Partial<SquadSession> & Pick<SquadSession, 'squadId
   };
 }
 
-/** `squadSize` fica de fora: é a coluna legada, e semear por ela não mudaria tamanho nenhum. */
-export function seedGame(overrides: Partial<Omit<SquadGame, 'squadSize'>> = {}): SquadGame {
+export function seedGame(overrides: Partial<SquadGame> = {}): SquadGame {
   const game: SquadGame = {
     id: randomUUID(),
     guildId: GUILD_ID,
     name: 'Helldivers 2',
     groupSize: 4,
     partySize: 4,
-    squadSize: null,
     enabled: true,
     fields: [
       {
@@ -1114,8 +1109,6 @@ export function seedSquad(input: Partial<Squad> & Pick<Squad, 'gameId'>): Squad 
     name: 'Squad Teste',
     textChannelId: null,
     voiceChannelId: null,
-    day: null,
-    block: null,
     guideMessageId: null,
     status: 'open',
     lastConfirmedAt: null,

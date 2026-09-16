@@ -55,7 +55,7 @@ describe('SquadService: propostas', () => {
     expect(result.outcome).toBe('created');
     expect(store.squads).toHaveLength(1);
     const squad = store.squads[0]!;
-    expect(squad).toMatchObject({ status: 'open', day: null, block: null, name: 'Helldivers 2 #1' });
+    expect(squad).toMatchObject({ status: 'open', name: 'Helldivers 2 #1' });
     expect(s.guild.channels.create).toHaveBeenCalledTimes(1);
     expect(s.guild.channels.create.mock.calls[0]?.[0].parent).toBe(s.category.id);
 
