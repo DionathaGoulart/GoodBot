@@ -13,14 +13,14 @@ describe('socialPauseMs', () => {
     expect(socialPauseMs(SOCIAL_MAX_FAILURES)).toBe(15 * MINUTE_MS);
     expect(socialPauseMs(SOCIAL_MAX_FAILURES + 1)).toBe(30 * MINUTE_MS);
     expect(socialPauseMs(SOCIAL_MAX_FAILURES + 2)).toBe(HOUR_MS);
-    expect(socialPauseMs(SOCIAL_MAX_FAILURES + 3)).toBe(2 * HOUR_MS);
-    expect(socialPauseMs(SOCIAL_MAX_FAILURES + 4)).toBe(4 * HOUR_MS);
   });
 
-  it('para em 6 h, por maior que seja o contador', () => {
-    expect(socialPauseMs(SOCIAL_MAX_FAILURES + 5)).toBe(6 * HOUR_MS);
-    expect(socialPauseMs(SOCIAL_MAX_FAILURES + 40)).toBe(6 * HOUR_MS);
-    expect(socialPauseMs(Number.MAX_SAFE_INTEGER)).toBe(6 * HOUR_MS);
+  it('para em 1 h, por maior que seja o contador', () => {
+    // Uma falha de 8 h (a noite do feed em 404) não pode custar mais de 1 h de
+    // atraso depois de acabar: era 4 h com o teto antigo, de 6 h.
+    expect(socialPauseMs(SOCIAL_MAX_FAILURES + 3)).toBe(HOUR_MS);
+    expect(socialPauseMs(SOCIAL_MAX_FAILURES + 40)).toBe(HOUR_MS);
+    expect(socialPauseMs(Number.MAX_SAFE_INTEGER)).toBe(HOUR_MS);
   });
 });
 

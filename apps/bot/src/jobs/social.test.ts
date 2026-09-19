@@ -300,11 +300,7 @@ describe('SocialJob · pausa automática', () => {
 
     await new SocialJob(deps).tick();
 
-    expect(pauseSocialAccount).toHaveBeenCalledWith(
-      {},
-      'conta-1',
-      new Date(NOW + 15 * MINUTE_MS),
-    );
+    expect(pauseSocialAccount).toHaveBeenCalledWith({}, 'conta-1', new Date(NOW + 15 * MINUTE_MS));
     expect(emit).toHaveBeenCalledOnce();
     expect(emit.mock.calls[0]?.[0]).toMatchObject({
       kind: 'social:conta-1',
@@ -321,11 +317,7 @@ describe('SocialJob · pausa automática', () => {
 
     await new SocialJob(deps).tick();
 
-    expect(pauseSocialAccount).toHaveBeenCalledWith(
-      {},
-      'conta-1',
-      new Date(NOW + 30 * MINUTE_MS),
-    );
+    expect(pauseSocialAccount).toHaveBeenCalledWith({}, 'conta-1', new Date(NOW + 30 * MINUTE_MS));
     expect(emit).not.toHaveBeenCalled();
     expect(resetSocialFailures).not.toHaveBeenCalled();
   });

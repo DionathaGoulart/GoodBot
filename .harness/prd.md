@@ -310,7 +310,9 @@ no painel vale na passada seguinte, sem restart.
 Erro numa conta não interrompe as outras: `failure_count` sobe e o último erro
 fica em `disabled_reason`. Na décima falha seguida a conta entra em **pausa
 automática** (`paused_until`): o job a pula por 15 min, e cada falha seguinte
-dobra a espera, até 6 h. O primeiro sucesso zera o contador, limpa a pausa e
+dobra a espera, até 1 h (era 6 h: o feed do YouTube passou três noites em 404
+e a conta só voltava até 4 h depois de a falha acabar). O primeiro sucesso zera
+o contador, limpa a pausa e
 avisa pelo webhook de alertas, que também avisou na entrada da pausa. O bot
 nunca desliga uma conta: `enabled = false` é sempre decisão humana, e salvar a
 conta pelo painel zera falhas e pausa. Até a v2.x a décima falha desligava a

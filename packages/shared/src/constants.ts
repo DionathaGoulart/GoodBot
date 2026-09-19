@@ -365,8 +365,13 @@ export const MAX_SOCIAL_MENTION_ROLES = 5;
 export const SOCIAL_MAX_FAILURES = 10;
 /** Primeira pausa ao bater o teto de falhas; dobra a cada falha seguinte. */
 export const SOCIAL_PAUSE_BASE_MS = 15 * MINUTE_MS;
-/** Teto da pausa: uma conta quebrada ainda é tentada quatro vezes por dia. */
-export const SOCIAL_PAUSE_MAX_MS = 6 * HOUR_MS;
+/**
+ * Teto da pausa: uma conta quebrada ainda é tentada 24 vezes por dia, e uma que
+ * voltou é notada em no máximo 1 h. Era 6 h; o feed do YouTube passou três
+ * noites seguidas em 404 e, depois do fim da falha, a conta ainda ficava até 4 h
+ * parada esperando a próxima tentativa.
+ */
+export const SOCIAL_PAUSE_MAX_MS = HOUR_MS;
 
 /**
  * Como cada tipo é chamado na interface. Mora aqui, e não no bot, porque o

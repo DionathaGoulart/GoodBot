@@ -16,6 +16,7 @@ import {
   SOCIAL_DEFAULT_POLL_SECONDS,
   SOCIAL_KIND_LABEL,
   SOCIAL_MAX_FAILURES,
+  SOCIAL_PAUSE_MAX_MS,
 } from '@goodbot/shared';
 
 import { childLogger } from '../logger';
@@ -60,7 +61,7 @@ export interface SocialJobDeps {
  * · **nunca derruba as outras contas** — cada conta é isolada num try/catch;
  * · **nunca fica batendo numa API morta, nem desiste dela** — a partir do
  *   décimo erro seguido a conta entra em pausa (`paused_until`), a espera dobra
- *   a cada falha até 6 h, e o primeiro sucesso a devolve sozinha. Desligar
+ *   a cada falha até 1 h, e o primeiro sucesso a devolve sozinha. Desligar
  *   (`enabled = false`) é sempre decisão humana.
  */
 export class SocialJob {
@@ -286,7 +287,8 @@ export class SocialJob {
       title: 'Conta de rede social em pausa',
       description:
         `\`${label}\` falhou ${String(failures)} vezes seguidas. O bot tenta de novo em ` +
-        `${String(Math.round(pauseMs / MINUTE_MS))} min e dobra a espera a cada falha, até 6 h. ` +
+        `${String(Math.round(pauseMs / MINUTE_MS))} min e dobra a espera a cada falha, até ` +
+        `${String(Math.round(SOCIAL_PAUSE_MAX_MS / MINUTE_MS))} min. ` +
         'No primeiro sucesso ela volta sozinha; as outras contas seguem normalmente.',
       level: 'warning',
       fields: [{ name: 'Motivo', value: reason }],
