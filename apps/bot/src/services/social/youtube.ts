@@ -1,12 +1,46 @@
-import { SOCIAL_KIND_HEADLINE } from '@goodbot/shared';
+import { MINUTE_MS, SOCIAL_KIND_HEADLINE } from '@goodbot/shared';
 
 import { socialFetch, socialFetchOk } from './http';
 import { SocialProviderError } from './types';
+import { childLogger } from '../../logger';
 
 import type { SocialAccountRef, SocialItem, SocialProvider } from './types';
 
+const log = childLogger('social');
+
 /** Quantas entradas do feed o job olha por passada. */
 export const YOUTUBE_FEED_LIMIT = 5;
+
+/**
+ * Espera do feed quando ele falha numa conta que também quer live. A primeira
+ * falha tenta de novo na passada seguinte; da segunda em diante a espera começa
+ * em 5 min e dobra até 30 min. Nesse tempo a sonda de live continua a cada
+ * passada, e o feed volta a ser tentado sozinho.
+ */
+export const YOUTUBE_FEED_RETRY_BASE_MS = 5 * MINUTE_MS;
+export const YOUTUBE_FEED_RETRY_MAX_MS = 30 * MINUTE_MS;
+/** Com o feed fora do ar, o aviso sai na primeira falha e depois a cada 30 min. */
+export const YOUTUBE_FEED_LOG_EVERY_MS = 30 * MINUTE_MS;
+
+/** Quanto esperar para tentar o feed de novo depois de `failures` falhas seguidas. */
+export function youtubeFeedRetryMs(failures: number): number {
+  if (failures < 2) return 0;
+  // O limite do expoente só evita `Infinity` num contador absurdo.
+  const doublings = Math.min(failures - 2, 16);
+  return Math.min(YOUTUBE_FEED_RETRY_BASE_MS * 2 ** doublings, YOUTUBE_FEED_RETRY_MAX_MS);
+}
+
+/** Uma sequência de falhas do feed de um canal, em memória. */
+interface FeedOutage {
+  failures: number;
+  since: number;
+  retryAt: number;
+  lastLoggedAt: number;
+}
+
+function minutesSince(since: number, now: number): number {
+  return Math.round((now - since) / MINUTE_MS);
+}
 
 export const YOUTUBE_FEED_URL = 'https://www.youtube.com/feeds/videos.xml';
 export const YOUTUBE_BASE_URL = 'https://www.youtube.com';
@@ -295,6 +329,8 @@ export function parseChannelInput(
 
 export interface YouTubeProviderOptions {
   fetch?: typeof globalThis.fetch;
+  /** O relógio da espera do feed; nos testes é ele que anda. */
+  now?: () => number;
 }
 
 const NOT_FOUND = 'Não encontrei esse canal no YouTube.';
@@ -320,9 +356,15 @@ export class YouTubeProvider implements SocialProvider {
   private readonly options: YouTubeProviderOptions;
   /** `videoId` → tipo final. Nunca guarda `upcoming`: aquilo ainda vai mudar. */
   private readonly kindCache = new Map<string, YouTubeKind>();
+  /** `channelId` → a sequência de falhas do feed em curso. Some no primeiro sucesso. */
+  private readonly feedOutages = new Map<string, FeedOutage>();
 
   constructor(options: YouTubeProviderOptions = {}) {
     this.options = options;
+  }
+
+  private now(): number {
+    return (this.options.now ?? Date.now)();
   }
 
   /**
@@ -331,12 +373,20 @@ export class YouTubeProvider implements SocialProvider {
    * o `isKnown` que impede o feed de 15 entradas virar 30 requisições.
    *
    * Devolve da publicação mais nova para a mais antiga, com a live na frente.
+   *
+   * **O feed não pode calar a live.** Ele já passou noites inteiras em 404
+   * (16 a 18/09/2026, das ~22h às ~6h) enquanto `/channel/UC…/live` respondia
+   * normalmente, e como o feed era lido primeiro e lançava, a sonda nem rodava:
+   * uma live nesse período ficava sem anúncio. Numa conta que também quer live o
+   * feed passa a ser de melhor esforço (`loadFeed`). Na primeira passada ele
+   * continua obrigatório, porque é ela que grava o histórico como visto.
    */
   async fetchLatest(account: SocialAccountRef): Promise<SocialItem[]> {
     const wantsUpload = account.kinds.includes('video') || account.kinds.includes('short');
     const wantsLive = account.kinds.includes('live');
 
-    const entries = wantsUpload ? await this.fetchFeed(account.externalId) : [];
+    const feedIsOptional = wantsLive && account.firstPass !== true;
+    const entries = wantsUpload ? await this.loadFeed(account.externalId, feedIsOptional) : [];
     const items: SocialItem[] = [];
     const seen = new Set<string>();
 
@@ -374,6 +424,68 @@ export class YouTubeProvider implements SocialProvider {
     }
 
     return items;
+  }
+
+  /**
+   * O feed com a política de falha da conta. `optional` = a conta ainda tem a
+   * sonda de live para ler: uma falha do YouTube vira lista vazia, o feed entra
+   * em espera (`youtubeFeedRetryMs`) e o que ficou de fora é anunciado quando
+   * ele voltar, porque `isKnown` ainda diz que aquilo é novo. Sem `optional` o
+   * erro sobe como sempre e quem decide é a pausa do job.
+   *
+   * Só `SocialProviderError` é engolido: um `TypeError` aqui é bug nosso, e
+   * esconder isso atrás de "feed indisponível" seria trocar um alerta por
+   * silêncio.
+   */
+  private async loadFeed(channelId: string, optional: boolean): Promise<YouTubeFeedEntry[]> {
+    const outage = this.feedOutages.get(channelId);
+    const now = this.now();
+    if (optional && outage && now < outage.retryAt) return [];
+
+    try {
+      const entries = await this.fetchFeed(channelId);
+      if (outage) {
+        this.feedOutages.delete(channelId);
+        log.info(
+          { channelId, failures: outage.failures, downMinutes: minutesSince(outage.since, now) },
+          'feed do YouTube voltou',
+        );
+      }
+      return entries;
+    } catch (error) {
+      if (!optional || !(error instanceof SocialProviderError)) throw error;
+      this.recordFeedFailure(channelId, outage, now, error);
+      return [];
+    }
+  }
+
+  private recordFeedFailure(
+    channelId: string,
+    previous: FeedOutage | undefined,
+    now: number,
+    error: SocialProviderError,
+  ): void {
+    const failures = (previous?.failures ?? 0) + 1;
+    const since = previous?.since ?? now;
+    const retryMs = youtubeFeedRetryMs(failures);
+    const shouldLog = !previous || now - previous.lastLoggedAt >= YOUTUBE_FEED_LOG_EVERY_MS;
+    this.feedOutages.set(channelId, {
+      failures,
+      since,
+      retryAt: now + retryMs,
+      lastLoggedAt: previous && !shouldLog ? previous.lastLoggedAt : now,
+    });
+    if (!shouldLog) return;
+    log.warn(
+      {
+        channelId,
+        failures,
+        downMinutes: minutesSince(since, now),
+        retryInMinutes: Math.round(retryMs / MINUTE_MS),
+        err: error,
+      },
+      'feed do YouTube indisponível: a conta segue só com a sonda de live',
+    );
   }
 
   /** As `YOUTUBE_FEED_LIMIT` publicações mais recentes do canal. */

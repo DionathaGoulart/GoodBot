@@ -223,6 +223,21 @@ describe('SocialJob', () => {
     expect(hasSocialPost).toHaveBeenCalledWith({}, 'conta-1', 'abc');
   });
 
+  it('diz ao provider quando é a primeira passada da conta', async () => {
+    const { deps, fetchLatest } = makeDeps([]);
+    listEnabledSocialAccounts.mockResolvedValue([
+      fakeAccount({ id: 'nova', lastCheckedAt: null }),
+      fakeAccount({ id: 'velha' }),
+    ]);
+
+    await new SocialJob(deps).tick();
+
+    expect(fetchLatest.mock.calls.map(([ref]) => [ref.id, ref.firstPass])).toEqual([
+      ['nova', true],
+      ['velha', false],
+    ]);
+  });
+
   it('uma conta que falha não impede as outras', async () => {
     const quebrada = fakeAccount({ id: 'quebrada' });
     const boa = fakeAccount({ id: 'boa' });

@@ -24,6 +24,7 @@ import {
   parseWatchState,
   parseYouTubeFeed,
   YouTubeProvider,
+  youtubeFeedRetryMs,
 } from './youtube';
 
 import type { SocialAccountRef } from './types';
@@ -33,6 +34,7 @@ const CANAL = 'UCabcdefghijklmnopqrstuv';
 const LOFI = 'UCSJ4gkVC6NrvII8umztf0Ow';
 const SEM_LIVE = 'UC_x5XG1OV2P6uZZ5FSM9Ttw';
 const LIVE_ID = 'rFZHOHl-L8A';
+const MINUTO = 60_000;
 const AVATAR =
   'https://yt3.googleusercontent.com/_BSh2VVvVMzqBoKyWbQnyC35XFOV-ZbXavf9nfu3ZjpFUGEImQnlWt9ZlpfGQBqWEbGNc4rPWg=s900-c-k-c0x00ffffff-no-rj';
 
@@ -43,6 +45,7 @@ interface FakeOptions {
   shorts?: readonly string[];
   /** Corpo de `/channel/<id>/live`. */
   live?: string;
+  liveStatus?: number;
   /** `videoId` → HTML de `watch?v=`. */
   watch?: Record<string, string>;
   /** Caminho da página de canal (`/@LofiGirl`, `/c/lofi`) → HTML. */
@@ -76,7 +79,9 @@ function fakeYouTube(options: FakeOptions = {}) {
       );
     }
     if (url.endsWith('/live')) {
-      return Promise.resolve(new Response(options.live ?? LIVE_SEM_TRANSMISSAO, { status: 200 }));
+      return Promise.resolve(
+        new Response(options.live ?? LIVE_SEM_TRANSMISSAO, { status: options.liveStatus ?? 200 }),
+      );
     }
     const body = options.pages?.[new URL(url).pathname];
     return Promise.resolve(
@@ -521,6 +526,147 @@ describe('YouTubeProvider.fetchLatest', () => {
     );
 
     expect(calls(fetchMock).some((url) => url.includes('googleapis'))).toBe(false);
+  });
+});
+
+describe('youtubeFeedRetryMs', () => {
+  it('a primeira falha tenta de novo na passada seguinte; depois dobra até 30 min', () => {
+    expect([0, 1, 2, 3, 4, 5, 6, 7].map(youtubeFeedRetryMs)).toEqual([
+      0,
+      0,
+      5 * MINUTO,
+      10 * MINUTO,
+      20 * MINUTO,
+      30 * MINUTO,
+      30 * MINUTO,
+      30 * MINUTO,
+    ]);
+    expect(youtubeFeedRetryMs(Number.MAX_SAFE_INTEGER)).toBe(30 * MINUTO);
+  });
+});
+
+describe('YouTubeProvider com o feed fora do ar', () => {
+  // A noite de 16 a 18/09/2026: o feed em 404 (e um 500 de vez em quando) das ~22h
+  // às ~6h, com a `/live` do mesmo canal respondendo normalmente.
+  const TODOS = ['video', 'short', 'live'] as SocialKind[];
+  const feedCalls = (mock: typeof globalThis.fetch) =>
+    calls(mock).filter((url) => url.includes('/feeds/'));
+  const liveCalls = (mock: typeof globalThis.fetch) =>
+    calls(mock).filter((url) => url.endsWith('/live'));
+
+  it.each([404, 500])('o %i do feed não cala a sonda de live', async (feedStatus) => {
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({ feedStatus, live: LIVE_EM_ANDAMENTO }),
+    });
+    const items = await provider.fetchLatest(account({ kinds: TODOS }));
+
+    expect(items.map((item) => [item.externalId, item.kind])).toEqual([['rFZHOHl-L8A', 'live']]);
+  });
+
+  it('sem live no ar a passada sai vazia, e não como erro', async () => {
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({ feedStatus: 404, live: LIVE_SEM_TRANSMISSAO }),
+    });
+    await expect(provider.fetchLatest(account({ kinds: TODOS }))).resolves.toEqual([]);
+  });
+
+  it('conta que só quer vídeo e short continua falhando: não sobra nada para ler', async () => {
+    const provider = new YouTubeProvider({ fetch: fakeYouTube({ feedStatus: 404 }) });
+    await expect(provider.fetchLatest(account())).rejects.toThrow('A plataforma respondeu 404.');
+  });
+
+  it('na primeira passada o feed é obrigatório, mesmo com live', async () => {
+    // É ela que grava o histórico como visto: seguir só com a live deixaria os
+    // vídeos antigos para uma passada em que eles seriam anunciados como novos.
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({ feedStatus: 404, live: LIVE_EM_ANDAMENTO }),
+    });
+    await expect(provider.fetchLatest(account({ kinds: TODOS, firstPass: true }))).rejects.toThrow(
+      'A plataforma respondeu 404.',
+    );
+  });
+
+  it('se a sonda de live também falha, a conta falha', async () => {
+    const provider = new YouTubeProvider({
+      fetch: fakeYouTube({ feedStatus: 404, liveStatus: 500 }),
+    });
+    await expect(provider.fetchLatest(account({ kinds: TODOS }))).rejects.toThrow(
+      'A plataforma respondeu 500.',
+    );
+  });
+
+  it('erro que não é da plataforma não é engolido: isso é bug nosso', async () => {
+    const fetchMock = vi.fn((input: string | URL | Request) =>
+      String(input).includes('/feeds/')
+        ? Promise.resolve({
+            ok: true,
+            status: 200,
+            text: () => Promise.reject(new TypeError('bug nosso')),
+          } as unknown as Response)
+        : Promise.resolve(new Response(LIVE_EM_ANDAMENTO, { status: 200 })),
+    ) as unknown as typeof globalThis.fetch;
+
+    await expect(
+      new YouTubeProvider({ fetch: fetchMock }).fetchLatest(account({ kinds: TODOS })),
+    ).rejects.toThrow('bug nosso');
+  });
+
+  it('o feed espera antes de ser tentado de novo, e a sonda roda em toda passada', async () => {
+    let clock = Date.parse('2026-09-19T01:00:00Z');
+    const fetchMock = fakeYouTube({ feedStatus: 404, live: LIVE_EM_ANDAMENTO });
+    const provider = new YouTubeProvider({ fetch: fetchMock, now: () => clock });
+    const pass = async () =>
+      (await provider.fetchLatest(account({ kinds: TODOS }))).map((item) => item.kind);
+
+    // 1ª falha: a passada seguinte já tenta de novo.
+    expect(await pass()).toEqual(['live']);
+    clock += 3 * MINUTO;
+    // 2ª falha: agora o feed descansa 5 min.
+    expect(await pass()).toEqual(['live']);
+    clock += 3 * MINUTO;
+    expect(await pass()).toEqual(['live']);
+    expect(feedCalls(fetchMock)).toHaveLength(2);
+    clock += 3 * MINUTO;
+    // Venceu a espera (passaram 6 min desde a 2ª falha): tenta e falha de novo.
+    expect(await pass()).toEqual(['live']);
+    expect(feedCalls(fetchMock)).toHaveLength(3);
+
+    // A sonda não esperou ninguém: uma requisição por passada, quatro passadas.
+    expect(liveCalls(fetchMock)).toHaveLength(4);
+  });
+
+  it('quando o feed volta, anuncia o que ficou de fora e zera a espera', async () => {
+    let clock = Date.parse('2026-09-19T01:00:00Z');
+    const options: FakeOptions = {
+      feedStatus: 404,
+      shorts: ['bbbbbbbbbbb'],
+      watch: { aaaaaaaaaaa: WATCH_VIDEO_DO_FEED },
+    };
+    const fetchMock = fakeYouTube(options);
+    const provider = new YouTubeProvider({ fetch: fetchMock, now: () => clock });
+    const pass = async () =>
+      (await provider.fetchLatest(account({ kinds: TODOS }))).map((item) => item.externalId);
+
+    // Duas falhas: o feed já está em espera de 5 min.
+    expect(await pass()).toEqual([]);
+    clock += 3 * MINUTO;
+    expect(await pass()).toEqual([]);
+
+    // O feed voltou, com dois vídeos que nasceram enquanto ele estava fora.
+    options.feedStatus = 200;
+    clock += 6 * MINUTO;
+    expect(await pass()).toEqual(['aaaaaaaaaaa', 'bbbbbbbbbbb']);
+    expect(feedCalls(fetchMock)).toHaveLength(3);
+
+    // Nova queda: recomeça do zero. Se a sequência anterior tivesse sobrado, a
+    // segunda falha daqui já seria a 4ª e o feed ficaria em espera na passada
+    // seguinte; recomeçando, as duas passadas tentam.
+    options.feedStatus = 404;
+    clock += 3 * MINUTO;
+    await pass();
+    clock += 3 * MINUTO;
+    await pass();
+    expect(feedCalls(fetchMock)).toHaveLength(5);
   });
 });
 

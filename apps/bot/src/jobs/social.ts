@@ -152,20 +152,23 @@ export class SocialJob {
   /** Uma conta: busca, anuncia o que é novo e atualiza o estado dela. */
   private async check(account: SocialAccount): Promise<void> {
     const at = new Date(this.now());
+    // A primeira passada de uma conta nova só marca o que já existe como
+    // visto: sem isto o canal receberia o feed inteiro de uma vez.
+    const backlog = account.lastCheckedAt === null;
     try {
       const items = await this.deps.provider.fetchLatest({
         id: account.id,
         platform: account.platform,
         externalId: account.externalId,
         kinds: account.kinds,
+        // É a passada que grava o histórico como visto: o provider não pode
+        // seguir com uma fonte fora do ar e deixar o resto para depois.
+        firstPass: backlog,
         // O provider não fala com o banco: quem sabe o que já foi anunciado é
         // o job, e é esta consulta que evita reclassificar o feed inteiro.
         isKnown: (externalId) => hasSocialPost(this.deps.db, account.id, externalId),
       });
 
-      // A primeira passada de uma conta nova só marca o que já existe como
-      // visto: sem isto o canal receberia o feed inteiro de uma vez.
-      const backlog = account.lastCheckedAt === null;
       // As publicações chegam da mais nova para a mais antiga; anunciar em
       // ordem cronológica deixa o canal legível.
       for (const item of [...items].reverse()) {

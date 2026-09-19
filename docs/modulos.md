@@ -178,6 +178,13 @@ Um não substitui o outro: deixar o de lives vazio significa live sem ping.
 > estava no feed e passa a avisar do próximo post em diante. Sem isso, cadastrar
 > um canal despejaria os últimos 15 vídeos de uma vez.
 
+> **Se o feed do YouTube cair, a live continua sendo avisada.** Numa conta que
+> também quer live, o feed passa a ser de melhor esforço: a sonda de live roda
+> em toda passada e o feed é tentado de novo depois de 5 a 30 min. Os vídeos que
+> saíram nesse meio-tempo são anunciados quando ele voltar. Numa conta só de
+> vídeo e short, o feed fora do ar conta como falha, e na décima seguida a conta
+> entra em pausa (de 15 min a, no máximo, 1 h).
+
 ---
 
 ## Squads

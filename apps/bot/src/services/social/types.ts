@@ -27,6 +27,13 @@ export interface SocialAccountRef {
   externalId: string;
   kinds: readonly SocialKind[];
   /**
+   * A conta nunca foi checada. É a passada que grava o que já existia como
+   * visto, então ela precisa da leitura **completa**: o provider não pode
+   * seguir com uma fonte fora do ar e deixar o resto do histórico para uma
+   * passada em que ele já seria anunciado como novidade.
+   */
+  firstPass?: boolean;
+  /**
    * Se a publicação já está em `social_posts`. O provider usa para **não**
    * gastar requisições classificando o que já foi anunciado — a consulta é do
    * job, porque provider não fala com o banco.
@@ -39,7 +46,9 @@ export interface SocialAccountRef {
  * porque é ela que mantém o job ignorante de RSS, de canonical e de `/shorts`.
  *
  * `fetchLatest` devolve as publicações **mais recentes primeiro** e pode
- * lançar: o job conta a falha e desliga a conta no décimo erro seguido.
+ * lançar: o job conta a falha e, no décimo erro seguido, põe a conta em pausa.
+ * Lançar cala a conta inteira, então um provider com mais de uma fonte só deve
+ * fazê-lo quando não sobrou nada para ler.
  */
 export interface SocialProvider {
   readonly platform: SocialPlatform;

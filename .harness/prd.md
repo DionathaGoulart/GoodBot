@@ -328,6 +328,18 @@ trava de verdade.
 
 1. **RSS** `feeds/videos.xml?channel_id=UC…` → as 5 entradas mais novas. É o
    que descobre vídeo e short, e traz título, autor, capa e data.
+
+   **O feed não pode calar a live.** Em 16, 17 e 18/09/2026 ele respondeu 404
+   (e um 500 de vez em quando) das ~22h às ~6h, todas as noites, enquanto o
+   `/channel/UC…/live` do mesmo canal respondia normalmente. Como o feed era
+   lido primeiro e lançava, a sonda nem rodava. Agora, numa conta que também
+   quer live, o feed é de **melhor esforço**: falhou, a passada segue só com a
+   sonda, e o feed espera antes de ser tentado de novo (a primeira falha tenta
+   na passada seguinte; da segunda em diante 5 min, dobrando até 30 min). O que
+   ficou de fora é anunciado quando ele voltar, porque `social_posts` ainda diz
+   que aquilo é novo. Na primeira passada de uma conta o feed continua
+   obrigatório, porque é ela que grava o histórico como visto; e uma conta que
+   só quer vídeo e short segue a regra de sempre, com falha e pausa.
 2. **Sonda de live** `GET /channel/UC…/live` → o `ID` da transmissão sai do
    `<link rel="canonical">` quando ele aponta para `watch?v=ID`, e do
    `currentVideoEndpoint` do `ytInitialData` quando não aponta; com `ID` em
