@@ -19,6 +19,19 @@
  * sem `videoDetails` e com `canonical="undefined"`. Eles ficam **ao lado** dos
  * antigos, e não no lugar deles, porque as duas formas seguem no ar e o parser
  * tem de aguentar as duas.
+ *
+ * Em 2026-09-19 as duas formas foram medidas de novo, pela VM e de uma máquina
+ * residencial, com os mesmos cabeçalhos do provider. Qual delas o YouTube serve
+ * muda com **quem pergunta**, não com UA, cookie ou idioma:
+ *
+ * · da máquina residencial, 18 de 18 respostas de `/live` vieram no formato
+ *   antigo, com ou sem cookie e UA;
+ * · da VM, toda `/live` de canal com transmissão no ar (6 canais) veio no
+ *   formato sem metadados, e todo canal parado (3 respostas) e toda agendada
+ *   (3 canais) vieram no formato antigo.
+ *
+ * O formato sem metadados só foi visto, portanto, **com transmissão no ar**. Uma
+ * agendada nele nunca apareceu, e é por isso que não há fixture dessa combinação.
  */
 
 /**
@@ -144,7 +157,10 @@ export const WATCH_VIDEO_SEM_METADADOS = `<!DOCTYPE html><html lang="pt-BR"><hea
 /**
  * `GET /channel/UC_x5XG1OV2P6uZZ5FSM9Ttw/live` de um canal que **não** está
  * transmitindo: `200`, canonical apontando de volta para o canal, nenhum
- * `"isLive"`. Recorte real.
+ * `"isLive"`. Recorte real, colhido em 2026-09-08. Reconferido pela VM em
+ * 2026-09-19 (3 de 3): mesmo com o formato sem metadados no ar para as lives, o
+ * canal parado continua servindo o canonical do próprio canal. É o que impede a
+ * sonda de lançar "mudou de formato" em toda passada de toda conta sem live.
  */
 export const LIVE_SEM_TRANSMISSAO = `<!DOCTYPE html><html lang="pt-BR"><head>
 <link rel="canonical" href="https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw">
@@ -184,18 +200,28 @@ export const WATCH_VOD_DE_LIVE = LIVE_EM_ANDAMENTO.replace(
 );
 
 /**
- * ⚠️ **Fixture sintética.** É o único estado que não foi colhido de uma página
- * real: não havia live agendada pública à mão em 2026-09-08. A forma copia a
- * do recorte real de `/live` (sem `og:`, título em `<meta name="title">` e no
- * `videoDetails`), trocando `"isLive":true` por `"isUpcoming":true`.
- * **Trocar por um recorte real na primeira oportunidade.**
+ * `GET /channel/UCjOJvvYe6tyEHY21OD33h8A/live` de um canal **com uma live
+ * agendada e nenhuma no ar**, colhido em 2026-09-19 pela VM. Recorte real: a
+ * rota serve o `watch` da estreia, com canonical `watch?v=` e o player inteiro.
+ *
+ * O que importa aqui, e que a fixture sintética anterior escondia: numa
+ * agendada os **dois** marcadores são verdadeiros. `"isUpcoming":true` vem do
+ * `videoDetails` do player, e `"isLive":true` vem do `videoViewCountRenderer`
+ * do `ytInitialData` ("1 aguardando"), que é o mesmo campo de uma live de
+ * verdade ("5.812 assistindo agora"). Por isso o provider olha `isUpcoming`
+ * **antes** de `isLive`; o inverso anunciaria a estreia como transmissão.
+ *
+ * O `ytInitialData` de uma agendada não traz nenhuma chave que a distinga de
+ * uma live (não existe `upcomingEventData`): a diferença toda mora no player.
+ * O `videoId` foi trocado para `ccccccccccc` para casar com os testes.
  */
 export const WATCH_AGENDADA = `<!DOCTYPE html><html lang="pt-BR"><head>
-<link rel="canonical" href="https://www.youtube.com/watch?v=ccccccccccc">
-<meta name="title" content="Estreia de sábado">
-<title>Estreia de sábado - YouTube</title>
-<script nonce="Y2Y0Y2M">var ytInitialPlayerResponse = {"playabilityStatus":{"status":"LIVE_STREAM_OFFLINE","reason":"A transmissão começa em breve","liveStreamability":{"liveStreamabilityRenderer":{"videoId":"ccccccccccc","pollDelayMs":"15000"}}},"videoDetails":{"videoId":"ccccccccccc","title":"Estreia de sábado","lengthSeconds":"0","isUpcoming":true,"channelId":"UCabcdefghijklmnopqrstuv","isCrawlable":true,"viewCount":"0","author":"Canal de Teste","isPrivate":false,"isLiveContent":true}};</script>
-</head><body></body></html>`;
+<link rel="canonical" href="https://www.youtube.com/watch?v=Z2fOnq2eHCY">
+<meta name="title" content="DIOGO NOGUEIRA no Bem Brasil: Show completo, ao vivo, do Sesc Itaquera - 20/09/2026">
+<title>DIOGO NOGUEIRA no Bem Brasil: Show completo, ao vivo, do Sesc Itaquera - 20/09/2026 - YouTube</title>
+<script nonce="Y2Y0Y2M">var ytInitialPlayerResponse = {"playabilityStatus":{"status":"LIVE_STREAM_OFFLINE","reason":"Este evento ao vivo começará em 22 horas.","playableInEmbed":true,"liveStreamability":{"liveStreamabilityRenderer":{"videoId":"Z2fOnq2eHCY","offlineSlate":{"liveStreamOfflineSlateRenderer":{"scheduledStartTime":"1789915800"}}}}},"videoDetails":{"videoId":"Z2fOnq2eHCY","title":"DIOGO NOGUEIRA no Bem Brasil: Show completo, ao vivo, do Sesc Itaquera - 20/09/2026","lengthSeconds":"0","channelId":"UCjOJvvYe6tyEHY21OD33h8A","isOwnerViewing":false,"isCrawlable":true,"isUpcoming":true,"allowRatings":true,"viewCount":"0","author":"TV Cultura","isLowLatencyLiveStream":false,"isPrivate":false,"isUnpluggedCorpus":false,"latencyClass":"MDE_STREAM_OPTIMIZATIONS_RENDERER_LATENCY_NORMAL","isLiveContent":true,"isTvfilmVideo":false}};</script>
+<script nonce="Y2Y0Y2M">var ytInitialData = {"currentVideoEndpoint":{"clickTrackingParams":"CAAQg2ciEwjZuoazjPuWAxUvW90CHV2aDrfKAQQVowD2","commandMetadata":{"webCommandMetadata":{"url":"/watch?v=Z2fOnq2eHCY","webPageType":"WEB_PAGE_TYPE_WATCH","rootVe":3832}}},"contents":{"twoColumnWatchNextResults":{"results":{"results":{"contents":[{"videoPrimaryInfoRenderer":{"title":{"runs":[{"text":"DIOGO NOGUEIRA no Bem Brasil: Show completo, ao vivo, do Sesc Itaquera - 20/09/2026"}]},"viewCount":{"videoViewCountRenderer":{"viewCount":{"runs":[{"text":"1 aguardando"}]},"isLive":true,"originalViewCount":"1"}}}}]}}}}};</script>
+</head><body></body></html>`.replaceAll('Z2fOnq2eHCY', 'ccccccccccc');
 
 /** `GET /@LofiGirl`: o canonical já traz o `UC…`. Recorte real. */
 export const CANAL_POR_HANDLE = `<!DOCTYPE html><html lang="pt-BR"><head>

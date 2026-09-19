@@ -178,12 +178,19 @@ describe('parseWatchState', () => {
     expect(state.thumbnail).toBeNull();
   });
 
-  it('reconhece a live agendada sem confundi-la com uma em andamento', () => {
+  it('na agendada isUpcoming e isLive são verdadeiros ao mesmo tempo', () => {
+    // Recorte real de 2026-09-19. O `isLive` vem do contador de views do
+    // `ytInitialData` ("1 aguardando"), o mesmo campo de uma live de verdade, e
+    // só o `isUpcoming` do player distingue as duas. Quem decidir olhando só o
+    // `isLive` anuncia a estreia como transmissão.
     expect(parseWatchState(WATCH_AGENDADA)).toMatchObject({
-      isLive: false,
+      isLive: true,
       isUpcoming: true,
       isLiveContent: true,
     });
+    expect(parseWatchState(WATCH_AGENDADA).title).toBe(
+      'DIOGO NOGUEIRA no Bem Brasil: Show completo, ao vivo, do Sesc Itaquera - 20/09/2026',
+    );
   });
 
   it('num vídeo comum nada é live', () => {
@@ -388,6 +395,8 @@ describe('YouTubeProvider.probeLive', () => {
   });
 
   it('agendada não é live: fica em espera e não vira item', async () => {
+    // A página traz `"isLive":true` também (ver o teste de `parseWatchState`),
+    // então o `null` aqui só sai porque `isUpcoming` é checado junto.
     const provider = new YouTubeProvider({ fetch: fakeYouTube({ live: WATCH_AGENDADA }) });
     expect(await provider.probeLive(CANAL)).toBeNull();
   });
