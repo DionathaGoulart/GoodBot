@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   CANAL_POR_HANDLE,
@@ -29,6 +29,22 @@ import {
 
 import type { SocialAccountRef } from './types';
 import type { SocialKind } from '@goodbot/shared';
+
+const { warn } = vi.hoisted(() => ({ warn: vi.fn() }));
+
+vi.mock('../../logger', () => ({
+  childLogger: () => ({ warn, info: vi.fn(), error: vi.fn(), debug: vi.fn() }),
+}));
+
+beforeEach(() => {
+  warn.mockClear();
+});
+
+/** A página de live sem o `currentVideoEndpoint`: o ID some, o resto fica. */
+const SEM_ENDPOINT = LIVE_EM_ANDAMENTO_SEM_METADADOS.replace(
+  /"currentVideoEndpoint":\{[\s\S]*?\}\},/,
+  '',
+);
 
 const CANAL = 'UCabcdefghijklmnopqrstuv';
 const LOFI = 'UCSJ4gkVC6NrvII8umztf0Ow';
@@ -411,15 +427,66 @@ describe('YouTubeProvider.probeLive', () => {
     await expect(provider.probeLive(CANAL)).rejects.toThrow(/mudou de formato/);
   });
 
+  it('canonical ausente deixa o retrato da página no log', async () => {
+    const provider = new YouTubeProvider({ fetch: fakeYouTube({ live: LIVE_SEM_CANONICAL }) });
+    await expect(provider.probeLive(CANAL)).rejects.toThrow(/mudou de formato/);
+
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      {
+        channelId: CANAL,
+        reason: 'sem-canonical',
+        canonical: null,
+        htmlLength: LIVE_SEM_CANONICAL.length,
+        pageTitle: null,
+        hasInitialData: true,
+        hasPlayerResponse: false,
+        hasCurrentVideoEndpoint: false,
+        isLive: false,
+      },
+      'página de live do YouTube em formato não reconhecido',
+    );
+  });
+
   it('canonical que não é nem watch nem canal, e sem ID no JSON, também alerta', async () => {
     // Só `/channel/UC…` autoriza o silêncio. Qualquer outra forma é página
     // nova, e ficar quieto aí é justamente o bug que se está consertando.
-    const provider = new YouTubeProvider({
-      fetch: fakeYouTube({
-        live: LIVE_EM_ANDAMENTO_SEM_METADADOS.replace(/"currentVideoEndpoint":\{[\s\S]*?\}\},/, ''),
-      }),
-    });
+    const provider = new YouTubeProvider({ fetch: fakeYouTube({ live: SEM_ENDPOINT }) });
     await expect(provider.probeLive(CANAL)).rejects.toThrow(/mudou de formato/);
+  });
+
+  it('sem ID no JSON, o log diz o que a página tinha e o que faltou', async () => {
+    const provider = new YouTubeProvider({ fetch: fakeYouTube({ live: SEM_ENDPOINT }) });
+    await expect(provider.probeLive(CANAL)).rejects.toThrow(/mudou de formato/);
+
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channelId: CANAL,
+        reason: 'sem-video-id',
+        canonical: 'undefined',
+        pageTitle: '- YouTube',
+        hasInitialData: true,
+        hasPlayerResponse: true,
+        // É exatamente o que faltou: sem o `currentVideoEndpoint` não há ID, e a
+        // página ainda diz que há transmissão ("isLive":true no contador).
+        hasCurrentVideoEndpoint: false,
+        isLive: true,
+      }),
+      'página de live do YouTube em formato não reconhecido',
+    );
+  });
+
+  it('página que o parser entende não escreve nada no log', async () => {
+    for (const live of [
+      LIVE_EM_ANDAMENTO,
+      LIVE_EM_ANDAMENTO_SEM_METADADOS,
+      LIVE_SEM_TRANSMISSAO,
+      WATCH_AGENDADA,
+    ]) {
+      await new YouTubeProvider({ fetch: fakeYouTube({ live }) }).probeLive(CANAL);
+    }
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('quando a live está no feed, título e capa vêm de lá', async () => {
@@ -633,6 +700,15 @@ describe('YouTubeProvider com o feed fora do ar', () => {
 
     // A sonda não esperou ninguém: uma requisição por passada, quatro passadas.
     expect(liveCalls(fetchMock)).toHaveLength(4);
+
+    // Três falhas em 9 min, um aviso só: o log não repete antes de 30 min.
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]?.[1]).toBe(
+      'feed do YouTube indisponível: a conta segue só com a sonda de live',
+    );
+    clock += 30 * MINUTO;
+    await pass();
+    expect(warn).toHaveBeenCalledTimes(2);
   });
 
   it('quando o feed volta, anuncia o que ficou de fora e zera a espera', async () => {

@@ -498,6 +498,41 @@ export class YouTubeProvider implements SocialProvider {
   }
 
   /**
+   * O erro de "mudou de formato", com o retrato da página no log. Em 2026-09-19
+   * a sonda lançou isso 8 vezes numa live do Goodivers (19:44 a 22:10, cerca de
+   * 1 passada em 6) e nenhuma variante quebrada pôde ser reproduzida depois:
+   * 40 leituras de uma live 24h vieram todas no mesmo formato. Sem a página em
+   * mãos, o log é o que diz qual variante o parser não entende.
+   *
+   * Só vão marcadores estruturais e o `<title>` (público); o HTML nunca.
+   */
+  private unreadableLivePage(
+    channelId: string,
+    html: string,
+    canonical: string | null,
+    reason: 'sem-canonical' | 'sem-video-id',
+  ): SocialProviderError {
+    log.warn(
+      {
+        channelId,
+        reason,
+        canonical: canonical?.slice(0, 200) ?? null,
+        htmlLength: html.length,
+        pageTitle: TITLE_RE.exec(html)?.[1]?.trim().slice(0, 80) ?? null,
+        hasInitialData: html.includes('var ytInitialData'),
+        hasPlayerResponse: html.includes('var ytInitialPlayerResponse'),
+        hasCurrentVideoEndpoint: html.includes('"currentVideoEndpoint"'),
+        isLive: /"isLive"\s*:\s*true/.test(html),
+      },
+      'página de live do YouTube em formato não reconhecido',
+    );
+    return new SocialProviderError(
+      'A página de live do canal mudou de formato e não pôde ser lida.',
+      this.platform,
+    );
+  }
+
+  /**
    * A sonda de live. `entries` é só para enriquecer: quando a transmissão já
    * está no feed, título e capa saem de lá, que é onde vêm mais limpos.
    *
@@ -517,10 +552,7 @@ export class YouTubeProvider implements SocialProvider {
 
     const canonical = parseCanonical(html);
     if (!canonical) {
-      throw new SocialProviderError(
-        'A página de live do canal mudou de formato e não pôde ser lida.',
-        this.platform,
-      );
+      throw this.unreadableLivePage(channelId, html, canonical, 'sem-canonical');
     }
 
     // O canonical primeiro, o `ytInitialData` como reserva: no formato sem
@@ -533,10 +565,7 @@ export class YouTubeProvider implements SocialProvider {
       // apontando para `/channel/UC…` que autoriza ficar quieto. Qualquer
       // outra coisa é formato novo, e aí a conta falha e alerta.
       if (CHANNEL_ID_URL_RE.test(canonical)) return null;
-      throw new SocialProviderError(
-        'A página de live do canal mudou de formato e não pôde ser lida.',
-        this.platform,
-      );
+      throw this.unreadableLivePage(channelId, html, canonical, 'sem-video-id');
     }
 
     const state = parseWatchState(html);
