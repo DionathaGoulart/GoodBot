@@ -1,9 +1,21 @@
 # Contribuindo
 
+Issues e PRs são bem-vindos. O fluxo:
+
+1. **Mudança grande, issue antes.** Módulo novo, tabela nova ou mudança de
+   comportamento de um módulo existente: abra uma issue e combine o desenho
+   antes de escrever código. Correção pequena pode ir direto para PR.
+2. **Fork e branch.** Faça um fork, crie uma branch a partir da `main` e suba
+   o projeto seguindo [`docs/primeiros-passos.md`](docs/primeiros-passos.md).
+3. **PR para a `main`.** O template do PR traz o checklist do §8. A CI roda
+   lint, typecheck, testes e build; PR vermelho não entra.
+
+Falha de segurança não vai em issue nem em PR: veja o [`SECURITY.md`](SECURITY.md).
+
 ## 1. Idioma
 
-Documentação, UI e mensagens do bot em **pt-BR**; commits em **inglês** (§7). Nomes de código
-(variáveis, funções, tipos, arquivos) em **inglês**.
+Documentação, UI e mensagens do bot em **pt-BR**; commits em **inglês** (§7).
+Nomes de código (variáveis, funções, tipos, arquivos) em **inglês**.
 
 ```ts
 // certo
@@ -105,7 +117,7 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 - [ ] rota nova? Bearer, Zod, `actorId`, rate limit e método no cliente tipado
 - [ ] variável nova? documentada no `.env.example`
 - [ ] nenhum `.env` no `git status`
-- [ ] tela nova? confere contra o `styleguide.md`
+- [ ] tela nova? confere contra o [`styleguide.md`](.harness/styleguide.md)
 
 A CI (`ci.yml`) roda em todo push e todo PR, com um Postgres de serviço. Ela é
 quem reprova o PR com erro de tipo.
@@ -117,5 +129,6 @@ infraestrutura. Se a feature precisa de tabela, a migration vem junto. Se
 precisa de variável, ela está no `.env.example`. Se depende de serviço externo,
 a configuração está descrita.
 
-O critério: outro dev clona, segue o `primeiros-passos.md` e a feature funciona,
-sem setup manual extra.
+O critério: outro dev clona, segue o
+[`primeiros-passos.md`](docs/primeiros-passos.md) e a feature funciona, sem
+setup manual extra.

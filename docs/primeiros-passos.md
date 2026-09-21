@@ -367,4 +367,4 @@ sintoma é "a tela abre e o botão responde 403".
   organizado e onde mexer para cada tipo de tarefa.
 - [`guild-como-codigo.md`](guild-como-codigo.md): configurar o servidor por
   arquivo em vez de clicar no painel.
-- [`contribuindo.md`](contribuindo.md): convenções e checklist de PR.
+- [`CONTRIBUTING.md`](../CONTRIBUTING.md): convenções e checklist de PR.

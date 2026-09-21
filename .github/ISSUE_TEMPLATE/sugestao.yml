@@ -1,0 +1,20 @@
+name: Sugestão
+description: Uma ideia de módulo, comando ou melhoria.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qual problema isso resolve
+      description: Conte a situação no seu servidor. O problema importa mais que a solução.
+    validations:
+      required: true
+  - type: textarea
+    id: ideia
+    attributes:
+      label: Como você imagina
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: O que você usa hoje
+      description: Outro bot, gambiarra, nada.

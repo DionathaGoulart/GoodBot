@@ -1,0 +1,42 @@
+name: Bug
+description: Algo não funciona como deveria.
+labels: [bug]
+body:
+  - type: textarea
+    id: o-que
+    attributes:
+      label: O que aconteceu
+      description: E o que você esperava que acontecesse.
+    validations:
+      required: true
+  - type: textarea
+    id: passos
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. No painel, abra Automod
+        2. Ligue a regra de links
+        3. Mande um link num canal liberado
+    validations:
+      required: true
+  - type: dropdown
+    id: onde
+    attributes:
+      label: Onde
+      options:
+        - Instância pública (goodbot.dionatha.com.br)
+        - Instância própria (self-hosted)
+        - Rodando localmente
+    validations:
+      required: true
+  - type: input
+    id: versao
+    attributes:
+      label: Versão ou commit
+      description: Para instância própria ou local. O `/health` com token mostra o commit em produção.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs ou prints
+      description: Tire tokens, IDs e conteúdo de mensagens antes de colar.
+      render: text
