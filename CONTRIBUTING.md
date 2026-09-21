@@ -132,3 +132,23 @@ a configuração está descrita.
 O critério: outro dev clona, segue o
 [`primeiros-passos.md`](docs/primeiros-passos.md) e a feature funciona, sem
 setup manual extra.
+
+## 10. Versões
+
+O Goodbot segue [SemVer](https://semver.org/lang/pt-BR/). A versão do produto é
+a do `package.json` da raiz; os pacotes do workspace ficam em `0.0.0`, porque
+são internos e nunca vão para o npm.
+
+Para lançar:
+
+1. mova o que está em **Não lançado** no [`CHANGELOG.md`](CHANGELOG.md) para
+   a versão nova, com a data;
+2. suba a `version` do `package.json` da raiz;
+3. commit `chore(release): X.Y.Z`, tag anotada `vX.Y.Z` e push **só dessa
+   tag** (`git push origin vX.Y.Z`), nunca `--tags`;
+4. crie o GitHub Release a partir da tag, com o trecho do changelog.
+
+Major quando quebra algo para quem hospeda (variável de ambiente, formato do
+`guild.yaml`, migration com passo manual) ou para quem usa (comando que some
+ou muda de forma). Minor para módulo, comando ou tela nova. Patch para
+correção.

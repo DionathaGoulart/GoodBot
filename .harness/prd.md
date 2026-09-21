@@ -3,6 +3,10 @@
 Versão 1.6 · 2026-09-16 · Documento de referência para todas as sessões.
 Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (UI).
 
+> As versões v1.0 a v1.6 citadas aqui são **revisões deste documento**, não
+> versões do software. O software segue SemVer a partir da 1.0.0, e o que muda
+> entre uma versão e outra está no [`CHANGELOG.md`](../CHANGELOG.md).
+
 > **v1.6: jogatina sob demanda.** O squad deixou de ter janela semanal fixa:
 > a grade do perfil serve só para o match, e quem marca a hora de jogar é o
 > próprio squad, com `/bora` ou o botão **BORA**. A sessão semanal automática
