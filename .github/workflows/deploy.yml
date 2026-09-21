@@ -33,8 +33,13 @@ env:
 
 jobs:
   # 1. Migrations antes de tudo: se o schema não subir, nada mais sobe.
+  #
+  # Só no repositório original. Um fork herda este workflow mas não os
+  # secrets, e sem o `if` todo push na main dele terminaria num deploy
+  # vermelho. Os outros jobs dependem deste, então pulam junto.
   migrate:
     name: Migrations (Supabase)
+    if: github.repository_owner == 'DionathaGoulart'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
