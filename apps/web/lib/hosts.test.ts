@@ -15,9 +15,9 @@ function headers(values: Record<string, string>) {
 
 describe('classifyHost', () => {
   it('reconhece os três subdomínios em qualquer domínio', () => {
-    expect(classifyHost('invite.goodbot.dionatha.com.br')).toBe('invite');
-    expect(classifyHost('demo.goodbot.dionatha.com.br')).toBe('demo');
-    expect(classifyHost('admin.goodbot.dionatha.com.br')).toBe('admin');
+    expect(classifyHost('invite.goodbot.example.com')).toBe('invite');
+    expect(classifyHost('demo.goodbot.example.com')).toBe('demo');
+    expect(classifyHost('admin.goodbot.example.com')).toBe('admin');
     expect(classifyHost('invite.goodbot.com.br')).toBe('invite');
   });
 
@@ -32,14 +32,14 @@ describe('classifyHost', () => {
   });
 
   it('cai em `app` no host do painel, num preview e sem host', () => {
-    expect(classifyHost('goodbot.dionatha.com.br')).toBe('app');
+    expect(classifyHost('goodbot.example.com')).toBe('app');
     expect(classifyHost('goodbot-git-main.vercel.app')).toBe('app');
     expect(classifyHost(null)).toBe('app');
     expect(classifyHost('')).toBe('app');
   });
 
   it('não confunde um rótulo que só começa igual', () => {
-    expect(classifyHost('invitex.goodbot.dionatha.com.br')).toBe('app');
+    expect(classifyHost('invitex.goodbot.example.com')).toBe('app');
     expect(classifyHost('goodbot.invite.com')).toBe('app');
   });
 });
@@ -75,22 +75,22 @@ describe('fluxo ↔ host', () => {
 
 describe('hostForSite', () => {
   it('põe o rótulo do destino na frente do host do painel', () => {
-    expect(hostForSite('goodbot.dionatha.com.br', 'admin')).toBe(
-      'admin.goodbot.dionatha.com.br',
+    expect(hostForSite('goodbot.example.com', 'admin')).toBe(
+      'admin.goodbot.example.com',
     );
-    expect(hostForSite('goodbot.dionatha.com.br', 'invite')).toBe(
-      'invite.goodbot.dionatha.com.br',
+    expect(hostForSite('goodbot.example.com', 'invite')).toBe(
+      'invite.goodbot.example.com',
     );
   });
 
   it('volta ao painel tirando o rótulo — é assim que o `admin.` manda ao login', () => {
-    expect(hostForSite('admin.goodbot.dionatha.com.br', 'app')).toBe('goodbot.dionatha.com.br');
-    expect(hostForSite('demo.goodbot.dionatha.com.br', 'app')).toBe('goodbot.dionatha.com.br');
+    expect(hostForSite('admin.goodbot.example.com', 'app')).toBe('goodbot.example.com');
+    expect(hostForSite('demo.goodbot.example.com', 'app')).toBe('goodbot.example.com');
   });
 
   it('troca um rótulo pelo outro sem empilhar', () => {
-    expect(hostForSite('demo.goodbot.dionatha.com.br', 'admin')).toBe(
-      'admin.goodbot.dionatha.com.br',
+    expect(hostForSite('demo.goodbot.example.com', 'admin')).toBe(
+      'admin.goodbot.example.com',
     );
   });
 
@@ -101,6 +101,6 @@ describe('hostForSite', () => {
 
   it('não come um rótulo que não é nosso', () => {
     // `goodbot` não está em PREFIXES: tirá-lo mandaria para outro domínio.
-    expect(hostForSite('goodbot.dionatha.com.br', 'app')).toBe('goodbot.dionatha.com.br');
+    expect(hostForSite('goodbot.example.com', 'app')).toBe('goodbot.example.com');
   });
 });

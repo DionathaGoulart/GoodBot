@@ -29,7 +29,7 @@ const PREFIXES: Record<string, SiteHost> = {
  * De qual dos hostnames veio esta requisição.
  *
  * A conta é pelo **primeiro rótulo** do host, não por uma lista de domínios em
- * variável: assim `invite.goodbot.dionatha.com.br`, `invite.goodbot.com.br` e
+ * variável: assim `invite.goodbot.example.com`, `invite.bot.example.org` e
  * `invite.localhost:3000` classificam igual, e trocar de domínio não mexe em
  * código. O que continua vindo do ambiente é a URL absoluta (`AUTH_URL`), que
  * é o que o `redirect_uri` do Discord exige bater exatamente.

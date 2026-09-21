@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/env', () => ({
   env: () => ({
-    AUTH_URL: 'https://goodbot.dionatha.com.br',
+    AUTH_URL: 'https://goodbot.example.com',
     DISCORD_CLIENT_ID: '123456789012345678',
     DISCORD_CLIENT_SECRET: 'segredo',
   }),
@@ -15,11 +15,9 @@ const { inviteAuthorizeUrl, inviteRedirectUri } = await import('./discord');
 describe('URL do convite', () => {
   it('manda cada fluxo para o seu próprio callback', () => {
     expect(inviteRedirectUri('invite')).toBe(
-      'https://invite.goodbot.dionatha.com.br/api/invite/callback',
+      'https://invite.goodbot.example.com/api/invite/callback',
     );
-    expect(inviteRedirectUri('demo')).toBe(
-      'https://demo.goodbot.dionatha.com.br/api/invite/callback',
-    );
+    expect(inviteRedirectUri('demo')).toBe('https://demo.goodbot.example.com/api/invite/callback');
   });
 
   it('pede o que o PRD §10 lista, sem Administrator', () => {
