@@ -177,11 +177,13 @@ export function renderAnalysis({ guild, state, avisosDoYaml }: AnaliseInput): st
   const p = (texto = ''): void => void linhas.push(texto);
 
   // ----- cabeçalho -----
+  // Sem snowflake nenhum, nem o do servidor nem o do dono: o servidor.md é
+  // versionado ao lado do guild.yaml, e os dois seguem a mesma regra de não
+  // carregar ID (o GUILD_ID mora no .env, que é gitignored).
   p(`# ${guild.name}`);
   p();
-  p(`- **ID** \`${guild.id}\``);
   p(`- **Membros** ${numero(guild.memberCount)}`);
-  p(`- **Dono** ${guild.ownerTag ?? '(fora do cache)'} \`${guild.ownerId}\``);
+  p(`- **Dono** ${guild.ownerTag ?? '(fora do cache)'}`);
   p(`- **Varrido em** ${new Date().toLocaleString('pt-BR')}`);
   p();
   p('> Retrato do servidor na hora da varredura, gerado por `pnpm guild scan`.');

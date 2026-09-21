@@ -1,8 +1,7 @@
 # Goodivers
 
-- **ID** `1316158165645000806`
 - **Membros** 11
-- **Dono** goodivers `270244055483547650`
+- **Dono** goodivers
 - **Varrido em** 15/09/2026, 08:20:32
 
 > Retrato do servidor na hora da varredura, gerado por `pnpm guild scan`.

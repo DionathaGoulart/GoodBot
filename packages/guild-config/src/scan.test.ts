@@ -166,8 +166,15 @@ describe('renderAnalysis', () => {
   it('abre com a identidade do servidor', () => {
     const md = render();
     expect(md).toContain('# Servidor Torto');
-    expect(md).toContain(`\`${GUILD}\``);
     expect(md).toContain('1.204');
+    expect(md).toContain('dono#0001');
+  });
+
+  it('não escreve snowflake nenhum, nem o do servidor nem o do dono', () => {
+    const md = render();
+    expect(md).not.toContain(GUILD);
+    expect(md).not.toContain('`999`');
+    expect(md).not.toMatch(/\d{17,20}/);
   });
 
   it('lista os cargos do topo para a base e separa os de bot', () => {
