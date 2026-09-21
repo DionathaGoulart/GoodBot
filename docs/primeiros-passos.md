@@ -117,7 +117,8 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 
 ## 7. Problemas comuns
 
-**`ERR_PNPM_UNSUPPORTED_ENGINE`**: Node fora da faixa 22.x. `nvm use`.
+**`ERR_PNPM_UNSUPPORTED_ENGINE`**: Node fora da faixa aceita (22 ou 24). `nvm use`
+põe o 22 do `.nvmrc`, que é o que roda em produção.
 
 **Comandos não aparecem no Discord**: são registrados como _guild commands_,
 uma guild por vez, e só nas que o bot **atende**. Confira se o bot está naquele
