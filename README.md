@@ -1,262 +1,164 @@
 # Goodbot
 
 [![CI](https://github.com/DionathaGoulart/Goodbot/actions/workflows/ci.yml/badge.svg)](https://github.com/DionathaGoulart/Goodbot/actions/workflows/ci.yml)
-[![Deploy](https://github.com/DionathaGoulart/Goodbot/actions/workflows/deploy.yml/badge.svg)](https://github.com/DionathaGoulart/Goodbot/actions/workflows/deploy.yml)
+[![Versão](https://img.shields.io/github/v/release/DionathaGoulart/Goodbot?label=vers%C3%A3o)](CHANGELOG.md)
+[![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue)](LICENSE)
 
-Bot de moderação para Discord (discord.js v14) + painel web (Next.js) para
-configurar e administrar um servidor. Monorepo pnpm em TypeScript, com a
-hospedagem dividida em três: o **bot** numa VM x86 da Oracle (Always Free) via
-Docker Compose, o **painel** na Vercel e o **Postgres** no Supabase.
+Bot de moderação para Discord com painel web. Tudo que o bot faz se configura
+pelo navegador, sem redeploy, e a hospedagem inteira cabe no plano gratuito de
+três provedores.
 
-## Estrutura
+> **English:** Goodbot is a Discord moderation bot with a web dashboard:
+> moderation cases, automod, logs, tickets, role panels, welcome messages,
+> YouTube alerts and gaming squads. It is a TypeScript monorepo (discord.js
+> v14, Next.js, Postgres with Drizzle) that runs entirely on free tiers
+> (Oracle Cloud, Vercel, Supabase). The bot, the dashboard and the docs are in
+> Brazilian Portuguese.
 
-```
-apps/bot                bot Discord + API interna (Hono)
-apps/web                painel Next.js (App Router, Tailwind, shadcn/ui, Auth.js)
-packages/db             Drizzle: schema e migrations
-packages/shared         Zod: schemas, tipos e constantes compartilhados
-packages/guild-config   guild como código: aplica um guild.yaml no servidor
-infra/                  docker-compose, Caddy, Dockerfiles, deploy, guild.yaml
-.harness/               PRD, arquitetura e styleguide (fonte de verdade)
-docs/                   guias de operação e de uso
-```
+## Duas formas de usar
 
-Para entender o código, comece por
-[`.harness/architecture.md`](.harness/architecture.md): o que existe, onde mora
-e por quê.
+**Convidar o Goodbot.** A instância pública aceita qualquer servidor:
+
+- [Convite normal](https://invite.goodbot.dionatha.com.br): o servidor entra
+  numa fila e o bot começa a atender quando o convite é aprovado.
+- [Demonstração](https://demo.goodbot.dionatha.com.br): o bot atende na hora,
+  por 1 hora, e depois sai sozinho.
+
+O painel fica em [goodbot.dionatha.com.br](https://goodbot.dionatha.com.br),
+com login pelo Discord. Quem convidou recebe uma DM a cada passo do convite.
+
+**Hospedar o seu.** O código é aberto e sob a licença MIT. Você precisa de uma
+aplicação no Discord, uma VM x86 com Docker (a Always Free da Oracle serve), a
+Vercel para o painel e um Postgres (o Supabase gratuito serve). O caminho
+completo está em [`docs/deploy.md`](docs/deploy.md).
 
 ## Módulos
 
 Cada módulo liga e desliga por servidor, tem uma página no painel e um schema
 Zod próprio em `packages/shared/src/config/`:
 
-| Módulo             | O que faz                                                        |
-| ------------------ | ---------------------------------------------------------------- |
-| **Moderação**      | ban, kick, timeout, warn, notas e casos numerados com mod-log    |
-| **Automod**        | spam, links, caps, palavras, menções e modo anti-raid            |
-| **Logs**           | mensagens, membros, servidor e voz em canais separados           |
-| **Boas-vindas**    | mensagem de entrada, de saída e DM, por template                 |
-| **Autorole**       | cargos na entrada e verificação por botão                        |
-| **Reaction roles** | painéis de cargo por botão, menu ou reação                       |
-| **Tickets**        | tipos, painel de abertura, transcript e fechamento               |
-| **Tags**           | respostas salvas com autocomplete                                |
-| **Utilidades**     | clear, purge, lock, slowmode, lembretes, enquetes e info         |
-| **Estatísticas**   | mensagens, entradas/saídas, voz e casos agregados por hora e dia |
-| **Redes sociais**  | avisa quando o canal do YouTube publica vídeo, short ou live     |
+| Módulo             | O que faz                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| **Moderação**      | ban (inclusive temporário), kick, timeout, warn e notas, em casos numerados com mod-log |
+| **Automod**        | spam, links, caps, palavras, menções e modo anti-raid                                   |
+| **Logs**           | mensagens, membros, servidor e voz em canais separados                                  |
+| **Boas-vindas**    | mensagem de entrada, de saída e DM, por template                                        |
+| **Autorole**       | cargos na entrada e verificação por botão                                               |
+| **Reaction roles** | painéis de cargo por botão, menu ou reação                                              |
+| **Tickets**        | tipos, painel de abertura, transcript e fechamento                                      |
+| **Tags**           | respostas salvas com autocomplete                                                       |
+| **Utilidades**     | clear, purge, lock, slowmode, lembretes, enquetes e info                                |
+| **Estatísticas**   | mensagens, entradas e saídas, voz e casos agregados por hora e dia                      |
+| **Redes sociais**  | avisa quando um canal do YouTube publica vídeo, short ou live                           |
+| **Squads**         | match de jogadores por horário, squad com canal próprio e jogatina com voice reservado  |
 
-O módulo de redes sociais funciona por polling, nunca por webhook de entrada, e
-não pede credencial nenhuma: vídeo, short e live saem de páginas públicas do
-próprio YouTube (feed RSS, `watch?v=` e `/channel/<id>/live`). O intervalo do
-laço fica na config do módulo, no painel — uma passada percorre todas as contas
-ligadas, e cada conta são duas requisições ao YouTube.
+O de redes sociais não pede credencial nenhuma: tudo sai de páginas públicas do
+YouTube. Detalhes de cada módulo, comandos e configuração em
+[`docs/modulos.md`](docs/modulos.md).
 
-### Cadastrar um canal do YouTube
+## O painel
 
-Pelo painel, em **Redes sociais → `ADICIONAR CANAL`**: cole no campo
-"Canal do YouTube" a URL da barra de endereços
-(`https://www.youtube.com/@LofiGirl`), o `@handle` ou o ID `UC…` e clique
-`BUSCAR`. O bot resolve os três formatos, e o cartão com avatar e nome aparece
-antes de salvar — se o canal não existir, o erro sai no próprio campo. Depois
-escolha o canal do Discord, quais tipos anunciar (vídeos, shorts, lives), o
-cargo a mencionar (opcional) e o template.
+- configuração de cada módulo, com validação igual à do bot;
+- membros, cargos e canais do servidor, com toda escrita passando pelo bot;
+- casos de moderação com filtros, desfazer e exportação CSV;
+- estatísticas de atividade;
+- auditoria imutável de tudo que o painel altera;
+- o perfil do bot naquele servidor: apelido, foto, capa e bio.
 
-Pelo Discord é `/social add`, que aceita o mesmo campo livre e confirma com o
-nome e o avatar do canal. `/social list` mostra as contas e o estado de cada
-uma; `/social test` manda um anúncio de exemplo.
-
-A primeira passada de uma conta nova **não anuncia nada**: ela só marca o que
-já estava no feed e passa a avisar do próximo post em diante.
-
-## Rodando localmente
-
-Requisitos: Node 22 (`.nvmrc`), pnpm 9 (`corepack enable`), Docker.
-
-```bash
-cp .env.example .env            # preencher DISCORD_TOKEN etc.
-docker compose -f infra/docker-compose.dev.yml up -d   # só o Postgres
-pnpm install
-pnpm db:migrate
-pnpm dev                        # bot + web em paralelo
-```
-
-Validação: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.
+Quem entra no painel é decidido **por servidor**: administrador, quem tem
+Gerenciar Servidor, ou os cargos que o servidor liberar.
 
 ## Configurar um servidor por arquivo
 
 Além do painel, a estrutura de um servidor (cargos, categorias, canais e
-permissões) pode ser descrita num arquivo e aplicada de uma vez:
+permissões) pode morar num `guild.yaml` e ser aplicada de uma vez:
 
 ```bash
-cp -r infra/discord/exemplo infra/discord/meu-servidor
-$EDITOR infra/discord/meu-servidor/guild.yaml   # a estrutura desejada
-$EDITOR infra/discord/meu-servidor/.env         # GUILD_ID, ACTOR_ID, token
-
-pnpm guild import --server meu-servidor         # captura o servidor atual
-pnpm guild plan   --server meu-servidor         # mostra o que mudaria
-pnpm guild apply  --server meu-servidor         # executa após confirmar
+pnpm guild scan "Meu Servidor"          # analisa o servidor e escreve o guild.yaml
+pnpm guild plan  --server meu-servidor  # mostra o que mudaria
+pnpm guild apply --server meu-servidor  # executa, depois de confirmar
 ```
 
-Num servidor que já existe, comece pelo `import`: ele lê o servidor, escreve o
-`guild.yaml` correspondente e confere a si mesmo — se a captura ficou fiel, o
-`plan` seguinte sai vazio.
-
-O `guild.yaml` não contém ID nenhum — tudo é por nome, e os IDs são resolvidos
-contra o servidor na hora. Por isso ele pode ser versionado num repositório
-público e o mesmo arquivo serve para mais de um servidor. Os segredos ficam no
-`.env` ao lado, que é gitignored.
-
-O apply é idempotente: rodar duas vezes seguidas não faz nada na segunda. E ele
-**nunca apaga** sem `--allow-delete`, porque apagar canal leva as mensagens
-junto.
-
+O arquivo não tem ID nenhum, só nomes, então pode ir para um repositório
+público. O apply é idempotente e **nunca apaga** sem `--allow-delete`.
 Detalhes em [`docs/guild-como-codigo.md`](docs/guild-como-codigo.md).
 
-## Rodar em produção localmente
+## Rodando localmente
 
-O desenho de produção tem três provedores, e só o primeiro roda em Docker:
-
-```
-                     ┌─ Vercel ─────────────┐
-   navegador ───────▶│  painel (Next.js)    │
-                     └──────────┬───────────┘
-                                │ HTTPS + Bearer (INTERNAL_API_TOKEN)
-                     ┌─ Oracle E2.1.Micro ──▼───────────────┐
-                     │  caddy :80/:443  ──▶  bot :3001      │
-                     │  (TLS automático)     (sem porta     │
-                     │                        publicada)    │
-                     └──────────┬───────────────────────────┘
-        Discord ◀───────────────┤ gateway + REST
-                                │
-                     ┌─ Supabase ▼──────────┐
-                     │  Postgres (TLS)      │   ← o painel usa o pooler :6543,
-                     └──────────────────────┘     o bot a conexão direta :5432
-```
-
-O que dá para reproduzir na máquina de desenvolvimento é o lado da Oracle:
+Requisitos: Node 22 (`.nvmrc`), pnpm 9 (`corepack enable`) e Docker.
 
 ```bash
-pnpm docker:build                       # imagem linux/amd64 do bot (goodbot-bot:local)
-BOT_IMAGE=goodbot-bot TAG=local BOT_DOMAIN=localhost pnpm docker:up
-curl -k https://localhost/health        # {"ok":true}
-docker stats --no-stream                # bot + caddy < 450 MB
-pnpm docker:down
+cp .env.example .env                                   # preencher DISCORD_TOKEN etc.
+docker compose -f infra/docker-compose.dev.yml up -d   # só o Postgres
+pnpm install
+pnpm db:migrate
+pnpm dev                                               # bot em :3001, painel em :3000
 ```
 
-Sem `BOT_IMAGE`/`TAG` o Compose usa a imagem publicada no GHCR
-(`ghcr.io/dionathagoulart/goodbot-bot:latest`) — que é o que a VM faz.
+Antes de abrir um PR: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.
+O passo a passo completo, com a aplicação no Discord, está em
+[`docs/primeiros-passos.md`](docs/primeiros-passos.md).
 
-Com `BOT_DOMAIN=localhost` o Caddy emite um certificado interno — daí o `-k`
-do curl. Em produção `BOT_DOMAIN=bot.<dominio>` e o certificado é Let's
-Encrypt, automático. Qualquer `Host` diferente do configurado recebe 404.
-
-Para exercitar o painel contra esse Caddy (build de produção, fora do Docker):
-
-```bash
-pnpm --filter @goodbot/web build
-NODE_TLS_REJECT_UNAUTHORIZED=0 INTERNAL_API_URL=https://localhost \
-  pnpm --filter @goodbot/web start
-```
-
-`NODE_TLS_REJECT_UNAUTHORIZED=0` existe **só** para aceitar o certificado
-interno do teste local; na Vercel o certificado é público e a variável não
-entra. As migrations nunca rodam no boot do bot: são um passo da CI
-(`pnpm db:migrate` com a `DATABASE_URL` do Supabase, que traz
-`?sslmode=require`).
-
-## Deploy
-
-Dois pipelines independentes disparam no mesmo `git push origin main`:
+## Como é por dentro
 
 ```
-  push na main
-       ├──▶ GitHub Actions (.github/workflows/deploy.yml)
-       │      1. migrate  → pnpm db:migrate no Supabase (conexão direta)
-       │      2. build    → imagem linux/amd64 no ghcr.io/<owner>/goodbot-bot
-       │      3. deploy   → scp de infra/ para a VM, depois
-       │                    docker compose pull && up -d
-       │
-       └──▶ Vercel (integração git, sem Action)
-              build do apps/web e publicação em goodbot.<dominio>
+   painel (Next.js, Vercel) ──HTTPS + Bearer──▶ API do bot (Hono) ──▶ Discord
+   CLI de guild ──────────────────────────────▶        │
+                                                        ▼
+                                              Postgres (Supabase)
 ```
 
-O passo de `scp` existe porque o `docker compose up` da VM lê o compose do
-disco **dela**. Sem ele, mudança em `infra/` ficava só no repositório: o
-`bootstrap-server.sh` copiava uma vez, na instalação, e nada depois — em
-silêncio. O mesmo passo leva o `migrate-rename.sh`, que é idempotente e sai em
-no-op quando não há o que migrar.
+O painel nunca fala com o Discord: toda ação passa pela API do bot, o único
+processo com sessão de gateway aberta. Por isso painel, comandos e CLI herdam
+as mesmas checagens de permissão, hierarquia e rate limit.
 
-`ci.yml` roda em todo push e todo PR (lint, typecheck, testes com um Postgres
-de serviço, build) — é ele que reprova um PR com erro de tipo. `deploy.yml` só
-roda na `main`, com `concurrency: deploy` e `cancel-in-progress: false`: um
-deploy nunca é interrompido no meio.
-
-### Segredos por provedor
-
-| Onde                          | Segredo                                                                                                                                    |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| GitHub Secrets                | `DATABASE_URL` (direta, para as migrations), `SSH_HOST`, `SSH_USER`, `SSH_KEY`; o GHCR usa o `GITHUB_TOKEN`                                |
-| `.env` em `/opt/goodbot` (VM) | `DISCORD_TOKEN`, `GUILD_IDS` (semente do registro), `DATABASE_URL` (direta), `INTERNAL_API_TOKEN`, `BOT_DOMAIN`, `ACME_EMAIL`              |
-| Variáveis da Vercel           | `DATABASE_URL` (pooler :6543), `AUTH_SECRET`, `AUTH_URL`, `DISCORD_CLIENT_ID/SECRET`, `INTERNAL_API_URL`, `INTERNAL_API_TOKEN`             |
-
-O `INTERNAL_API_TOKEN` está na VM e na Vercel; rotacionar significa trocar nos
-dois de uma vez.
-
-### Primeira vez na VM
-
-```bash
-ssh ubuntu@<ip>
-git clone <repo> /tmp/goodbot && cd /tmp/goodbot
-sudo bash infra/scripts/bootstrap-server.sh   # swap, iptables, docker, /opt/goodbot
-$EDITOR /opt/goodbot/.env                       # preencher
-/opt/goodbot/deploy.sh                          # sobe bot + caddy
+```
+apps/bot                bot Discord + API interna (Hono) + jobs
+apps/web                painel Next.js (App Router, Tailwind, shadcn/ui, Auth.js)
+packages/db             Drizzle: schema, migrations e repositories
+packages/shared         Zod: schemas, tipos e constantes do bot e do painel
+packages/guild-config   guild como código: guild.yaml, plano e apply
+infra/                  Docker Compose, Caddy, fail2ban, scripts de deploy e backup
+.harness/               PRD, mapa da arquitetura e guia visual
+docs/                   guias de uso e de operação
 ```
 
-O bootstrap é idempotente. O que ele **não** faz e continua manual: as Ingress
-Rules TCP 80/443 na Security List da VCN, o DNS (`A` de `bot.<dominio>` para o
-IP da VM, `CNAME` do painel para a Vercel), o redirect
-`https://goodbot.<dominio>/api/auth/callback/discord` no Developer Portal e o
-`docker login ghcr.io` caso o pacote seja privado.
-
-### Rollback
-
-As imagens ficam no GHCR com tag `sha-<commit>` além de `latest`:
-
-```bash
-ssh ubuntu@<ip> '/opt/goodbot/deploy.sh sha-1a2b3c4'
-```
-
-O painel volta pelo botão _Promote_ de um deployment anterior na Vercel.
-
-### Verificação pós-deploy
-
-```bash
-ssh ubuntu@<ip> 'cd /opt/goodbot && docker compose ps && docker compose logs --tail 20 bot'
-curl -s https://bot.<dominio>/health                      # {"ok":true}
-curl -s -o /dev/null -w '%{http_code}\n' \
-  -H 'Authorization: Bearer errado' \
-  https://bot.<dominio>/guilds/$GUILD_ID/roles            # 401
-curl -sI https://goodbot.<dominio> | head -5                # painel na Vercel
-```
+Para entender o código, comece por
+[`.harness/architecture.md`](.harness/architecture.md): o que existe, onde mora
+e por quê.
 
 ## Documentação
 
-Comece por aqui:
+| Guia                                                | Para quê                                           |
+| --------------------------------------------------- | -------------------------------------------------- |
+| [`primeiros-passos.md`](docs/primeiros-passos.md)   | subir o projeto do zero na sua máquina             |
+| [`modulos.md`](docs/modulos.md)                     | o que cada módulo faz e como configurar            |
+| [`guild-como-codigo.md`](docs/guild-como-codigo.md) | configurar um servidor por arquivo                 |
+| [`deploy.md`](docs/deploy.md)                       | hospedar em produção: provedores, segredos, deploy |
+| [`runbook.md`](docs/runbook.md)                     | operação: incidentes, backup, rollback             |
+| [`api-interna.md`](docs/api-interna.md)             | falar com a API do bot direto                      |
+| [`banco-de-dados.md`](docs/banco-de-dados.md)       | schema, migrations e repositories                  |
+| [`.harness/prd.md`](.harness/prd.md)                | requisitos, modelo de dados e decisões             |
+| [`.harness/styleguide.md`](.harness/styleguide.md)  | guia visual do painel                              |
 
-- [`.harness/architecture.md`](.harness/architecture.md) — **o mapa do código**:
-  camadas, fluxos de ponta a ponta, invariantes e onde mexer para cada tarefa.
-- [`.harness/prd.md`](.harness/prd.md) — requisitos, modelo de dados, decisões.
-- [`.harness/styleguide.md`](.harness/styleguide.md) — guia visual do painel.
-- [`CLAUDE.md`](CLAUDE.md) — convenções do repositório.
+O que muda entre versões fica no [`CHANGELOG.md`](CHANGELOG.md).
 
-Guias em [`docs/`](docs/):
+## Contribuir
 
-| Guia                                                | Para quê                                 |
-| --------------------------------------------------- | ---------------------------------------- |
-| [`primeiros-passos.md`](docs/primeiros-passos.md)   | subir o projeto do zero na sua máquina   |
-| [`guild-como-codigo.md`](docs/guild-como-codigo.md) | configurar um servidor por arquivo       |
-| [`api-interna.md`](docs/api-interna.md)             | falar com a API do bot direto            |
-| [`modulos.md`](docs/modulos.md)                     | o que cada módulo faz e como configurar  |
-| [`banco-de-dados.md`](docs/banco-de-dados.md)       | schema, migrations e repositories        |
-| [`contribuindo.md`](docs/contribuindo.md)           | convenções, commits e checklist de PR    |
-| [`runbook.md`](docs/runbook.md)                     | operação: incidentes, rollback, plantão  |
-| [`migracao-nome.md`](docs/migracao-nome.md)         | passos externos da troca CoBot → Goodbot |
+Issues e PRs são bem-vindos. As convenções (idioma, commits, checklist de PR)
+estão em [`CONTRIBUTING.md`](CONTRIBUTING.md). O projeto também traz um
+[`CLAUDE.md`](CLAUDE.md) com as regras para quem trabalha com agentes de IA.
+
+## Segurança
+
+Achou uma falha? **Não abra issue pública.** O caminho para reportar em
+privado está no [`SECURITY.md`](SECURITY.md).
+
+## Licença
+
+[MIT](LICENSE) © 2026 Dionatha Goulart.
+
+Pode usar, modificar, hospedar e até vender. A condição é manter o aviso de
+copyright e a licença (o arquivo `LICENSE`) em qualquer cópia ou fork, ou
+seja, o crédito ao autor original vai junto. Se o Goodbot ajudou você, um link
+para este repositório é muito bem-vindo.
