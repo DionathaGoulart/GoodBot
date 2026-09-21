@@ -36,7 +36,7 @@ No [Developer Portal](https://discord.com/developers/applications):
    ```
 
 7. **Installation > Install Link: `None`.** Senão o Discord oferece o botão
-   "Add App" do perfil do bot, que instala **sem** passar pelos nossos links —
+   "Add App" do perfil do bot, que instala **sem** passar pelos nossos links,
    e esse servidor entraria no registro sem classificação nenhuma.
 8. **OAuth2 > URL Generator**: escopos `bot` e `applications.commands`, as
    permissões do PRD §10, e use a URL para convidar o bot ao seu servidor de
@@ -117,22 +117,22 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 
 ## 7. Problemas comuns
 
-**`ERR_PNPM_UNSUPPORTED_ENGINE`** — Node fora da faixa 22.x. `nvm use`.
+**`ERR_PNPM_UNSUPPORTED_ENGINE`**: Node fora da faixa 22.x. `nvm use`.
 
-**Comandos não aparecem no Discord** — são registrados como _guild commands_,
+**Comandos não aparecem no Discord**: são registrados como _guild commands_,
 uma guild por vez, e só nas que o bot **atende**. Confira se o bot está naquele
 servidor e se a linha dele em `guild_registry` está `approved` (ou `demo` no
 prazo): o log do boot diz `guild não atendida; o bot fica calado nela` quando
 não está. Guild commands propagam na hora; se não apareceram e o status está
-certo, o registro falhou — veja o log do boot.
+certo, o registro falhou: veja o log do boot.
 
-**Automod não reage a nada** — falta o intent _Message Content_.
+**Automod não reage a nada**: falta o intent _Message Content_.
 
-**Painel abre mas as telas de servidor dão erro** — o painel não fala com o
+**Painel abre mas as telas de servidor dão erro**: o painel não fala com o
 Discord, e sim com a API do bot. Confira `INTERNAL_API_URL` e se o
 `INTERNAL_API_TOKEN` é **o mesmo** dos dois lados.
 
-**`connect ECONNREFUSED ...:5432`** — o Postgres do Docker não subiu.
+**`connect ECONNREFUSED ...:5432`**: o Postgres do Docker não subiu.
 `docker compose -f infra/docker-compose.dev.yml ps`.
 
 ## 7.1 Adicionar um segundo servidor
@@ -150,7 +150,7 @@ depois**, senão ele fica online e calado lá.
 
    Este é o caminho de quem tem acesso à VM, e existe para os servidores que
    já eram seus. Para os outros, o caminho normal é o link de convite (§7.2) e
-   a fila do painel do dono (§7.6) — nenhum dos dois pede SSH nem reinício.
+   a fila do painel do dono (§7.6). Nenhum dos dois pede SSH nem reinício.
 
    Se hoje está como `GUILD_ID`, pode trocar o nome ou deixar: `GUILD_IDS`
    ganha quando os dois existem.
@@ -167,8 +167,8 @@ depois**, senão ele fica online e calado lá.
 O que muda no painel: entrar leva ao seletor (`/servidores`) quando você tem
 acesso a mais de um; com um só, direto para ele. A barra lateral mostra o nome
 e o ícone de cada servidor, e o ícone do servidor atual, no alto à direita,
-reabre o seletor. Seu nível de permissão é resolvido **por servidor** — ser
-dono de um não dá nada no outro —, e a lista só mostra onde você tem nível:
+reabre o seletor. Seu nível de permissão é resolvido **por servidor** (ser
+dono de um não dá nada no outro), e a lista só mostra onde você tem nível:
 quem administra um servidor não lê o nome dos outros.
 
 ### O que conferir depois
@@ -179,7 +179,7 @@ curl -s -H "Authorization: Bearer $INTERNAL_API_TOKEN" \
 ```
 
 O bloco `guilds` deve mostrar `cached` igual a `expected`. Se `cached` for
-menor, o bot não está em algum servidor da lista — o log do boot diz qual.
+menor, o bot não está em algum servidor da lista: o log do boot diz qual.
 
 ### Quanto a VM aguenta
 
@@ -219,8 +219,8 @@ seu subdomínio:
 O caminho é sempre o mesmo: a pessoa abre o link, lê o que vai acontecer e
 clica; nós assinamos um `state` (HMAC do `AUTH_SECRET`, válido por 15 minutos)
 e mandamos ao OAuth do Discord com o `redirect_uri` de volta para o **mesmo**
-subdomínio. Na volta, trocamos o `code` com o Discord — é essa troca, e não o
-`guild_id` da URL, que prova que a instalação aconteceu — e gravamos a linha em
+subdomínio. Na volta, trocamos o `code` com o Discord (é essa troca, e não o
+`guild_id` da URL, que prova que a instalação aconteceu) e gravamos a linha em
 `guild_registry`.
 
 Três regras que caem de graça disso, porque uma linha que já existe nunca tem o
@@ -242,7 +242,7 @@ http://demo.localhost:3000
 ```
 
 Com o `pnpm dev` rodando, abra um dos dois. Se cair no painel em vez da tela de
-convite, o `Host` chegou sem o rótulo — confira a URL. As duas URLs de callback
+convite, o `Host` chegou sem o rótulo: confira a URL. As duas URLs de callback
 precisam estar em **OAuth2 > Redirects** (§2).
 
 O `http://localhost:3000/convite` mostra os dois links, o que é útil para
@@ -265,14 +265,14 @@ decide nada. A despedida continua pública porque a saída é um fato do servido
 Nada é apagado: casos, tags, tickets e config continuam no banco e voltam como
 estavam se o servidor for aprovado depois.
 
-O link do aviso sai do `AUTH_URL` — a mesma variável do painel, que em produção
+O link do aviso sai do `AUTH_URL`, a mesma variável do painel, que em produção
 também precisa estar no `.env` da VM. Sem ela o bot sobe igual e o aviso sai
 sem link.
 
 Duas colunas em `guild_registry` guardam o que já foi feito (`demo_warned_at` e
 `demo_ended_at`), no banco e não na memória do processo: um deploy no meio da
 hora não repete o aviso nem a despedida. O `status` continua `demo` depois do
-fim — é ele que diz "este servidor já usou a sua" na tela do convite.
+fim: é ele que diz "este servidor já usou a sua" na tela do convite.
 
 O bot deixa de atender **no instante** do vencimento, mesmo que o job esteja
 atrasado: a conta é do `isGuildServed`, não do job.
@@ -284,8 +284,8 @@ isso é `apps/bot/src/jobs/pending-expiry.ts`, de hora em hora: avisa no
 servidor, avisa no privado de quem convidou, sai e marca a linha como
 `expired`.
 
-A razão é a mesma da expiração da demo — bot mudo parado num servidor é a pior
-versão possível —, só que aqui ele é mudo desde o primeiro minuto: quem
+A razão é a mesma da expiração da demo (bot mudo parado num servidor é a pior
+versão possível), só que aqui ele é mudo desde o primeiro minuto: quem
 convidou não tem como distinguir "ainda não aprovaram" de "instalei errado".
 
 **`expired` não é `blocked`.** A linha continua no registro contando a
@@ -294,7 +294,7 @@ o relógio recomeça do zero. Quem já está na fila **não** adia a recusa clic
 no próprio link de novo: o relógio só reinicia para quem estava fora dela.
 
 Na tela de servidores do painel admin ele aparece como `RECUSADO`, e fica fora
-da fila — ele **é** a decisão, tomada pelo prazo.
+da fila: ele **é** a decisão, tomada pelo prazo.
 
 ## 7.5 O que o bot fala no privado de quem convidou
 
@@ -312,7 +312,7 @@ Todo o texto mora num arquivo só: `apps/bot/src/lib/inviter-dm.ts`.
 
 Os dois primeiros avisos da tabela (as **entradas**) não podem partir do bot
 sozinho: quando o `guildCreate` chega, ele ainda não sabe por qual link a
-pessoa veio — o Discord adiciona o bot no clique em "Autorizar", antes de o
+pessoa veio: o Discord adiciona o bot no clique em "Autorizar", antes de o
 painel trocar o `code`. Quem sabe o fluxo é o painel, e ele pede o aviso certo
 em `POST /registry/:guildId/notice`.
 
@@ -323,7 +323,7 @@ nenhum, porque não há a quem avisar.
 ## 7.6 O painel do dono (`admin.`)
 
 `http://admin.localhost:3000` em dev. Entra quem tem o snowflake em
-`OWNER_DISCORD_ID` — **não** é cargo em servidor nenhum: quem administra um
+`OWNER_DISCORD_ID`. **Não** é cargo em servidor nenhum: quem administra um
 servidor qualquer viraria administrador do bot inteiro.
 
 Quatro telas:
@@ -338,33 +338,33 @@ Quatro telas:
 Entrar é sempre pelo `/login` do painel, nunca por `admin.`: o `redirect_uri`
 do Discord aponta para o host do painel, e é o único registrado. Quem abre
 `admin.` sem sessão é mandado para lá e volta sozinho. O cookie de sessão sai
-com `domain` do host do painel para valer nos dois — sem isso o navegador não o
+com `domain` do host do painel para valer nos dois: sem isso o navegador não o
 mandaria para `admin.` e a tela seria inalcançável.
 
 Duas coisas que valem saber antes de precisar delas:
 
 - **Aprovar funciona com o bot fora do ar.** É uma escrita em `guild_registry`,
-  e o `RegistryService` relê o registro a cada minuto — e no boot. Bloquear
+  e o `RegistryService` relê o registro a cada minuto, e no boot. Bloquear
   também: a saída do servidor é a metade que precisa do bot, e ela é tolerante
   a falha (o bot abandona bloqueados sozinho no `ready` e no `guildCreate`).
 - **Manutenção não derruba o bot.** Ele fica online e continua registrando
   eventos; só recusa interação, com um aviso efêmero. Derrubar o container
   marcaria o bot como offline no Discord e ninguém saberia por quê.
 
-O broadcast pede a palavra `ENVIAR` digitada, e ela é conferida pela API do bot
-— não só pela tela. Ensaie antes: o botão de ensaio mostra em que canal a
+O broadcast pede a palavra `ENVIAR` digitada, e ela é conferida pela API do bot,
+não só pela tela. Ensaie antes: o botão de ensaio mostra em que canal a
 mensagem cairia em cada servidor, sem mandar nada. Não há como desfazer.
 
 Em produção, `OWNER_DISCORD_ID` precisa estar em **três** lugares, como o
 `INTERNAL_API_TOKEN`: variáveis do projeto na Vercel (o painel), `.env` da VM (o
 bot) e *variable* do repositório no GitHub, de onde o `deploy.yml` mantém a
-linha do `.env` da VM em dia. Faltando em um deles, aquele lado fecha — o
+linha do `.env` da VM em dia. Faltando em um deles, aquele lado fecha: o
 sintoma é "a tela abre e o botão responde 403".
 
 ## 8. Depois daqui
 
-- [`.harness/architecture.md`](../.harness/architecture.md) — como o código é
+- [`.harness/architecture.md`](../.harness/architecture.md): como o código é
   organizado e onde mexer para cada tipo de tarefa.
-- [`guild-como-codigo.md`](guild-como-codigo.md) — configurar o servidor por
+- [`guild-como-codigo.md`](guild-como-codigo.md): configurar o servidor por
   arquivo em vez de clicar no painel.
-- [`contribuindo.md`](contribuindo.md) — convenções e checklist de PR.
+- [`contribuindo.md`](contribuindo.md): convenções e checklist de PR.

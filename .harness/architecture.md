@@ -1,4 +1,4 @@
-# Goodbot — Arquitetura
+# Goodbot: Arquitetura
 
 Documento de orientação: o que existe, onde mora e por quê. Quem chega aqui
 (pessoa ou IA) deve conseguir situar-se sem ler o repositório inteiro.
@@ -63,7 +63,7 @@ fora dele.**
 ```
 
 `shared` não importa `db`, `bot` nem `web`. Se um schema Zod precisar de algo
-do banco, o dado vira tipo puro em `shared` e o `db` se adapta — não o
+do banco, o dado vira tipo puro em `shared` e o `db` se adapta, não o
 contrário. É o que permite o painel (que roda na Vercel, sem acesso ao gateway)
 importar exatamente os mesmos schemas que o bot usa para validar.
 
@@ -73,7 +73,7 @@ importar exatamente os mesmos schemas que o bot usa para validar.
 
 ### 4.1 Boot
 
-`src/index.ts` é uma função `main()` que faz a composição manual de tudo — não
+`src/index.ts` é uma função `main()` que faz a composição manual de tudo: não
 há container de injeção de dependência. A ordem importa:
 
 1. `createDb(env.DATABASE_URL)` e `createClient()` (o client discord.js)
@@ -86,13 +86,13 @@ há container de injeção de dependência. A ordem importa:
 Antes do `login`, o `GUILD_IDS` é semeado no registro (`RegistryService.seed`)
 e o espelho em memória é carregado: quando o primeiro evento chegar, o bot já
 sabe quem atende. No `ready`, cada guild **atendida pelo registro** é preparada
-por vez (`lib/guild-setup.ts`: upsert, config, guild commands — o cache de
+por vez (`lib/guild-setup.ts`: upsert, config, guild commands; o cache de
 membros **não** é preenchido no boot: ele tem teto por
 guild e se enche pelos eventos, porque a RAM crescia com a soma dos membros de
 todos os servidores). Guild ausente vira log de erro e não impede as outras. Guild em que
 o bot está mas não atende ganha linha `pending` e fica calada; bloqueada, ele
 sai. O intervalo de flush das stats é do processo e recebe o menor valor entre
-as guilds — quem resolve esse conflito é o `ProcessTuner`, porque desde o
+as guilds. Quem resolve esse conflito é o `ProcessTuner`, porque desde o
 registro uma guild pode entrar depois do boot. O LRU do cache de mensagens já
 foi resolvido ali pelo maior valor e saiu: cada canal usa o `perChannel` da
 própria guild, e canal parado há 1 h deixa a memória.
@@ -202,8 +202,8 @@ Há ainda `assertMayGrant`: ninguém concede uma permissão que ele próprio nã
 tem. O dono da guild é a única exceção, porque já tem tudo por definição.
 
 `/admin` e `/registry` são as duas rotas fora de `/guilds/:guildId`, pela mesma
-razão: elas existem para tratar servidores que o bot **não** atende — a fila de
-aprovação e os avisos de recusa —, e o `withGuild` esconderia justamente esses.
+razão: elas existem para tratar servidores que o bot **não** atende (a fila de
+aprovação e os avisos de recusa), e o `withGuild` esconderia justamente esses.
 
 No `/admin`, o `actorId` não é conferido contra uma guild: ele é comparado ao
 `OWNER_DISCORD_ID` do ambiente. Sem a variável, toda escrita ali responde 403:
@@ -212,7 +212,7 @@ um `.env` incompleto não pode virar painel admin aberto.
 O `/registry` não tem `actorId`, e isso é decisão: **não existe ator**. Quem
 convidou já foi provado pela troca do `code` no OAuth, o destinatário da DM não
 é escolhido pela chamada (é o `invited_by` da linha) e o corpo só escolhe qual
-texto de uma lista fechada sai — o texto mora no bot, em `lib/inviter-dm.ts`.
+texto de uma lista fechada sai. O texto mora no bot, em `lib/inviter-dm.ts`.
 Ela existe porque o bot **não sabe por qual link a pessoa veio**: o Discord
 adiciona o bot no clique em "Autorizar", então o `guildCreate` chega antes de o
 painel trocar o `code`. Quem sabe o fluxo é o painel, e é ele que pede o aviso.
@@ -276,7 +276,7 @@ A classificação é pelo **primeiro rótulo** do host (`lib/hosts.ts`), não po
 uma lista de domínios em variável: trocar de domínio não mexe em código, e
 `invite.localhost:3000` funciona em dev sem configuração. O que continua vindo
 do ambiente é a URL absoluta (`AUTH_URL`), porque o `redirect_uri` do OAuth
-tem de bater exatamente com o que está registrado no Discord — e montá-lo a
+tem de bater exatamente com o que está registrado no Discord, e montá-lo a
 partir do header `Host` seria deixar o cliente escolher.
 
 `invite.` e `demo.` servem **só** `/convite*` e `/api/*`; qualquer outro
@@ -288,7 +288,7 @@ esquecer de trancar um deles.
 
 **Entrar acontece num lugar só.** O `redirect_uri` do Auth.js aponta para o
 host do painel, e é o único registrado no Discord; `admin.` não tem `/login`
-próprio. Quem chega lá sem sessão é mandado para o `/login` do painel — no
+próprio. Quem chega lá sem sessão é mandado para o `/login` do painel, no
 `proxy.ts` e de novo no `requireBotOwner`, que redireciona para URL **absoluta**
 justamente por isso: um `/login` relativo cairia na raiz de `admin.`, que
 reescreve para `/admin`, que redireciona de novo. A troca de rótulo entre hosts
@@ -298,7 +298,7 @@ irmãos é o `hostForSite` de `lib/hosts.ts`.
 o cookie é *host-only* e o navegador não o manda para `admin.<host>`: quem
 entrasse no painel chegaria no admin sem sessão, e o admin ficaria inalcançável
 por construção. Com o `domain` do host do painel, ele vale também para
-`invite.` e `demo.` — deliberado e pouco, porque esses dois servem só a tela de
+`invite.` e `demo.`, deliberado e pouco, porque esses dois servem só a tela de
 convite, o cookie é `httpOnly` e o CSRF continua sendo o do Auth.js.
 
 ### 5.2 A guild vai explícita em toda escrita
@@ -312,13 +312,13 @@ form (client) ─▶ Server Action ─▶ lib/internal-api.ts ─▶ API do bot 
 ```
 
 Toda action que escreve numa guild tem a forma `(guildId, formData)`, e o
-`guildId` sai da rota — `useGuildId()` no componente cliente, que é o
+`guildId` sai da rota: `useGuildId()` no componente cliente, que é o
 `useParams` de `/g/[guildId]`. Nenhuma delas resolve a guild sozinha.
 
 Isso é **tipo**, não convenção: um call site que esqueça a guild não compila.
 A versão anterior deixava a action escolher "a primeira guild atendida", o que
 funcionava enquanto o bot só atendia um servidor e, com mais de um, escrevia no
-servidor errado sem erro nenhum — editando o servidor B, salvava no A. Quem
+servidor errado sem erro nenhum: editando o servidor B, salvava no A. Quem
 recebe o argumento é o `requireGuildAccess`, então a guild conferida é sempre a
 guild escrita.
 
@@ -334,7 +334,7 @@ client vê o token, e o navegador nunca fala com a API do bot diretamente.
 Até a Etapa 22 ele revalidava a rota a cada 10 segundos
 (`components/layout/auto-refresh.tsx`). A conta não fechava: uma aba aberta
 custava 360 invocações por hora na Vercel para mostrar números que, num
-servidor de treze pessoas, não mudam nesse ritmo. No celular era pior — um
+servidor de treze pessoas, não mudam nesse ritmo. No celular era pior. Um
 `router.refresh()` cujo pedido RSC falha faz o Next recarregar a página
 inteira, e em rede móvel essa recarga também falha: sobrava a tela de erro do
 browser, que parecia bug do painel.
@@ -343,7 +343,7 @@ Hoje quem atualiza é o botão da topbar (`components/layout/refresh.tsx`), e
 ele faz duas coisas na ordem:
 
 1. `refreshGuildData` (em `lib/stats.ts`) derruba a tag `stats:<guildId>` com
-   `revalidateTag(..., { expire: 0 })` — sem isso o clique devolveria o mesmo
+   `revalidateTag(..., { expire: 0 })`: sem isso o clique devolveria o mesmo
    dado cacheado e pareceria um botão quebrado;
 2. o cliente chama `router.refresh()`, e o React troca só o que mudou.
 
@@ -361,7 +361,7 @@ num site de páginas estáticas e péssimo aqui: **toda** tela do painel é
 dinâmica, porque toda uma passa por `auth()`. Cada prefetch é um render
 completo no servidor, não um arquivo de cache. Com os treze itens da sidebar na
 tela, abrir o dashboard disparava treze invocações na Vercel antes de alguém
-clicar em qualquer coisa — e, chegando juntas, parte delas voltava 503. Quem dá
+clicar em qualquer coisa e, chegando juntas, parte delas voltava 503. Quem dá
 o retorno imediato do clique é o `loading.tsx` de `/g/[guildId]`, que já
 existia.
 
@@ -416,16 +416,16 @@ src/
 
 Dois pontos que carregam mais peso do que parecem:
 
-**`api/client.ts`** — `createInternalClient({ baseUrl, token })` devolve ~45
+**`api/client.ts`**: `createInternalClient({ baseUrl, token })` devolve ~45
 métodos tipados sobre a API do bot, cada um validando a resposta com o schema
 correspondente. O painel usa. O `guild-config` usa. Qualquer script novo deve
 usar em vez de montar `fetch` na mão.
 
-**`api/permissions.ts`** — `PERMISSION_BITS` é uma lista **curada** das
+**`api/permissions.ts`**: `PERMISSION_BITS` é uma lista **curada** das
 permissões do Discord que o produto expõe. Um teste em `apps/bot` confere cada
 bit contra o `PermissionFlagsBits` do discord.js, então um erro de digitação
 quebra o `pnpm test` e não o servidor de alguém. O bitfield que a lista **não**
-conhece é preservado ao salvar (`mergePermissions`) — salvar um cargo pelo
+conhece é preservado ao salvar (`mergePermissions`): salvar um cargo pelo
 painel nunca apaga uma permissão nova do Discord.
 
 ---
@@ -467,7 +467,7 @@ Decisões que explicam o código:
 
 - **O retrato vem numa chamada só.** `GET /guilds/:id/state` devolve cargos,
   canais e o detalhe de cada canal, montados do cache do gateway. O caminho
-  antigo — `/roles`, `/channels` e um `/channels/:id` por canal — custava
+  antigo (`/roles`, `/channels` e um `/channels/:id` por canal) custava
   `2 + N` idas e voltas em série até a VM. `state.ts` mantém aquele caminho só
   como plano B, para quando o bot publicado ainda não tiver a rota.
 - **`servidor.md` não é o yaml em outro formato.** Ele existe porque decidir o
@@ -495,7 +495,7 @@ Decisões que explicam o código:
 
 Limitações honestas: override só expõe `view` e `send` (é o que a API oferece);
 canal não tem campo de posição, então a ordem é a de criação; o casamento é por
-nome — renomear no yaml é lido como "sumiu um, apareceu outro"; e fórum, palco,
+nome (renomear no yaml é lido como "sumiu um, apareceu outro"); e fórum, palco,
 tópico, emoji, sticker e evento ficam fora do spec (o import avisa e o apply não
 os toca).
 
@@ -560,7 +560,7 @@ Quatro coisas nesse caminho não são gosto:
   senão uma aba esquecida aberta gera `state` vencido.
 - **O `guild_id` da query é ignorado**: qualquer um digita um. Quem prova a
   instalação é a troca do `code`, e é ela que devolve `invitedBy`.
-- **O `redirect_uri` sai do `AUTH_URL`**, nunca do header `Host` — quem manda
+- **O `redirect_uri` sai do `AUTH_URL`**, nunca do header `Host`: quem manda
   o header é o cliente, e esse valor tem de bater exatamente com o que está no
   Developer Portal.
 - **O `guildCreate` ganha do callback, sempre.** O Discord adiciona o bot no
@@ -568,12 +568,12 @@ Quatro coisas nesse caminho não são gosto:
   vai gravar. É por isso que o convite tem escrita própria
   (`claimInvitedGuild`) em vez do `ensureGuildRegistered`: ela **assume** a
   linha quando o status é `pending`, `expired` ou uma `demo` já gasta. Sem
-  isso — como era até a v1.4 — o link da demonstração entregava um servidor
+  isso, como era até a v1.4, o link da demonstração entregava um servidor
   `pending`: demo nenhuma, nunca.
 - **O que ela nunca toca** resolve o resto numa regra: `approved` não volta
   para a fila, `blocked` continua bloqueado, e uma demo em curso não é
   derrubada por um clique no link normal. A demo não se renova porque prazo
-  novo exige `demo_ended_at` nulo — a memória é a coluna, não o status.
+  novo exige `demo_ended_at` nulo: a memória é a coluna, não o status.
 
 **Um match de squad**
 
@@ -701,22 +701,22 @@ Duas coisas nesse caminho, e na gestão de jogadores ao lado dele, não são gos
 
 Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 
-1. **ID do Discord é `string`.** Nunca `Number(snowflake)` — snowflake estoura
+1. **ID do Discord é `string`.** Nunca `Number(snowflake)`: snowflake estoura
    o `Number` com precisão silenciosa.
 2. **Todo query filtra por `guildId`,** e nada assume "a" guild. A única
    exceção é o painel do dono do bot (`apps/web/lib/admin.ts`), que existe
-   justamente para olhar o conjunto — e ela é fechada por
+   justamente para olhar o conjunto, e ela é fechada por
    `OWNER_DISCORD_ID`. Quem o bot
    atende vem do registro (`guild_registry`, via `RegistryService`), não de uma
    variável; no painel, quem decide acesso é a guild da URL, o nível de
    permissão é por guild na sessão, e toda action de escrita recebe o `guildId`
-   no primeiro argumento (§5.2) — nenhuma resolve a guild sozinha. O registro
+   no primeiro argumento (§5.2): nenhuma resolve a guild sozinha. O registro
    vale nos **dois** caminhos de
    entrada: interação (`lib/interaction.ts`) e evento do gateway
-   (`lib/loader.ts`). Handler novo não precisa lembrar de checar — o
+   (`lib/loader.ts`). Handler novo não precisa lembrar de checar: o
    `loadEvents` descarta antes; a exceção é `always: true`, hoje só
    `guildCreate`/`guildDelete`.
-3. **Todo input externo passa por Zod de `shared`** — opção de comando, body da
+3. **Todo input externo passa por Zod de `shared`**: opção de comando, body da
    API, formulário do painel, jsonb de config. Bot e painel importam o mesmo
    schema.
 4. **Config de módulo só pelo `ConfigService`.**
@@ -760,7 +760,7 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 - **Hierarquia**: o cargo do bot precisa estar **acima** de todo cargo que ele
   gerencia, senão a operação falha com `BOT_ROLE_HIERARCHY`.
 - **`moveRole` anda uma casa por chamada.** Não existe "definir posição".
-- **Migrations não rodam no boot do bot** — são um passo da CI.
+- **Migrations não rodam no boot do bot**: são um passo da CI.
 - **O backup acompanha a versão do Supabase.** `pg_dump` aborta contra servidor
   de major maior que a dele; a imagem do serviço `backup` é `postgres:17-alpine`
   porque o Supabase está no 17. Pelo mesmo motivo, restaure num Postgres 17: o
@@ -769,7 +769,7 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
   variáveis do projeto na Vercel. Rotacionar é trocar nos três de uma vez.
 - **`OWNER_DISCORD_ID` vale nos dois lados**: o painel confere antes de
   renderizar `/admin`, e o bot confere de novo o `actorId` de toda escrita ali.
-  Faltando em qualquer um dos dois, aquele lado fecha — o que dá o sintoma
+  Faltando em qualquer um dos dois, aquele lado fecha, o que dá o sintoma
   "a tela abre e o botão responde 403".
 
 ## 13. Validação

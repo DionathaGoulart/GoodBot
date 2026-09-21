@@ -1,4 +1,4 @@
-# Goodbot — PRD (Product Requirements Document)
+# Goodbot: PRD (Product Requirements Document)
 
 Versão 1.6 · 2026-09-16 · Documento de referência para todas as sessões.
 Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (UI).
@@ -36,36 +36,36 @@ Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (
 > e dois riscos na §11. O que **não** mudou: os outros módulos, a hospedagem e
 > o ciclo de vida do convite.
 
-> **v1.4 — o convite fala.** O ciclo de vida do convite deixou de ser mudo para
+> **v1.4: o convite fala.** O ciclo de vida do convite deixou de ser mudo para
 > quem convidou: o bot avisa **no privado dessa pessoa** a cada mudança de
 > estado (entrou em demo, demo acabando, demo acabou, entrou na fila, aprovado,
 > recusado). O aviso de 10 minutos da demo saiu do canal do servidor e passou a
 > ser só essa DM. Entrou o status `expired`: convite parado **uma semana** na
-> fila é recusado sozinho, o bot se despede e sai — e, ao contrário de
+> fila é recusado sozinho, o bot se despede e sai. Ao contrário de
 > `blocked`, o servidor pode ser convidado de novo. Junto veio a correção de um
 > defeito que anulava a demonstração em produção (§5.10, "a corrida do
 > `guildCreate`"). O que mudou no documento: §5.10 inteira, `guild_registry` na
 > §8 e a §9.3.
 
-> **v1.3 — bot público.** O Goodbot deixou de atender uma lista de servidores
+> **v1.3: bot público.** O Goodbot deixou de atender uma lista de servidores
 > no ambiente e passou a atender uma **tabela** (`guild_registry`): quem entra
 > por `invite.` espera aprovação, quem entra por `demo.` é atendido por uma
 > hora, e o dono do bot decide o resto num painel próprio em `admin.<domínio>`.
 > O que mudou: entrou a §5.10 (o ciclo de vida do convite), e com ela
 > `guild_registry` na §8, a fronteira da §7.1, o convite e os hostnames na
-> §7.3, o acesso da §6 e o teto de 100 servidores na §11 — que deixou de ser
+> §7.3, o acesso da §6 e o teto de 100 servidores na §11, que deixou de ser
 > irrelevante. Quem opera o bot como produto continua na §9.3. O que **não**
 > mudou: os módulos do bot, o resto do modelo de dados, os níveis de permissão
 > dentro de um servidor e a hospedagem.
 
-> **v1.2 — nome e guild como código.** O projeto passou a se chamar
+> **v1.2: nome e guild como código.** O projeto passou a se chamar
 > **Goodbot** (era CoBot): pacotes `@goodbot/*`, imagem `goodbot-bot`,
 > métricas `goodbot_*` e `/opt/goodbot` na VM. A migração da VM já rodou e o
 > script dela saiu do repositório. Entrou também a §5.9, guild como código. O que
 > **não** mudou: requisitos funcionais existentes, modelo de dados, permissões
 > e hospedagem.
 
-> **v1.1 — mudança de hospedagem.** A v1.0 assumia tudo numa VM ARM
+> **v1.1: mudança de hospedagem.** A v1.0 assumia tudo numa VM ARM
 > (Ampere A1) com um único Docker Compose. A capacidade A1 do free tier é
 > intermitente e impediu a criação da instância, então a hospedagem passou a
 > ser dividida: **bot** na Oracle E2.1.Micro (x86, Always Free), **painel**
@@ -116,7 +116,7 @@ Frase-guia: _um só lugar para moderar, configurar e entender o servidor._
   i18n depois, sem implementar agora.
 - Dashboard público / vitrine.
 
-## 5. Requisitos funcionais — Bot
+## 5. Requisitos funcionais: Bot
 
 Cada módulo tem `enabled` e configuração própria, lida do Postgres com cache
 (ver §8). Todo comando de moderação aceita `motivo` (obrigatório para ban,
@@ -246,35 +246,35 @@ noturno no bot. Nenhum conteúdo de mensagem é armazenado nas stats.
 
 Servidor HTTP no processo do bot (`:3001`). Desde a v1.1 o painel roda fora
 da VM (Vercel), então esta API é **exposta na internet** pelo Caddy em
-`https://bot.<dominio>` — o container continua sem publicar porta no host, só
+`https://bot.<dominio>`. O container continua sem publicar porta no host, só
 o Caddy o alcança. Auth por header `Authorization: Bearer
 <INTERNAL_API_TOKEN>` com comparação em tempo constante, mais rate limit e
 body cap (§7.3). Endpoints (todos validados com Zod de `packages/shared`):
 
-- `GET /health` — status gateway, ping, uptime, guild cache.
-- `GET /guilds/:id/channels|roles|members?q=&limit=` — dados ao vivo do cache
+- `GET /health`: status gateway, ping, uptime, guild cache.
+- `GET /guilds/:id/channels|roles|members?q=&limit=`: dados ao vivo do cache
   do bot (com fallback a fetch).
-- `GET /guilds/:id/members/:userId` — detalhe ao vivo.
+- `GET /guilds/:id/members/:userId`: detalhe ao vivo.
 - `GET /guilds/:id/members/lookup?ids=`: nome e avatar de até 100 IDs
   separados por vírgula (repetidos contam uma vez). Cache primeiro, o resto
   numa busca só pelo gateway; devolve `members`, `missing` (confirmados fora
   do servidor) e `unresolved` (o gateway não respondeu, a tela mostra o ID). É
   leitura, sem `actorId`, como `GET /members`, e fica registrada antes de
   `/members/:userId`. Serve a aba `JOGADORES` dos squads (§6.2).
-- `POST /guilds/:id/moderation` — `{type, targetId, reason, duration,
+- `POST /guilds/:id/moderation`: `{type, targetId, reason, duration,
 actorId}` → executa a ação e cria caso (mesmo caminho que o slash command).
-- `POST /guilds/:id/config/invalidate` — `{module}` → bot recarrega cache
+- `POST /guilds/:id/config/invalidate`: `{module}` → bot recarrega cache
   daquele módulo (o painel chama após salvar).
-- `POST /guilds/:id/messages` — enviar/editar mensagem de welcome-test,
+- `POST /guilds/:id/messages`: enviar/editar mensagem de welcome-test,
   reaction-role panel, ticket panel ou escrita à mão no painel (`dashboard`).
   Menções só saem no que o corpo marcar; `@everyone` exige `actorId` com a
   permissão no Discord. Balde próprio de 10/min por guild (§7.4).
-- `GET /guilds/:id/channels/:id/messages` — últimas 50 do canal, cada uma
+- `GET /guilds/:id/channels/:id/messages`: últimas 50 do canal, cada uma
   relida como template para o painel abrir no editor.
-- `DELETE /guilds/:id/channels/:id/messages/:id` — apagar pelo painel;
+- `DELETE /guilds/:id/channels/:id/messages/:id`: apagar pelo painel;
   devolve o que foi apagado, que é o que a auditoria guarda.
 - `POST /guilds/:id/reaction-roles/:id/publish`, `POST /tickets/panel/publish`.
-- `GET /guilds/:id/audit-log?type=&limit=` — proxy para audit log do Discord.
+- `GET /guilds/:id/audit-log?type=&limit=`: proxy para audit log do Discord.
 
 `/health` é o único endpoint sem auth, e responde apenas `{ok: true}` sem
 token (o corpo detalhado exige o Bearer), para servir de healthcheck.
@@ -293,8 +293,8 @@ cargo para vídeo e short, outro para live.
 
 Desde a v2 o módulo é **só YouTube e sem credencial nenhuma**: nada de API
 key, de cota, de projeto no Google Cloud. Os três sinais saem de páginas
-públicas do próprio YouTube. Twitch, Instagram e TikTok saíram do código —
-ver a nota de futuro no fim da seção.
+públicas do próprio YouTube. Twitch, Instagram e TikTok saíram do código
+(ver a nota de futuro no fim da seção).
 
 Tudo por **polling** no scheduler do bot, nunca por webhook de entrada: a API
 do bot está exposta na internet e §7.3 proíbe rota sem autenticação além do
@@ -345,13 +345,13 @@ trava de verdade.
    mãos, `"isLive":true` no HTML confirma a live. Canonical apontando para o
    próprio canal, ou `"isUpcoming":true`, significa "nenhuma live agora".
    Canonical **ausente**, ou qualquer outra forma sem `ID` no JSON, é erro (a
-   página mudou), não "sem live" — assim uma mudança no YouTube desliga a
+   página mudou), não "sem live": assim uma mudança no YouTube desliga a
    conta com alerta em vez de deixar o módulo mudo.
 
    A reserva no `ytInitialData` não é preciosismo: em 2026-09-11 o YouTube
    passou a servir a quem não roda JS um `watch` sem nenhuma tag `og:`, sem
    `videoDetails` no `ytInitialPlayerResponse` e com
-   `canonical="undefined"` — uma string, não uma tag ausente. A sonda lia
+   `canonical="undefined"`: uma string, não uma tag ausente. A sonda lia
    aquilo como "não tem live" e o módulo atravessava a transmissão inteira
    calado, sem erro e sem `failure_count` subindo. Título e autor do anúncio
    vêm, nesse formato, do `videoPrimaryInfoRenderer` e do
@@ -360,7 +360,7 @@ trava de verdade.
    youtube.com/shorts/ID` responde `200` para short e `303` para vídeo comum;
    se não for short, `GET watch?v=ID` separa `"isUpcoming":true` (em espera),
    `"isLive":true` (live) e o resto (vídeo). O resultado final fica em cache
-   em memória por ID — é imutável. Erro de rede na classificação vira
+   em memória por ID: é imutável. Erro de rede na classificação vira
    **vídeo**: errar o rótulo é melhor que não avisar.
 4. Filtra pelos tipos da conta e anuncia em ordem cronológica, com a linha
    gravada antes do envio.
@@ -375,13 +375,13 @@ Regras que caem daí:
 - A **primeira passada de uma conta nova não anuncia nada**: ela grava em
   `social_posts` o que já existia e passa a avisar do próximo post em diante.
   Sem isso, adicionar um canal antigo despejaria o feed inteiro no canal.
-- **Live agendada não é anunciada.** Fica em espera — não entra em
-  `social_posts`, não é cacheada — e é reavaliada a cada passada até virar
+- **Live agendada não é anunciada.** Fica em espera (não entra em
+  `social_posts`, não é cacheada) e é reavaliada a cada passada até virar
   live de verdade. Premiere se comporta igual e é anunciada como live.
 - **Live que terminou não vira "vídeo novo".** O VOD tem o mesmo `videoId`, e
   a unique em `social_posts` já bloqueia.
 - **`social_posts` não tem retenção.** Podar a linha faria o vídeo antigo que
-  ainda está no feed voltar a ser "novo" e ser anunciado outra vez — foi um
+  ainda está no feed voltar a ser "novo" e ser anunciado outra vez. Foi um
   bug real da v1, com retenção de 90 dias.
 
 **Cadastro.** O campo é um só e aceita a URL da barra de endereços, o
@@ -407,7 +407,7 @@ testado, com a mesma regra. Duas decisões que o desenho não fixava:
   **imagem do embed**, e só quando o template não define uma imagem própria.
   Um card com a capa é o que dá ao anúncio a cara que se espera.
 
-**Futuro — outras plataformas.** Twitch, Instagram e TikTok foram removidos do
+**Futuro: outras plataformas.** Twitch, Instagram e TikTok foram removidos do
 código na v2 (nenhum usuário, muita superfície). O enum `social_platform` do
 Postgres mantém os quatro valores (remover valor de enum exige recriar o
 tipo). Quando uma delas voltar, entra como um serviço ao lado do YouTube, sem
@@ -423,8 +423,8 @@ aprovação comercial), ou seja, melhor esforço e aviso explícito no painel.
 ### 5.9 Guild como código (CLI)
 
 Configurar um servidor pelo painel custa uma chamada por clique. Para trabalho
-em escala — montar um servidor do zero, replicar uma estrutura em outro, ou
-revisar em PR o que mudou na hierarquia — existe um caminho declarativo.
+em escala (montar um servidor do zero, replicar uma estrutura em outro, ou
+revisar em PR o que mudou na hierarquia) existe um caminho declarativo.
 
 Um arquivo `infra/discord/<slug>/guild.yaml` descreve **cargos, categorias,
 canais e permissões de canal**. O comando `pnpm guild plan` compara esse
@@ -440,7 +440,7 @@ Requisitos que o desenho tem de cumprir:
   fora do versionamento.
 - **Idempotência.** Rodar duas vezes seguidas não produz efeito na segunda.
   Só as permissões que o produto conhece (§`PERMISSION_BITS`) entram na
-  comparação — comparar o bitfield inteiro faria todo apply reescrever todo
+  comparação: comparar o bitfield inteiro faria todo apply reescrever todo
   cargo, já que o bot preserva os bits que não conhece.
 - **Nada é apagado por padrão.** Remoção exige `--allow-delete`, sai num bloco
   separado do plano e pede confirmação digitada que o `--yes` não pula: apagar
@@ -451,8 +451,8 @@ Requisitos que o desenho tem de cumprir:
 - **Respeitar o rate limit.** Pausa configurável entre chamadas (padrão 120 ms)
   e uma repescagem quando a API devolve 503 com `retryAfter`.
 
-`pnpm guild import` faz o caminho inverso — lê o servidor e escreve o
-`guild.yaml` que o descreve —, e verifica a si mesmo: depois de escrever, relê o
+`pnpm guild import` faz o caminho inverso (lê o servidor e escreve o
+`guild.yaml` que o descreve) e verifica a si mesmo: depois de escrever, relê o
 arquivo e monta o plano, que tem de sair vazio. Sem isso, adotar um servidor que
 já existe significaria transcrever tudo à mão, e qualquer esquecimento viraria
 diferença falsa na primeira execução.
@@ -469,13 +469,13 @@ todo servidor tem um estado:
 
 | Status     | Como chega                                       | O bot atende?    |
 | ---------- | ------------------------------------------------ | ---------------- |
-| `pending`  | convite por `invite.` — espera aprovação         | não, fica calado |
+| `pending`  | convite por `invite.`: espera aprovação          | não, fica calado |
 | `approved` | o dono do bot aprovou no painel dele (§9.3)      | sim, sem prazo   |
-| `demo`     | convite por `demo.` — aprovado na hora           | sim, por 1 hora  |
+| `demo`     | convite por `demo.`: aprovado na hora            | sim, por 1 hora  |
 | `blocked`  | o dono do bot bloqueou                           | não, e ele sai   |
 | `expired`  | passou 1 semana em `pending` sem decisão         | não, e ele sai   |
 
-Não atender é **estado válido**: o bot fica na guild e ignora tudo — nem
+Não atender é **estado válido**: o bot fica na guild e ignora tudo: nem
 interação, nem evento do gateway. Isso é requisito de privacidade, não detalhe
 de implementação: sem o filtro no caminho do evento, um servidor que nunca foi
 aprovado alimentaria o `message_cache` (com conteúdo de mensagem) e as
@@ -490,7 +490,7 @@ fluxos foi usado. Exigências:
 
 - O `state` do OAuth é **assinado** (HMAC-SHA256 com o `AUTH_SECRET`) e vale
   15 minutos. Sem assinatura, alguém troca `state=pending` por `state=demo`
-  — ou por um status que nem devia existir ali — e se aprova sozinho. O
+  (ou por um status que nem devia existir ali) e se aprova sozinho. O
   callback ainda confere se o fluxo do `state` bate com o hostname que o
   recebeu: divergir é `state` reaproveitado.
 - O `state` é assinado no **clique**, não ao renderizar a página: uma aba
@@ -505,7 +505,7 @@ fluxos foi usado. Exigências:
 
 **A corrida do `guildCreate`.** O Discord adiciona o bot no clique em
 "Autorizar", então o evento do gateway chega ao bot **antes** de o callback
-trocar o `code` — a linha do registro já nasceu `pending` quando o fluxo do
+trocar o `code`: a linha do registro já nasceu `pending` quando o fluxo do
 convite vai gravar. Um upsert que nunca sobrescreve, como era até a v1.4,
 fazia o link da demonstração entregar um servidor `pending`: demo nenhuma,
 nunca. Por isso o convite tem uma escrita própria (`claimInvitedGuild`), que
@@ -514,7 +514,7 @@ não toca em `approved`, `blocked` nem numa demo em curso. A mesma escrita é o
 que permite reabrir um convite recusado pelo prazo.
 
 **A demonstração** dura 1 hora, é fixa (não é negociável por servidor: seria um
-plano gratuito, que não é o que a demo é) e **não se renova** — quem já teve a
+plano gratuito, que não é o que a demo é) e **não se renova**: quem já teve a
 sua entra na fila de aprovação como qualquer um. O que impede a renovação é o
 `demo_ended_at`, não o status: a linha volta a ser `pending` quando o servidor
 é convidado de novo, mas prazo novo só sai para quem nunca gastou o seu.
@@ -535,7 +535,7 @@ afeta e a única que pode agir sobre ela:
 
 O aviso de 10 minutos é **só** essa DM: uma contagem regressiva no canal do
 servidor é barulho para todo mundo que não decide nada. A despedida da demo
-continua **também** no servidor, porque aí o fato é público — o bot está
+continua **também** no servidor, porque aí o fato é público: o bot está
 saindo, e quem o viu moderando merece saber por quê.
 
 A entrada não pode ser avisada pelo bot sozinho: quando o `guildCreate` chega,
@@ -545,7 +545,7 @@ painel, e é ele que pede o aviso certo ao bot (`POST /registry/:guildId/notice`
 **A recusa por inatividade.** Um convite parado em `pending` por
 `PENDING_EXPIRY_MS` (**1 semana**) é recusado sozinho: o bot avisa no servidor,
 avisa quem convidou, sai, e a linha vira `expired`. A razão é a mesma da
-expiração da demo — bot mudo parado num servidor é a pior versão possível —,
+expiração da demo (bot mudo parado num servidor é a pior versão possível),
 só que aqui ele é mudo desde o primeiro minuto, e quem convidou não tem como
 distinguir "ainda não aprovaram" de "instalei errado". O prazo transforma
 silêncio indefinido em resposta.
@@ -553,19 +553,19 @@ silêncio indefinido em resposta.
 `expired` **não** é `blocked`: a linha continua contando a história na fila do
 painel, mas o mesmo servidor pode ser convidado de novo a qualquer momento, e
 aí o relógio recomeça. Quem está na fila **não** adia a recusa clicando no
-próprio link de novo — o relógio só reinicia para quem estava fora dela.
+próprio link de novo: o relógio só reinicia para quem estava fora dela.
 
 E a regra que fecha o ciclo: **estar no servidor e estar na fila são a mesma
 coisa.** A reentrada do bot num servidor `expired` já o devolve a `pending`, no
 próprio `guildCreate`, sem depender de o callback do convite chegar ao fim.
 Sem isso um reconvite interrompido no meio deixaria o bot dentro de um servidor
-`expired` — mudo, atendido por ninguém e fora do alcance de todo job, que é
+`expired`: mudo, atendido por ninguém e fora do alcance de todo job, que é
 exatamente o estado que esta seção existe para acabar.
 
 **Teto a manter à vista: 100 servidores.** Acima disso, o Discord exige
 verificação da aplicação para as intents privilegiadas (`GuildMembers` e
 `MessageContent`), das quais automod e logs dependem (§7.3, §10). O modelo com
-aprovação é o que segura isso — e a demo que expira sozinha também.
+aprovação é o que segura isso, e a demo que expira sozinha também.
 
 ### 5.11 Squads fixos
 
@@ -919,12 +919,12 @@ tabelas) e DM aos membros, com uma exceção: as ações de admin pelo painel
 (pausar, retomar, editar respostas, apagar perfil e tirar do squad) avisam a
 pessoa por DM com o motivo.
 
-## 6. Requisitos funcionais — Painel
+## 6. Requisitos funcionais: Painel
 
 Acesso: login com Discord OAuth2 (Auth.js). Após login, o painel verifica, na
 **guild da URL**, se o usuário é membro dela **e** tem permissão
 `Administrator` **ou** `ManageGuild` **ou** um dos cargos listados em
-`dashboard_access_roles` — e se essa guild é atendida pelo registro (§5.10).
+`dashboard_access_roles`, e se essa guild é atendida pelo registro (§5.10).
 Caso contrário → "Acesso negado". Sessão JWT
 (cookie httpOnly), 7 dias, re-verificação de permissão a cada 15 min
 (cache) e em toda ação de escrita.
@@ -942,7 +942,7 @@ Caso contrário → "Acesso negado". Sessão JWT
   clica no botão de atualizar da topbar; não há poll de fundo. O botão invalida
   o cache da guild antes de revalidar, então clicar sempre traz dado fresco. Os
   blocos pesados ficam em cache de 5 minutos, o que torna navegar entre telas
-  barato — a exceção é a atividade recente, sempre ao vivo.
+  barato. A exceção é a atividade recente, sempre ao vivo.
 
 ### 6.2 Configuração por módulo
 
@@ -1041,7 +1041,7 @@ o que ficar vazio cai no perfil global do bot.
   navegação.
 - Imagens seguem a mesma regra do ícone do servidor (§6.3): PNG, JPEG, GIF ou
   WEBP, até 8 MB, enviadas como data URL e validadas pelo mesmo schema no
-  painel, na action e na rota do bot. Os três estados valem aqui também —
+  painel, na action e na rota do bot. Os três estados valem aqui também:
   ausente não mexe, `null` remove, data URL troca.
 - O apelido é o único campo com permissão atrás: sem `CHANGE_NICKNAME` no
   cargo do bot, a rota recusa antes de falar com o Discord e a tela explica o
@@ -1050,7 +1050,7 @@ o que ficar vazio cai no perfil global do bot.
   bot lê do próprio `GuildMember`, porque uma cópia só poderia divergir. A
   auditoria (§6.5) guarda o antes/depois como URL do CDN, nunca a imagem.
 - **A bio é a exceção, e é espelho.** O Discord aceita escrevê-la e não a
-  devolve em endpoint nenhum — não está no objeto de membro. Sem uma cópia o
+  devolve em endpoint nenhum: não está no objeto de membro. Sem uma cópia o
   painel não teria como mostrar a que está valendo, então ela mora em
   `guild_settings.bot_bio`, gravada **depois** de o Discord aceitar. Quem
   alterar a bio por fora do painel deixa os dois fora de sincronia, e o painel
@@ -1067,8 +1067,8 @@ o que ficar vazio cai no perfil global do bot.
 - Quem o bot atende é o **registro** (`guild_registry`, §5.10), não o
   ambiente: o `GUILD_IDS` sobrou como **semente** (no boot cria a linha
   `approved` de quem ainda não tem uma; quem já tem não é tocado) e deixou de
-  ser obrigatório. A fronteira vale nos **dois** caminhos de entrada — a
-  interação (`lib/interaction.ts`) e o evento do gateway (`lib/loader.ts`) —,
+  ser obrigatório. A fronteira vale nos **dois** caminhos de entrada, a
+  interação (`lib/interaction.ts`) e o evento do gateway (`lib/loader.ts`),
   e o filtro do evento fica no carregador, não em cada handler, para handler
   novo já nascer filtrado. Estar numa guild que o bot não atende é estado
   válido: ele fica calado nela.
@@ -1088,7 +1088,7 @@ o que ficar vazio cai no perfil global do bot.
   permissão: alguém pode ser dono de um servidor e nem estar no outro. Quem
   decide acesso é sempre a guild da URL (`/g/[guildId]/...`), nunca "a" guild
   da sessão; guild fora do registro é negada antes de consultar o bot. Toda
-  action de escrita recebe a guild no primeiro argumento — nenhuma resolve
+  action de escrita recebe a guild no primeiro argumento: nenhuma resolve
   sozinha "a" guild.
 - A lista que o painel oferece é o registro **∩** o que este usuário pode
   abrir. Com servidores de terceiros, mostrar o registro inteiro seria
@@ -1102,7 +1102,7 @@ o que ficar vazio cai no perfil global do bot.
 mais a lista completa de ninguém: a RAM cresce com o número de servidores, não
 com a soma dos membros deles. Em troca, quem lista membros pergunta ao Discord
 (lista, busca por prefixo ou `fetchMember`) e a contagem de membros por cargo é
-exata só até 5.000 membros — acima disso o campo não vai, e o painel escreve
+exata só até 5.000 membros: acima disso o campo não vai, e o painel escreve
 "—". O consumo real está no `rssBytes` do `/health`; o sinal de alarme é ele
 voltar a crescer em linha reta com o número de servidores.
 
@@ -1129,7 +1129,7 @@ dele.
 - **Painel (Vercel)**: `output` padrão (não `standalone`); server components
   com `fetch` paralelo; nada de trabalho pesado por request. Cold start
   importa: manter dependências do server enxutas.
-- **Postgres (Supabase free)**: 500 MB de armazenamento — as retenções do §8
+- **Postgres (Supabase free)**: 500 MB de armazenamento. As retenções do §8
   já cabem nisso com folga; `shared_buffers` é do provedor, não nosso.
   Painel conecta pelo **pooler** (pgBouncer) porque funções serverless abrem
   muitas conexões curtas; o bot conecta direto, com pool de no máximo 5.
@@ -1137,7 +1137,7 @@ dele.
 - Stats agregadas em memória e flush em lote (§5.6); nunca 1 INSERT por
   mensagem.
 - Cache de config no bot com TTL de segurança (5 min) além da invalidação
-  explícita — agora ainda mais importante, já que cada leitura do painel
+  explícita, agora ainda mais importante, já que cada leitura do painel
   cruza a internet.
 - Consultas do painel paginadas server-side; gráficos lêem de `stat_buckets`
   (nunca de tabelas de eventos brutos).
@@ -1155,7 +1155,7 @@ guilds.members.read`; `AUTH_SECRET` ≥ 32 bytes; cookies `Secure`,
 - **Autorização**: checagem de permissão em **todo** server action / route
   handler, não só no layout; helper `requireGuildAccess(session, guildId,
 level)`. A guild conferida é sempre a que vai ser lida ou escrita, e ela
-  chega explícita — da URL nas páginas, no primeiro argumento nas actions, em
+  chega explícita: da URL nas páginas, no primeiro argumento nas actions, em
   `?guildId=` nas rotas de apoio, que devolvem 404 sem o parâmetro em vez de
   adivinhar.
 - **Convite (`invite.` / `demo.`)**: o `state` do OAuth é assinado com HMAC do
@@ -1425,8 +1425,8 @@ verifica na API interna usando `actorId`).
 
 ### 9.3 O dono do bot
 
-Fora desta tabela, e de propósito. Quem opera o Goodbot como produto — aprovar
-servidores, expulsar, avisar todos, entrar em manutenção — é uma pessoa só, e
+Fora desta tabela, e de propósito. Quem opera o Goodbot como produto (aprovar
+servidores, expulsar, avisar todos, entrar em manutenção) é uma pessoa só, e
 ela é identificada por `OWNER_DISCORD_ID` no ambiente, **nunca** por cargo em
 servidor nenhum: se fosse por cargo, quem administra um servidor qualquer
 viraria administrador do bot inteiro.
@@ -1434,7 +1434,7 @@ viraria administrador do bot inteiro.
 O painel do dono vive num hostname próprio (`admin.<domínio>`) e usa a mesma
 sessão do Discord; o que muda é contra o que a identidade é comparada. A API do
 bot confere de novo o `actorId` de toda escrita em `/admin` contra a mesma
-variável — o Bearer prova de onde veio a chamada, não quem pediu (§7.3).
+variável: o Bearer prova de onde veio a chamada, não quem pediu (§7.3).
 
 Ausência da variável fecha os dois lados. Um `.env` incompleto não pode virar
 painel admin aberto.
@@ -1484,22 +1484,22 @@ provedor, documentada em `docs/runbook.md`.
 
 | Risco                                                             | Mitigação                                                                                                                                  | Status |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| Intents privilegiadas exigem verificação acima de 100 servidores  | **passou a valer com o bot público**: quem entra depende de aprovação, e a demo expira sozinha, então o número não cresce sem decisão (§5.10) | parcial — não há alerta automático ao chegar perto de 100; é item do checklist do runbook |
-| Free tier da Oracle reclama instâncias ociosas                    | bot mantém CPU > 0; monitorar; não é "idle" com gateway aberto                                                                             | feito — gateway aberto + `/metrics` |
+| Intents privilegiadas exigem verificação acima de 100 servidores  | **passou a valer com o bot público**: quem entra depende de aprovação, e a demo expira sozinha, então o número não cresce sem decisão (§5.10) | parcial: não há alerta automático ao chegar perto de 100; é item do checklist do runbook |
+| Free tier da Oracle reclama instâncias ociosas                    | bot mantém CPU > 0; monitorar; não é "idle" com gateway aberto                                                                             | feito: gateway aberto + `/metrics` |
 | **Capacidade Ampere A1 indisponível**                             | resolvido: v1.1 usa E2.1.Micro (x86), que não sofre com capacidade                                                                         | feito |
-| **API do bot exposta na internet**                                | subdomínio próprio, Bearer de 32 bytes com comparação timing-safe, rate limit 60/min por IP, body ≤ 256 KB, sem CORS, fail2ban no Caddy (§7.3) | feito (fail2ban **manual**) — `api/server.ts`, `infra/fail2ban/`; alerta a cada 50 respostas 401 numa hora |
-| **Latência web → bot / web → banco**                              | Vercel e Supabase na mesma região (`sa-east-1` / GRU quando possível); painel usa cache do bot; server components paralelizam fetches       | feito — medida no card **Saúde** (`/g/[guildId]/system`) e no `goodbot_api_duration_ms` |
-| **Limites do free tier da Vercel/Supabase**                       | painel de um servidor está muito abaixo dos limites; alerta de uso; migração para VM continua possível (o Compose antigo fica documentado)  | parcial — não existe alerta automático de cota; é item do checklist mensal do runbook (a Vercel e o Supabase não expõem isso no free tier) |
-| **Supabase pausa projeto por inatividade (7 dias)**               | o bot mantém conexão e escrita constante; alerta se `pg_dump` diário falhar                                                                | feito — ping a cada 60s (`watchDatabase`), alerta "Postgres inacessível"; `backup.sh` alerta ao falhar |
-| Regex do usuário (ReDoS)                                          | limite + timeout + validação no painel                                                                                                     | feito — `safe-regex2` no schema Zod (painel recusa ao salvar) **e** na compilação do bot; padrão ≤ 200 chars, entrada ≤ 2 000 chars |
-| Perda de mensagens de log por rate limit                          | fila com coalescing (§7.4)                                                                                                                 | feito — `LogQueue`; tamanho da fila exposto no `/metrics` e no card Saúde |
-| Token da API do bot vazar em log                                  | nunca logar headers; pino `redact`; rotação documentada no runbook                                                                         | feito — `logger.ts` (`redact`), rotação nos três cofres em `docs/runbook.md` |
-| Auth.js + Discord: `guilds.members.read` exige o usuário na guild | tratar 403 como "acesso negado"                                                                                                            | feito — `resolveGuildLevel` → `/denied` |
-| Drift entre schema Zod de config e jsonb salvo                    | campo `version` + migração de config na leitura                                                                                            | feito — `packages/shared/src/config` |
-| Disco cheio (logs, message_cache)                                 | retenções (§8), rotação Docker; o disco do banco agora é do Supabase (alerta de cota)                                                       | feito — `RetentionJob` com alerta na falha; `json-file` com 5×10 MB; `docker system prune` semanal no bootstrap |
-| **Backup do Supabase não é exportável no free tier**              | `pg_dump` próprio diário no serviço `backup` do Compose, 7 diários + 4 semanais no volume `backups`; `infra/scripts/restore.sh`             | feito — só os schemas `public` e `drizzle` (o resto é do Supabase e quebra o restore num Postgres comum); imagem na mesma major do Supabase (17); dump sem o rodapé do `pg_dump` é descartado e alerta; o `/health` ignora arquivo < 1 KB. Cópia externa (Object Storage + rclone) segue **opcional e não implementada** |
-| **Perder o rastro do que está rodando na VM**                     | `GIT_SHA` embutido na imagem pela CI, exibido no `/health`, no card Saúde e no alerta de boot                                              | feito — `infra/docker/bot.Dockerfile` |
-| **Rate limit do painel na Vercel**                                | 60/min por IP nas rotas de auth e nas server actions de escrita                                                                             | parcial — contagem **por instância**, porque o painel é stateless e a stack não tem store compartilhado (§12); serve para cortar script, não como cota |
+| **API do bot exposta na internet**                                | subdomínio próprio, Bearer de 32 bytes com comparação timing-safe, rate limit 60/min por IP, body ≤ 256 KB, sem CORS, fail2ban no Caddy (§7.3) | feito (fail2ban **manual**): `api/server.ts`, `infra/fail2ban/`; alerta a cada 50 respostas 401 numa hora |
+| **Latência web → bot / web → banco**                              | Vercel e Supabase na mesma região (`sa-east-1` / GRU quando possível); painel usa cache do bot; server components paralelizam fetches       | feito: medida no card **Saúde** (`/g/[guildId]/system`) e no `goodbot_api_duration_ms` |
+| **Limites do free tier da Vercel/Supabase**                       | painel de um servidor está muito abaixo dos limites; alerta de uso; migração para VM continua possível (o Compose antigo fica documentado)  | parcial: não existe alerta automático de cota; é item do checklist mensal do runbook (a Vercel e o Supabase não expõem isso no free tier) |
+| **Supabase pausa projeto por inatividade (7 dias)**               | o bot mantém conexão e escrita constante; alerta se `pg_dump` diário falhar                                                                | feito: ping a cada 60s (`watchDatabase`), alerta "Postgres inacessível"; `backup.sh` alerta ao falhar |
+| Regex do usuário (ReDoS)                                          | limite + timeout + validação no painel                                                                                                     | feito: `safe-regex2` no schema Zod (painel recusa ao salvar) **e** na compilação do bot; padrão ≤ 200 chars, entrada ≤ 2 000 chars |
+| Perda de mensagens de log por rate limit                          | fila com coalescing (§7.4)                                                                                                                 | feito: `LogQueue`; tamanho da fila exposto no `/metrics` e no card Saúde |
+| Token da API do bot vazar em log                                  | nunca logar headers; pino `redact`; rotação documentada no runbook                                                                         | feito: `logger.ts` (`redact`), rotação nos três cofres em `docs/runbook.md` |
+| Auth.js + Discord: `guilds.members.read` exige o usuário na guild | tratar 403 como "acesso negado"                                                                                                            | feito: `resolveGuildLevel` → `/denied` |
+| Drift entre schema Zod de config e jsonb salvo                    | campo `version` + migração de config na leitura                                                                                            | feito: `packages/shared/src/config` |
+| Disco cheio (logs, message_cache)                                 | retenções (§8), rotação Docker; o disco do banco agora é do Supabase (alerta de cota)                                                       | feito: `RetentionJob` com alerta na falha; `json-file` com 5×10 MB; `docker system prune` semanal no bootstrap |
+| **Backup do Supabase não é exportável no free tier**              | `pg_dump` próprio diário no serviço `backup` do Compose, 7 diários + 4 semanais no volume `backups`; `infra/scripts/restore.sh`             | feito: só os schemas `public` e `drizzle` (o resto é do Supabase e quebra o restore num Postgres comum); imagem na mesma major do Supabase (17); dump sem o rodapé do `pg_dump` é descartado e alerta; o `/health` ignora arquivo < 1 KB. Cópia externa (Object Storage + rclone) segue **opcional e não implementada** |
+| **Perder o rastro do que está rodando na VM**                     | `GIT_SHA` embutido na imagem pela CI, exibido no `/health`, no card Saúde e no alerta de boot                                              | feito: `infra/docker/bot.Dockerfile` |
+| **Rate limit do painel na Vercel**                                | 60/min por IP nas rotas de auth e nas server actions de escrita                                                                             | parcial: contagem **por instância**, porque o painel é stateless e a stack não tem store compartilhado (§12); serve para cortar script, não como cota |
 | **Teto de 500 canais por servidor** (v1.5)                        | um canal de texto por squad e voice emprestado de um pool, nunca um voice por squad (§5.11)                                                | parcial: o painel mostra o contador de canais, mas nada barra squad novo perto do teto; se criar o canal falhar, o squad é arquivado na hora |
 | **Pool de voices cheio** (v1.5)                                   | a reserva pega o voice preferido do squad ou o primeiro livre; sem nenhum, cria um voice temporário da jogatina e o apaga no fim            | feito: `temporaryVoices`, apagado só vazio; sem permissão, no teto de 500 canais ou com a opção desligada, a jogatina fica sem sala e o lembrete avisa. Voice órfão (reinício ou Discord sem resposta no meio da criação) é resolvido pela reconciliação do job |
 | **Horário do `/bora` mal entendido** (v1.6)                       | `parseWhen` puro no fuso da guild, erro que traz exemplos, autocomplete que ecoa o que o bot entendeu antes de enviar e mensagem da jogatina com a data completa | feito: `shared/squads/when.ts`, com testes de tabela |
@@ -1526,7 +1526,7 @@ provedor, documentada em `docs/runbook.md`.
 | Zod em `packages/shared`            | um schema por config e por payload da API do bot, importado por bot e web: validação idêntica dos dois lados                           |
 | Sem Redis                           | um processo de bot + config no Postgres com cache em memória cobre single-server; `ConfigBus` abstrai o pub/sub para depois            |
 | **Hospedagem dividida** (v1.1)      | a capacidade Ampere A1 do free tier é intermitente e bloqueou a criação da VM; o bot sozinho cabe na E2.1.Micro (1 GB), que sempre tem capacidade. Painel e banco saem para serviços gerenciados |
-| **Bot na Oracle E2.1.Micro (x86)**  | Always Free e sempre disponível; o bot é ≤ 300 MB RSS e precisa de processo longo com gateway aberto — exatamente o que serverless não faz |
+| **Bot na Oracle E2.1.Micro (x86)**  | Always Free e sempre disponível; o bot é ≤ 300 MB RSS e precisa de processo longo com gateway aberto, exatamente o que serverless não faz |
 | **Imagens `linux/amd64`**           | consequência do E2.1.Micro; some o build QEMU/ARM na CI, que era o passo mais lento do deploy                                          |
 | **Painel na Vercel**                | Next.js roda nativamente, deploy por git, previews por PR, HTTPS e CDN sem configurar nada; plano Hobby é gratuito para uso não-comercial |
 | **Postgres no Supabase**            | free tier sempre ligado (Neon suspende por inatividade e o pool do bot brigaria com isso); backups gerenciados; pooler pgBouncer necessário para as funções serverless da Vercel |
@@ -1541,7 +1541,7 @@ provedor, documentada em `docs/runbook.md`.
 | **Quem o bot atende é tabela, não variável** (v1.3) | aprovar um servidor não pode exigir deploy nem SSH; e a fila continua funcionando com o bot fora do ar, que é justamente o dia em que se precisa dela. O `GUILD_IDS` sobrou como semente do registro no boot |
 | **Demo com prazo fixo de 1 h, sem renovação** (v1.3) | prazo por servidor viraria um plano gratuito negociável; renovar viraria acesso permanente por reconvite. O prazo curto também é o que segura o teto de 100 servidores das intents privilegiadas |
 | **`state` do convite assinado** (v1.3) | é o `state` que carrega o fluxo (`pending` ou `demo`), então sem HMAC quem cola o link escolhe o próprio status. Assinado no clique, com validade de 15 min |
-| **Convite tem escrita própria, não upsert** (v1.4) | o `guildCreate` cria a linha antes de o callback do OAuth rodar; um upsert que nunca sobrescreve fazia o link da demo entregar um servidor `pending`. Quem assume a linha é o fluxo do convite — só quando ela é `pending`, `expired` ou demo gasta |
+| **Convite tem escrita própria, não upsert** (v1.4) | o `guildCreate` cria a linha antes de o callback do OAuth rodar; um upsert que nunca sobrescreve fazia o link da demo entregar um servidor `pending`. Quem assume a linha é o fluxo do convite, só quando ela é `pending`, `expired` ou demo gasta |
 | **Aviso de 10 min da demo só por DM** (v1.4) | quem decide pedir a aprovação é quem convidou; contagem regressiva no canal é barulho para quem não decide nada. A despedida continua pública, porque a saída é um fato do servidor |
 | **Fila expira em 1 semana, como `expired`** (v1.4) | fila sem prazo é depósito, e um bot mudo parado num servidor não distingue "não aprovaram" de "instalei errado". `expired` em vez de `blocked` porque é ausência de decisão, não decisão: convidar de novo funciona |
 | **Avisos de convite pedidos pelo painel** (v1.4) | o bot não sabe por qual link a pessoa veio quando o `guildCreate` chega. Quem sabe é o painel; o bot só escolhe o texto, de uma lista fechada, e o destinatário sai do `invited_by` da linha |

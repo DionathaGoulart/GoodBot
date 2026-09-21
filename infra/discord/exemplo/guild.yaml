@@ -21,7 +21,7 @@ name: Servidor de exemplo
 # ---------------------------------------------------------------------------
 # Cargos, do mais alto para o mais baixo.
 #
-# `@everyone` não entra nesta lista — ele não é criado nem editado aqui, só
+# `@everyone` não entra nesta lista: ele não é criado nem editado aqui, só
 # usado como alvo em `overrides`. Cargos de bot (managed) também são ignorados.
 #
 # Os nomes de permissão são os do Discord. A lista válida está em
@@ -76,7 +76,7 @@ channels:
 # Discord. Um override no canal sobrescreve o da categoria.
 #
 # Cada override aceita `view` e `send`, com allow / deny / inherit. São as duas
-# permissões que a API do bot expõe por override (PRD §6.3) — prometer mais
+# permissões que a API do bot expõe por override (PRD §6.3): prometer mais
 # aqui seria mentir sobre o que o apply consegue escrever.
 # ---------------------------------------------------------------------------
 categories:

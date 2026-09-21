@@ -1,20 +1,20 @@
-# Goodbot — instruções para o Claude Code
+# Goodbot: instruções para o Claude Code
 
 Bot de moderação para Discord (discord.js v14) + painel web (Next.js) num
 monorepo pnpm. Tudo em TypeScript. Idioma do projeto: **pt-BR** (docs,
 commits, UI, mensagens do bot); nomes de código em inglês.
 
-**Hospedagem (PRD v1.1):** dividida em três — o **bot** roda numa VM
+**Hospedagem (PRD v1.1):** dividida em três: o **bot** roda numa VM
 `VM.Standard.E2.1.Micro` da Oracle (x86_64, 1 OCPU / 1 GB, Always Free) via
 Docker Compose com Caddy na frente; o **painel** roda na Vercel; o
 **Postgres** é gerenciado no Supabase. Imagens Docker são `linux/amd64`.
 
 ## Antes de agir (obrigatório em toda sessão)
 
-1. Leia `.harness/architecture.md` — o mapa do código: o que cada camada faz,
+1. Leia `.harness/architecture.md`, o mapa do código: o que cada camada faz,
    onde cada coisa mora e por quê. É o caminho mais curto para se situar sem
    ler o repositório inteiro.
-2. Leia `.harness/prd.md` — requisitos, modelo de dados, permissões, decisões.
+2. Leia `.harness/prd.md`: requisitos, modelo de dados, permissões, decisões.
 3. Leia `.harness/styleguide.md` se a tarefa tocar em `apps/web` ou em embeds.
 4. Leia apenas os arquivos que a tarefa exige. O `architecture.md` diz onde
    procurar; não varra o repositório por hábito.
@@ -22,7 +22,7 @@ Docker Compose com Caddy na frente; o **painel** roda na Vercel; o
 A stack está **definida** no PRD §12. Não proponha alternativas (nem Redis,
 nem Prisma, nem outro framework web). Quando uma tarefa depender de uma ação
 que só o usuário pode fazer (criar recurso num provedor, preencher segredo,
-aprovar app numa plataforma), pare e peça — não invente contorno.
+aprovar app numa plataforma), pare e peça. Não invente contorno.
 
 ## Layout do repositório
 
@@ -61,7 +61,7 @@ docs/                   guias: primeiros passos, módulos, API, banco, runbook
   `pnpm typecheck` devem passar antes de dar uma etapa por concluída.
 - **Testes:** Vitest. Unitários para regras de automod, parsers de duração,
   templates, schemas Zod e helpers de permissão. `pnpm test`.
-- **Commits:** Conventional Commits **inteiramente em inglês** — assunto e
+- **Commits:** Conventional Commits **inteiramente em inglês**, assunto e
   corpo. Assunto no imperativo, minúsculo, sem ponto final, até 72 caracteres:
   `feat(bot): add tempban to /ban`, `fix(web): keep the theme across reloads`.
   O corpo (quebrado em 72 colunas) explica o **porquê** e o que a mudança
@@ -76,7 +76,7 @@ docs/                   guias: primeiros passos, módulos, API, banco, runbook
   sombra dura, JetBrains Mono, temas `crimson`/`rose`, hex só em
   `globals.css`. Componentes shadcn são editados em `apps/web/components/ui`.
 - **Guild como código:** estrutura de servidor (cargos, canais, permissões)
-  vive em `infra/discord/<slug>/guild.yaml`, **sem nenhum ID** — tudo por nome.
+  vive em `infra/discord/<slug>/guild.yaml`, **sem nenhum ID**: tudo por nome.
   Segredo do servidor fica no `.env` ao lado, gitignored. Rode `pnpm guild plan`
   antes de `apply`; nada é apagado sem `--allow-delete`.
   Para entender um servidor antes de mexer: `pnpm guild scan "<nome>"` escreve

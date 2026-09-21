@@ -1,4 +1,4 @@
-# Runbook — Goodbot
+# Runbook: Goodbot
 
 O que fazer quando algo dá errado, e o que conferir todo mês. Escrito para
 quem tem SSH na VM, acesso ao projeto na Vercel e ao do Supabase.
@@ -51,7 +51,7 @@ ssh goodbot 'cd /opt/goodbot && docker compose restart bot'
 # Tudo.
 ssh goodbot 'cd /opt/goodbot && docker compose down && docker compose up -d'
 
-# Voltar para uma imagem anterior (rollback) — a tag sai do GHCR.
+# Voltar para uma imagem anterior (rollback): a tag sai do GHCR.
 ssh goodbot 'cd /opt/goodbot && TAG=sha-1a2b3c4 docker compose up -d bot'
 ```
 
@@ -120,7 +120,7 @@ NOVO=$(openssl rand -hex 32)
    manter os três iguais evita surpresa).
 
 O `OWNER_DISCORD_ID` mora nos mesmos três lugares, mas não é segredo e não se
-rotaciona: é um ID público do Discord. O que ele exige é estar nos três — o
+rotaciona: é um ID público do Discord. O que ele exige é estar nos três: o
 painel confere antes de renderizar `/admin`, e o bot confere de novo o
 `actorId` de toda escrita ali. Faltando em um lado, aquele lado fecha, e o
 sintoma é "a tela abre e o botão responde 403". No GitHub ele é *variable*, não
@@ -183,7 +183,7 @@ bot como offline, e aí ninguém saberia se caiu ou se é manutenção.
 O estado fica na tabela `meta` (chave `maintenance`), não numa variável do
 processo: um deploy no meio da janela desligaria a manutenção sem ninguém
 pedir. O espelho em memória do bot relê a cada minuto, então mexer na chave na
-mão também funciona — e leva até um minuto para valer:
+mão também funciona, e leva até um minuto para valer:
 
 ```sql
 -- Emergência, com o painel fora. Desliga a manutenção.
@@ -199,9 +199,9 @@ update meta set value = '{"enabled":false,"message":null,"since":null,"by":null}
 `pending`; quem usou a demonstração até o fim aparece como demo gasta. Os dois
 esperam a mesma decisão.
 
-- **APROVAR** — escreve `approved` no registro e apaga o prazo. O bot passa a
+- **APROVAR**: escreve `approved` no registro e apaga o prazo. O bot passa a
   atender em até um minuto, sem redeploy e sem reinício.
-- **RECUSAR** — escreve `blocked` e pede ao bot para sair. Se o bot estiver
+- **RECUSAR**: escreve `blocked` e pede ao bot para sair. Se o bot estiver
   fora, o bloqueio vale do mesmo jeito: ele abandona servidores bloqueados
   sozinho no próximo boot.
 
@@ -218,7 +218,7 @@ ensaio devolve em que canal a mensagem cairia em cada servidor sem enviar nada,
 e é o único jeito de descobrir de antemão que num deles o bot não tem canal
 onde falar.
 
-O envio pede a palavra `ENVIAR` digitada, e ela é conferida pela API do bot —
+O envio pede a palavra `ENVIAR` digitada, e ela é conferida pela API do bot,
 não só pela tela. **Não há como desfazer:** o bot não apaga o que publicou, e a
 mensagem vai para gente que não é você.
 
@@ -226,7 +226,7 @@ mensagem vai para gente que não é você.
 
 ## Um comando sumiu do cliente do Discord
 
-No boot os slash commands só vão ao Discord quando o hash do manifesto muda —
+No boot os slash commands só vão ao Discord quando o hash do manifesto muda,
 o que está certo quase sempre, e é inútil justamente quando o hash está certo e
 o Discord não.
 
@@ -238,10 +238,10 @@ equivalente pela VM é subir o bot com `--force`.
 
 ## O gateway caiu
 
-O alerta "Gateway desconectado" só dispara depois de 60 s fora — abaixo disso é
+O alerta "Gateway desconectado" só dispara depois de 60 s fora: abaixo disso é
 reconexão normal do discord.js e não exige ação.
 
-1. `docker compose logs --tail 100 bot` — procure `shardDisconnect` e o código
+1. `docker compose logs --tail 100 bot`: procure `shardDisconnect` e o código
    de fechamento.
 2. Código `4004` = token inválido → rotacione o token do bot (acima).
 3. Código `4014` = intent privilegiada desligada → Developer Portal → _Bot_ →
@@ -256,14 +256,14 @@ reconexão normal do discord.js e não exige ação.
 
 O free tier pausa projetos ociosos por 7 dias. O bot escreve o tempo todo
 (stats, message cache), então isto só deveria acontecer se ele já estivesse
-fora — mas o sintoma é claro: alerta "Postgres inacessível" e `database.ok:
+fora, mas o sintoma é claro: alerta "Postgres inacessível" e `database.ok:
 false` no `/health`.
 
 1. Painel do Supabase → _Restore project_. Leva alguns minutos.
 2. Enquanto isso o bot continua de pé: comandos que tocam o banco falham com
    embed de erro, o gateway não cai.
 3. Volte: o alerta "Postgres respondendo de novo" chega sozinho.
-4. Confira que o backup voltou a rodar (`docker compose logs backup`) — se o
+4. Confira que o backup voltou a rodar (`docker compose logs backup`). Se o
    dump falhou durante a pausa, rode um na mão.
 
 ---
@@ -277,7 +277,7 @@ ssh goodbot 'sudo fail2ban-client status goodbot-api'      # IPs banidos
 ssh goodbot 'sudo fail2ban-client set goodbot-api unbanip 1.2.3.4'  # desbanir
 ```
 
-Se os IPs variam muito (botnet), rotacione o `INTERNAL_API_TOKEN` — ele é a
+Se os IPs variam muito (botnet), rotacione o `INTERNAL_API_TOKEN`: ele é a
 única barreira. O fail2ban limita a velocidade, não a determinação.
 
 ---
@@ -390,17 +390,17 @@ de servidores médios.
 
 ## Checklist mensal
 
-- [ ] **Painel do dono:** `admin.<dominio>` — a tela de **Saúde** junta RAM
+- [ ] **Painel do dono:** `admin.<dominio>`. A tela de **Saúde** junta RAM
       contra o orçamento de 300 MB, o tamanho do banco contra a cota, o cache
       de mensagens, guilds em cache vs registro, uso por servidor e os erros
       recentes do processo. Comece por ela; os itens abaixo são o que ela não
       vê.
 - [ ] **Fila:** `admin.<dominio>/fila` vazia. Servidor esperando aprovação é
       alguém com o bot mudo e sem entender por quê.
-- [ ] **Espaço em disco:** `ssh goodbot 'df -h /'` — abaixo de 80%.
-- [ ] **Memória:** `ssh goodbot 'cd /opt/goodbot && docker stats --no-stream'` —
+- [ ] **Espaço em disco:** `ssh goodbot 'df -h /'`, abaixo de 80%.
+- [ ] **Memória:** `ssh goodbot 'cd /opt/goodbot && docker stats --no-stream'`,
       bot < 300 MB, total < 500 MB (a máquina tem 1 GB).
-- [ ] **Backups:** `docker compose exec backup ls -lah /backups` — o dump de
+- [ ] **Backups:** `docker compose exec backup ls -lah /backups`. O dump de
       hoje existe e tem dezenas de KB. Arquivo de 20 bytes é gzip vazio: o
       `pg_dump` falhou. O card **BACKUP.SYS** em `/g/<guildId>/system` diz "em
       dia" e ignora arquivo abaixo de 1 KB.
@@ -411,11 +411,11 @@ de servidores médios.
       400 MB o tile marca APERTADO e o bot alerta. Veja a seção abaixo.
 - [ ] **Uso da Vercel:** painel → _Usage_. Um servidor só fica muito abaixo do
       limite; um salto quer dizer que alguém achou o painel.
-- [ ] **fail2ban:** `sudo fail2ban-client status goodbot-api` — banimentos de
+- [ ] **fail2ban:** `sudo fail2ban-client status goodbot-api`. Banimentos de
       sobra querem dizer sondagem constante.
 - [ ] **Dependências:** os PRs do Dependabot da semana, e `pnpm audit
 --audit-level high` limpo.
-- [ ] **Certificado:** `curl -sI https://bot.<dominio>/health | head -1` — o
+- [ ] **Certificado:** `curl -sI https://bot.<dominio>/health | head -1`. O
       Caddy renova sozinho, mas vale conferir.
 
 ---

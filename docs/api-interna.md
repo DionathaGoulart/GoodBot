@@ -1,7 +1,7 @@
 # A API interna do bot
 
 O bot expõe uma API HTTP (Hono). É por ela que o painel e o CLI de guild fazem
-tudo — o painel **não** fala com o Discord diretamente. Este guia é para quem
+tudo: o painel **não** fala com o Discord diretamente. Este guia é para quem
 quer falar com ela direto, ou adicionar uma rota nova.
 
 Base: `http://localhost:3001` em dev, `https://bot.<dominio>` em produção.
@@ -17,7 +17,7 @@ curl -s -H "Authorization: Bearer $INTERNAL_API_TOKEN" \
 ```
 
 A comparação do token é em tempo constante (SHA-256 + `timingSafeEqual`), e a
-resposta a token ausente e token errado é **a mesma** — nada diz a um scanner o
+resposta a token ausente e token errado é **a mesma**: nada diz a um scanner o
 que ele acertou.
 
 Passar de 50 respostas 401 numa hora dispara alerta operacional: isso já é
@@ -26,7 +26,7 @@ sondagem, não dedo gordo.
 ## 2. `actorId`: quem pediu
 
 O Bearer prova que a chamada veio de um cliente autorizado. Ele **não** diz
-quem clicou. Por isso toda escrita carrega `actorId` no corpo — o ID Discord da
+quem clicou. Por isso toda escrita carrega `actorId` no corpo: o ID Discord da
 pessoa responsável.
 
 ```bash
@@ -46,10 +46,10 @@ curl -X POST http://localhost:3001/guilds/$GUILD_ID/roles \
 
 Com esse ID o bot resolve três coisas:
 
-1. **Nível** — `requireActor(deps, guild, id, 'admin')`. Sem o nível, 403.
-2. **Hierarquia** — `assertRoleManageable`. Ninguém edita cargo acima do seu,
+1. **Nível**: `requireActor(deps, guild, id, 'admin')`. Sem o nível, 403.
+2. **Hierarquia**: `assertRoleManageable`. Ninguém edita cargo acima do seu,
    nem acima do cargo do bot.
-3. **Concessão** — `assertMayGrant`. Ninguém concede permissão que ele próprio
+3. **Concessão**: `assertMayGrant`. Ninguém concede permissão que ele próprio
    não tem. O dono da guild é a única exceção, porque já tem tudo.
 
 O `reason` vai para o registro de auditoria do Discord.
@@ -119,11 +119,11 @@ Os schemas de request e response de cada uma estão em
 
 Todo o resto da API vive sob `/guilds/:guildId` e é autorizado pelo **nível do
 `actorId` naquele servidor**. Estas duas não podem ser: elas existem justamente
-para tratar as guilds que o bot **não** atende — a fila de aprovação e os
-avisos de recusa —, e um middleware que exigisse guild atendida esconderia
+para tratar as guilds que o bot **não** atende (a fila de aprovação e os
+avisos de recusa), e um middleware que exigisse guild atendida esconderia
 exatamente o que elas precisam ver.
 
-O que muda é só contra o que o `actorId` é conferido — `OWNER_DISCORD_ID`, a
+O que muda é só contra o que o `actorId` é conferido: `OWNER_DISCORD_ID`, a
 variável, em vez da hierarquia de cargos de uma guild:
 
 ```bash
@@ -143,7 +143,7 @@ painel admin aberto para qualquer `actorId` que chegasse com o Bearer certo.
 `POST /registry/:guildId/notice` é o que faz o bot mandar a DM de ciclo de vida
 do convite (entrou em demo, demo acabando, entrou na fila, aprovado, recusado).
 Ela não carrega `actorId` porque **não existe ator**: quem convidou já foi
-provado pela troca do `code` no OAuth, e nada na chamada escolhe quem recebe —
+provado pela troca do `code` no OAuth, e nada na chamada escolhe quem recebe:
 o destinatário é o `invited_by` da linha do registro. O corpo só escolhe qual
 texto de uma lista fechada sai, e o texto mora no bot
 (`apps/bot/src/lib/inviter-dm.ts`).
@@ -159,15 +159,15 @@ Ela existe como rota porque o bot **não sabe por qual link a pessoa veio**: o
 Discord adiciona o bot no clique em "Autorizar", então o `guildCreate` chega
 antes de o painel trocar o `code`. Quem sabe o fluxo é o painel.
 
-A resposta diz se a DM chegou (`delivered`) — `false` é resultado normal, DM
-fechada é comum — e para quem ela foi (`userId`, nulo nas linhas semeadas pelo
+A resposta diz se a DM chegou (`delivered`: `false` é resultado normal, DM
+fechada é comum) e para quem ela foi (`userId`, nulo nas linhas semeadas pelo
 `GUILD_IDS`).
 
 ### 4.3 Broadcast
 
 O `POST /admin/broadcast` pede ainda um `confirm: "ENVIAR"` no corpo. A palavra
 é digitada na tela, mas a conferência é aqui: uma trava que só existe no
-navegador protege contra o clique errado, não contra a chamada solta — e é o
+navegador protege contra o clique errado, não contra a chamada solta. E é o
 único endpoint do projeto que escreve em servidores de terceiros. Antes de
 enviar, `dryRun: true` devolve em que canal a mensagem cairia em cada servidor,
 sem mandar nada.
@@ -214,7 +214,7 @@ de abusar, e ninguém escreve dez mensagens à mão por minuto.
 Estourar devolve 503 com `retryAfter` em segundos.
 
 O teto alto para quem tem o token é deliberado: quem tem o token já pode fazer
-tudo que a API oferece, e racioná-lo não protege de nada — a defesa contra
+tudo que a API oferece, e racioná-lo não protege de nada: a defesa contra
 vazamento é rotacionar, não racionar. O balde apertado existe contra scanner
 anônimo.
 
@@ -222,7 +222,7 @@ anônimo.
 
 256 KB por padrão. As rotas que carregam imagem (ícone e banner da guild, foto
 e capa do bot na guild, capa de evento, emoji, sticker) aceitam 12 MB, porque
-uma imagem de 8 MB — o limite do Discord — vira ~11 MB depois da base64.
+uma imagem de 8 MB, o limite do Discord, vira ~11 MB depois da base64.
 
 ## 7. Adicionar uma rota
 

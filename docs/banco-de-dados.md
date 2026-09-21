@@ -1,6 +1,6 @@
 # Banco de dados
 
-Postgres com Drizzle (16 em dev e na CI, 17 no Supabase de produção). Tudo que toca o banco vive em `packages/db` — nenhum
+Postgres com Drizzle (16 em dev e na CI, 17 no Supabase de produção). Tudo que toca o banco vive em `packages/db`: nenhum
 outro pacote escreve SQL.
 
 ## 1. Layout
@@ -38,7 +38,7 @@ comandos, eventos e rotas chamam uma função de repository, nunca montam query.
 Duas convenções que valem em todas:
 
 - **`guildId` é `string`** e entra em **todo** filtro. Snowflake nunca vira
-  `Number` — a precisão se perde em silêncio.
+  `Number`: a precisão se perde em silêncio.
 - **Config de módulo é `jsonb`** em `module_configs`, validado pelo schema Zod
   correspondente em `packages/shared/src/config/`. O banco guarda; o Zod é quem
   garante a forma.
@@ -94,13 +94,13 @@ por `(guildId, createdAt)`, `stat_buckets` por `(guildId, bucket)`,
 `scheduled_actions` por `runAt`.
 
 Se você adicionar uma consulta nova que varre tabela grande, o índice faz parte
-da mesma migration — não de um "depois".
+da mesma migration, não de um "depois".
 
 ## 5. Retenção
 
 O job `retention` (`apps/bot/src/jobs/retention.ts`) apaga o que passou do
 prazo configurado por módulo: `message_cache`, `automod_hits` e
-`stat_buckets` antigos. Sem ele o banco cresce sem teto — a VM Always Free não
+`stat_buckets` antigos. Sem ele o banco cresce sem teto. A VM Always Free não
 tem folga para isso.
 
 ## 6. Ambientes
@@ -132,7 +132,7 @@ O serviço `backup` do Compose roda `pg_dump` diário na hora definida por
 para reportar a data do último no `/health`.
 
 Restaurar: `infra/scripts/restore.sh`. Testar a restauração faz parte do
-runbook — backup que nunca foi restaurado não é backup.
+runbook: backup que nunca foi restaurado não é backup.
 
 ## 8. Testes
 

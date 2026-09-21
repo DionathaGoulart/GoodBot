@@ -11,7 +11,7 @@ só o que falta.
 
 ## 1. Começando
 
-Se o servidor **já existe** — o caso comum —, não escreva nada à mão:
+Se o servidor **já existe** (o caso comum), não escreva nada à mão:
 
 ```bash
 pnpm guild scan                 # lista os servidores em que o bot está
@@ -34,7 +34,7 @@ hora do `apply` o autor sai do dono do servidor, que o bot já informa.
 O `servidor.md` não é um despejo do yaml em outro formato. Ele existe para a
 metade do trabalho que o yaml não cobre: decidir o que mudar exige entender o
 que há, e oitocentas linhas de YAML descrevem sem explicar. A seção
-**Observações** é o ponto — ela aponta categoria vazia, canal solto, cargo
+**Observações** é o ponto: ela aponta categoria vazia, canal solto, cargo
 duplicado que o yaml não distinguiria, `@everyone` com permissão perigosa e o
 que está fora do alcance do formato.
 
@@ -80,7 +80,7 @@ yaml de um servidor que você já versiona. Lê o servidor pela API e escreve o
 `guild.yaml` que o descreve: cargos na ordem da hierarquia, categorias e canais
 na ordem em que aparecem, e as permissões de canal.
 
-Ele se recusa a sobrescrever um `guild.yaml` que já exista — para isso, use
+Ele se recusa a sobrescrever um `guild.yaml` que já exista. Para isso, use
 `--force`.
 
 **A verificação vem junto.** Depois de escrever, o import relê o arquivo e monta
@@ -92,7 +92,7 @@ Escrito: infra/discord/meu-servidor/guild.yaml
 Conferido: o plano contra este arquivo sai vazio.
 ```
 
-Se sobrar qualquer diferença, ele mostra qual e **sai com erro** — é sinal de
+Se sobrar qualquer diferença, ele mostra qual e **sai com erro**: é sinal de
 que o import deixou algo passar, e você não deve confiar no arquivo antes de
 entender o que foi.
 
@@ -100,7 +100,7 @@ entender o que foi.
 
 Ele avisa em cada caso, mas vale saber de antemão:
 
-- **Canais de tipo que o spec não representa** — fórum, palco, tópico. Ficam de
+- **Canais de tipo que o spec não representa**: fórum, palco, tópico. Ficam de
   fora do arquivo e o apply simplesmente não mexe neles.
 - **Emojis, stickers, eventos e webhooks.** Idem.
 - **Cargos de bot** (`managed`) não entram em `roles:`, porque o Discord não
@@ -184,7 +184,7 @@ Plano para "Meu servidor"
 
 Um detalhe importante: só as permissões que o produto conhece entram na
 comparação. O Discord adiciona permissões novas com o tempo, e o bot preserva
-os bits que não conhece ao salvar um cargo — se o diff olhasse o bitfield
+os bits que não conhece ao salvar um cargo: se o diff olhasse o bitfield
 inteiro, todo `apply` reescreveria todo cargo para sempre.
 
 ## 5. Remoção
@@ -232,7 +232,7 @@ Vale saber antes de tentar:
 - **Canal não tem posição.** A ordem é a de criação. Reordenar canal de um
   servidor existente é manual.
 - **Renomear é lido como troca.** O casamento é por nome, então mudar `geral`
-  para `chat` no arquivo aparece como "criar `chat`" — e, só com
+  para `chat` no arquivo aparece como "criar `chat`" e, só com
   `--allow-delete`, "apagar `geral`". Renomeie pelo painel e depois ajuste o
   arquivo.
 - **Não gerencia**: emojis, stickers, eventos, webhooks, fóruns, palcos e
@@ -243,7 +243,7 @@ Vale saber antes de tentar:
 Vale entender, porque não é o comportamento óbvio.
 
 O apply enxerga **apenas os cargos que o arquivo cita** em `overrides`. Um
-override que existe no canal mas não aparece no yaml é deixado em paz — não é
+override que existe no canal mas não aparece no yaml é deixado em paz: não é
 removido. É o que a API permite: ela edita um cargo por vez e não apaga quem
 ficou de fora.
 
@@ -268,16 +268,16 @@ Uma pasta por servidor:
 
 ```
 infra/discord/
-  goodivers/
+  servidor-a/
     guild.yaml
     .env        (gitignored)
-  darkning/
+  servidor-b/
     guild.yaml
     .env        (gitignored)
 ```
 
 ```bash
-pnpm guild apply --server goodivers
+pnpm guild apply --server servidor-a
 ```
 
 ## 9. Segurança
@@ -287,7 +287,7 @@ O que **nunca** pode ir para o repositório:
 - `INTERNAL_API_TOKEN` e `DISCORD_TOKEN`
 - códigos de convite permanentes (quem tem o código entra no servidor)
 - URLs de webhook (quem tem a URL publica como se fosse o bot)
-- lista de banidos com motivo e IDs de membros — dado pessoal de terceiros
+- lista de banidos com motivo e IDs de membros (dado pessoal de terceiros)
 
 `GUILD_ID` e `ACTOR_ID` não são segredos no sentido estrito (qualquer membro vê
 o ID do servidor), mas identificam **qual** servidor é o seu. Por isso ficam no
@@ -322,7 +322,7 @@ resumo no fim.
 ```
 
 Como o `plan` é sempre recalculado contra o estado real, corrigir o problema e
-rodar de novo aplica exatamente o que faltou — nada é feito duas vezes.
+rodar de novo aplica exatamente o que faltou: nada é feito duas vezes.
 
 | Erro                 | Causa                                                       |
 | -------------------- | ----------------------------------------------------------- |
@@ -362,6 +362,6 @@ de alguém clicando no servidor: o Discord sempre mostra o **bot** como autor,
 porque é o token dele que executa.
 
 A API do bot também exige um `actorId` em cada escrita, mas ele nunca chega ao
-Discord — é a checagem interna que impede o admin de um servidor de mexer em
+Discord: é a checagem interna que impede o admin de um servidor de mexer em
 outro pelo painel (PRD §9.2). No CLI ele sai do dono da guild automaticamente;
 para assinar com outra pessoa, preencha `ACTOR_ID` no `.env` do servidor.

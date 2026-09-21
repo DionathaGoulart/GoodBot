@@ -5,7 +5,7 @@ description: Varre um servidor do Discord que o Goodbot atende e escreve a anál
 
 # Reformar um servidor
 
-Duas fases: **entender** e **mudar**. Nunca pule a primeira — sem o retrato
+Duas fases: **entender** e **mudar**. Nunca pule a primeira: sem o retrato
 você está adivinhando os nomes dos canais e cargos que já existem, e o
 `guild.yaml` casa tudo por nome.
 
@@ -21,7 +21,7 @@ nada para configurar. O `scan` grava três arquivos:
 
 | Arquivo | Para quê |
 | --- | --- |
-| `servidor.md` | a análise — leia **este** para se situar |
+| `servidor.md` | a análise: leia **este** para se situar |
 | `guild.yaml` | a mesma estrutura em forma executável; é o que o `plan` compara |
 | `.env` | só o `GUILD_ID` |
 
@@ -30,7 +30,7 @@ seção **Observações**: ela aponta duplicação, categoria vazia, `@everyone`
 permissão perigosa e o que está fora do alcance do yaml.
 
 O `scan` se autoconfere: depois de escrever, ele monta o plano contra o próprio
-yaml, e esse plano tem de sair vazio. Se não sair, ele avisa e sai com erro —
+yaml, e esse plano tem de sair vazio. Se não sair, ele avisa e sai com erro:
 não confie no arquivo antes de entender por quê.
 
 ## 2. Mudar
@@ -58,7 +58,7 @@ o usuário não precisa configurar nada.
   rode `scan --force` para recapturar.
 - **Apagar é opt-in.** Sem `--allow-delete` o apply só cria e edita. Com a
   flag, as remoções saem num bloco separado e exigem digitar `APAGAR`. Canal
-  apagado leva o histórico junto — proponha remoção, nunca a aplique por conta.
+  apagado leva o histórico junto. Proponha remoção, nunca a aplique por conta.
 - **Reordenar cargo é caro.** Uma chamada por casa que o cargo anda; fica atrás
   de `--reorder`.
 - **Fora do alcance:** fóruns, palcos, tópicos, threads, emojis, stickers,

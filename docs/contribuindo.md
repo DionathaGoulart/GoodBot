@@ -14,9 +14,9 @@ export async function createTicket(guildId: string, userId: string) {
 
 ## 2. Antes de escrever código
 
-1. `.harness/architecture.md` — onde a coisa mora e por quê.
-2. `.harness/prd.md` — o requisito por trás.
-3. `.harness/styleguide.md` — se a mudança toca `apps/web` ou um embed.
+1. `.harness/architecture.md`: onde a coisa mora e por quê.
+2. `.harness/prd.md`: o requisito por trás.
+3. `.harness/styleguide.md`: se a mudança toca `apps/web` ou um embed.
 
 A stack está **decidida** (PRD §12). Não proponha Redis, Prisma ou outro
 framework web.
@@ -37,10 +37,10 @@ Node 22 LTS (`.nvmrc`). O `engines` recusa 23+.
 ## 4. As regras que valem em todo lugar
 
 1. **ID do Discord é `string`.** Nunca `Number(snowflake)`.
-2. **Todo query filtra por `guildId`,** e nada assume "a" guild — o bot é
+2. **Todo query filtra por `guildId`,** e nada assume "a" guild: o bot é
    público. No painel, action que escreve recebe o `guildId` no primeiro
    argumento (`useGuildId()` no cliente); rota de `/api/*` o recebe na query.
-3. **Todo input externo passa por Zod de `@goodbot/shared`** — opção de comando,
+3. **Todo input externo passa por Zod de `@goodbot/shared`**: opção de comando,
    corpo da API, formulário do painel, jsonb de config. Bot e painel importam o
    **mesmo** schema; duplicar a validação é como as duas pontas divergem.
 4. **Config de módulo só pelo `ConfigService`.** Query direta devolve dado
@@ -48,7 +48,7 @@ Node 22 LTS (`.nvmrc`). O `engines` recusa 23+.
 5. **`pino`, nunca `console.log`** fora de scripts. Nunca logar token, header ou
    conteúdo de mensagem em nível `info`.
 6. **`UserFacingError`** para o que vira embed ou toast. O resto sobe e é
-   logado. Handler de interação **sempre** responde — efêmero em erro.
+   logado. Handler de interação **sempre** responde, efêmero em erro.
 7. **Rota nova = Bearer + Zod + rate limit.** Só `/health` fica de fora.
 8. **Segredo nunca no repositório.** Só `.env.example`, com comentário. Confira
    `git status` antes de commitar.
@@ -59,7 +59,7 @@ ESLint + Prettier na raiz. `pnpm lint` e `pnpm typecheck` **têm** de passar.
 
 - Comentário explica **por quê**, não o quê. Se o código precisa de comentário
   para dizer o que faz, o problema é o código.
-- TypeScript estrito. Sem `any` — use `unknown` e estreite.
+- TypeScript estrito. Sem `any`: use `unknown` e estreite.
 - `interface` para forma de objeto, união discriminada para máquina de estados.
 - Componente shadcn é editado em `apps/web/components/ui`, não reinstalado.
 
@@ -91,7 +91,7 @@ docs: describe the guild-as-code flow
 Escopos: `bot`, `web`, `db`, `shared`, `guild-config`, `infra`, `ci`.
 
 Assunto no imperativo, minúsculo, sem ponto final, até 72 caracteres. O corpo
-vai quebrado em 72 colunas e responde **por que**, não o que — o diff já diz o
+vai quebrado em 72 colunas e responde **por que**, não o que: o diff já diz o
 que. Um commit por tarefa lógica.
 
 ## 8. Antes de abrir PR
@@ -117,5 +117,5 @@ infraestrutura. Se a feature precisa de tabela, a migration vem junto. Se
 precisa de variável, ela está no `.env.example`. Se depende de serviço externo,
 a configuração está descrita.
 
-O critério: outro dev clona, segue o `primeiros-passos.md` e a feature funciona
-— sem setup manual extra.
+O critério: outro dev clona, segue o `primeiros-passos.md` e a feature funciona,
+sem setup manual extra.

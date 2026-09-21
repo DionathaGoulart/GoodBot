@@ -26,7 +26,7 @@ Ban, kick, timeout, warn e notas, cada ação virando um **caso numerado**.
 | `/punish`                | aplica a punição do nível de escalonamento atual |
 
 O tempban entra em `scheduled_actions` e é o `Scheduler` que desfaz na hora.
-Reiniciar o bot não perde o agendamento — ele está no banco.
+Reiniciar o bot não perde o agendamento: ele está no banco.
 
 **Escalonamento**: N advertências em X tempo dispara uma ação automática. Os
 degraus ficam na config do módulo.
@@ -54,7 +54,7 @@ e é apagado pela retenção.
 Também é ligável pelo painel e pela API.
 
 > A regra `words` aceita regex. O projeto usa `safe-regex2` para recusar padrão
-> com backtracking catastrófico — regex de usuário não derruba o bot.
+> com backtracking catastrófico: regex de usuário não derruba o bot.
 
 ---
 
@@ -68,7 +68,7 @@ centenas de escritas simultâneas e estouraria o rate limit do Discord. A fila
 absorve o pico e escoa no ritmo permitido.
 
 Edição e exclusão de mensagem precisam do conteúdo anterior, que o Discord não
-manda no evento — daí a tabela `message_cache`, com prazo de retenção próprio.
+manda no evento: daí a tabela `message_cache`, com prazo de retenção próprio.
 
 O cache tem duas camadas: as últimas `messageCache.perChannel` mensagens de
 cada canal ficam na memória do bot (o valor é do servidor dono do canal e não
@@ -135,7 +135,7 @@ e edição pelo painel ou pelo comando.
 | `/stats`           | números do servidor                     |
 
 `/lock` grava em `channel_locks` o estado anterior das permissões, para o
-`/unlock` devolver exatamente o que havia — e não um palpite.
+`/unlock` devolver exatamente o que havia, e não um palpite.
 
 ---
 
@@ -148,7 +148,7 @@ O `StatsService` acumula em memória e faz flush periódico: contar uma mensagem
 por vez seria um `INSERT` por mensagem. O job `stats-rollup` compacta hora em
 dia.
 
-Falha de flush vira alerta operacional — número perdido não volta.
+Falha de flush vira alerta operacional: número perdido não volta.
 
 ---
 
@@ -160,7 +160,7 @@ Avisa num canal quando o canal do YouTube publica vídeo, short ou live.
 YouTube: feed RSS, `watch?v=` e `/channel/<id>/live`. Sem chave, sem cota, sem
 conta no Google Cloud.
 
-Funciona por **polling**, nunca por webhook de entrada — a API do bot está
+Funciona por **polling**, nunca por webhook de entrada: a API do bot está
 exposta na internet e o PRD §7.3 proíbe rota sem autenticação além do
 `/health`. O intervalo fica na config do módulo.
 
