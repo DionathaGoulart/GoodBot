@@ -9,6 +9,8 @@ some ou muda de forma).
 
 ## [Não lançado]
 
+## [1.0.1] - 2026-09-21
+
 ### Corrigido
 
 - O alerta "BOT NO AR", o `/health` e o log de boot mostravam `v0.0.0`: a
@@ -19,8 +21,11 @@ some ou muda de forma).
 
 ### Alterado
 
-- Dependências atualizadas pelo Dependabot, entre elas Next 16.3.5, React
-  19.3, Zod 4.6, TypeScript 6 e Vitest 5.
+- Dependências atualizadas pelo Dependabot. No bot e no painel: Next 16.3.5,
+  React 19.3, Zod 4.6, Hono 4.13.8 e recharts 3.10, entre outras. Nas
+  ferramentas de desenvolvimento: TypeScript 6, Vitest 5 e dotenv 18.
+- O Dependabot não propõe mais versão major do `@types/node`: os tipos
+  acompanham o Node 22 que roda em produção.
 
 ## [1.0.0] - 2026-09-21
 
@@ -93,5 +98,6 @@ aqui:
 | v1.5    | módulo de squads                                              |
 | v1.6    | jogatina sob demanda, parties, convite com votação, histórico |
 
-[Não lançado]: https://github.com/DionathaGoulart/Goodbot/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/DionathaGoulart/Goodbot/releases/tag/v1.0.0
+[Não lançado]: https://github.com/DionathaGoulart/GoodBot/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/DionathaGoulart/GoodBot/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/DionathaGoulart/GoodBot/releases/tag/v1.0.0
