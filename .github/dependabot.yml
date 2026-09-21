@@ -11,7 +11,7 @@ updates:
       timezone: America/Sao_Paulo
     open-pull-requests-limit: 5
     commit-message:
-      # Conventional Commits em pt-BR, como o resto do repositório (CLAUDE.md).
+      # Conventional Commits em inglês, como o resto do histórico (CLAUDE.md).
       prefix: chore
       prefix-development: chore
       include: scope

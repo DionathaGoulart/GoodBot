@@ -72,7 +72,7 @@ OWNER_DISCORD_ID=...
 ```
 
 O `OWNER_DISCORD_ID` é o snowflake da **sua** conta do Discord, e é o que abre
-`admin.` (§7.4). Para pegá-lo: Configurações do Usuário → Avançado → **Modo
+`admin.` (§7.6). Para pegá-lo: Configurações do Usuário → Avançado → **Modo
 desenvolvedor**, depois clique com o botão direito no seu nome → **Copiar ID do
 usuário**. Sem ele o painel admin não abre para ninguém, que é o padrão seguro;
 o resto do bot e do painel sobe igual.
@@ -150,7 +150,7 @@ depois**, senão ele fica online e calado lá.
 
    Este é o caminho de quem tem acesso à VM, e existe para os servidores que
    já eram seus. Para os outros, o caminho normal é o link de convite (§7.2) e
-   a fila do painel do dono (§7.4) — nenhum dos dois pede SSH nem reinício.
+   a fila do painel do dono (§7.6) — nenhum dos dois pede SSH nem reinício.
 
    Se hoje está como `GUILD_ID`, pode trocar o nome ou deixar: `GUILD_IDS`
    ganha quando os dois existem.
@@ -161,7 +161,7 @@ depois**, senão ele fica online e calado lá.
 
 > A semeadura só vale para servidor **sem linha** no registro. Se o bot já foi
 > convidado antes (a linha nasce `pending`), acrescentar o ID não aprova nada:
-> quem aprova é a fila do painel do dono (§7.4). O bot relê o registro a cada
+> quem aprova é a fila do painel do dono (§7.6). O bot relê o registro a cada
 > minuto; não precisa reiniciar.
 
 O que muda no painel: entrar leva ao seletor (`/servidores`) quando você tem

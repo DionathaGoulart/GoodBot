@@ -1,6 +1,6 @@
 # Banco de dados
 
-Postgres 16 com Drizzle. Tudo que toca o banco vive em `packages/db` — nenhum
+Postgres com Drizzle (16 em dev e na CI, 17 no Supabase de produção). Tudo que toca o banco vive em `packages/db` — nenhum
 outro pacote escreve SQL.
 
 ## 1. Layout
@@ -21,7 +21,7 @@ comandos, eventos e rotas chamam uma função de repository, nunca montam query.
 
 ## 2. As tabelas
 
-33 no total.
+34 no total.
 
 | Grupo         | Tabelas                                                                                                                                  |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |

@@ -2,7 +2,7 @@
 
 ## 1. Idioma
 
-Documentação, commits, UI e mensagens do bot em **pt-BR**. Nomes de código
+Documentação, UI e mensagens do bot em **pt-BR**; commits em **inglês** (§7). Nomes de código
 (variáveis, funções, tipos, arquivos) em **inglês**.
 
 ```ts
@@ -93,8 +93,6 @@ Escopos: `bot`, `web`, `db`, `shared`, `guild-config`, `infra`, `ci`.
 Assunto no imperativo, minúsculo, sem ponto final, até 72 caracteres. O corpo
 vai quebrado em 72 colunas e responde **por que**, não o que — o diff já diz o
 que. Um commit por tarefa lógica.
-
-Só commite quando pedirem.
 
 ## 8. Antes de abrir PR
 

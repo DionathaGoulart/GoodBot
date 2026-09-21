@@ -107,7 +107,7 @@ cp .env.example .env            # preencher DISCORD_TOKEN, etc.
 docker compose -f infra/docker-compose.dev.yml up -d postgres
 pnpm install
 pnpm --filter @goodbot/db db:migrate
-pnpm dev                        # bot + web em paralelo (turbo/concurrently)
+pnpm dev                        # bot + web em paralelo (concurrently)
 ```
 
 Em dev tudo é local: Postgres no Docker, bot em `:3001`, painel em `:3000`.
@@ -118,10 +118,3 @@ Validação padrão de uma etapa (rodar tudo antes de marcar como concluída):
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
-
-## Ambiente do desenvolvedor
-
-Windows + WSL2; o repo vive em `/mnt/c/...` sincronizado pelo OneDrive.
-`node_modules` está no `.gitignore` e deve ficar fora do OneDrive se a sync
-incomodar (alternativa: `pnpm config set store-dir ~/.pnpm-store`). Comandos
-Docker rodam no WSL.

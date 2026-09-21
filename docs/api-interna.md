@@ -56,8 +56,8 @@ O `reason` vai para o registro de auditoria do Discord.
 
 ## 3. Use o cliente tipado, não `fetch`
 
-Já existe um cliente com ~45 métodos, cada um validando a resposta com o schema
-Zod correspondente:
+Já existe um cliente tipado, com um método por rota, cada um validando a
+resposta com o schema Zod correspondente:
 
 ```ts
 import { createInternalClient } from '@goodbot/shared';
@@ -110,7 +110,7 @@ validação Zod) e `retryAfter` quando o 503 veio de rate limit.
 | `admin`       | painel do dono: guilds, expulsar, broadcast, manutenção, resync                                                                                                                                                                                                                                      |
 | `registry`    | o aviso por DM a quem convidou o bot (ciclo de vida do convite)                                                                                                                                                                                                                                      |
 | `metrics`     | contadores em formato Prometheus                                                                                                                                                                                                                                                                     |
-| `health`      | **sem auth** — estado do gateway, banco e último backup                                                                                                                                                                                                                                              |
+| `health`      | sem token, só `{ok: true}`; com Bearer, gateway, banco e último backup                                                                                                                                                                                                                                             |
 
 Os schemas de request e response de cada uma estão em
 `packages/shared/src/api/`.
@@ -250,6 +250,11 @@ Checklist antes de considerar pronta:
 curl -s http://localhost:3001/health
 ```
 
-Responde sem autenticação — é o que o Caddy, o Docker e o monitor externo usam.
-Traz o estado do gateway, do Postgres e a data do último backup. Não traz nada
-que sirva a um atacante.
+É a única rota sem autenticação, e é o que o Caddy, o Docker e o monitor
+externo usam. Sem token ela responde só `{"ok":true}`, para não vazar nada a
+quem apenas achou o subdomínio. Com o Bearer, traz o estado do gateway, do
+Postgres e a data do último backup:
+
+```bash
+curl -s -H "Authorization: Bearer $INTERNAL_API_TOKEN" http://localhost:3001/health
+```

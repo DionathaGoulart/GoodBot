@@ -771,8 +771,6 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
   renderizar `/admin`, e o bot confere de novo o `actorId` de toda escrita ali.
   Faltando em qualquer um dos dois, aquele lado fecha — o que dá o sintoma
   "a tela abre e o botão responde 403".
-- **Ambiente de desenvolvimento**: Windows + WSL2, repositório em `/mnt/c/...`
-  sincronizado pelo OneDrive. `node_modules` fica fora do OneDrive.
 
 ## 13. Validação
 

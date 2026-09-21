@@ -79,10 +79,11 @@ Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (
 
 Goodbot é um bot de moderação completo para Discord acompanhado de um painel web
 que gerencia **tudo** do servidor e do bot: configuração de cada módulo,
-membros, cargos, canais, casos de moderação e estatísticas de atividade. Roda
-em uma única instância ARM (Oracle Cloud Free Tier) com Docker Compose, custo
-zero de hospedagem, e é projetado para um servidor pequeno hoje sem impedir
-multi-servidor amanhã.
+membros, cargos, canais, casos de moderação e estatísticas de atividade. O bot
+roda numa VM x86 da Oracle (Always Free) com Docker Compose, o painel na Vercel
+e o Postgres no Supabase, todos no plano gratuito. Nasceu para um servidor
+pequeno e desde a v1.3 atende vários, com convite, aprovação e demonstração
+(§5.10).
 
 Frase-guia: _um só lugar para moderar, configurar e entender o servidor._
 
@@ -107,8 +108,6 @@ Frase-guia: _um só lugar para moderar, configurar e entender o servidor._
 ## 4. Não-objetivos (v1)
 
 - Música, economia, leveling/XP, minigames.
-- Multi-servidor **ativo** (o schema suporta, a UI e o bot operam em um
-  `guildId` configurado).
 - Sharding (um servidor não precisa; discord.js só exige acima de 2.500
   guilds).
 - App móvel; o painel é responsivo, e isso basta.
@@ -1498,7 +1497,6 @@ provedor, documentada em `docs/runbook.md`.
 | Auth.js + Discord: `guilds.members.read` exige o usuário na guild | tratar 403 como "acesso negado"                                                                                                            | feito — `resolveGuildLevel` → `/denied` |
 | Drift entre schema Zod de config e jsonb salvo                    | campo `version` + migração de config na leitura                                                                                            | feito — `packages/shared/src/config` |
 | Disco cheio (logs, message_cache)                                 | retenções (§8), rotação Docker; o disco do banco agora é do Supabase (alerta de cota)                                                       | feito — `RetentionJob` com alerta na falha; `json-file` com 5×10 MB; `docker system prune` semanal no bootstrap |
-| OneDrive sincronizando `node_modules` no Windows do dev           | `.gitignore` + trabalhar via WSL (path `/mnt/c/...` já é o caso); pnpm com `node-linker=hoisted` não é necessário; documentar no CLAUDE.md | feito — CLAUDE.md |
 | **Backup do Supabase não é exportável no free tier**              | `pg_dump` próprio diário no serviço `backup` do Compose, 7 diários + 4 semanais no volume `backups`; `infra/scripts/restore.sh`             | feito — só os schemas `public` e `drizzle` (o resto é do Supabase e quebra o restore num Postgres comum); imagem na mesma major do Supabase (17); dump sem o rodapé do `pg_dump` é descartado e alerta; o `/health` ignora arquivo < 1 KB. Cópia externa (Object Storage + rclone) segue **opcional e não implementada** |
 | **Perder o rastro do que está rodando na VM**                     | `GIT_SHA` embutido na imagem pela CI, exibido no `/health`, no card Saúde e no alerta de boot                                              | feito — `infra/docker/bot.Dockerfile` |
 | **Rate limit do painel na Vercel**                                | 60/min por IP nas rotas de auth e nas server actions de escrita                                                                             | parcial — contagem **por instância**, porque o painel é stateless e a stack não tem store compartilhado (§12); serve para cortar script, não como cota |
