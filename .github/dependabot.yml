@@ -15,6 +15,13 @@ updates:
       prefix: chore
       prefix-development: chore
       include: scope
+    ignore:
+      # Os tipos do Node acompanham a major que roda em produção (.nvmrc, a
+      # imagem do bot e o projeto na Vercel). Um @types/node mais novo deixa
+      # o typecheck aceitar API que o runtime não tem, e o erro só aparece no
+      # deploy. A major sobe junto com a migração do runtime, à mão.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     groups:
       # Um PR por grupo em vez de um por pacote: o repositório é pequeno e a
       # CI roda o monorepo inteiro a cada PR.
