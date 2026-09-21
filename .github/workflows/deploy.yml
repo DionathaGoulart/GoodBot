@@ -190,7 +190,6 @@ jobs:
           envs: GHCR_USER,GHCR_TOKEN,AUTH_URL,OWNER_DISCORD_ID
           script_stop: true
           script: |
-            bash /tmp/goodbot-infra/scripts/migrate-rename.sh
             cd /opt/goodbot
             # As variáveis não-secretas no `.env` da VM, sem ninguém precisar
             # de SSH. Só escreve as que existem no repositório: um valor vazio

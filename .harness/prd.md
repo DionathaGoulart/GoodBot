@@ -60,8 +60,8 @@ Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (
 
 > **v1.2 — nome e guild como código.** O projeto passou a se chamar
 > **Goodbot** (era CoBot): pacotes `@goodbot/*`, imagem `goodbot-bot`,
-> métricas `goodbot_*` e `/opt/goodbot` na VM — os passos externos estão em
-> `docs/migracao-nome.md`. Entrou também a §5.9, guild como código. O que
+> métricas `goodbot_*` e `/opt/goodbot` na VM. A migração da VM já rodou e o
+> script dela saiu do repositório. Entrou também a §5.9, guild como código. O que
 > **não** mudou: requisitos funcionais existentes, modelo de dados, permissões
 > e hospedagem.
 

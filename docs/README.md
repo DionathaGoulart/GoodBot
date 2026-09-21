@@ -20,7 +20,6 @@
 | [banco-de-dados.md](banco-de-dados.md)       | schema, migrations, repositories, backup           |
 | [contribuindo.md](contribuindo.md)           | convenções, commits, checklist de PR               |
 | [runbook.md](runbook.md)                     | operação: incidentes, rollback, plantão            |
-| [migracao-nome.md](migracao-nome.md)         | passos externos da troca CoBot → Goodbot           |
 
 ## Fora daqui
 
