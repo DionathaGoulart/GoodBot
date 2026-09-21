@@ -3,6 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "description": "Bot de moderação para Discord + painel web (monorepo pnpm)",
+  "license": "MIT",
+  "author": "Dionatha Goulart",
+  "homepage": "https://github.com/DionathaGoulart/Goodbot#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DionathaGoulart/Goodbot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DionathaGoulart/Goodbot/issues"
+  },
   "type": "module",
   "packageManager": "pnpm@9.15.9",
   "engines": {
