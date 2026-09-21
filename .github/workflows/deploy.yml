@@ -220,6 +220,10 @@ jobs:
             install -d -m 750 ./scripts
             install -m 755 /tmp/goodbot-infra/scripts/backup.sh ./scripts/backup.sh
             install -m 755 /tmp/goodbot-infra/scripts/restore.sh ./scripts/restore.sh
+            # O deploy.sh é o caminho do rollback (`deploy.sh sha-…`). Sem esta
+            # linha a cópia da VM ficava a do bootstrap, e foi assim que ela
+            # passou o rename inteiro apontando para `/opt/cobot`.
+            install -m 750 /tmp/goodbot-infra/scripts/deploy.sh ./deploy.sh
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose pull
             docker compose up -d --remove-orphans
