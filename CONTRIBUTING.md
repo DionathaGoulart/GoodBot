@@ -143,7 +143,9 @@ Para lançar:
 
 1. mova o que está em **Não lançado** no [`CHANGELOG.md`](CHANGELOG.md) para
    a versão nova, com a data;
-2. suba a `version` do `package.json` da raiz;
+2. suba a `version` do `package.json` da raiz e o `VERSION` de
+   `packages/shared/src/index.ts`, que é o que o bot mostra (um teste reprova
+   a CI se os dois divergirem);
 3. commit `chore(release): X.Y.Z`, tag anotada `vX.Y.Z` e push **só dessa
    tag** (`git push origin vX.Y.Z`), nunca `--tags`;
 4. crie o GitHub Release a partir da tag, com o trecho do changelog.

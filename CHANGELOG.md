@@ -9,6 +9,19 @@ some ou muda de forma).
 
 ## [Não lançado]
 
+### Corrigido
+
+- O alerta "BOT NO AR", o `/health` e o log de boot mostravam `v0.0.0`: a
+  constante `VERSION` não acompanhou a 1.0.0. Um teste agora compara as duas.
+- O Dependabot nunca conseguia atualizar o npm: ele roda em Node 24 e o
+  `engines` só aceitava o 22. A faixa passou a aceitar 22 e 24; produção
+  continua no 22.
+
+### Alterado
+
+- Dependências atualizadas pelo Dependabot, entre elas Next 16.3.5, React
+  19.3, Zod 4.6, TypeScript 6 e Vitest 5.
+
 ## [1.0.0] - 2026-09-21
 
 Primeira versão pública. O bot já rodava em produção antes dela; a 1.0.0 marca
