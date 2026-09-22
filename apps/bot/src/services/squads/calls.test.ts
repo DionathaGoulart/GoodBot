@@ -218,7 +218,7 @@ describe('SquadService: ENTRAR na chamada pública', () => {
     ).rejects.toMatchObject({ code: 'SQUAD_FULL' });
   });
 
-  it('a chamada sai do ar quando a jogatina começa, e ENTRAR atrasado avisa', async () => {
+  it('a chamada fica no ar durante a jogatina e diz que já está rolando', async () => {
     const s = scenario();
     const session = await schedule(s);
     await s.service.callForPlayers(s.discordGuild, session.id, A, 'event');
@@ -227,12 +227,82 @@ describe('SquadService: ENTRAR na chamada pública', () => {
     s.clock.now = session.startsAt.getTime();
     await s.service.startSession(s.discordGuild, sessionRow(session.id));
 
+    expect(call.deleted).toBe(false);
+    expect(sessionRow(session.id).callMessageId).toBe(call.id);
+    expect(embedOf(call)?.description).toContain('está jogando agora');
+    // A mensagem da jogatina aponta a chamada aberta mesmo depois do início.
+    const announce = messageById(s, session.messageId);
+    expect(embedOf(announce)?.fields?.find((field) => field.name === 'Chamada')?.value).toContain(
+      `<#${s.search.id}>`,
+    );
+
+    const sent = await s.service.requestFromCall(s.discordGuild, C, session.id);
+    expect(sent.session.startedAt).not.toBeNull();
+    expect(store.requests).toEqual([
+      expect.objectContaining({ userId: C, status: 'pending', sessionId: session.id }),
+    ]);
+  });
+
+  it('quem entra no meio da jogatina vira "vou" e é mandado para a sala', async () => {
+    const s = scenario();
+    const session = await schedule(s);
+    await s.service.callForPlayers(s.discordGuild, session.id, A, 'event');
+    s.clock.now = session.startsAt.getTime();
+    await s.service.remindSession(s.discordGuild, sessionRow(session.id));
+    await s.service.startSession(s.discordGuild, sessionRow(session.id));
+    const voiceChannelId = sessionRow(session.id).voiceChannelId;
+    expect(voiceChannelId).not.toBeNull();
+
+    await s.service.requestFromCall(s.discordGuild, C, session.id);
+    const result = await s.service.voteJoinRequest(s.discordGuild, store.requests[0]!.id, A, true);
+
+    expect(result.outcome).toBe('accepted');
+    expect(sessionRow(session.id).goingIds).toContain(C);
+    // O pedido da chamada não tem thread: quem avisa é o canal do squad, que
+    // a pessoa passa a ver ao entrar.
+    const welcome = s.channel.sent.find((message) =>
+      String(embedOf(message)?.description).includes('A jogatina está rolando'),
+    );
+    expect(embedOf(welcome)?.description).toContain(`<#${String(voiceChannelId)}>`);
+    expect(welcome?.payload.content).toBe(`<@${C}>`);
+  });
+
+  it('a chamada sai do ar no fim da jogatina, e ENTRAR atrasado avisa', async () => {
+    const s = scenario();
+    const session = await schedule(s);
+    await s.service.callForPlayers(s.discordGuild, session.id, A, 'event');
+    const call = s.search.sent[0]!;
+    s.clock.now = session.startsAt.getTime();
+    await s.service.startSession(s.discordGuild, sessionRow(session.id));
+
+    s.clock.now = session.endsAt.getTime();
+    expect(await s.service.closeFinishedCalls(s.discordGuild)).toBe(1);
+
     expect(call.deleted).toBe(true);
     expect(sessionRow(session.id).callMessageId).toBeNull();
     await expect(s.service.requestFromCall(s.discordGuild, C, session.id)).rejects.toMatchObject({
       code: 'CALL_CLOSED',
     });
     expect(store.requests).toEqual([]);
+    // Jogatina que ainda não acabou fica no ar: o passo não mexe nela.
+    expect(await s.service.closeFinishedCalls(s.discordGuild)).toBe(0);
+  });
+
+  it('o voice vazio depois do início encerra a jogatina e leva a chamada junto', async () => {
+    const s = scenario();
+    const session = await schedule(s);
+    await s.service.callForPlayers(s.discordGuild, session.id, A, 'event');
+    const call = s.search.sent[0]!;
+    s.clock.now = session.startsAt.getTime();
+    await s.service.remindSession(s.discordGuild, sessionRow(session.id));
+    await s.service.startSession(s.discordGuild, sessionRow(session.id));
+    const voiceChannelId = sessionRow(session.id).voiceChannelId!;
+
+    s.clock.now = session.startsAt.getTime() + HOUR_MS;
+    expect(await s.service.releaseEmptyVoice(s.discordGuild, voiceChannelId)).toBe(true);
+
+    expect(call.deleted).toBe(true);
+    expect(sessionRow(session.id).callMessageId).toBeNull();
   });
 
   it('cancelar a jogatina ou arquivar o squad também tira a chamada do ar', async () => {
@@ -252,7 +322,7 @@ describe('SquadService: ENTRAR na chamada pública', () => {
     expect(sessionRow(tomorrow.id).callMessageId).toBeNull();
   });
 
-  it('chamada apagada por alguém não impede o início', async () => {
+  it('chamada apagada por alguém não impede o início nem o fim', async () => {
     const s = scenario();
     const session = await schedule(s);
     await s.service.callForPlayers(s.discordGuild, session.id, A, 'event');
@@ -260,7 +330,10 @@ describe('SquadService: ENTRAR na chamada pública', () => {
 
     s.clock.now = session.startsAt.getTime() + HOUR_MS;
     expect(await s.service.startSession(s.discordGuild, sessionRow(session.id))).not.toBeNull();
-    expect(sessionRow(session.id).callMessageId).toBeNull();
     expect(sessionRow(session.id).startedAt).not.toBeNull();
+
+    s.clock.now = session.endsAt.getTime();
+    await s.service.closeFinishedCalls(s.discordGuild);
+    expect(sessionRow(session.id).callMessageId).toBeNull();
   });
 });

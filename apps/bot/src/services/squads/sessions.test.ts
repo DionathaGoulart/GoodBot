@@ -693,7 +693,7 @@ describe('SquadService: marcar jogatina', () => {
     expect(stateB.setChannel).toHaveBeenCalledWith(s.voice.id, expect.any(String));
     const announce = messageById(s, sessionRow().messageId)!;
     expect(embedOf(announce)?.title).toBe('> JOGATINA COMEÇOU');
-    expect(buttonLabels(announce)).toEqual(['REPETIR', 'TRAZER CONVIDADO']);
+    expect(buttonLabels(announce)).toEqual(['REPETIR', 'CHAMAR GENTE', 'TRAZER CONVIDADO']);
     // Anúncio já chamou todo mundo: não sai lembrete à parte.
     expect(
       s.channel.sent.some((message) => String(message.payload.content).includes('começa')),

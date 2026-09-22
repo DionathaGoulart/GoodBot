@@ -38,6 +38,7 @@ import {
   DAY_MS,
   describeWhen,
   HOUR_MS,
+  isSessionOver,
   MINUTE_MS,
   parseWhen,
   SECOND_MS,
@@ -823,6 +824,44 @@ export class SessionService {
   }
 
   /**
+   * A sala da jogatina do squad que está rolando agora; `null` quando não há
+   * nenhuma. Quem entra no squad no meio de uma precisa saber onde cair, e o
+   * canal do squad só passa a existir para a pessoa depois de ela entrar.
+   * Nunca lança.
+   */
+  async runningRoom(
+    guildId: string,
+    squadId: string,
+  ): Promise<{ voiceChannelId: string | null; voiceTemporary: boolean } | null> {
+    try {
+      const now = this.ctx.now();
+      // Uma jogatina dura no máximo 12 h: um dia para trás pega toda começada.
+      const started = await listSessionsStartingBetween(
+        this.ctx.db,
+        guildId,
+        new Date(now - DAY_MS),
+        new Date(now + 1),
+      );
+      const running = started.find(
+        (session) =>
+          session.squadId === squadId &&
+          !session.cancelledAt &&
+          session.startedAt !== null &&
+          !isSessionOver(session, now),
+      );
+      if (!running) return null;
+      const reserved = isReserved(running);
+      return {
+        voiceChannelId: reserved ? running.voiceChannelId : null,
+        voiceTemporary: reserved && running.voiceTemporary,
+      };
+    } catch (error) {
+      log.warn({ err: error, guildId, squadId }, 'falha ao ler a sala da jogatina em andamento');
+      return null;
+    }
+  }
+
+  /**
    * Dá o voice reservado de uma jogatina só, com a mesma regra da
    * `grantLiveVoice`: é o convidado avulso chegando com a sala já trancada.
    * Sem reserva viva não concede nada, porque a reserva, quando sair, já
@@ -890,12 +929,16 @@ export class SessionService {
     const now = this.ctx.date();
     const marked = await markSessionStarted(db, guild.id, session.id, now, { startsBy: now });
     if (!marked) return null;
-    // Chamada pública é para antes do início: sai do ar mesmo com o squad arquivado.
-    await this.ctx.parts.calls.close(guild, marked);
 
     const result: StartResult = { moved: [], pinged: [] };
     const squad = await getSquad(db, guild.id, marked.squadId);
-    if (!squad || squad.status === 'archived') return result;
+    if (!squad || squad.status === 'archived') {
+      // Squad arquivado não recebe mais ninguém: a chamada dele não faz sentido.
+      await this.ctx.parts.calls.close(guild, marked);
+      return result;
+    }
+    // A chamada continua no ar durante a jogatina, dizendo que já rolou o começo.
+    await this.ctx.parts.calls.refreshMessage(guild, marked);
 
     const voiceId = isReserved(marked) ? marked.voiceChannelId : null;
     for (const userId of await this.memberIds(guild.id, squad.id)) {
@@ -1219,6 +1262,12 @@ export class SessionService {
     if (!released) return false;
     if (current.voiceTemporary && voiceChannelId) {
       this.temporaryVoices.get(guild.id)?.delete(voiceChannelId);
+    }
+    // Sala devolvida depois do início é jogatina encerrada: a chamada sai com
+    // ela. Antes do início, a sala volta ao pool por remarcação ou
+    // cancelamento, e a chamada continua (o cancelamento a fecha por conta).
+    if (isSessionOver(released, this.ctx.now())) {
+      await this.ctx.parts.calls.close(guild, released);
     }
     if (restored && voiceChannelId) {
       this.ctx.record({

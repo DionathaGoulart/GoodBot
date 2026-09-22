@@ -236,6 +236,7 @@ describe('histórico e chamada pública', () => {
       game: { name: 'Helldivers 2', groupSize: 8 },
       memberIds: ['300000000000000001'],
       history: HISTORY,
+      running: null,
       embedColor: 0,
       mentionCandidate: false,
     } as const;
@@ -243,6 +244,26 @@ describe('histórico e chamada pública', () => {
     expect(open?.fields?.find((field) => field.name === 'Histórico')?.value).toBe(HISTORY);
     const done = embedOf(inviteMessage({ ...view, state: 'joined' }));
     expect(done?.fields ?? []).toEqual([]);
+    expect(done?.description).not.toContain('rolando agora');
+
+    // Entrou pela chamada de uma jogatina em andamento: o aviso aponta a sala.
+    const running = embedOf(
+      inviteMessage({
+        ...view,
+        state: 'joined',
+        running: { voiceChannelId: '400000000000000002', voiceTemporary: false },
+      }),
+    );
+    expect(running?.description).toContain('rolando agora');
+    expect(running?.description).toContain('<#400000000000000002>');
+    const noRoom = embedOf(
+      inviteMessage({
+        ...view,
+        state: 'joined',
+        running: { voiceChannelId: null, voiceTemporary: false },
+      }),
+    );
+    expect(noRoom?.description).toContain('em qual sala eles estão');
   });
 
   it('a lista do /squad procurar leva o histórico de cada squad', () => {
@@ -259,7 +280,7 @@ describe('histórico e chamada pública', () => {
   it('a chamada pública: quando, party, squad, histórico e ENTRAR, sem chamar ninguém', () => {
     const startsAt = new Date('2026-09-18T00:00:00Z');
     const message = publicCallMessage({
-      session: { id: 42, startsAt },
+      session: { id: 42, startsAt, startedAt: null },
       squad: { name: 'Os Bravos' },
       game: { name: 'Helldivers 2', groupSize: 8, partySize: 4 },
       memberCount: 3,
@@ -278,6 +299,23 @@ describe('histórico e chamada pública', () => {
     expect(rowsOf(message)).toEqual([['enter']]);
     expect(message.allowedMentions).toEqual({ parse: [] });
     expect(JSON.stringify(embed)).not.toMatch(/[—–]/);
+  });
+
+  it('a chamada de uma jogatina em andamento diz que já está rolando', () => {
+    const startsAt = new Date('2026-09-18T00:00:00Z');
+    const embed = embedOf(
+      publicCallMessage({
+        session: { id: 42, startsAt, startedAt: startsAt },
+        squad: { name: 'Os Bravos' },
+        game: { name: 'Helldivers 2', groupSize: 8, partySize: 4 },
+        memberCount: 3,
+        history: HISTORY,
+        embedColor: 0,
+      }),
+    );
+    expect(embed?.description).toContain('está jogando agora');
+    expect(embed?.description).toContain(`<t:${String(startsAt.getTime() / 1000)}:R>`);
+    expect(embed?.description).toContain('jogatina em andamento');
   });
 
   it('a jogatina só oferece CHAMAR GENTE quando dá, e mostra a chamada aberta', () => {
@@ -318,12 +356,18 @@ describe('histórico e chamada pública', () => {
     expect(embedOf(called)?.fields?.find((field) => field.name === 'Chamada')?.value).toContain(
       '<#400000000000000001>',
     );
+    // Rolando, CHAMAR GENTE continua: falta gente é o que se descobre jogando.
     const started = sessionMessage({
       ...view,
       state: 'started',
       callChannelId: '400000000000000001',
+      canCall: false,
     });
-    expect(embedOf(started)?.fields?.some((field) => field.name === 'Chamada')).toBe(false);
+    expect(rowsOf(started)).toEqual([['session']]);
+    expect(embedOf(started)?.fields?.find((field) => field.name === 'Chamada')?.value).toContain(
+      '<#400000000000000001>',
+    );
+    expect(rowsOf(sessionMessage({ ...view, state: 'started' }))).toEqual([['session', 'call']]);
   });
 
   it('TRAZER CONVIDADO fica na linha de cima, também rolando, e o convidado conta na party', () => {
@@ -365,11 +409,11 @@ describe('histórico e chamada pública', () => {
     expect(scheduled.allowedMentions).toEqual({ users: [a, b] });
 
     expect(rowsOf(sessionMessage({ ...view, state: 'started' }))).toEqual([
-      ['session', 'guest-pick'],
+      ['session', 'call', 'guest-pick'],
     ]);
-    expect(rowsOf(sessionMessage({ ...view, state: 'started', canBringGuest: false }))).toEqual([
-      ['session'],
-    ]);
+    expect(
+      rowsOf(sessionMessage({ ...view, state: 'started', canCall: false, canBringGuest: false })),
+    ).toEqual([['session']]);
     const none = sessionMessage({ ...view, guestIds: [] });
     expect(embedOf(none)?.fields?.some((field) => field.name === 'Convidados')).toBe(false);
   });

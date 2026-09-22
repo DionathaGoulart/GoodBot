@@ -498,6 +498,11 @@ export class SquadService {
     return this.ctx.parts.calls.call(guild, sessionId, userId, source);
   }
 
+  /** Job: tira do ar a chamada pública das jogatinas que acabaram. */
+  closeFinishedCalls(guild: Guild): Promise<number> {
+    return this.ctx.parts.calls.closeFinished(guild);
+  }
+
   /** CHAMAR GENTE no guia: a próxima jogatina com lugar. */
   callForNextSession(
     guild: Guild,

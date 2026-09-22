@@ -8,7 +8,7 @@ import {
   listSquadMembers,
   setModuleConfig,
 } from '@goodbot/db';
-import { DAY_MS, joinRequestKey, UserFacingError } from '@goodbot/shared';
+import { DAY_MS, isSessionOver, joinRequestKey, UserFacingError } from '@goodbot/shared';
 import { ChannelType } from 'discord.js';
 
 import { discordErrorCode, log } from './context';
@@ -219,8 +219,10 @@ export class SearchService {
    * `/squad procurar`, com duas diferenças. Não exige perfil nem grade que
    * combine, porque a pessoa respondeu a uma jogatina com dia e hora (o
    * horário já bate); e o pedido guarda a jogatina, para a votação dizer de
-   * onde a pessoa veio e quem entra já ficar como "vou" nela. Chamada de
-   * jogatina que começou ou foi cancelada sai do ar no clique.
+   * onde a pessoa veio e quem entra já ficar como "vou" nela. Vale com a
+   * jogatina rolando: a votação é do squad, e quem for aceito ganha o voice
+   * reservado ao entrar. Chamada de jogatina acabada ou cancelada sai do ar no
+   * clique.
    */
   async requestFromCall(guild: Guild, userId: string, sessionId: number): Promise<CallRequestSent> {
     const { db } = this.ctx;
@@ -234,12 +236,11 @@ export class SearchService {
       !squad ||
       squad.status === 'archived' ||
       session.cancelledAt !== null ||
-      session.startedAt !== null ||
-      session.startsAt.getTime() <= this.ctx.now();
+      isSessionOver(session, this.ctx.now());
     if (over) {
       await this.ctx.parts.calls.close(guild, session);
       throw new UserFacingError(
-        'Esta chamada acabou: a jogatina já começou, foi cancelada ou o squad foi encerrado.',
+        'Esta chamada acabou: a jogatina terminou, foi cancelada ou o squad foi encerrado.',
         { code: 'CALL_CLOSED' },
       );
     }

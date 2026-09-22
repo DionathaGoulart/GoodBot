@@ -10,7 +10,7 @@ import {
   releaseSessionCall,
   setSessionCallMessage,
 } from '@goodbot/db';
-import { UserFacingError } from '@goodbot/shared';
+import { isSessionOver, UserFacingError } from '@goodbot/shared';
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 
 import { discordErrorCode, log } from './context';
@@ -42,9 +42,16 @@ export interface CallSent {
  * regra que esconde o botão CHAMAR GENTE da mensagem da jogatina, para o botão
  * só aparecer quando funciona. Convidado avulso ocupa lugar na party como
  * quem disse "vou".
+ *
+ * A chamada vale até o fim da jogatina, e não até o início: falta gente é o
+ * que se descobre jogando, e quem entra no meio ainda pega partida (a sala
+ * reservada é liberada para quem entra, ver `grantLiveVoice`).
  */
 export function callBlocker(
-  session: Pick<SquadSession, 'startsAt' | 'startedAt' | 'cancelledAt' | 'calledAt' | 'goingIds'>,
+  session: Pick<
+    SquadSession,
+    'endsAt' | 'startedAt' | 'voiceReleasedAt' | 'cancelledAt' | 'calledAt' | 'goingIds'
+  >,
   context: {
     now: number;
     memberCount: number;
@@ -55,9 +62,9 @@ export function callBlocker(
   if (session.cancelledAt) {
     return new UserFacingError('Esta jogatina foi cancelada.', { code: 'SESSION_CANCELLED' });
   }
-  if (session.startedAt || session.startsAt.getTime() <= context.now) {
-    return new UserFacingError('A jogatina já começou: a chamada é para antes do início.', {
-      code: 'SESSION_STARTED',
+  if (isSessionOver(session, context.now)) {
+    return new UserFacingError('Esta jogatina já acabou: a chamada é para quem ainda vai jogar.', {
+      code: 'SESSION_ENDED',
     });
   }
   if (session.calledAt) {
@@ -82,9 +89,10 @@ export function callBlocker(
 
 /**
  * CHAMAR GENTE: a jogatina de um squad anunciada no canal de busca, com
- * ENTRAR para quem não é do squad. Uma chamada por jogatina, só antes do
- * início, e ela sai do ar quando a jogatina começa ou é cancelada. Quem aperta
- * ENTRAR vira pedido de entrada em votação (ver `SearchService.requestFromCall`).
+ * ENTRAR para quem não é do squad. Uma chamada por jogatina, antes ou durante
+ * ela, e sai do ar quando a jogatina acaba (`ends_at` ou a reserva liberada
+ * depois do início) ou é cancelada. Quem aperta ENTRAR vira pedido de entrada
+ * em votação (ver `SearchService.requestFromCall`).
  *
  * A trava é `called_at`, gravado antes de postar; a mensagem que não saiu
  * desfaz a trava, para dar para chamar de novo.
@@ -168,9 +176,9 @@ export class CallService {
     });
     log.info(bindings, 'chamada pública postada');
 
-    // A jogatina pode ter começado ou sido cancelada enquanto a mensagem saía:
+    // A jogatina pode ter acabado ou sido cancelada enquanto a mensagem saía:
     // quem a encerrou não viu a mensagem para apagar.
-    if (saved.startedAt || saved.cancelledAt) {
+    if (saved.cancelledAt || isSessionOver(saved, this.ctx.now())) {
       await this.close(guild, saved);
     } else {
       await this.ctx.parts.sessions.refresh(guild, saved.id);
@@ -179,8 +187,9 @@ export class CallService {
   }
 
   /**
-   * O botão do guia: a próxima jogatina que aceita chamada. Sem nenhuma que
-   * aceite, tenta a mais próxima, para a pessoa ler o motivo.
+   * O botão do guia: a primeira jogatina que aceita chamada, a que está
+   * rolando inclusive. Sem nenhuma que aceite, tenta a mais próxima, para a
+   * pessoa ler o motivo.
    */
   async callNext(
     guild: Guild,
@@ -197,9 +206,11 @@ export class CallService {
     const members = await listSquadMembers(db, guildId, squad.id);
 
     const now = this.ctx.now();
-    const upcoming = (
-      await listUpcomingSessions(db, guildId, this.ctx.date(), { squadIds: [squad.id] })
-    ).filter((session) => !session.startedAt && session.startsAt.getTime() > now);
+    // `listUpcomingSessions` já deixa de fora cancelada e passada do fim; a
+    // que está rolando agora continua valendo, e é a primeira da lista.
+    const upcoming = await listUpcomingSessions(db, guildId, this.ctx.date(), {
+      squadIds: [squad.id],
+    });
     const guests = await listSessionGuests(
       db,
       guildId,
@@ -250,9 +261,30 @@ export class CallService {
   }
 
   /**
+   * Passo do job: tira do ar a chamada de toda jogatina que acabou. É o que
+   * fecha a chamada no `ends_at`, porque nada mais acontece nesse minuto: o
+   * início não fecha mais (a chamada vale durante a jogatina) e a liberação da
+   * reserva só chega quando há sala. Nunca lança; devolve quantas tirou.
+   */
+  async closeFinished(guild: Guild): Promise<number> {
+    let closed = 0;
+    try {
+      const now = this.ctx.now();
+      for (const session of await listOpenSessionCalls(this.ctx.db, guild.id)) {
+        if (!session.cancelledAt && !isSessionOver(session, now)) continue;
+        if (await this.close(guild, session)) closed++;
+      }
+    } catch (error) {
+      log.warn({ err: error, guildId: guild.id }, 'falha ao tirar as chamadas encerradas do ar');
+    }
+    return closed;
+  }
+
+  /**
    * Reedita a chamada no ar com a jogatina de agora: a remarcação muda o
-   * horário que ela anuncia. Nunca lança; chamada que sumiu fica para o
-   * ENTRAR, que já responde que ela acabou.
+   * horário que ela anuncia, e o início troca o texto para "rolando agora".
+   * Nunca lança; chamada que sumiu fica para o ENTRAR, que já responde que
+   * ela acabou.
    */
   async refreshMessage(guild: Guild, session: SquadSession): Promise<void> {
     const { callMessageId, callChannelId } = session;

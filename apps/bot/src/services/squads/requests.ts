@@ -21,6 +21,7 @@ import {
   DAY_MS,
   decideJoinVote,
   HOUR_MS,
+  isSessionOver,
   isUserFacingError,
   UserFacingError,
 } from '@goodbot/shared';
@@ -782,9 +783,30 @@ export class JoinRequestService {
       memberIds: members.map((member) => member.userId),
       history: history.text,
       state,
+      running: state === 'joined' ? await this.runningSession(guildId, request) : null,
       embedColor,
       mentionCandidate,
     });
+  }
+
+  /**
+   * A jogatina da chamada que a pessoa respondeu, se ela está rolando agora:
+   * quem entra no meio precisa saber em qual sala cair, e o canal do squad só
+   * aparece para ela depois de entrar.
+   */
+  private async runningSession(
+    guildId: string,
+    request: SquadJoinRequest,
+  ): Promise<{ voiceChannelId: string | null; voiceTemporary: boolean } | null> {
+    if (!request.sessionId) return null;
+    const session = await getSquadSession(this.ctx.db, guildId, request.sessionId);
+    if (!session?.startedAt || session.cancelledAt) return null;
+    if (isSessionOver(session, this.ctx.now())) return null;
+    const reserved = session.voiceReservedAt !== null && session.voiceReleasedAt === null;
+    return {
+      voiceChannelId: reserved ? session.voiceChannelId : null,
+      voiceTemporary: reserved && session.voiceTemporary,
+    };
   }
 
   /** Reedita a votação; nunca lança. */

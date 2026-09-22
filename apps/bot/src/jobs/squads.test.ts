@@ -99,6 +99,39 @@ describe('SquadsJob', () => {
     expect(s.voices[0]!.permissionOverwrites.set).toHaveBeenCalledTimes(2);
   });
 
+  it('a chamada pública fica no ar durante a jogatina e sai no fim', async () => {
+    const s = jobScenario();
+    const { session } = await s.schedule('hoje 12h');
+    await s.service.callForPlayers(s.discordGuild, session.id, A, 'event');
+    const call = s.search.sent[0]!;
+
+    s.clock.now = at('2026-09-14T15:00:00Z');
+    expect(await s.run()).toMatchObject({ started: 1, calls: 0 });
+    expect(call.deleted).toBe(false);
+
+    // A sala é liberada no fim e leva a chamada junto: nada sobra para o passo.
+    s.clock.now = at('2026-09-14T18:00:00Z');
+    expect(await s.run()).toMatchObject({ released: 1, calls: 0 });
+    expect(call.deleted).toBe(true);
+    expect(store.sessions[0]?.callMessageId).toBeNull();
+  });
+
+  it('a chamada de uma jogatina sem sala sai do ar no fim previsto', async () => {
+    const s = jobScenario();
+    const { session } = await s.schedule('hoje 12h');
+    await s.service.callForPlayers(s.discordGuild, session.id, A, 'event');
+    const call = s.search.sent[0]!;
+    // Sem reserva: começa sem sala, e não há liberação que feche a chamada.
+    s.clock.now = at('2026-09-14T15:00:00Z');
+    await s.service.startSession(s.discordGuild, store.sessions[0]!);
+
+    s.clock.now = at('2026-09-14T18:00:00Z');
+    expect(await s.run()).toMatchObject({ calls: 1 });
+
+    expect(call.deleted).toBe(true);
+    expect(await s.run()).toMatchObject({ calls: 0 });
+  });
+
   it('cada passada acerta a presença com quem está no voice reservado', async () => {
     const s = jobScenario();
     await s.schedule('hoje 12h');

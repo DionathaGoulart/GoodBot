@@ -274,6 +274,9 @@ export class SquadLifecycleService {
             groupSize: game.groupSize,
             embedColor: await this.ctx.embedColor(guildId),
             ping: options.ping,
+            // Entrou com a jogatina rolando (pela chamada pública, em geral):
+            // este é o único aviso que a pessoa vê, e ele diz onde entrar.
+            running: await this.ctx.parts.sessions.runningRoom(guildId, squadId),
           }),
         )
         .catch(logFailure('não foi possível avisar a entrada no squad', { guildId, squadId }));

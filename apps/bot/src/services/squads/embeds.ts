@@ -358,15 +358,26 @@ export interface MembershipView {
 }
 
 /** "Entrou". Com `ping`, a pessoa é chamada: é assim que ela acha o canal novo. */
-export function memberJoinedMessage(view: MembershipView & { ping: boolean }): BaseMessageOptions {
+export function memberJoinedMessage(
+  view: MembershipView & {
+    ping: boolean;
+    /** A jogatina do squad rolando agora: quem chegou no meio precisa da sala. */
+    running?: { voiceChannelId: string | null; voiceTemporary: boolean } | null;
+  },
+): BaseMessageOptions {
   const full = view.memberCount >= view.groupSize ? ' O squad está completo.' : '';
+  const room = !view.running
+    ? ''
+    : view.running.voiceChannelId
+      ? ` A jogatina está rolando: ${mention(view.userId)}, entra em <#${view.running.voiceChannelId}>${view.running.voiceTemporary ? ` (${TEMPORARY_VOICE_NOTE})` : ''}.`
+      : ` A jogatina está rolando: digam a ${mention(view.userId)} em qual sala vocês estão.`;
   return {
     ...(view.ping ? { content: mention(view.userId) } : {}),
     embeds: [
       infoEmbed(
         {
           title: 'Chegou reforço',
-          description: `${mention(view.userId)} entrou no squad. Agora são ${String(view.memberCount)} de ${String(view.groupSize)}.${full}`,
+          description: `${mention(view.userId)} entrou no squad. Agora são ${String(view.memberCount)} de ${String(view.groupSize)}.${full}${room}`,
           footer: SQUADS_FOOTER,
         },
         view.embedColor,
@@ -537,6 +548,12 @@ export interface InviteView {
   /** `formatHistory` do squad: é o que diz ao candidato se o squad joga de verdade. */
   history: string;
   state: InviteState;
+  /**
+   * A jogatina do squad que está rolando agora, quando quem entrou veio da
+   * chamada dela: o aviso de entrada aponta a sala, porque o convidado não
+   * tinha como saber dela. `null` = nenhuma rolando.
+   */
+  running: { voiceChannelId: string | null; voiceTemporary: boolean } | null;
   embedColor: number;
   /** Só o primeiro envio chama o candidato; a reedição não pinga. */
   mentionCandidate: boolean;
@@ -553,9 +570,15 @@ function inviteDescription(view: InviteView): string {
       return `Pedido enviado ao ${squad}. O squad está votando, e eu aviso aqui quando decidirem.`;
     case 'joined': {
       const where = channelOf(view.squad);
-      return where
+      const home = where
         ? `Você entrou no ${squad}. A casa do squad é ${where}.`
         : `Você entrou no ${squad}.`;
+      if (!view.running) return home;
+      const note = view.running.voiceTemporary ? ` (${TEMPORARY_VOICE_NOTE})` : '';
+      const room = view.running.voiceChannelId
+        ? `entra em <#${view.running.voiceChannelId}>, já liberada para você${note}.`
+        : 'pergunte no canal do squad em qual sala eles estão.';
+      return `${home} A jogatina está rolando agora: ${room}`;
     }
     case 'passed':
       return `Você passou neste convite para o ${squad}.`;
@@ -791,8 +814,9 @@ export interface SessionView {
   /** Convidados avulsos da jogatina: aparecem à parte e contam na party. */
   guestIds: readonly string[];
   /**
-   * CHAMAR GENTE ainda vale: antes do início, sem chamada feita, com vaga no
-   * squad e lugar na party. O botão só aparece quando funciona.
+   * CHAMAR GENTE ainda vale: jogatina viva (marcada ou rolando), sem chamada
+   * feita, com vaga no squad e lugar na party. O botão só aparece quando
+   * funciona.
    */
   canCall: boolean;
   /**
@@ -884,7 +908,7 @@ export function sessionMessage(view: SessionView): BaseMessageOptions {
     const playing = session.goingIds.length + view.guestIds.length;
     const party = view.partySize === null ? null : partyText(playing, view.partySize);
     if (party) fields.push({ name: 'Party', value: party });
-    if (view.state === 'scheduled' && view.callChannelId) {
+    if (view.callChannelId) {
       fields.push({
         name: 'Chamada',
         value: `Aberta em <#${view.callChannelId}>: quem quiser jogar pede para entrar, e vocês votam aqui.`,
@@ -904,14 +928,17 @@ export function sessionMessage(view: SessionView): BaseMessageOptions {
       .setLabel('NÃO VOU')
       .setStyle(ButtonStyle.Secondary),
   ];
-  if (view.canCall) {
-    answer.push(
-      new ButtonBuilder()
-        .setCustomId(callButtonId(session.id))
-        .setLabel('CHAMAR GENTE')
-        .setStyle(ButtonStyle.Secondary),
-    );
-  }
+  // A chamada e o convidado valem durante a jogatina também: quem está
+  // jogando é quem descobre que falta gente.
+  const call = view.canCall
+    ? [
+        new ButtonBuilder()
+          .setCustomId(callButtonId(session.id))
+          .setLabel('CHAMAR GENTE')
+          .setStyle(ButtonStyle.Secondary),
+      ]
+    : [];
+  answer.push(...call);
   const guest = view.canBringGuest
     ? [
         new ButtonBuilder()
@@ -942,6 +969,7 @@ export function sessionMessage(view: SessionView): BaseMessageOptions {
               .setCustomId(sessionButtonId('repeat', session.id))
               .setLabel('REPETIR')
               .setStyle(ButtonStyle.Primary),
+            ...call,
             ...guest,
           )
         : [];
@@ -1053,7 +1081,7 @@ export function sessionStartMessage(view: {
 }
 
 export interface PublicCallView {
-  session: Pick<SquadSession, 'id' | 'startsAt'>;
+  session: Pick<SquadSession, 'id' | 'startsAt' | 'startedAt'>;
   squad: Pick<Squad, 'name'>;
   game: Pick<SquadGame, 'name' | 'groupSize' | 'partySize'>;
   memberCount: number;
@@ -1066,19 +1094,27 @@ export interface PublicCallView {
  * A chamada pública do CHAMAR GENTE, no canal de busca: a jogatina, o squad e
  * o histórico dele, com ENTRAR. Não traz contagem de quem vai, que mudaria a
  * cada voto sem a mensagem acompanhar, e não chama ninguém: quem lê o canal de
- * busca está ali para isso. Sai do ar quando a jogatina começa.
+ * busca está ali para isso. Sai do ar quando a jogatina acaba.
+ *
+ * Depois do início ela é reeditada: o convite passa a ser para entrar numa
+ * partida que já está rolando, que é o que muda para quem lê.
  */
 export function publicCallMessage(view: PublicCallView): BaseMessageOptions {
   const { session, squad, game } = view;
-  const when = `${timestamp(session.startsAt, 'F')} (${timestamp(session.startsAt, 'R')})`;
+  const when = session.startedAt
+    ? `está jogando agora (começou ${timestamp(session.startsAt, 'R')})`
+    : `joga ${timestamp(session.startsAt, 'F')} (${timestamp(session.startsAt, 'R')})`;
+  const enter = session.startedAt
+    ? 'Quer entrar nessa? Aperte **ENTRAR**: o squad vota e, com metade dele a favor, você entra no squad e já cai na jogatina em andamento.'
+    : 'Quer jogar junto? Aperte **ENTRAR**: o squad vota e, com metade dele a favor, você entra no squad e já fica marcado na jogatina.';
   return {
     embeds: [
       infoEmbed(
         {
           title: `Bora jogar ${game.name}?`,
           description: [
-            `O squad **${squad.name}** joga ${when} e tem lugar na party (cada partida leva até ${String(game.partySize)}).`,
-            'Quer jogar junto? Aperte **ENTRAR**: o squad vota e, com metade dele a favor, você entra no squad e já fica marcado na jogatina.',
+            `O squad **${squad.name}** ${when} e tem lugar na party (cada partida leva até ${String(game.partySize)}).`,
+            enter,
           ].join('\n\n'),
           fields: [
             {
@@ -1577,9 +1613,12 @@ export function callSentText(result: {
 
 export function callRequestSentText(result: {
   squad: Pick<Squad, 'name'>;
-  session: Pick<SquadSession, 'startsAt'>;
+  session: Pick<SquadSession, 'startsAt' | 'startedAt'>;
 }): string {
-  return `Pedido enviado ao **${result.squad.name}**. O squad vota: com metade dele a favor, você entra e já fica marcado na jogatina de ${timestamp(result.session.startsAt, 'f')}.`;
+  const which = result.session.startedAt
+    ? 'na jogatina que está rolando'
+    : `na jogatina de ${timestamp(result.session.startsAt, 'f')}`;
+  return `Pedido enviado ao **${result.squad.name}**. O squad vota: com metade dele a favor, você entra e já fica marcado ${which}.`;
 }
 
 export function guestSentText(result: {
