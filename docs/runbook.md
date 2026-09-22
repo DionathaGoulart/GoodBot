@@ -211,6 +211,37 @@ esperam a mesma decisão.
 
 ---
 
+## Aviso de manutenção no deploy
+
+Todo deploy que reinicia o bot avisa os servidores antes, sozinho. O job
+`changes` do `deploy.yml` compara o commit da imagem no ar (label da imagem)
+com o novo e dá um tipo ao deploy (`packages/shared/src/deploy.ts`):
+
+| Tipo       | Quando                                                      | Previsão | O bot |
+| ---------- | ----------------------------------------------------------- | -------- | ----- |
+| `none`     | só painel, docs, CI ou guild como código                    | nenhuma  | não é reconstruído nem reinicia; ninguém é avisado |
+| `restart`  | código do bot, `shared`, `db`, lockfile, Dockerfile         | ~1 min   | reinicia |
+| `database` | migration nova em `packages/db/drizzle/`                    | ~2 min   | reinicia com o schema novo |
+| `infra`    | `docker-compose.yml`, `Caddyfile`, fail2ban, scripts da VM  | ~3 min   | reinicia; o Caddy pode subir de novo junto |
+
+Depois do `docker compose pull`, o `scripts/deploy-notice.sh` pede ao bot que
+ainda está no ar para publicar o aviso (no mesmo canal do broadcast) com a hora
+prevista de volta; logo em seguida vem o `up`. O bot novo, ao subir, edita a
+mesma mensagem para "Goodbot de volta" com o tempo que ficou fora. O estado
+fica em `meta` (chave `deploy_notice`), porque quem avisa e quem confirma são
+processos diferentes.
+
+- **Rodar o workflow à mão** nunca é `none`: é pedir o deploy.
+- **Rollback com `deploy.sh`** também avisa (`restart`); `DEPLOY_KIND=none
+  ./deploy.sh sha-…` reinicia calado.
+- **Sem `OWNER_DISCORD_ID` na VM** o aviso não sai (a rota responde 403) e o
+  deploy segue normal: o script nunca falha o deploy.
+- **Aviso que ficou "em manutenção"** com o bot no ar é deploy que avisou e não
+  reiniciou (o `up` falhou antes de derrubar o container). O próximo boot
+  resolve; para resolver já, `docker compose restart bot`.
+
+---
+
 ## Mandar um aviso para todos os servidores
 
 `admin.<dominio>` → **Manutenção** → **BROADCAST**. Sempre **ENSAIAR** antes: o

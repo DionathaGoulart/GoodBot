@@ -134,8 +134,8 @@ src/
                   (convites e votações vencidos, lembrete, voice reservado e
                   início das jogatinas, varredura de presença, e o passo
                   diário de inatividade, guias e match), capacity (RAM e
-                  tamanho do banco contra
-                  as linhas de aviso, alerta no webhook)
+                  tamanho do banco contra as linhas de aviso, alerta no
+                  webhook)
   lib/            utilitários sem estado: embeds, template, cooldown, purge,
                   channels (onde o bot pode falar), guild-setup,
                   inviter-dm (todo o texto dos avisos a quem convidou)...
@@ -161,6 +161,7 @@ fino: valida entrada, chama um service, responde. Os principais:
 | `AuditService`            | trilha do que o bot e o painel fizeram                     |
 | `Scheduler`               | executa `scheduled_actions` (tempban, lembrete, unlock)    |
 | `AlertService`            | manda alerta operacional por webhook                       |
+| `DeployNoticeService`     | aviso de manutenção do deploy: o bot velho publica, o novo edita para "voltou" |
 
 > **Regra dura:** config de módulo é lida **sempre** pelo `ConfigService`,
 > nunca por query direta dentro de um comando ou evento. O cache existe e uma
@@ -413,6 +414,8 @@ src/
              (client.ts, `createInternalClient`) + permissions.ts
   config/    um schema Zod por módulo (automod, logs, welcome, tickets...)
   constants.ts, duration.ts, snowflake.ts, templates.ts, errors.ts
+  deploy.ts  o tipo de um deploy pelos arquivos que mudaram (a CI usa pelo
+             `deploy-kind.ts`) e a previsão de volta de cada tipo
 ```
 
 Dois pontos que carregam mais peso do que parecem:
@@ -771,6 +774,12 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
   gerencia, senão a operação falha com `BOT_ROLE_HIERARCHY`.
 - **`moveRole` anda uma casa por chamada.** Não existe "definir posição".
 - **Migrations não rodam no boot do bot**: são um passo da CI.
+- **Nem todo push reinicia o bot.** O job `changes` do `deploy.yml` classifica
+  o deploy pelo diff entre o commit da imagem no ar e o novo
+  (`packages/shared/src/deploy.ts`); `none` (painel, docs, CI) pula a imagem e
+  o deploy da VM. Arquivo novo que entra na imagem ou na VM precisa entrar nas
+  listas de lá, senão a mudança não sobe. O que reinicia avisa os servidores
+  antes (`scripts/deploy-notice.sh` → `POST /admin/deploy-notice`).
 - **O backup acompanha a versão do Supabase.** `pg_dump` aborta contra servidor
   de major maior que a dele; a imagem do serviço `backup` é `postgres:17-alpine`
   porque o Supabase está no 17. Pelo mesmo motivo, restaure num Postgres 17: o

@@ -16,8 +16,8 @@ Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (
 > quem cada um mais joga, e por jogatina quem foi, quem faltou e quem
 > apareceu sem avisar. A fonte é só o voice das jogatinas: nada de presença
 > de perfil nem de tempo fora de jogatina marcada. O que mudou no documento:
-> "Histórico", "Números" e "O relógio" na §5.11. O que **não** mudou: o resto
-> do módulo e os outros módulos.
+> "Histórico", "Números" e "O relógio" na §5.11, e o aviso de manutenção do
+> deploy na §7.5. O que **não** mudou: o resto do módulo e os outros módulos.
 
 > **v1.6: jogatina sob demanda.** O squad deixou de ter janela semanal fixa:
 > a grade do perfil serve só para o match, e quem marca a hora de jogar é o
@@ -1290,6 +1290,19 @@ level)`. A guild conferida é sempre a que vai ser lida ou escrita, e ela
   (`git.deploymentEnabled`) e o job `painel` publica com a CLI
   (`vercel pull/build/deploy --prebuilt --prod`) depois do `migrate`. Branch e
   PR continuam ganhando preview pela integração normal.
+- **Deploy avisa antes de reiniciar o bot** (v1.7). Um job `changes` compara
+  o commit da imagem no ar com o novo e classifica o deploy
+  (`packages/shared/src/deploy.ts`): `none` (painel, docs, CI) não reconstrói
+  nem reinicia o bot; `restart` (código), `database` (migration nova) e `infra`
+  (compose, Caddy, scripts da VM) reiniciam, e antes do `up` o bot ainda no ar
+  publica em cada servidor atendido um aviso de manutenção com a previsão de
+  volta do tipo (~1, ~2 e ~3 min; o reinício medido na E2.1.Micro fica abaixo
+  de 1 min). O bot novo, no boot, edita o mesmo aviso para "voltou" com o
+  tempo fora. A chamada é a rota `POST /admin/deploy-notice` (Bearer, Zod e
+  `actorId` do dono, como o resto do `/admin`), feita de dentro do container
+  pelo `scripts/deploy-notice.sh`, que nunca falha o deploy. O estado mora em
+  `meta` (`deploy_notice`), porque quem avisa e quem confirma são processos
+  diferentes.
 - O painel na Vercel é stateless: qualquer instância pode atender qualquer
   request; nada de estado em memória entre requests.
 - Graceful shutdown: flush de stats, fechar HTTP, destruir client, 10s de
