@@ -450,6 +450,14 @@ export type SquadFieldMatch = (typeof SQUAD_FIELD_MATCH)[number];
 export const SQUAD_MATCH_WEIGHTS = { cell: 1, soft: 3 } as const;
 
 /**
+ * Antecedência com que o voice reservado já conta como "da jogatina": estar
+ * nele a partir daqui é presença. A reserva sai no lembrete, que pode vir
+ * antes disso; o evento de voz (pelo banco) e a varredura do bot usam a mesma
+ * janela.
+ */
+export const SQUAD_PRESENCE_LEAD_MS = HOUR_MS;
+
+/**
  * Tamanhos de um jogo. O **grupo** é o squad inteiro; a **party** é quem joga
  * junto numa partida. Um jogo de quatro por partida comporta um squad de doze
  * que se divide conforme quem aparece na jogatina. O match propõe uma party;

@@ -318,9 +318,11 @@ export const squadSessions = pgTable(
  * quando. Uma linha por entrada: sair e voltar abre outra. É a presença de
  * verdade que o histórico conta, porque "vou" não prova que a pessoa foi.
  *
- * Gravada pelo evento de voz. Linha sem `left_at` é quem ainda está, ou quem
- * saiu com o bot fora do ar; o histórico só olha quem esteve, não quanto
- * tempo.
+ * Gravada pelo evento de voz e pela varredura do bot (`sweepPresence`), que
+ * cobre o que o evento não vê: quem já estava no voice quando a reserva saiu
+ * e quem entrou ou saiu com o bot fora do ar. Linha sem `left_at` é quem ainda
+ * está; a de quem saiu com o bot fora do ar fecha na varredura seguinte, na
+ * hora dela, e por isso superestima o tempo dessa pessoa.
  */
 export const squadSessionAttendance = pgTable(
   'squad_session_attendance',

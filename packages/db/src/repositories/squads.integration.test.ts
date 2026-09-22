@@ -11,6 +11,7 @@ import {
   cancelSquadSession,
   claimProposalSquad,
   claimSessionCall,
+  closeAttendanceRow,
   closeSessionAttendance,
   closeSessionCall,
   closeSquadProposal,
@@ -33,6 +34,7 @@ import {
   listDueJoinRequests,
   listInactiveSquads,
   listMembersOfSquads,
+  listOpenAttendance,
   listOpenJoinRequests,
   listOpenSessionCalls,
   listPlayedSessions,
@@ -757,26 +759,63 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect(request?.sessionId).toBe(recent.id);
     });
 
-    it('presença: uma linha por entrada, fecha as abertas da pessoa e lista sem repetir', async () => {
+    it('presença: uma linha por entrada, fecha as abertas da pessoa e lista com os intervalos', async () => {
       const session = await newSession('Presença');
       const joinedAt = new Date();
+      const later = new Date(joinedAt.getTime() + 1_000);
       const input = { guildId: GUILD_ID, sessionId: session.id, userId: USER_B, joinedAt };
       expect(await openSessionAttendance(db, input)).toBe(true);
       expect(await openSessionAttendance(db, input)).toBe(false);
-      await openSessionAttendance(db, { ...input, joinedAt: new Date(joinedAt.getTime() + 1_000) });
+      await openSessionAttendance(db, { ...input, joinedAt: later });
       await openSessionAttendance(db, { ...input, userId: USER_C });
 
-      expect(await closeSessionAttendance(db, OTHER_GUILD_ID, USER_B, new Date())).toBe(0);
-      expect(await closeSessionAttendance(db, GUILD_ID, USER_B, new Date())).toBe(2);
-      expect(await closeSessionAttendance(db, GUILD_ID, USER_B, new Date())).toBe(0);
+      const leftAt = new Date(joinedAt.getTime() + 60_000);
+      expect(await closeSessionAttendance(db, OTHER_GUILD_ID, USER_B, leftAt)).toBe(0);
+      expect(await closeSessionAttendance(db, GUILD_ID, USER_B, leftAt)).toBe(2);
+      expect(await closeSessionAttendance(db, GUILD_ID, USER_B, leftAt)).toBe(0);
 
       const rows = await listSessionAttendance(db, GUILD_ID, [session.id]);
       expect(rows.sort((a, b) => (a.userId < b.userId ? -1 : 1))).toEqual([
-        { sessionId: session.id, userId: USER_B },
-        { sessionId: session.id, userId: USER_C },
+        { sessionId: session.id, userId: USER_B, joinedAt, leftAt },
+        { sessionId: session.id, userId: USER_B, joinedAt: later, leftAt },
+        { sessionId: session.id, userId: USER_C, joinedAt, leftAt: null },
       ]);
       expect(await listSessionAttendance(db, GUILD_ID, [])).toEqual([]);
       expect(await listSessionAttendance(db, OTHER_GUILD_ID, [session.id])).toEqual([]);
+    });
+
+    it('presença aberta: lista com o voice da jogatina e fecha uma linha só, uma vez', async () => {
+      const session = await newSession('Presença aberta');
+      const voiceChannelId = '300000000000000099';
+      await reserveSessionVoice(db, GUILD_ID, session.id, {
+        voiceChannelId,
+        overwrites: [],
+        at: new Date(),
+      });
+      const joinedAt = new Date();
+      await openSessionAttendance(db, {
+        guildId: GUILD_ID,
+        sessionId: session.id,
+        userId: USER_D,
+        joinedAt,
+      });
+
+      const open = (await listOpenAttendance(db, GUILD_ID)).filter(
+        (row) => row.sessionId === session.id,
+      );
+      expect(open).toEqual([{ sessionId: session.id, userId: USER_D, joinedAt, voiceChannelId }]);
+      expect(
+        (await listOpenAttendance(db, OTHER_GUILD_ID)).some((row) => row.sessionId === session.id),
+      ).toBe(false);
+
+      const key = { sessionId: session.id, userId: USER_D, joinedAt };
+      const at = new Date(joinedAt.getTime() + 60_000);
+      expect(await closeAttendanceRow(db, OTHER_GUILD_ID, key, at)).toBe(false);
+      expect(await closeAttendanceRow(db, GUILD_ID, key, at)).toBe(true);
+      expect(await closeAttendanceRow(db, GUILD_ID, key, at)).toBe(false);
+      expect(
+        (await listOpenAttendance(db, GUILD_ID)).some((row) => row.sessionId === session.id),
+      ).toBe(false);
     });
   });
 

@@ -2,6 +2,7 @@ import {
   joinRequestKey,
   pairKey,
   SQUAD_OPEN_REQUEST_STATUSES,
+  SQUAD_PRESENCE_LEAD_MS,
   type SquadAnswers,
   type SquadGameField,
   type SquadOpenRequestStatus,
@@ -1707,13 +1708,10 @@ export async function releaseSessionVoice(
   return row ?? null;
 }
 
-/** Antecedência com que o voice reservado já conta como "da jogatina" (a reserva sai no lembrete). */
-const ACTIVE_SESSION_LEAD_MS = 60 * 60_000;
-
 /**
  * A sessão com reserva viva neste voice em `now`: reservada, não liberada e
- * com `starts_at - 60 min <= now < ends_at`. É o que o evento de voz consulta
- * para saber se quem entrou ou saiu mexe numa sessão de squad.
+ * com `starts_at - SQUAD_PRESENCE_LEAD_MS <= now < ends_at`. É o que o evento
+ * de voz consulta para saber se quem entrou ou saiu mexe numa sessão de squad.
  */
 export async function getActiveSessionByVoice(
   db: DbExecutor,
@@ -1730,7 +1728,7 @@ export async function getActiveSessionByVoice(
         eq(squadSessions.voiceChannelId, voiceChannelId),
         isNotNull(squadSessions.voiceReservedAt),
         isNull(squadSessions.voiceReleasedAt),
-        lte(squadSessions.startsAt, new Date(now.getTime() + ACTIVE_SESSION_LEAD_MS)),
+        lte(squadSessions.startsAt, new Date(now.getTime() + SQUAD_PRESENCE_LEAD_MS)),
         gt(squadSessions.endsAt, now),
       ),
     )
@@ -1953,17 +1951,31 @@ export async function closeSessionAttendance(
   return rows.length;
 }
 
-/** Quem esteve em cada jogatina, uma linha por pessoa e jogatina. */
+export interface SessionAttendanceRow {
+  sessionId: number;
+  userId: string;
+  joinedAt: Date;
+  /** `null` = ainda no voice (ou saiu sem a varredura ter visto ainda). */
+  leftAt: Date | null;
+}
+
+/**
+ * As entradas no voice de cada jogatina, com o intervalo de cada uma. Quem
+ * saiu e voltou aparece mais de uma vez: quem conta pessoas deduplica, quem
+ * conta tempo junta os intervalos (`shared/squads/stats.ts`).
+ */
 export async function listSessionAttendance(
   db: DbExecutor,
   guildId: string,
   sessionIds: readonly number[],
-): Promise<{ sessionId: number; userId: string }[]> {
+): Promise<SessionAttendanceRow[]> {
   if (sessionIds.length === 0) return [];
   return db
-    .selectDistinct({
+    .select({
       sessionId: squadSessionAttendance.sessionId,
       userId: squadSessionAttendance.userId,
+      joinedAt: squadSessionAttendance.joinedAt,
+      leftAt: squadSessionAttendance.leftAt,
     })
     .from(squadSessionAttendance)
     .where(
@@ -1971,5 +1983,62 @@ export async function listSessionAttendance(
         eq(squadSessionAttendance.guildId, guildId),
         inArray(squadSessionAttendance.sessionId, [...sessionIds]),
       ),
-    );
+    )
+    .orderBy(asc(squadSessionAttendance.joinedAt));
+}
+
+export interface OpenAttendanceRow {
+  sessionId: number;
+  userId: string;
+  joinedAt: Date;
+  /** O voice da jogatina, que continua gravado depois da liberação. */
+  voiceChannelId: string | null;
+}
+
+/**
+ * Toda presença aberta da guild, com o voice da jogatina dela. É o que a
+ * varredura confere contra quem está em voice agora: linha aberta de quem não
+ * está mais naquele voice saiu com o bot fora do ar.
+ */
+export async function listOpenAttendance(
+  db: DbExecutor,
+  guildId: string,
+): Promise<OpenAttendanceRow[]> {
+  return db
+    .select({
+      sessionId: squadSessionAttendance.sessionId,
+      userId: squadSessionAttendance.userId,
+      joinedAt: squadSessionAttendance.joinedAt,
+      voiceChannelId: squadSessions.voiceChannelId,
+    })
+    .from(squadSessionAttendance)
+    .innerJoin(squadSessions, eq(squadSessions.id, squadSessionAttendance.sessionId))
+    .where(and(eq(squadSessionAttendance.guildId, guildId), isNull(squadSessionAttendance.leftAt)));
+}
+
+/**
+ * Fecha uma presença só, pela chave inteira. `false` quando ela já estava
+ * fechada: o evento de voz e a varredura podem chegar juntos, e quem fecha
+ * primeiro vale.
+ */
+export async function closeAttendanceRow(
+  db: DbExecutor,
+  guildId: string,
+  row: { sessionId: number; userId: string; joinedAt: Date },
+  at: Date,
+): Promise<boolean> {
+  const rows = await db
+    .update(squadSessionAttendance)
+    .set({ leftAt: at })
+    .where(
+      and(
+        eq(squadSessionAttendance.guildId, guildId),
+        eq(squadSessionAttendance.sessionId, row.sessionId),
+        eq(squadSessionAttendance.userId, row.userId),
+        eq(squadSessionAttendance.joinedAt, row.joinedAt),
+        isNull(squadSessionAttendance.leftAt),
+      ),
+    )
+    .returning({ sessionId: squadSessionAttendance.sessionId });
+  return rows.length > 0;
 }
