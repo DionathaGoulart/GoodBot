@@ -99,6 +99,28 @@ describe('SquadsJob', () => {
     expect(s.voices[0]!.permissionOverwrites.set).toHaveBeenCalledTimes(2);
   });
 
+  it('cada passada acerta a presença com quem está no voice reservado', async () => {
+    const s = jobScenario();
+    await s.schedule('hoje 12h');
+    s.clock.now = at('2026-09-14T14:40:00Z');
+    await s.run();
+
+    // B entra com o bot fora do ar: nenhum evento chegou.
+    s.guild.putInVoice(B, s.voices[0]!.id);
+    s.clock.now = at('2026-09-14T14:45:00Z');
+    expect(await s.run()).toMatchObject({ swept: 1 });
+    expect(store.attendance).toEqual([
+      expect.objectContaining({ userId: B, joinedAt: new Date(s.clock.now), leftAt: null }),
+    ]);
+
+    // E sai do mesmo jeito.
+    s.guild.voiceStates.cache.delete(B);
+    s.clock.now = at('2026-09-14T14:50:00Z');
+    expect(await s.run()).toMatchObject({ swept: 1 });
+    expect(store.attendance[0]?.leftAt).toEqual(new Date(s.clock.now));
+    expect(await s.run()).toMatchObject({ swept: 0 });
+  });
+
   it('jogatina cancelada não é lembrada nem começa', async () => {
     const s = jobScenario();
     const { session } = await s.schedule('hoje 12h');

@@ -37,6 +37,7 @@ import type {
   RemindResult,
   ScheduleResult,
   StartResult,
+  SweepResult,
 } from './sessions';
 import type { ArchiveOptions, RemoveMemberResult, RenameOptions, RenameResult } from './squads';
 import type { Squad, SquadGame, SquadProfile, SquadProposal, SquadSession } from '@goodbot/db';
@@ -83,6 +84,7 @@ export type {
   RemindResult,
   ScheduleResult,
   StartResult,
+  SweepResult,
 } from './sessions';
 export type { ArchiveOptions, RemoveMemberResult, RenameOptions, RenameResult } from './squads';
 
@@ -441,6 +443,11 @@ export class SquadService {
   /** Evento de voz: voice reservado vazio depois do início libera a reserva. */
   releaseEmptyVoice(guild: Guild, voiceChannelId: string): Promise<boolean> {
     return this.ctx.parts.sessions.releaseIfEmpty(guild, voiceChannelId);
+  }
+
+  /** Job: acerta a presença com quem está em voice agora (o que o evento de voz não viu). */
+  sweepPresence(guild: Guild): Promise<SweepResult> {
+    return this.ctx.parts.sessions.sweepPresence(guild);
   }
 
   /** Job: adota ou apaga o voice temporário de uma criação que não terminou. */

@@ -1027,16 +1027,47 @@ export const impl = {
     return closed;
   },
   async listSessionAttendance(_db: unknown, guildId: string, sessionIds: readonly number[]) {
-    const seen = new Set<string>();
-    const rows: { sessionId: number; userId: string }[] = [];
-    for (const a of store.attendance) {
-      if (a.guildId !== guildId || !sessionIds.includes(a.sessionId)) continue;
-      const key = `${String(a.sessionId)}:${a.userId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      rows.push({ sessionId: a.sessionId, userId: a.userId });
-    }
-    return rows;
+    return copy(
+      store.attendance
+        .filter((a) => a.guildId === guildId && sessionIds.includes(a.sessionId))
+        .sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())
+        .map(({ sessionId, userId, joinedAt, leftAt }) => ({
+          sessionId,
+          userId,
+          joinedAt,
+          leftAt,
+        })),
+    );
+  },
+  async listOpenAttendance(_db: unknown, guildId: string) {
+    return copy(
+      store.attendance
+        .filter((a) => a.guildId === guildId && a.leftAt === null)
+        .map(({ sessionId, userId, joinedAt }) => ({
+          sessionId,
+          userId,
+          joinedAt,
+          voiceChannelId: findSession(guildId, sessionId)?.voiceChannelId ?? null,
+        })),
+    );
+  },
+  async closeAttendanceRow(
+    _db: unknown,
+    guildId: string,
+    row: { sessionId: number; userId: string; joinedAt: Date },
+    at: Date,
+  ) {
+    const found = store.attendance.find(
+      (a) =>
+        a.guildId === guildId &&
+        a.sessionId === row.sessionId &&
+        a.userId === row.userId &&
+        a.joinedAt.getTime() === row.joinedAt.getTime() &&
+        a.leftAt === null,
+    );
+    if (!found) return false;
+    found.leftAt = at;
+    return true;
   },
 
   async listSessionsToRelease(_db: unknown, guildId: string, now: Date) {

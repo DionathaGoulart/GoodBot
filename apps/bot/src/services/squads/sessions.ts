@@ -1,6 +1,7 @@
 import {
   cancelSquadSession,
   clearSquadWarned,
+  closeAttendanceRow,
   closeSessionAttendance,
   createSquadSession,
   getActiveSessionByVoice,
@@ -10,6 +11,7 @@ import {
   getSquadSessionAt,
   listInactiveSquads,
   listLiveTemporaryVoiceIds,
+  listOpenAttendance,
   listPendingTemporaryVoices,
   listSessionsStartingBetween,
   listSessionsToRelease,
@@ -36,6 +38,7 @@ import {
   parseWhen,
   SECOND_MS,
   snowflakeToDate,
+  SQUAD_PRESENCE_LEAD_MS,
   UserFacingError,
   WEEK_MS,
 } from '@goodbot/shared';
@@ -117,6 +120,14 @@ export interface StartResult {
 export interface InactivityResult {
   warned: string[];
   archived: string[];
+}
+
+/** O que a varredura de presença acertou. */
+export interface SweepResult {
+  /** Presenças abertas para quem estava no voice reservado sem linha aberta. */
+  opened: number;
+  /** Presenças fechadas de quem não está mais no voice da jogatina. */
+  closed: number;
 }
 
 /** O que o job tem a fazer com as jogatinas nesta passada. */
@@ -387,6 +398,8 @@ export class SessionService {
     if (!squad || squad.status === 'archived') return { session: marked, voiceChannelId: null };
 
     const voiceChannelId = await this.reserveVoice(guild, marked);
+    // Quem já estava no voice antes da reserva não gera evento de entrada.
+    if (voiceChannelId) await this.sweepSafely(guild);
     const current = (await getSquadSession(db, guild.id, marked.id)) ?? marked;
     const voiceTemporary = voiceChannelId !== null && current.voiceTemporary;
     if (!current.messageId) {
@@ -539,6 +552,9 @@ export class SessionService {
         log.warn({ err: error, guildId: guild.id, userId }, 'não foi possível mover para o voice');
       }
     }
+    // Quem já estava na sala não foi movido e não gerou evento. Quem foi
+    // movido entra pelo evento de voz, quando o gateway contar.
+    if (voiceId) await this.sweepSafely(guild);
 
     if (!voiceId && marked.goingIds.length >= 2) {
       await markSessionPlayed(db, guild.id, marked.id, this.ctx.date());
@@ -918,15 +934,14 @@ export class SessionService {
     if (!session || session.cancelledAt) return false;
     const members = await this.memberIds(guild.id, session.squadId);
     if (!members.includes(userId)) return false;
+    const at = this.ctx.date();
     await openSessionAttendance(db, {
       guildId: guild.id,
       sessionId: session.id,
       userId,
-      joinedAt: this.ctx.date(),
+      joinedAt: at,
     });
-    await markSessionPlayed(db, guild.id, session.id, this.ctx.date());
-    await touchSquadConfirmed(db, guild.id, session.squadId, this.ctx.date());
-    await clearSquadWarned(db, guild.id, session.squadId);
+    await this.markPlayed(guild.id, session, at);
     return true;
   }
 
@@ -938,6 +953,88 @@ export class SessionService {
    */
   async recordLeave(guild: Guild, userId: string): Promise<number> {
     return closeSessionAttendance(this.ctx.db, guild.id, userId, this.ctx.date());
+  }
+
+  /**
+   * Acerta a presença com quem está em voice agora, para cobrir o que o
+   * evento de voz não vê. Roda na reserva, no início e a cada passada do job.
+   *
+   * - Quem é do squad e está no voice reservado de uma jogatina viva (a mesma
+   *   janela do evento: de `SQUAD_PRESENCE_LEAD_MS` antes do início até o fim),
+   *   sem presença aberta nela, ganha uma a partir de agora. É quem já estava
+   *   na sala quando a reserva saiu, ou quem entrou com o bot fora do ar.
+   * - Presença aberta de quem não está mais no voice da jogatina dela fecha
+   *   agora. É quem saiu com o bot fora do ar, e por isso o tempo dessa pessoa
+   *   sai maior do que foi: a saída de verdade não chegou a ninguém.
+   *
+   * Quem continua no voice depois da liberação continua contando, como no
+   * evento, que só fecha na saída. A exceção é o voice que já está na janela
+   * de outra jogatina (a seguinte do squad, na mesma sala): a presença passa a
+   * ser dessa, e a antiga fecha, senão as duas contariam o mesmo tempo.
+   */
+  async sweepPresence(guild: Guild): Promise<SweepResult> {
+    const { db } = this.ctx;
+    const guildId = guild.id;
+    const now = this.ctx.now();
+    const at = this.ctx.date();
+    const channelOf = (userId: string) => guild.voiceStates.cache.get(userId)?.channelId ?? null;
+    const result: SweepResult = { opened: 0, closed: 0 };
+
+    const live = (await this.liveReservations(guildId)).filter(
+      (session) =>
+        session.voiceChannelId !== null &&
+        !session.cancelledAt &&
+        session.startsAt.getTime() - SQUAD_PRESENCE_LEAD_MS <= now &&
+        now < session.endsAt.getTime(),
+    );
+    const holder = new Map(live.map((session) => [session.voiceChannelId, session.id]));
+
+    const stillOpen = new Set<string>();
+    for (const row of await listOpenAttendance(db, guildId)) {
+      const voiceId = row.voiceChannelId;
+      const here =
+        voiceId !== null &&
+        channelOf(row.userId) === voiceId &&
+        (holder.get(voiceId) ?? row.sessionId) === row.sessionId;
+      if (here) stillOpen.add(`${String(row.sessionId)}:${row.userId}`);
+      else if (await closeAttendanceRow(db, guildId, row, at)) result.closed++;
+    }
+
+    for (const session of live) {
+      const arrived = (await this.memberIds(guildId, session.squadId)).filter(
+        (userId) =>
+          channelOf(userId) === session.voiceChannelId &&
+          !stillOpen.has(`${String(session.id)}:${userId}`),
+      );
+      for (const userId of arrived) {
+        const input = { guildId, sessionId: session.id, userId, joinedAt: at };
+        if (await openSessionAttendance(db, input)) result.opened++;
+      }
+      if (arrived.length > 0) await this.markPlayed(guildId, session, at);
+    }
+
+    if (result.opened > 0 || result.closed > 0) {
+      log.info({ guildId, ...result }, 'presença acertada');
+    }
+    return result;
+  }
+
+  /** `sweepPresence` dentro de outro fluxo, que não pode cair por causa dela. */
+  private async sweepSafely(guild: Guild): Promise<void> {
+    await this.sweepPresence(guild).catch((error: unknown) => {
+      log.warn({ err: error, guildId: guild.id }, 'falha na varredura de presença');
+    });
+  }
+
+  /**
+   * Alguém do squad no voice reservado: a jogatina rolou, e é o sinal de vida
+   * mais forte do squad, que também desfaz o aviso de inatividade.
+   */
+  private async markPlayed(guildId: string, session: SquadSession, at: Date): Promise<void> {
+    const { db } = this.ctx;
+    await markSessionPlayed(db, guildId, session.id, at);
+    await touchSquadConfirmed(db, guildId, session.squadId, at);
+    await clearSquadWarned(db, guildId, session.squadId);
   }
 
   /**

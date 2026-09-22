@@ -36,6 +36,8 @@ export interface SquadsPass {
   reminded: number;
   started: number;
   released: number;
+  /** Presenças abertas e fechadas pela varredura (o que o evento de voz não viu). */
+  swept: number;
   /** Criações de voice temporário que não terminaram, resolvidas nesta passada. */
   reconciled: number;
   daily: boolean;
@@ -47,9 +49,10 @@ export interface SquadsPass {
  * O relógio do módulo `squads`, de 5 em 5 minutos, por guild atendida com o
  * módulo ligado. Ele não marca jogatina (quem marca é gente, pelo `/bora`).
  * A ordem de cada passada: expira propostas e pedidos, lembra (e reserva o
- * voice), começa (e move), libera o voice da jogatina encerrada, resolve
- * voice temporário de criação interrompida e, uma vez
- * por dia, cobra inatividade, põe os guias em dia e roda o match de novo.
+ * voice), começa (e move), libera o voice da jogatina encerrada, acerta a
+ * presença com quem está em voice, resolve voice temporário de criação
+ * interrompida e, uma vez por dia, cobra inatividade, põe os guias em dia e
+ * roda o match de novo.
  *
  * Cada passo é isolado: falha num não impede os seguintes, e falha numa guild
  * não impede as outras. Rodar duas vezes seguidas não repete nada, porque a
@@ -105,6 +108,7 @@ export class SquadsJob {
       reminded: 0,
       started: 0,
       released: 0,
+      swept: 0,
       reconciled: 0,
       daily: false,
       guides: 0,
@@ -130,6 +134,10 @@ export class SquadsJob {
         if (await squads.releaseVoice(guild, session)) pass.released++;
       });
     }
+    await this.step(guild, 'varrer presença', async () => {
+      const swept = await squads.sweepPresence(guild);
+      pass.swept = swept.opened + swept.closed;
+    });
     await this.step(guild, 'reconciliar voices temporários', async () => {
       pass.reconciled = await squads.reconcileTemporaryVoices(guild);
     });
