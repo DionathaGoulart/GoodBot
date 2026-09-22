@@ -41,6 +41,7 @@ import { PlayersTable } from './players-table';
 import { ProposalsTable } from './proposals-table';
 import { SelectionBar } from './selection-bar';
 
+import type { SquadSessionsData } from '@/lib/squad-sessions';
 import type { SquadGameRow } from '@/lib/squads';
 
 const STATUS_FILTERS: { value: SquadProfileStatus | null; label: string }[] = [
@@ -54,6 +55,8 @@ interface PlayersTabProps {
   games: SquadGameRow[];
   /** `null` para quem não é admin: o servidor nem carrega perfis e nomes. */
   players: SquadPlayersData | null;
+  /** As jogatinas da janela: é delas que saem os números do sheet do jogador. */
+  sessions: SquadSessionsData;
   proposals: SquadProposalSummary[];
   blocks: SquadBlockConfig[];
   timeZone: string;
@@ -81,6 +84,7 @@ export function PlayersTab(props: PlayersTabProps) {
 function AdminPlayers({
   games,
   players,
+  sessions,
   proposals,
   blocks,
   timeZone,
@@ -279,6 +283,7 @@ function AdminPlayers({
         player={openRow}
         game={game}
         data={players}
+        sessions={sessions}
         blocks={blocks}
         timeZone={timeZone}
         onClose={() => setOpenUserId(null)}

@@ -9,6 +9,8 @@ import {
   listOpenSquadProposals,
   listOpenJoinRequests,
   listRecentProposalPairs,
+  listSessionAttendance,
+  listSessionsInWindow,
   listSquadGames,
   listSquadProfilesByGame,
   listSquads,
@@ -24,6 +26,7 @@ import {
   RemoveSquadMemberInputSchema,
   SetSquadProfileStatusInputSchema,
   SquadGameInputSchema,
+  SQUAD_HISTORY_WINDOW_DAYS,
   SquadManualCheckInputSchema,
   SquadNameSchema,
   validateAnswers,
@@ -46,6 +49,7 @@ import { toFieldErrors, type ActionResult } from './module-config';
 import { formatMatchResult } from './squad-labels';
 
 import type { SquadPlayersData } from './squad-players';
+import type { SquadSessionsData } from './squad-sessions';
 import type { z } from 'zod';
 
 const PATH = (guildId: string) => `/g/${guildId}/config/squads`;
@@ -200,6 +204,61 @@ export async function loadSquadPlayers(
     missingMemberIds: summaries.missing,
     unresolvedMemberIds: summaries.unresolved,
     membersError: summaries.error,
+  };
+}
+
+/**
+ * A aba JOGATINAS: as jogatinas da guild e a presença delas, direto do banco.
+ * Nenhuma rota nova no bot, porque a conta é a mesma regra pura de
+ * `shared/squads/stats.ts` e o painel já fala com o Postgres.
+ *
+ * A janela é a do histórico (90 dias), e não "desde sempre": ler toda a
+ * presença do servidor a cada abertura da página é justamente o que a janela
+ * evita. Squad arquivado entra, porque a jogatina que ele jogou aconteceu.
+ */
+export async function loadSquadSessions(guildId: string): Promise<SquadSessionsData> {
+  const loadedAt = Date.now();
+  const since = new Date(loadedAt - SQUAD_HISTORY_WINDOW_DAYS * DAY_MS);
+  const [sessions, squads] = await Promise.all([
+    listSessionsInWindow(db(), guildId, since),
+    listSquads(db(), guildId),
+  ]);
+  const attendance = await listSessionAttendance(
+    db(),
+    guildId,
+    sessions.map((session) => session.id),
+  );
+
+  const summaries = await loadMemberSummaries(guildId, [
+    ...new Set([
+      ...attendance.map((row) => row.userId),
+      ...sessions.flatMap((session) => session.goingIds),
+    ]),
+  ]);
+
+  return {
+    sessions: sessions.map((session) => ({
+      id: session.id,
+      squadId: session.squadId,
+      startsAt: session.startsAt.toISOString(),
+      endsAt: session.endsAt.toISOString(),
+      goingIds: session.goingIds,
+      startedAt: session.startedAt?.toISOString() ?? null,
+      playedAt: session.playedAt?.toISOString() ?? null,
+      cancelledAt: session.cancelledAt?.toISOString() ?? null,
+    })),
+    attendance: attendance.map((row) => ({
+      sessionId: row.sessionId,
+      userId: row.userId,
+      joinedAt: row.joinedAt.toISOString(),
+      leftAt: row.leftAt?.toISOString() ?? null,
+      asGuest: row.asGuest,
+    })),
+    squads: squads.map((squad) => ({ id: squad.id, gameId: squad.gameId, name: squad.name })),
+    members: summaries.members,
+    membersError: summaries.error,
+    loadedAt,
+    windowDays: SQUAD_HISTORY_WINDOW_DAYS,
   };
 }
 

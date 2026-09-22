@@ -18,9 +18,11 @@ import { useGuildId } from '@/lib/use-guild-id';
 import { withId } from './form-data';
 import { EMPTY_GAME, GameSheet, type GameEditing } from './game-sheet';
 import { PlayersTab } from './players-tab';
+import { SessionsTab } from './sessions-tab';
 import { SquadsTable } from './squads-table';
 
 import type { SquadPlayersData } from '@/lib/squad-players';
+import type { SquadSessionsData } from '@/lib/squad-sessions';
 import type { SquadGameRow, SquadsOverviewData } from '@/lib/squads';
 import type { SquadBlockConfig } from '@goodbot/shared';
 
@@ -78,14 +80,16 @@ function SearchMessagePanel({
 }
 
 /**
- * As quatro faces do módulo numa página só: como ele se comporta
- * (`Configuração`), para que jogos (`Jogos`), quem já joga junto (`Squads`)
- * e quem tem perfil, com o match manual (`Jogadores`).
+ * As cinco faces do módulo numa página só: como ele se comporta
+ * (`Configuração`), para que jogos (`Jogos`), quem já joga junto (`Squads`),
+ * quem tem perfil, com o match manual (`Jogadores`), e o que essa gente
+ * jogou de verdade (`Jogatinas`).
  */
 export function SquadsTabs({
   games,
   overview,
   searchingCounts,
+  sessions,
   players,
   blocks,
   maxSquadsPerUser,
@@ -101,6 +105,8 @@ export function SquadsTabs({
   overview: SquadsOverviewData;
   /** `gameId → perfis procurando`. */
   searchingCounts: Record<string, number>;
+  /** As jogatinas da janela do histórico e a presença delas, para a aba JOGATINAS. */
+  sessions: SquadSessionsData;
   /** Só para admin; `null` para quem só lê. */
   players: SquadPlayersData | null;
   blocks: SquadBlockConfig[];
@@ -232,6 +238,7 @@ export function SquadsTabs({
           <TabsTrigger value="games">JOGOS</TabsTrigger>
           <TabsTrigger value="squads">SQUADS</TabsTrigger>
           <TabsTrigger value="players">JOGADORES</TabsTrigger>
+          <TabsTrigger value="sessions">JOGATINAS</TabsTrigger>
         </TabsList>
 
         <TabsContent value="config">
@@ -298,12 +305,17 @@ export function SquadsTabs({
           <PlayersTab
             games={games}
             players={players}
+            sessions={sessions}
             proposals={overview.openProposals}
             blocks={blocks}
             timeZone={timeZone}
             maxSquadsPerUser={maxSquadsPerUser}
             cooldownDays={cooldownDays}
           />
+        </TabsContent>
+
+        <TabsContent value="sessions">
+          <SessionsTab games={games} data={sessions} timeZone={timeZone} />
         </TabsContent>
       </Tabs>
 

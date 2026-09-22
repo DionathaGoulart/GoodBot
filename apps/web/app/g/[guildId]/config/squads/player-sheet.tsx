@@ -1,7 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { SQUAD_CELLS, type SquadBlockConfig, type SquadGameField } from '@goodbot/shared';
+import {
+  formatPlaytime,
+  SQUAD_CELLS,
+  type SquadBlockConfig,
+  type SquadGameField,
+} from '@goodbot/shared';
 
 import {
   deletePlayerProfileAction,
@@ -23,6 +28,7 @@ import {
   SQUAD_PROFILE_STATUS_LABEL,
   SQUAD_STATUS_LABEL,
 } from '@/lib/squad-labels';
+import { buildPlayerSessionStats } from '@/lib/squad-sessions';
 import { useGuildId } from '@/lib/use-guild-id';
 
 import { withPayload } from './form-data';
@@ -32,6 +38,7 @@ import { ReasonDialog, type ReasonRequest } from './reason-dialog';
 import { SquadGridHeatmap } from './squad-grid-heatmap';
 
 import type { PlayerRow, SquadPlayersData } from '@/lib/squad-players';
+import type { SquadSessionsData } from '@/lib/squad-sessions';
 import type { SquadGameRow } from '@/lib/squads';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -66,6 +73,7 @@ export function PlayerSheet({
   player,
   game,
   data,
+  sessions,
   blocks,
   timeZone,
   onClose,
@@ -74,6 +82,7 @@ export function PlayerSheet({
   player: PlayerRow | null;
   game: SquadGameRow | null;
   data: SquadPlayersData;
+  sessions: SquadSessionsData;
   blocks: SquadBlockConfig[];
   timeZone: string;
   onClose: () => void;
@@ -121,6 +130,15 @@ export function PlayerSheet({
     () =>
       Array.from({ length: SQUAD_CELLS }, (_, bit) => ((player?.availability ?? 0) >> bit) & 1),
     [player?.availability],
+  );
+  // Os mesmos números da aba JOGATINAS, só desta pessoa e deste jogo: somam
+  // todos os squads dela no jogo, como o `/squad stats`.
+  const numbers = React.useMemo(
+    () =>
+      player && game
+        ? buildPlayerSessionStats(sessions, game.id, player.userId, game.partySize)
+        : null,
+    [game, player, sessions],
   );
 
   if (!player || !game) {
@@ -218,6 +236,63 @@ export function PlayerSheet({
 
             <Section title="GRADE">
               <SquadGridHeatmap grid={grid} blocks={blocks} mode="mask" />
+            </Section>
+
+            <Section title={`NÚMEROS · ${String(sessions.windowDays)} DIAS`}>
+              {numbers?.stats ? (
+                <>
+                  <dl className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col">
+                      <dt className="screen-meta">TEMPO DE JOGO</dt>
+                      <dd className="text-sm tabular-nums">{formatPlaytime(numbers.stats.ms)}</dd>
+                    </div>
+                    <div className="flex flex-col">
+                      <dt className="screen-meta">JOGATINAS</dt>
+                      <dd className="text-sm tabular-nums">
+                        {numbers.stats.sessions} DE {numbers.sessions}
+                      </dd>
+                    </div>
+                    <div className="flex flex-col">
+                      <dt className="screen-meta">PRESENÇA</dt>
+                      <dd className="text-sm tabular-nums">
+                        {numbers.stats.attendanceRate === null
+                          ? 'SEM VOU'
+                          : `${String(Math.round(numbers.stats.attendanceRate * 100))}% (${String(numbers.stats.kept)}/${String(numbers.stats.going)})`}
+                      </dd>
+                    </div>
+                    <div className="flex flex-col">
+                      <dt className="screen-meta">FALTAS</dt>
+                      <dd className="text-sm tabular-nums">{numbers.stats.noShows}</dd>
+                    </div>
+                  </dl>
+                  {numbers.stats.bySize.length > 0 ? (
+                    <p className="screen-meta">
+                      {numbers.stats.bySize
+                        .filter((size) => size.ms > 0)
+                        .sort((a, b) => b.ms - a.ms || b.size - a.size)
+                        .map((size) => `${formatPlaytime(size.ms)} ${size.label.toUpperCase()}`)
+                        .join(' · ')}
+                    </p>
+                  ) : null}
+                  {numbers.pairs.length > 0 ? (
+                    <p className="screen-meta">
+                      JOGA MAIS COM{' '}
+                      {numbers.pairs
+                        .slice(0, 3)
+                        .map((pair) => {
+                          const other =
+                            pair.userIds[0] === player.userId ? pair.names[1] : pair.names[0];
+                          return `${other.toUpperCase()} (${formatPlaytime(pair.ms)})`;
+                        })
+                        .join(' · ')}
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="screen-meta">
+                  AINDA NÃO JOGOU NENHUMA JOGATINA DESTE JOGO NA JANELA
+                </p>
+              )}
             </Section>
 
             <Section title="SQUADS">

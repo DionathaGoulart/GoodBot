@@ -8,6 +8,7 @@ import { TEST_GUILD_ID } from '@/vitest.setup';
 import { PlayerSheet } from './player-sheet';
 
 import type { PlayerRow, SquadPlayersData } from '@/lib/squad-players';
+import type { SquadSessionsData } from '@/lib/squad-sessions';
 import type { SquadGameRow } from '@/lib/squads';
 
 const setPlayerStatusAction = vi.fn();
@@ -40,6 +41,7 @@ vi.mock('sonner', () => ({
 const GAME_ID = '11111111-1111-4111-8111-111111111111';
 const ALFA = '33333333-3333-4333-8333-333333333333';
 const ANA = '300000000000000001';
+const BIA = '300000000000000002';
 
 const FIELDS: SquadGameField[] = [
   { key: 'nick', label: 'Nick', type: 'text', options: [], required: true, match: 'none' },
@@ -68,7 +70,7 @@ const DATA: SquadPlayersData = {
     {
       id: 'p1',
       gameId: GAME_ID,
-      userIds: [ANA, '300000000000000002'],
+      userIds: [ANA, BIA],
       acceptedIds: [],
       declinedIds: [],
       squadId: null,
@@ -95,6 +97,48 @@ const DATA: SquadPlayersData = {
   missingMemberIds: [],
   unresolvedMemberIds: [],
   membersError: null,
+};
+
+const NOW = Date.parse('2026-09-22T12:00:00.000Z');
+
+/** Uma jogatina de 2 h com Ana e Bia, e um VOU que a Ana cumpriu. */
+const SESSIONS: SquadSessionsData = {
+  sessions: [
+    {
+      id: 1,
+      squadId: ALFA,
+      startsAt: '2026-09-20T23:00:00.000Z',
+      endsAt: '2026-09-21T05:00:00.000Z',
+      goingIds: [ANA, BIA],
+      startedAt: '2026-09-20T23:00:00.000Z',
+      playedAt: '2026-09-20T23:00:00.000Z',
+      cancelledAt: null,
+    },
+  ],
+  attendance: [
+    {
+      sessionId: 1,
+      userId: ANA,
+      joinedAt: '2026-09-20T23:00:00.000Z',
+      leftAt: '2026-09-21T01:00:00.000Z',
+      asGuest: false,
+    },
+    {
+      sessionId: 1,
+      userId: BIA,
+      joinedAt: '2026-09-20T23:00:00.000Z',
+      leftAt: '2026-09-21T01:00:00.000Z',
+      asGuest: false,
+    },
+  ],
+  squads: [{ id: ALFA, gameId: GAME_ID, name: 'Alfa' }],
+  members: {
+    [ANA]: { displayName: 'Ana', username: 'ana', avatarUrl: null },
+    [BIA]: { displayName: 'Bia', username: 'bia', avatarUrl: null },
+  },
+  membersError: null,
+  loadedAt: NOW,
+  windowDays: 90,
 };
 
 function player(overrides: Partial<PlayerRow> = {}): PlayerRow {
@@ -128,6 +172,7 @@ function renderSheet(row: PlayerRow) {
       player={row}
       game={GAME}
       data={DATA}
+      sessions={SESSIONS}
       blocks={[...DEFAULT_SQUAD_BLOCKS]}
       timeZone="America/Sao_Paulo"
       onClose={onClose}

@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { PlayersTab } from './players-tab';
 
 import type { PlayerProfileRow, SquadPlayersData } from '@/lib/squad-players';
+import type { SquadSessionsData } from '@/lib/squad-sessions';
 import type { SquadGameRow } from '@/lib/squads';
 import type * as navigation from 'next/navigation';
 
@@ -139,11 +140,23 @@ const DATA: SquadPlayersData = {
   membersError: null,
 };
 
+/** A aba JOGADORES não mostra jogatina: os números do sheet saem vazios. */
+const SESSIONS: SquadSessionsData = {
+  sessions: [],
+  attendance: [],
+  squads: [],
+  members: {},
+  membersError: null,
+  loadedAt: Date.parse('2026-09-22T12:00:00.000Z'),
+  windowDays: 90,
+};
+
 function renderTab(players: SquadPlayersData | null = DATA) {
   render(
     <PlayersTab
       games={GAMES}
       players={players}
+      sessions={SESSIONS}
       proposals={PROPOSALS}
       blocks={[...DEFAULT_SQUAD_BLOCKS]}
       timeZone="America/Sao_Paulo"

@@ -9,6 +9,7 @@ import {
   loadSearchingCounts,
   loadSquadGames,
   loadSquadPlayers,
+  loadSquadSessions,
   loadSquadsOverview,
 } from '@/lib/squads';
 
@@ -25,7 +26,7 @@ export default async function SquadsConfigPage({
   const readOnly = !hasAccess(session.level, 'admin');
   const gamesLoad = loadSquadGames(guildId);
   const configLoad = loadModuleConfig(guildId, 'squads');
-  const [{ config }, games, searchingCounts, overview, general, channelNames, players] =
+  const [{ config }, games, searchingCounts, overview, general, channelNames, sessions, players] =
     await Promise.all([
       configLoad,
       gamesLoad,
@@ -33,6 +34,7 @@ export default async function SquadsConfigPage({
       loadSquadsOverview(guildId),
       loadGeneralPage(guildId),
       loadChannelNames(guildId),
+      loadSquadSessions(guildId),
       // Perfis, respostas e nomes são só de admin: para quem só lê, nem saem do banco.
       readOnly
         ? Promise.resolve(null)
@@ -64,6 +66,7 @@ export default async function SquadsConfigPage({
         games={games}
         overview={overview}
         searchingCounts={searchingCounts}
+        sessions={sessions}
         players={players}
         blocks={config.blocks}
         maxSquadsPerUser={config.maxSquadsPerUser}
