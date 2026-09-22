@@ -23,6 +23,7 @@ import { AlertService } from './services/alerts';
 import { AuditService } from './services/audit';
 import { AutoroleService } from './services/autorole';
 import { ConfigService } from './services/config';
+import { DeployNoticeService } from './services/deploy-notice';
 import { LockService } from './services/locks';
 import { LogQueue } from './services/log-queue';
 import { LogService } from './services/logs';
@@ -69,6 +70,9 @@ async function main(): Promise<void> {
   // Modo manutenção. Mesmo desenho do registro, e pelo mesmo motivo: é lido
   // em toda interação e não pode custar uma query por evento.
   const maintenance = new MaintenanceService({ db });
+  // O aviso de manutenção do deploy: o bot velho publica, este processo, ao
+  // subir, troca por "voltou".
+  const deployNotice = new DeployNoticeService({ client, db, registry });
   // A trilha do que o bot faz sozinho (§6.5); o painel escreve na mesma tabela.
   const audit = new AuditService({ db, client });
   const queue = new LogQueue({ client });
@@ -213,6 +217,7 @@ async function main(): Promise<void> {
       commands,
       registry,
       maintenance,
+      deployNotice,
     },
     token: env.INTERNAL_API_TOKEN,
     port: env.INTERNAL_API_PORT,
@@ -285,6 +290,7 @@ async function main(): Promise<void> {
     retention.start();
     capacity.start();
     databaseProbe.start();
+    void deployNotice.resolve();
     alerts.emit({
       kind: 'boot',
       title: 'Bot no ar',

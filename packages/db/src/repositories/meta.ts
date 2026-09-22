@@ -16,6 +16,12 @@ export const META_KEYS = {
   maintenance: 'maintenance',
   /** Último dia local em que o passo diário do job de squads rodou, por guild. */
   squadsDaily: 'squads_daily',
+  /**
+   * O aviso de deploy ainda no ar: as mensagens que o bot velho publicou antes
+   * de cair. Fica no banco porque quem as edita para "voltou" é o processo
+   * novo, que não tem a memória do velho.
+   */
+  deployNotice: 'deploy_notice',
 } as const;
 
 /** `squads_daily:<guildId>`: o dia local (`AAAA-MM-DD`) da última passada diária. */
@@ -95,4 +101,64 @@ export async function setMaintenance(
 ): Promise<MaintenanceRecord> {
   await setMeta(db, META_KEYS.maintenance, record);
   return record;
+}
+
+/** Uma mensagem do aviso de deploy num servidor. */
+export interface DeployNoticeMessage {
+  guildId: string;
+  channelId: string;
+  messageId: string;
+}
+
+/** O aviso de deploy como ele é guardado em `meta`. */
+export interface DeployNoticeRecord {
+  kind: string;
+  /** Quando o aviso saiu (ISO): é daqui que o "voltou" conta o tempo fora. */
+  startedAt: string;
+  expectedAt: string;
+  messages: DeployNoticeMessage[];
+}
+
+const isNoticeMessage = (value: unknown): value is DeployNoticeMessage => {
+  const item = value as Partial<DeployNoticeMessage> | null;
+  return (
+    typeof item === 'object' &&
+    item !== null &&
+    typeof item.guildId === 'string' &&
+    typeof item.channelId === 'string' &&
+    typeof item.messageId === 'string'
+  );
+};
+
+/**
+ * O aviso pendente, ou `null`. Chave corrompida conta como ausente, como na
+ * manutenção: o pior que isso causa é um aviso que não vira "voltou", e isso
+ * não pode travar o boot.
+ */
+export async function getDeployNotice(db: DbExecutor): Promise<DeployNoticeRecord | null> {
+  const raw = await getMeta<Partial<DeployNoticeRecord>>(db, META_KEYS.deployNotice);
+  if (
+    !raw ||
+    typeof raw !== 'object' ||
+    typeof raw.kind !== 'string' ||
+    typeof raw.startedAt !== 'string' ||
+    typeof raw.expectedAt !== 'string' ||
+    !Array.isArray(raw.messages)
+  ) {
+    return null;
+  }
+  return {
+    kind: raw.kind,
+    startedAt: raw.startedAt,
+    expectedAt: raw.expectedAt,
+    messages: raw.messages.filter(isNoticeMessage),
+  };
+}
+
+export async function setDeployNotice(db: DbExecutor, record: DeployNoticeRecord): Promise<void> {
+  await setMeta(db, META_KEYS.deployNotice, record);
+}
+
+export async function clearDeployNotice(db: DbExecutor): Promise<void> {
+  await deleteMeta(db, META_KEYS.deployNotice);
 }

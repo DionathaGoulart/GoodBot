@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getMaintenance } from './meta';
+import { getDeployNotice, getMaintenance } from './meta';
 
 import type { DbExecutor } from '../client';
 
@@ -55,5 +55,36 @@ describe('getMaintenance', () => {
       since: null,
       by: null,
     });
+  });
+});
+
+describe('getDeployNotice', () => {
+  const message = {
+    guildId: '100000000000000001',
+    channelId: '100000000000000002',
+    messageId: '100000000000000003',
+  };
+  const record = {
+    kind: 'restart',
+    startedAt: '2026-09-22T12:00:00.000Z',
+    expectedAt: '2026-09-22T12:01:00.000Z',
+    messages: [message],
+  };
+
+  it('devolve o aviso gravado', async () => {
+    await expect(getDeployNotice(fakeDb(record))).resolves.toEqual(record);
+  });
+
+  it('chave ausente ou corrompida é aviso nenhum', async () => {
+    await expect(getDeployNotice(fakeDb(undefined))).resolves.toBeNull();
+    await expect(getDeployNotice(fakeDb('aviso'))).resolves.toBeNull();
+    await expect(getDeployNotice(fakeDb({ ...record, messages: 'x' }))).resolves.toBeNull();
+    await expect(getDeployNotice(fakeDb({ ...record, startedAt: 1 }))).resolves.toBeNull();
+  });
+
+  it('mensagem malformada sai da lista sem derrubar as outras', async () => {
+    await expect(
+      getDeployNotice(fakeDb({ ...record, messages: [message, { guildId: 1 }, null] })),
+    ).resolves.toEqual(record);
   });
 });

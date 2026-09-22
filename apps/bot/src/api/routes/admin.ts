@@ -1,5 +1,6 @@
 import {
   BroadcastInputSchema,
+  DeployNoticeInputSchema,
   LeaveGuildInputSchema,
   MaintenanceInputSchema,
   ResyncCommandsInputSchema,
@@ -242,6 +243,19 @@ export function createAdminRoutes(deps: ApiDeps, options: AdminRoutesOptions): H
           by: input.actorId,
         });
         return c.json(state);
+      })
+
+      /**
+       * O aviso de manutenção de um deploy, com a previsão de volta do tipo.
+       * Quem chama é o script de deploy da VM, logo antes de derrubar o
+       * container; o bot novo edita o aviso para "voltou" quando sobe.
+       */
+      .post('/deploy-notice', validate('json', DeployNoticeInputSchema), async (c) => {
+        const input = c.req.valid('json');
+        requireOwner(options, input.actorId);
+        const result = await deps.deployNotice.announce(input.kind);
+        log.warn({ by: input.actorId, ...result }, 'aviso de deploy publicado');
+        return c.json(result);
       })
 
       /**

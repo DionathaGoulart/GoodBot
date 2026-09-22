@@ -8,6 +8,7 @@ import {
   MAX_EMBED_TITLE_LENGTH,
   MAX_REASON_LENGTH,
 } from '../constants';
+import { NOTICE_DEPLOY_KINDS } from '../deploy';
 
 /**
  * O painel do dono do bot (`admin.<domínio>`).
@@ -132,6 +133,30 @@ export const MaintenanceInputSchema = AdminActorSchema.extend({
   message: z.string().max(MAX_EMBED_DESCRIPTION_LENGTH).nullable().default(null),
 });
 export type MaintenanceInput = z.infer<typeof MaintenanceInputSchema>;
+
+// ── aviso de deploy ──────────────────────────────────────────────────────────
+
+/**
+ * O aviso que o bot publica nos servidores logo antes de um deploy o
+ * reiniciar, com a previsão de volta do tipo de deploy. Quem chama é o script
+ * de deploy da VM, com o `OWNER_DISCORD_ID` como `actorId`; o bot novo, ao
+ * subir, edita a mesma mensagem para dizer que voltou.
+ */
+export const DeployNoticeInputSchema = AdminActorSchema.extend({
+  kind: z.enum(NOTICE_DEPLOY_KINDS),
+});
+export type DeployNoticeInput = z.infer<typeof DeployNoticeInputSchema>;
+
+export const DeployNoticeResultSchema = z.object({
+  kind: z.enum(NOTICE_DEPLOY_KINDS),
+  /** A previsão de volta, em ISO. */
+  expectedAt: z.string(),
+  /** Servidores atendidos que o bot tentou avisar. */
+  total: z.number().int().min(0),
+  /** Quantos receberam o aviso. */
+  delivered: z.number().int().min(0),
+});
+export type DeployNoticeResult = z.infer<typeof DeployNoticeResultSchema>;
 
 // ── re-registro de comandos ──────────────────────────────────────────────────
 

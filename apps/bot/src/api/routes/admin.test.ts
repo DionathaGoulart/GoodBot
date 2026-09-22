@@ -53,6 +53,9 @@ function makeApp(options: { ownerId?: string; served?: string[] } = {}) {
   const setMaintenance = vi.fn(() =>
     Promise.resolve({ enabled: true, message: null, since: null, by: OWNER_ID }),
   );
+  const announceDeploy = vi.fn((kind: string) =>
+    Promise.resolve({ kind, expectedAt: '2026-09-22T12:01:00.000Z', total: 2, delivered: 2 }),
+  );
 
   const deps = {
     client: {
@@ -72,6 +75,7 @@ function makeApp(options: { ownerId?: string; served?: string[] } = {}) {
       current: () => ({ enabled: false, message: null, since: null, by: null }),
       set: setMaintenance,
     },
+    deployNotice: { announce: announceDeploy },
   } as unknown as ApiDeps;
 
   const app = createApiApp({
@@ -84,7 +88,7 @@ function makeApp(options: { ownerId?: string; served?: string[] } = {}) {
       clientId: '500000000000000005',
     },
   });
-  return { app, guildA, guildB, setMaintenance };
+  return { app, guildA, guildB, setMaintenance, announceDeploy };
 }
 
 /**
@@ -134,7 +138,11 @@ describe('sair de um servidor', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ guildId: GUILD_A, name: 'Servidor A', announced: true });
+    expect(await res.json()).toMatchObject({
+      guildId: GUILD_A,
+      name: 'Servidor A',
+      announced: true,
+    });
     expect(guildA.channel.send).toHaveBeenCalled();
     expect(guildA.leave).toHaveBeenCalled();
   });
@@ -233,5 +241,36 @@ describe('manutenção', () => {
       message: 'volto já',
       by: OWNER_ID,
     });
+  });
+});
+
+describe('aviso de deploy', () => {
+  const post = (app: ReturnType<typeof makeApp>['app'], body: unknown) =>
+    app.request('/admin/deploy-notice', {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify(body),
+    });
+
+  it('só o dono publica, com um dos tipos que reiniciam o bot', async () => {
+    const { app, announceDeploy } = makeApp({ ownerId: OWNER_ID });
+
+    expect((await post(app, { actorId: ESTRANHO_ID, kind: 'restart' })).status).toBe(403);
+    expect((await post(app, { actorId: OWNER_ID, kind: 'none' })).status).toBe(400);
+    expect(announceDeploy).not.toHaveBeenCalled();
+
+    const res = await post(app, { actorId: OWNER_ID, kind: 'database' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ kind: 'database', delivered: 2 });
+    expect(announceDeploy).toHaveBeenCalledWith('database');
+  });
+
+  it('sem OWNER_DISCORD_ID no ambiente o deploy não avisa', async () => {
+    const { app, announceDeploy } = makeApp();
+
+    const res = await post(app, { actorId: OWNER_ID, kind: 'restart' });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: { code: 'OWNER_NOT_CONFIGURED' } });
+    expect(announceDeploy).not.toHaveBeenCalled();
   });
 });
