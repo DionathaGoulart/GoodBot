@@ -40,6 +40,7 @@ import {
   listOpenJoinRequests,
   listOpenSessionCalls,
   listPlayedSessions,
+  listPlayedSessionsByGame,
   listRecentJoinRequestKeys,
   listRecentJoinRequestsFor,
   listRecentProposalPairs,
@@ -875,6 +876,18 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect(await listPlayedSessions(db, GUILD_ID, [], at(90))).toEqual([]);
       expect(await listPlayedSessions(db, OTHER_GUILD_ID, [squad.id], at(90))).toEqual([]);
       expect(await markSessionPlayed(db, GUILD_ID, cancelled.id, new Date())).toBeNull();
+
+      // Por jogo: as jogatinas de todos os squads dele, e só dele.
+      const byGame = await listPlayedSessionsByGame(db, GUILD_ID, game.id, at(90));
+      expect(byGame.map((row) => row.id)).toEqual([recent.id]);
+      const quiet = await createSquadGame(db, {
+        guildId: GUILD_ID,
+        name: 'Jogo sem jogatina',
+        groupSize: 4,
+        partySize: 4,
+      });
+      expect(await listPlayedSessionsByGame(db, GUILD_ID, quiet!.id, at(90))).toEqual([]);
+      expect(await listPlayedSessionsByGame(db, OTHER_GUILD_ID, game.id, at(90))).toEqual([]);
 
       const totals = await countPlayedSessions(db, GUILD_ID, [squad.id, other.id]);
       expect(totals).toEqual([{ squadId: squad.id, played: 2, lastPlayedAt: recent.startsAt }]);

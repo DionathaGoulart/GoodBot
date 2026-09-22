@@ -2072,6 +2072,34 @@ export async function listPlayedSessions(
     .orderBy(asc(squadSessions.startsAt));
 }
 
+/**
+ * As jogatinas que rolaram desde `since` em **qualquer** squad de um jogo, da
+ * mais antiga. É a leitura dos números por jogo (`/squad stats`): a pessoa pode
+ * ter passado por mais de um squad do mesmo jogo, e o tempo dela é a soma dos
+ * dois.
+ */
+export async function listPlayedSessionsByGame(
+  db: DbExecutor,
+  guildId: string,
+  gameId: string,
+  since: Date,
+): Promise<SquadSession[]> {
+  return db
+    .select(getTableColumns(squadSessions))
+    .from(squadSessions)
+    .innerJoin(squads, eq(squads.id, squadSessions.squadId))
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squads.guildId, guildId),
+        eq(squads.gameId, gameId),
+        playedSession(),
+        gte(squadSessions.startsAt, since),
+      ),
+    )
+    .orderBy(asc(squadSessions.startsAt));
+}
+
 export interface PlayedSessionTotals {
   squadId: string;
   played: number;
