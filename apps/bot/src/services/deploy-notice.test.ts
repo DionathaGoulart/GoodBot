@@ -25,10 +25,9 @@ const GUILD_C = '400000000000000004';
 
 let nextId = 0;
 
-/** Guild o bastante para `noticeChannel`: canal de sistema onde o bot escreve (ou não). */
-function fakeGuild(id: string, options: { canSend?: boolean; failSend?: boolean } = {}) {
-  const channel = {
-    id: `${id}-canal`,
+function fakeChannel(id: string, options: { canSend?: boolean; failSend?: boolean }) {
+  return {
+    id,
     type: 0,
     rawPosition: 0,
     isTextBased: () => true,
@@ -42,17 +41,32 @@ function fakeGuild(id: string, options: { canSend?: boolean; failSend?: boolean 
       edit: vi.fn(async (_id: string, _payload: { embeds: { toJSON(): unknown }[] }) => ({})),
     },
   };
+}
+
+/**
+ * Guild o bastante para `noticeChannel`: o canal de sistema onde o bot escreve
+ * (ou não) e um segundo canal, que só recebe se a guild o tiver escolhido.
+ */
+function fakeGuild(id: string, options: { canSend?: boolean; failSend?: boolean } = {}) {
+  const channel = fakeChannel(`${id}-canal`, options);
+  const chosen = fakeChannel(`${id}-escolhido`, options);
   const guild = {
     id,
     systemChannel: channel,
     members: { me: { id: 'bot' } },
-    channels: { cache: new Collection([[channel.id, channel]]) },
+    channels: {
+      cache: new Collection([
+        [channel.id, channel],
+        [chosen.id, chosen],
+      ]),
+    },
   };
   Object.assign(channel, { guild });
-  return { guild, channel };
+  Object.assign(chosen, { guild });
+  return { guild, channel, chosen };
 }
 
-function setup(served: string[] = [GUILD_A, GUILD_B]) {
+function setup(served: string[] = [GUILD_A, GUILD_B], chosenByGuild: Record<string, string> = {}) {
   const a = fakeGuild(GUILD_A);
   const b = fakeGuild(GUILD_B, { canSend: false });
   const c = fakeGuild(GUILD_C, { failSend: true });
@@ -70,13 +84,17 @@ function setup(served: string[] = [GUILD_A, GUILD_B]) {
     },
   } as unknown as Client;
   const clock = { now: NOW };
+  const getSettings = vi.fn(async (guildId: string) => ({
+    noticeChannelId: chosenByGuild[guildId] ?? null,
+  }));
   const service = new DeployNoticeService({
     client,
     db: {} as never,
     registry: { servedGuildIds: () => served },
+    config: { getSettings } as never,
     now: () => clock.now,
   });
-  return { service, clock, a, b, c };
+  return { service, clock, a, b, c, getSettings };
 }
 
 const record = () => stored.value as DeployNoticeRecord;
@@ -110,6 +128,26 @@ describe('DeployNoticeService', () => {
       expectedAt: new Date(NOW + 2 * MINUTE_MS).toISOString(),
       messages: [{ guildId: GUILD_A, channelId: s.a.channel.id, messageId: expect.any(String) }],
     });
+  });
+
+  it('o canal escolhido pelo servidor ganha o aviso no lugar do de sistema', async () => {
+    const s = setup([GUILD_A], { [GUILD_A]: `${GUILD_A}-escolhido` });
+
+    await s.service.announce('restart');
+
+    expect(s.a.chosen.send).toHaveBeenCalledTimes(1);
+    expect(s.a.channel.send).not.toHaveBeenCalled();
+    expect(record().messages).toEqual([
+      { guildId: GUILD_A, channelId: s.a.chosen.id, messageId: expect.any(String) },
+    ]);
+  });
+
+  it('canal escolhido que sumiu cai no canal de sistema', async () => {
+    const s = setup([GUILD_A], { [GUILD_A]: '900000000000000009' });
+
+    await s.service.announce('restart');
+
+    expect(s.a.channel.send).toHaveBeenCalledTimes(1);
   });
 
   it('um aviso que não chegou a reiniciar soma as mensagens ao seguinte', async () => {

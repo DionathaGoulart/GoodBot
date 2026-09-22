@@ -69,6 +69,8 @@ function makeApp(options: { ownerId?: string; served?: string[] } = {}) {
       isReady: () => true,
     },
     db: { execute: () => Promise.resolve([]) },
+    // Nenhuma guild do teste escolheu canal de aviso: vale o de sistema.
+    config: { getSettings: () => Promise.resolve({ noticeChannelId: null }) },
     commands: new Collection(),
     registry: { servedGuildIds: () => options.served ?? [GUILD_A, GUILD_B] },
     maintenance: {

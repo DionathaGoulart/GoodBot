@@ -19,16 +19,26 @@ export function canBotSend(channel: GuildBasedChannel): boolean {
 }
 
 /**
- * Onde falar com o servidor quando não há canal configurado para o assunto —
- * hoje, os avisos de fim da demo.
+ * Onde o bot fala com o servidor sobre si mesmo: manutenção de deploy,
+ * broadcast do dono e fim da demonstração.
  *
- * Primeiro o canal de sistema, que é onde o Discord já põe as mensagens de
- * entrada e é o que o dono do servidor espera. Sem ele (ou sem permissão de
- * escrever lá), o primeiro canal de texto onde o bot consegue falar, na ordem
- * em que aparecem na barra lateral: um recado que ninguém lê é melhor do que
- * recado nenhum, e "o bot saiu sem avisar" é exatamente o que a etapa evita.
+ * Primeiro o canal escolhido em `guild_settings.notice_channel_id`, que é a
+ * resposta de quem configurou o servidor. Sem escolha (ou com um canal que
+ * sumiu, virou voz ou calou o bot), o canal de sistema do Discord, onde essas
+ * mensagens caíam antes do campo existir. Sem ele também, o primeiro canal de
+ * texto onde o bot consegue falar, na ordem da barra lateral: um recado que
+ * ninguém lê é melhor do que recado nenhum, e "o bot sumiu sem avisar" é
+ * justamente o que estes avisos evitam.
  */
-export function noticeChannel(guild: Guild): GuildTextBasedChannel | null {
+export function noticeChannel(
+  guild: Guild,
+  configuredId?: string | null,
+): GuildTextBasedChannel | null {
+  if (configuredId) {
+    const chosen = guild.channels.cache.get(configuredId);
+    if (chosen?.isTextBased() && canBotSend(chosen)) return chosen;
+  }
+
   const system = guild.systemChannel;
   if (system && canBotSend(system)) return system;
 

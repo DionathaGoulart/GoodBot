@@ -134,7 +134,8 @@ export function createAdminRoutes(deps: ApiDeps, options: AdminRoutesOptions): H
         const name = guild.name;
         let announced = false;
         if (input.announce) {
-          announced = await announce(guild, () =>
+          const settings = await deps.config.getSettings(guildId);
+          announced = await announce(guild, settings.noticeChannelId, () =>
             warningEmbed({
               title: 'O Goodbot está saindo',
               description: [
@@ -177,7 +178,8 @@ export function createAdminRoutes(deps: ApiDeps, options: AdminRoutesOptions): H
           // de um broadcast entregue e sem relatório é o pior resultado
           // possível — ninguém saberia até onde ele foi.
           try {
-            const channel = noticeChannel(guild);
+            const settings = await deps.config.getSettings(guildId);
+            const channel = noticeChannel(guild, settings.noticeChannelId);
             const base = {
               guildId,
               name: guild.name,
@@ -310,9 +312,13 @@ export function createAdminRoutes(deps: ApiDeps, options: AdminRoutesOptions): H
 }
 
 /** Manda um embed no canal de aviso. Falhar aqui nunca trava a saída. */
-async function announce(guild: Guild, build: () => EmbedBuilder): Promise<boolean> {
+async function announce(
+  guild: Guild,
+  configuredId: string | null,
+  build: () => EmbedBuilder,
+): Promise<boolean> {
   try {
-    const channel = noticeChannel(guild);
+    const channel = noticeChannel(guild, configuredId);
     if (!channel) return false;
     await channel.send({ embeds: [build()] });
     return true;

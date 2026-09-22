@@ -16,6 +16,7 @@ export interface ResolvedSettings {
   adminRoleIds: string[];
   dashboardAccessRoleIds: string[];
   logChannelId: string | null;
+  noticeChannelId: string | null;
   dmOnPunish: DmOnPunish | null;
   /** `false` quando não há linha no banco (tudo default). */
   stored: boolean;
@@ -28,6 +29,7 @@ export const DEFAULT_SETTINGS: Omit<ResolvedSettings, 'guildId' | 'stored'> = {
   adminRoleIds: [],
   dashboardAccessRoleIds: [],
   logChannelId: null,
+  noticeChannelId: null,
   dmOnPunish: null,
 };
 
@@ -131,6 +133,7 @@ export class ConfigService {
           adminRoleIds: row.adminRoleIds,
           dashboardAccessRoleIds: row.dashboardAccessRoleIds,
           logChannelId: row.logChannelId,
+          noticeChannelId: row.noticeChannelId,
           dmOnPunish: row.dmOnPunish,
           stored: true,
         }

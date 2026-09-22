@@ -5,6 +5,7 @@ import { noticeChannel } from '../lib/channels';
 import { successEmbed, warningEmbed } from '../lib/embeds';
 import { childLogger } from '../logger';
 
+import type { ConfigService } from './config';
 import type { RegistryService } from './registry';
 import type { Db, DeployNoticeMessage } from '@goodbot/db';
 import type { DeployNoticeResult, NoticeDeployKind } from '@goodbot/shared';
@@ -65,6 +66,8 @@ export interface DeployNoticeServiceOptions {
   client: Client;
   db: Db;
   registry: Pick<RegistryService, 'servedGuildIds'>;
+  /** Para o canal de aviso escolhido pelo servidor; o cache já é do serviço. */
+  config: Pick<ConfigService, 'getSettings'>;
   now?: () => number;
 }
 
@@ -89,7 +92,7 @@ export class DeployNoticeService {
 
   /** Publica o aviso nos servidores atendidos. Servidor que falha não trava os outros. */
   async announce(kind: NoticeDeployKind): Promise<DeployNoticeResult> {
-    const { client, db, registry } = this.options;
+    const { client, db, registry, config } = this.options;
     const now = this.now();
     const expectedAt = now + DEPLOY_DOWNTIME_MINUTES[kind] * MINUTE_MS;
 
@@ -100,7 +103,8 @@ export class DeployNoticeService {
       if (!guild) continue;
       total++;
       try {
-        const channel = noticeChannel(guild);
+        const settings = await config.getSettings(guildId);
+        const channel = noticeChannel(guild, settings.noticeChannelId);
         if (!channel) continue;
         const message = await channel.send({ embeds: [deployNoticeEmbed(kind, expectedAt)] });
         messages.push({ guildId, channelId: channel.id, messageId: message.id });

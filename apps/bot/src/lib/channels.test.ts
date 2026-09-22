@@ -48,6 +48,21 @@ describe('canBotSend', () => {
 });
 
 describe('noticeChannel', () => {
+  it('prefere o canal escolhido pelo servidor', () => {
+    const sistema = channel({ id: 'sistema' });
+    const escolhido = channel({ id: 'escolhido' });
+    const g = guild({ systemChannel: sistema, channels: [sistema, escolhido] });
+    expect(noticeChannel(g, 'escolhido')?.id).toBe('escolhido');
+  });
+
+  it('cai no canal de sistema quando o escolhido sumiu ou calou o bot', () => {
+    const sistema = channel({ id: 'sistema' });
+    const mudo = channel({ id: 'mudo', pode: false });
+    const g = guild({ systemChannel: sistema, channels: [sistema, mudo] });
+    expect(noticeChannel(g, 'apagado')?.id).toBe('sistema');
+    expect(noticeChannel(g, 'mudo')?.id).toBe('sistema');
+  });
+
   it('prefere o canal de sistema', () => {
     const sistema = channel({ id: 'sistema' });
     const outro = channel({ id: 'outro' });

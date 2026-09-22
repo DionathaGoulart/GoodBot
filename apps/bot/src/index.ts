@@ -72,7 +72,7 @@ async function main(): Promise<void> {
   const maintenance = new MaintenanceService({ db });
   // O aviso de manutenção do deploy: o bot velho publica, este processo, ao
   // subir, troca por "voltou".
-  const deployNotice = new DeployNoticeService({ client, db, registry });
+  const deployNotice = new DeployNoticeService({ client, db, registry, config });
   // A trilha do que o bot faz sozinho (§6.5); o painel escreve na mesma tabela.
   const audit = new AuditService({ db, client });
   const queue = new LogQueue({ client });
