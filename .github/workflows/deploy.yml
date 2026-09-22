@@ -2,6 +2,11 @@
 # no Postgres gerenciado, build da imagem amd64 do bot no GHCR, `docker compose
 # pull` por SSH na VM da Oracle e a publicação do painel na Vercel (PRD §7.5).
 #
+# Um quinto, `changes`, roda junto das migrations e decide o que acontece com o
+# bot: push que não mexe em nada da imagem nem da VM (painel, docs, CI) não
+# reconstrói nem reinicia o bot, e o que reinicia avisa os servidores antes,
+# com a previsão de volta do tipo de deploy.
+#
 # O painel entrou aqui na v1.4. Antes ele saía pela integração git da Vercel,
 # **em paralelo** com este workflow, e isso tinha uma janela ruim: num push que
 # mexe no schema, a Vercel publicava o painel novo enquanto o job `migrate`
@@ -32,6 +37,67 @@ env:
   IMAGE_NAME: goodbot-bot
 
 jobs:
+  # 0. O que muda no bot desde a versão no ar: `none`, `restart`, `database`
+  #    ou `infra` (`packages/shared/src/deploy.ts`). Decide se a imagem é
+  #    construída e que aviso de manutenção sai antes do reinício.
+  changes:
+    name: O que muda no bot
+    if: github.repository_owner == 'DionathaGoulart'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    outputs:
+      kind: ${{ steps.kind.outputs.kind }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # O commit da imagem que está rodando (label da imagem). O diff parte
+      # dele, e não do push anterior: um deploy que falhou no meio não pode
+      # fazer o seguinte achar que o bot já está em dia.
+      - name: Versão no ar
+        id: deployed
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          capture_stdout: true
+          script: |
+            echo "deployed=$(docker inspect goodbot-bot --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' 2>/dev/null)"
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile --filter @goodbot/shared
+
+      - name: Classificar
+        id: kind
+        env:
+          DEPLOYED: ${{ steps.deployed.outputs.stdout }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          base=$(printf '%s' "$DEPLOYED" | grep -o 'deployed=[0-9a-f]\{40\}' | cut -d= -f2 | head -n 1 || true)
+          if [ -n "$base" ] && git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            kind=$(git diff --name-only "$base" "$GITHUB_SHA" | pnpm --filter @goodbot/shared --silent deploy-kind)
+          else
+            # Sem versão no ar conhecida (primeiro deploy, container parado,
+            # histórico reescrito): não dá para saber o que mudou, reinicia.
+            kind=restart
+          fi
+          # Rodar o workflow à mão é pedir o deploy: nunca `none`.
+          if [ "$EVENT" = workflow_dispatch ] && [ "$kind" = none ]; then
+            kind=restart
+          fi
+          echo "Versão no ar: ${base:-desconhecida} · tipo: $kind"
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+
   # 1. Migrations antes de tudo: se o schema não subir, nada mais sobe.
   #
   # Só no repositório original. Um fork herda este workflow mas não os
@@ -107,7 +173,10 @@ jobs:
     name: Imagem do bot (GHCR)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: migrate
+    needs: [migrate, changes]
+    # Nada que entra na imagem nem na VM mudou: o bot fica como está, sem
+    # reinício e sem aviso. O `deploy` depende deste e pula junto.
+    if: needs.changes.outputs.kind != 'none'
     outputs:
       tag: ${{ steps.meta.outputs.version }}
     steps:
@@ -153,7 +222,7 @@ jobs:
     name: Deploy na Oracle (SSH)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: build
+    needs: [build, changes]
     environment: production
     steps:
       - uses: actions/checkout@v7
@@ -188,11 +257,13 @@ jobs:
           # Discord —, e o bot o usa para conferir o `actorId` de toda escrita
           # em `/admin`. Vazia = as rotas admin recusam tudo.
           OWNER_DISCORD_ID: ${{ vars.OWNER_DISCORD_ID }}
+          # O tipo do deploy (job `changes`): escolhe o aviso de manutenção.
+          DEPLOY_KIND: ${{ needs.changes.outputs.kind }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          envs: GHCR_USER,GHCR_TOKEN,AUTH_URL,OWNER_DISCORD_ID
+          envs: GHCR_USER,GHCR_TOKEN,AUTH_URL,OWNER_DISCORD_ID,DEPLOY_KIND
           script_stop: true
           script: |
             cd /opt/goodbot
@@ -229,8 +300,12 @@ jobs:
             # linha a cópia da VM ficava a do bootstrap, e foi assim que ela
             # passou o rename inteiro apontando para `/opt/cobot`.
             install -m 750 /tmp/goodbot-infra/scripts/deploy.sh ./deploy.sh
+            install -m 755 /tmp/goodbot-infra/scripts/deploy-notice.sh ./scripts/deploy-notice.sh
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose pull
+            # Depois do pull, para o aviso sair só quando o bot vai mesmo cair:
+            # daqui ao `up` são segundos. O bot novo troca o aviso por "voltou".
+            ./scripts/deploy-notice.sh "${DEPLOY_KIND:-restart}"
             docker compose up -d --remove-orphans
             docker image prune -f
             docker logout ghcr.io

@@ -6,6 +6,10 @@
 #
 #   ./deploy.sh              # puxa a tag `latest`
 #   ./deploy.sh sha-1a2b3c4  # volta para um build específico do GHCR
+#
+# Antes do `up`, os servidores recebem o aviso de manutenção de um reinício
+# rápido. `DEPLOY_KIND=database` ou `infra` troca a previsão; `DEPLOY_KIND=none`
+# reinicia calado.
 set -euo pipefail
 
 APP_DIR=${APP_DIR:-/opt/goodbot}
@@ -22,6 +26,9 @@ export TAG
 echo "▶ Deploy da tag: $TAG"
 
 docker compose pull
+if [[ -x ./scripts/deploy-notice.sh ]]; then
+  ./scripts/deploy-notice.sh "${DEPLOY_KIND:-restart}"
+fi
 docker compose up -d --remove-orphans
 docker image prune -f
 
