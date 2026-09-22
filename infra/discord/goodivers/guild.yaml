@@ -205,11 +205,10 @@ categories:
           - role: "@everyone"
             view: allow
             send: allow
-      - name: files
+      # O fórum `files` (downloads) mora logo depois; fórum não entra no spec.
+      - name: files-old
         topic: Downloads das ferramentas do Goodivers, como a Macro HD2 e o GoodVoice. Aparece pra quem tem o cargo Files.
         overrides:
-          - role: Files
-            view: allow
           - role: Bots
             view: allow
             send: allow
