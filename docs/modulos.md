@@ -291,7 +291,10 @@ Meia hora antes (`reminderMinutesBefore`) um voice livre do pool fica reservado
 marcada para daqui a pouco já sai com sala; marcada para `agora`, já começa. Na
 hora, quem está em outro voice é movido e quem não está em nenhum é chamado. No
 fim da jogatina, ou quando o voice esvazia depois do início, as permissões
-voltam exatamente ao que eram. Com o pool todo ocupado, o bot cria um voice só
+voltam exatamente ao que eram. Quem entra no squad com a sala já reservada
+(aceito numa votação ou convidado por um membro) ganha a sala na hora, e a
+liberação devolve o voice ao que era também para essa pessoa. Com o pool todo
+ocupado, o bot cria um voice só
 para a jogatina (`Jogatina · <squad>`, na categoria dos squads, trancado do
 mesmo jeito) e o apaga quando ele esvazia depois do início, ou no fim, mas
 nunca com gente dentro. A opção fica na aba de configuração ("Voice temporário

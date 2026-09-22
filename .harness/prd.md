@@ -17,9 +17,12 @@ Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (
 > apareceu sem avisar. A fonte é só o voice das jogatinas: nada de presença
 > de perfil nem de tempo fora de jogatina marcada. A jogatina ganhou
 > **REMARCAR**: quem está no "vou" muda o horário sem cancelar, e o squad é
-> avisado numa mensagem nova. O que mudou no documento: "Jogatina",
-> "Histórico", "Números" e "O relógio" na §5.11, o REMARCAR na §9.1 e o aviso
-> de manutenção do deploy na §7.5. O que **não** mudou: o resto do módulo e os
+> avisado numa mensagem nova. Quem entra no squad com a sala já reservada
+> ganha a sala na hora, e a liberação devolve o voice ao que era também para
+> essa pessoa. O que mudou no documento: "Jogatina",
+> "Histórico", "Números" e "O relógio" na §5.11, o snapshot de
+> `squad_sessions` na §8, o REMARCAR na §9.1 e o aviso de manutenção do
+> deploy na §7.5. O que **não** mudou: o resto do módulo e os
 > outros módulos.
 
 > **v1.6: jogatina sob demanda.** O squad deixou de ter janela semanal fixa:
@@ -793,6 +796,17 @@ não notifica.
    "não vou" e apontando a sala. É uma mensagem à parte porque editar a
    mensagem da jogatina não notifica ninguém.
 
+A reserva libera quem era membro quando saiu. Quem entra no squad com ela viva
+(aceito na votação, convidado por um membro, aceite tardio da proposta) ganha a
+sala na hora, senão ficaria do lado de fora da jogatina do próprio squad. No
+voice do pool, o overwrite que a pessoa tinha entra no snapshot **antes** da
+concessão, numa `UPDATE` condicional com a reserva viva: a liberação só devolve
+os ids do snapshot, e um overwrite dado fora dele ficaria no voice para sempre.
+A reserva liberada no meio do caminho não concede nada. O primeiro registro de
+um id é o que vale, então quem sai e volta com a mesma reserva não troca o
+estado de antes pelo que a reserva deu. O voice temporário, apagado no fim, só
+concede. Jogatina cancelada fica de fora: a sala dela está voltando ao pool.
+
 Na hora, o bot **move** para o voice reservado quem já está em outro voice da
 guild e chama, numa mensagem só, quem não está em nenhum (o Discord só deixa
 mover quem já está em voice); quem votou "Não vou" fica em paz. No fim da
@@ -1448,7 +1462,8 @@ squad_sessions    (id bigserial PK, guild_id, squad_id FK, starts_at, ends_at, c
                    -- a jogatina: `created_by` nulo = sessão semanal da v1.5; `ends_at` = início + `sessionHours`;
                    -- `message_id` é a mensagem com Vou / Não vou
                    -- o snapshot do voice mora aqui, e não em channel_locks: um /lock no voice reservado
-                   -- trocaria o que a liberação restaura
+                   -- trocaria o que a liberação restaura; quem entra no squad com a reserva viva é
+                   -- acrescentado a ele antes de ganhar o voice (o primeiro registro de um id vale)
                    -- `called_at`: trava de uma chamada pública por jogatina (fica depois de ela sair do
                    -- ar); `call_message_id` volta a nulo quando a mensagem é apagada no início
 squad_session_attendance (guild_id, session_id FK cascade, user_id, joined_at, left_at,

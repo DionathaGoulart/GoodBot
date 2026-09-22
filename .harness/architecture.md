@@ -615,6 +615,8 @@ matcher (vaga) ou CONVIDAR / `/squad convidar` ─▶ JoinRequestService.invite
   ─▶ GuideService.refresh ─▶ SquadsJob (5 min): lembrete + reserva do voice (snapshot na jogatina)
      pool cheio: grava a reserva sem canal, cria o voice temporário, grava o id
      (criação interrompida: o job reconcilia, adotando ou apagando o órfão)
+  ─▶ entrou no squad com a reserva viva: addMember ─▶ SessionService.grantLiveVoice
+     (pool: o overwrite de antes vai para o snapshot primeiro, depois a concessão; temporário: só concede)
   ─▶ na hora, move os membros e tira do ar a chamada pública
   ─▶ voiceStateUpdate (events/community/squads-voice.ts): quem é do squad no voice reservado
      abre presença em squad_session_attendance e marca played_at; sair de um voice do pool
