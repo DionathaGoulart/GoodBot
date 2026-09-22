@@ -19,10 +19,13 @@ Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (
 > **REMARCAR**: quem está no "vou" muda o horário sem cancelar, e o squad é
 > avisado numa mensagem nova. Quem entra no squad com a sala já reservada
 > ganha a sala na hora, e a liberação devolve o voice ao que era também para
-> essa pessoa. O que mudou no documento: "Jogatina",
-> "Histórico", "Números" e "O relógio" na §5.11, o snapshot de
-> `squad_sessions` na §8, o REMARCAR na §9.1 e o aviso de manutenção do
-> deploy na §7.5. O que **não** mudou: o resto do módulo e os
+> essa pessoa. E a jogatina ganhou **convidado avulso**: quem é do squad traz
+> gente de fora para jogar só aquela, com a sala liberada e o aviso numa
+> thread privada, sem entrar no squad. O que mudou no documento: "Jogatina",
+> "Convidado avulso", "Histórico", "Números" e "O relógio" na §5.11,
+> `squad_session_guests` e o snapshot de
+> `squad_sessions` na §8, o REMARCAR e o TRAZER CONVIDADO na §9.1, a aba de
+> configuração na §6.2 e o aviso de manutenção do deploy na §7.5. O que **não** mudou: o resto do módulo e os
 > outros módulos.
 
 > **v1.6: jogatina sob demanda.** O squad deixou de ter janela semanal fixa:
@@ -853,6 +856,28 @@ primeira semana que ainda não passou). Não existe agendamento automático:
 repetir é a rotina. `played_at` marca a jogatina que rolou, na primeira presença
 de um membro no voice reservado ou, sem sala, no início com dois "vou".
 
+**Convidado avulso.** Sobrou lugar e quem você quer chamar não é do squad?
+**TRAZER CONVIDADO**, na mensagem da jogatina (marcada ou em andamento), abre
+um select de pessoa para quem é do squad. O convidado joga **só aquela
+jogatina** e não entra no squad: nada de votação, perfil ou vaga. São no
+máximo `maxSessionGuests` (4) por jogatina, e 0 desliga o botão; ele some
+também quando o teto enche, a jogatina é cancelada ou ela acaba (o fim
+previsto, ou o voice reservado que esvaziou depois do início). Não vale bot,
+quem já é do squad, quem já é convidado dali nem quem saiu do servidor.
+O aviso vai numa **thread privada do canal de busca**, com o convidado e quem
+o trouxe, porque ele não vê o canal do squad: o convite diz o squad, o jogo, o
+horário e a sala, e a mesma thread recebe o início ("começou, entra em X"), a
+remarcação e o cancelamento. O convidado ganha o voice reservado como um
+membro (o overwrite de antes entra no snapshot, como em quem entra no squad
+com a reserva viva), e a liberação o devolve ao que era; trazido antes da
+reserva, ele já entra nos alvos dela e do voice temporário. O bot **não move**
+convidado: ele não pediu para ir. Tirar convidado antes do fim não existe; o
+acesso acaba na liberação.
+A presença dele conta no tempo e nas formações, e ocupa lugar na conta da
+party (e por isso pode fechar o CHAMAR GENTE), mas não marca `played_at`, não
+é sinal de vida do squad e fica fora do histórico: jogatina em que só apareceu
+convidado não rolou para o squad.
+
 **Chamada pública.** Sobrou lugar na party? **CHAMAR GENTE**, na mensagem da
 jogatina ou no guia (que escolhe a próxima jogatina que aceita chamada), posta
 a jogatina no canal de busca: o squad, o jogo, quando, o tamanho da party, o
@@ -996,7 +1021,8 @@ DM". Tirar do squad também avisa o canal do squad, que fica sabendo que foi a
 staff, mas nunca o motivo.
 
 **Permissões.** O módulo depende de `CreatePrivateThreads` (threads da
-proposta e do convite para squad), `Connect` e `Speak` (reserva do voice) e
+proposta, do convite para squad e do convidado avulso), `Connect` e `Speak`
+(reserva do voice) e
 `PinMessages` (guia), além de `ManageChannels`, `ManageRoles` e `MoveMembers`,
 que o convite do bot já pedia. A chamada pública só precisa de ver, escrever e
 mandar embed no canal de busca, o mesmo que a mensagem fixa. Sem elas ele não quebra: o match, a reserva e o
@@ -1004,7 +1030,8 @@ pin conferem antes e pulam com aviso no log (§10), e `/squad convidar` explica
 que falta permissão no canal de busca.
 
 Fora do escopo desta versão: voice criado e apagado por squad, jogatina
-recorrente automática (`/bora toda sexta`), mais de um voice por jogatina, match
+recorrente automática (`/bora toda sexta`), mais de um voice por jogatina, tirar
+convidado antes do fim da jogatina, match
 entre jogos diferentes, estatísticas em `stat_buckets` (os contadores do painel saem direto das
 tabelas) e DM aos membros, com uma exceção: as ações de admin pelo painel
 (pausar, retomar, editar respostas, apagar perfil e tirar do squad) avisam a
@@ -1064,7 +1091,7 @@ grava, escreve auditoria (§6.5), chama `invalidate` no bot, toast.
 - **Squads** (§5.11), em quatro abas. `CONFIGURAÇÃO`: canal de busca, cargo de
   ping, categoria, nome do canal, voices do pool, voice temporário com o pool
   cheio, prazos, duração da jogatina,
-  jogatinas marcadas por squad e as 4 faixas da grade, com o painel da mensagem fixa (publicar ou atualizar) no topo.
+  jogatinas marcadas por squad, convidados por jogatina e as 4 faixas da grade, com o painel da mensagem fixa (publicar ou atualizar) no topo.
   `JOGOS`: CRUD de jogo (nome, tamanho do squad de 2 a 20, quantos jogam por
   vez de 2 a 10 e nunca mais que o squad, ligado) com as até 5
   perguntas do perfil, e o botão de rodar o match agora; apagar jogo é recusado
@@ -1467,11 +1494,19 @@ squad_sessions    (id bigserial PK, guild_id, squad_id FK, starts_at, ends_at, c
                    -- `called_at`: trava de uma chamada pública por jogatina (fica depois de ela sair do
                    -- ar); `call_message_id` volta a nulo quando a mensagem é apagada no início
 squad_session_attendance (guild_id, session_id FK cascade, user_id, joined_at, left_at,
-                   PK(session_id, user_id, joined_at))
+                   as_guest, PK(session_id, user_id, joined_at))
                    idx (guild_id, user_id)
                    -- presença no voice reservado, uma linha por entrada; é o que o histórico e os
                    -- números contam. Evento de voz + varredura; `left_at` nulo = ainda no voice
                    -- (quem saiu com o bot fora do ar fecha na varredura seguinte)
+                   -- `as_guest`: convidado avulso, decidido na entrada; conta no tempo e nas
+                   -- formações, nunca em `played_at`, sinal de vida ou histórico
+squad_session_guests (guild_id, session_id FK cascade, user_id, invited_by, thread_id,
+                   invited_at, PK(session_id, user_id))
+                   idx (guild_id, user_id)
+                   -- convidado avulso (§5.11): joga só esta jogatina, sem entrar no squad.
+                   -- `thread_id` é a thread privada do aviso, no canal de busca; o teto
+                   -- (`maxSessionGuests`) é conferido com a linha da jogatina travada
 ```
 
 Relações principais: `guilds 1—N cases`, `cases 1—0..1 scheduled_actions`,
@@ -1479,7 +1514,7 @@ Relações principais: `guilds 1—N cases`, `cases 1—0..1 scheduled_actions`,
 `reaction_role_panels 1—N items`, `ticket_types 1—N tickets`, `ticket_panels
 N—N ticket_types` (array), `squad_games 1—N squad_profiles|squads|squad_proposals`,
 `squads 1—N squad_members|squad_join_requests|squad_sessions`,
-`squad_sessions 1—N squad_session_attendance`, tudo `N—1 guilds`.
+`squad_sessions 1—N squad_session_attendance|squad_session_guests`, tudo `N—1 guilds`.
 Toda tabela de squad tem `guild_id`, inclusive as filhas que chegam à guild pelo
 squad: um uuid vindo de `custom_id` ou da URL nunca alcança o squad de outro
 servidor.
@@ -1506,7 +1541,8 @@ re-verifica (o registro é dica de UI, não segurança).
 No módulo `squads` (§5.11), `/squad` e `/bora` são de `member`, com duas
 exceções: `/squad painel` (publicar a mensagem fixa) é de `admin`, e
 `/squad renomear` e `/squad convidar` exigem ser do squad. `/bora`, os botões da
-jogatina (VOU, NÃO VOU, REMARCAR, CANCELAR, REPETIR, CHAMAR GENTE), o CONVIDAR e o
+jogatina (VOU, NÃO VOU, REMARCAR, CANCELAR, REPETIR, CHAMAR GENTE, TRAZER
+CONVIDADO), o CONVIDAR e o
 CHAMAR GENTE do guia e a votação de entrada (A FAVOR, CONTRA) exigem ser do
 squad, e REMARCAR exige também estar no "vou" da jogatina;
 ENTRAR e PASSO do convite só valem para quem foi convidado, e o ENTRAR da

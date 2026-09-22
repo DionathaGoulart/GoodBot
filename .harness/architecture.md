@@ -34,7 +34,7 @@ pelo próprio bot, que é o único processo com uma sessão de gateway aberta.
                            │ Drizzle
                    ┌───────▼────────┐
                    │ Postgres       │  (Supabase em produção,
-                   │ 34 tabelas     │   Docker local em dev)
+                   │ 35 tabelas     │   Docker local em dev)
                    └────────────────┘
 ```
 
@@ -382,14 +382,14 @@ src/
                    logs, messages, misc, social, squads, stats, audit, enums,
                    relations
   repositories/    18 arquivos: uma função por consulta, nunca SQL solto fora
-drizzle/           19 migrations SQL versionadas
+drizzle/           21 migrations SQL versionadas
 ```
 
-34 tabelas. As centrais: `guilds`, `guild_registry`, `guild_settings`,
+35 tabelas. As centrais: `guilds`, `guild_registry`, `guild_settings`,
 `module_configs`, `cases`,
 `audit_logs`, `automod_rules`, `automod_hits`, `scheduled_actions`,
 `stat_buckets`, `tickets`, `reaction_role_panels`, `social_accounts`, `squads`
-(as oito do módulo começam por `squad_`).
+(as nove do módulo começam por `squad_`).
 
 Fluxo obrigatório ao mexer no schema:
 
@@ -617,7 +617,11 @@ matcher (vaga) ou CONVIDAR / `/squad convidar` ─▶ JoinRequestService.invite
      (criação interrompida: o job reconcilia, adotando ou apagando o órfão)
   ─▶ entrou no squad com a reserva viva: addMember ─▶ SessionService.grantLiveVoice
      (pool: o overwrite de antes vai para o snapshot primeiro, depois a concessão; temporário: só concede)
-  ─▶ na hora, move os membros e tira do ar a chamada pública
+  ─▶ TRAZER CONVIDADO ─▶ GuestService.bring: addSessionGuest (teto sob `for update` da jogatina)
+     ─▶ thread privada no canal de busca com o convidado e quem trouxe (falha desfaz a linha)
+     ─▶ grantSessionVoice; trazido antes da reserva, ele já entra nos alvos dela
+  ─▶ na hora, move os membros (nunca o convidado) e tira do ar a chamada pública;
+     início, remarcação e cancelamento avisam cada convidado na thread dele
   ─▶ voiceStateUpdate (events/community/squads-voice.ts): quem é do squad no voice reservado
      abre presença em squad_session_attendance e marca played_at; sair de um voice do pool
      ou temporário (lista em memória, carregada do banco uma vez por guild) fecha
@@ -649,7 +653,8 @@ guia, convite, /squad procurar, chamada e overview da API ─▶ HistoryService.
   ─▶ três leituras: jogatinas que rolaram (90 dias), totais por squad, presença dessas jogatinas
   ─▶ summarizeHistory + formatHistory (shared, fuso e faixas da guild)
 
-números (relatório, guia, /squad stats, painel) ─▶ listSessionAttendance (com joined_at/left_at)
+números (relatório, guia, /squad stats, painel) ─▶ listSessionAttendance (com joined_at/left_at
+  e as_guest; o histórico descarta convidado, os números o contam à parte)
   ─▶ shared/squads/stats.ts: formationSegments (linha do tempo por jogatina) ─▶ summarizeSession,
      summarizePlayers, summarizeFormations, summarizePairs
 ```
@@ -766,6 +771,7 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | mexer no guia fixo do squad       | `apps/bot/src/services/squads/guide.ts` (texto em `guideMessage`, `embeds.ts`) |
 | mexer no convite ou na votação de entrada | `apps/bot/src/services/squads/requests.ts` + regra em `packages/shared/src/squads/join-vote.ts` |
 | mexer no CHAMAR GENTE (chamada pública) | `apps/bot/src/services/squads/calls.ts` (ENTRAR em `search.ts`, texto em `publicCallMessage`) |
+| mexer no convidado avulso        | `apps/bot/src/services/squads/guests.ts` (regra do botão em `guestBlocker`, texto em `embeds.ts`) |
 | mexer no histórico de jogatinas   | `apps/bot/src/services/squads/history.ts` (leitura) + `packages/shared/src/squads/history.ts` (resumo e frase) |
 | mexer nos números das jogatinas   | regra pura em `packages/shared/src/squads/stats.ts`; presença em `sessions.ts` (`confirmPresence`, `sweepPresence`) |
 | mexer no match manual             | `apps/bot/src/services/squads/manual.ts` + regra pura em `packages/shared/src/squads/manual.ts` |
@@ -806,5 +812,5 @@ Antes de dar qualquer trabalho por concluído:
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-137 arquivos de teste, ~1.680 casos (Vitest). Os testes de integração de
+143 arquivos de teste, ~1.860 casos (Vitest). Os testes de integração de
 repository precisam de um Postgres e são pulados sem ele.

@@ -280,8 +280,9 @@ e o servidor tem teto de 500 canais.
 usa `/bora hoje 21h`. O bot entende `agora`, `hoje 21h`, `hoje 21:30`,
 `amanhã 20h`, `sex 22h`, `dom 15h` e `16/09 21h`, no fuso do servidor, e o
 autocomplete mostra o que ele entendeu antes de enviar. Quem marcou já vai. A
-mensagem da jogatina chama o squad e tem duas linhas de botões: `VOU`, `NÃO VOU`
-e `CHAMAR GENTE` em cima; `REMARCAR` e `CANCELAR` embaixo. Ela dura 3 h
+mensagem da jogatina chama o squad e tem duas linhas de botões: `VOU`,
+`NÃO VOU`, `CHAMAR GENTE` e `TRAZER CONVIDADO` em cima; `REMARCAR` e `CANCELAR`
+embaixo. Ela dura 3 h
 (`sessionHours`) e cada squad tem até 5 marcadas (`maxUpcomingSessions`).
 A contagem diz se a party fechou ("fechada, 4 de 4") ou, com mais gente que a
 party, quantas dá ("dá 2 parties: 7 vão e cada partida leva até 4"); o bot
@@ -325,6 +326,15 @@ perfil: a pessoa respondeu a uma jogatina com dia e hora. Quem entra já fica
 como `VOU` nela. Uma chamada por jogatina, só antes do início, com vaga no squad
 e lugar na party (o botão some quando não dá). A chamada é apagada quando a
 jogatina começa, é cancelada ou o squad é arquivado.
+
+**Trazer alguém de fora.** `TRAZER CONVIDADO`, na mensagem da jogatina (marcada
+ou rolando), abre um select de pessoa para quem é do squad. O convidado joga só
+aquela jogatina, sem entrar no squad: ganha a sala reservada como um membro (e a
+perde na liberação) e recebe o convite numa conversa privada no canal de busca,
+com quem o chamou, que também avisa o início, a remarcação e o cancelamento. São
+até 4 por jogatina ("Convidados por jogatina" na aba de configuração; 0 desliga
+o botão), e ele conta na party, no tempo e nas formações, mas não no histórico
+do squad. O bot não move convidado de voice: ele não pediu para ir.
 
 **Histórico.** O bot anota quem do squad entra no voice reservado de cada
 jogatina e resume o que rolou: "6 jogatinas no último mês, geralmente sexta e
