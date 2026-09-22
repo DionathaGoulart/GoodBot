@@ -54,6 +54,7 @@ import {
   releaseSessionCall,
   releaseSessionVoice,
   reopenSquadSession,
+  rescheduleSquadSession,
   reserveSessionVoice,
   setSessionCallMessage,
   setSessionMessage,
@@ -576,6 +577,83 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect(await reopenSquadSession(db, GUILD_ID, session.id, input)).toBeNull();
       await releaseSessionVoice(db, GUILD_ID, session.id, new Date());
       expect((await reopenSquadSession(db, GUILD_ID, session.id, input))?.voiceReservedAt).toBeNull();
+    });
+
+    it('remarcar troca o horário, esbarra em minuto ocupado e só zera a reserva devolvida', async () => {
+      const session = await newSession('Remarcar');
+      const at = (ms: number) => ({
+        startsAt: new Date(ms),
+        endsAt: new Date(ms + 3 * HOUR),
+      });
+      const later = at(session.startsAt.getTime() + HOUR);
+
+      const moved = await rescheduleSquadSession(db, GUILD_ID, session.id, {
+        ...later,
+        resetReminder: false,
+      });
+      expect(moved).toMatchObject({
+        outcome: 'rescheduled',
+        session: { id: session.id, ...later, goingIds: [USER_A] },
+      });
+      expect(
+        await rescheduleSquadSession(db, OTHER_GUILD_ID, session.id, { ...later, resetReminder: false }),
+      ).toEqual({ outcome: 'stale' });
+
+      // O minuto antigo ficou livre e outra jogatina o ocupou: voltar para ele esbarra no índice.
+      const other = await createSquadSession(db, {
+        guildId: GUILD_ID,
+        squadId: session.squadId,
+        startsAt: session.startsAt,
+        endsAt: session.endsAt,
+        createdBy: USER_B,
+        goingIds: [USER_B],
+      });
+      expect(other).not.toBeNull();
+      expect(
+        await rescheduleSquadSession(db, GUILD_ID, session.id, {
+          ...at(session.startsAt.getTime()),
+          resetReminder: false,
+        }),
+      ).toEqual({ outcome: 'taken' });
+
+      await markSessionReminded(db, GUILD_ID, session.id, new Date());
+      await reserveSessionVoice(db, GUILD_ID, session.id, {
+        voiceChannelId: '400000000000000012',
+        overwrites: [],
+        at: new Date(),
+      });
+      const far = { ...at(session.startsAt.getTime() + DAY), resetReminder: true };
+      expect(await rescheduleSquadSession(db, GUILD_ID, session.id, far)).toEqual({
+        outcome: 'stale',
+      });
+      await releaseSessionVoice(db, GUILD_ID, session.id, new Date());
+      expect(await rescheduleSquadSession(db, GUILD_ID, session.id, far)).toMatchObject({
+        outcome: 'rescheduled',
+        session: {
+          remindedAt: null,
+          voiceChannelId: null,
+          voiceOverwrites: null,
+          voiceReservedAt: null,
+          voiceReleasedAt: null,
+        },
+      });
+
+      await markSessionStarted(db, GUILD_ID, session.id, new Date());
+      expect(
+        await rescheduleSquadSession(db, GUILD_ID, session.id, { ...later, resetReminder: false }),
+      ).toEqual({ outcome: 'stale' });
+    });
+
+    it('lembrar e começar com startsBy só pegam a jogatina que já está na hora', async () => {
+      const session = await newSession('Hora certa');
+      const now = new Date();
+      const early = { startsBy: now };
+      const onTime = { startsBy: session.startsAt };
+
+      expect(await markSessionReminded(db, GUILD_ID, session.id, now, early)).toBeNull();
+      expect(await markSessionStarted(db, GUILD_ID, session.id, now, early)).toBeNull();
+      expect(await markSessionReminded(db, GUILD_ID, session.id, now, onTime)).not.toBeNull();
+      expect(await markSessionStarted(db, GUILD_ID, session.id, now, onTime)).not.toBeNull();
     });
 
     it('jogatina começada não cancela, e rolou marca uma vez', async () => {

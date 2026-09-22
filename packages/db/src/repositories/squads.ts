@@ -30,6 +30,7 @@ import {
   type SQL,
 } from 'drizzle-orm';
 
+import { isUniqueViolation } from './pg-errors';
 import { guilds } from '../schema/guilds';
 import {
   squadGames,
@@ -1335,6 +1336,72 @@ export async function reopenSquadSession(
   return row ?? null;
 }
 
+export interface RescheduleSquadSessionInput {
+  startsAt: Date;
+  endsAt: Date;
+  /**
+   * Zera o lembrete e a reserva, para o job lembrar e reservar de novo perto
+   * do horário novo. Só vale com a reserva já devolvida ao pool (ou sem
+   * reserva): zerar o snapshot antes da liberação deixaria o voice trancado.
+   */
+  resetReminder: boolean;
+}
+
+export type RescheduleSquadSessionResult =
+  | { outcome: 'rescheduled'; session: SquadSession }
+  /** O squad já tem jogatina nesse minuto (`(squad_id, starts_at)` é único), cancelada ou não. */
+  | { outcome: 'taken' }
+  /** Começou, foi cancelada, sumiu ou ainda segura uma reserva que era para zerar. */
+  | { outcome: 'stale' };
+
+/**
+ * REMARCAR: troca o horário de uma jogatina que ainda não começou nem foi
+ * cancelada. A trava é a própria `UPDATE`: o início do job e um CANCELAR no
+ * mesmo instante não deixam remarcar o que já não está marcado.
+ */
+export async function rescheduleSquadSession(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+  input: RescheduleSquadSessionInput,
+): Promise<RescheduleSquadSessionResult> {
+  const filters: SQL[] = [
+    eq(squadSessions.guildId, guildId),
+    eq(squadSessions.id, sessionId),
+    isNull(squadSessions.startedAt),
+    isNull(squadSessions.cancelledAt),
+  ];
+  if (input.resetReminder) {
+    filters.push(
+      or(isNull(squadSessions.voiceReservedAt), isNotNull(squadSessions.voiceReleasedAt)) as SQL,
+    );
+  }
+  try {
+    const [row] = await db
+      .update(squadSessions)
+      .set({
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+        ...(input.resetReminder
+          ? {
+              remindedAt: null,
+              voiceChannelId: null,
+              voiceOverwrites: null,
+              voiceTemporary: false,
+              voiceReservedAt: null,
+              voiceReleasedAt: null,
+            }
+          : {}),
+      })
+      .where(and(...filters))
+      .returning();
+    return row ? { outcome: 'rescheduled', session: row } : { outcome: 'stale' };
+  } catch (error) {
+    if (isUniqueViolation(error)) return { outcome: 'taken' };
+    throw error;
+  }
+}
+
 export async function getSquadSession(
   db: DbExecutor,
   guildId: string,
@@ -1368,12 +1435,29 @@ export async function listSessionsStartingBetween(
     .orderBy(asc(squadSessions.startsAt));
 }
 
-/** `null` quando o lembrete já saiu: o job de 5 em 5 min não lembra duas vezes. */
+/**
+ * Até quando a jogatina tem de começar para o passo valer. O job lista as
+ * jogatinas uma vez e trata uma a uma; uma remarcação nesse meio-tempo muda o
+ * horário, e a lista velha não pode lembrar nem começar a jogatina que foi
+ * para mais tarde.
+ */
+export interface SessionStepGuard {
+  startsBy?: Date;
+}
+
+const startsByFilter = (guard: SessionStepGuard): SQL[] =>
+  guard.startsBy ? [lte(squadSessions.startsAt, guard.startsBy)] : [];
+
+/**
+ * `null` quando o lembrete já saiu (o job de 5 em 5 min não lembra duas vezes)
+ * ou quando a jogatina começa depois de `startsBy`.
+ */
 export async function markSessionReminded(
   db: DbExecutor,
   guildId: string,
   sessionId: number,
   at: Date,
+  guard: SessionStepGuard = {},
 ): Promise<SquadSession | null> {
   const [row] = await db
     .update(squadSessions)
@@ -1383,6 +1467,7 @@ export async function markSessionReminded(
         eq(squadSessions.guildId, guildId),
         eq(squadSessions.id, sessionId),
         isNull(squadSessions.remindedAt),
+        ...startsByFilter(guard),
       ),
     )
     .returning();
@@ -1405,14 +1490,16 @@ export async function setSessionMessage(
 }
 
 /**
- * `null` quando a jogatina já começou ou foi cancelada: os membros são movidos
- * para o voice uma vez só, e nunca para uma jogatina que não vai acontecer.
+ * `null` quando a jogatina já começou ou foi cancelada (os membros são movidos
+ * para o voice uma vez só, e nunca para uma jogatina que não vai acontecer) ou
+ * quando ela começa depois de `startsBy`.
  */
 export async function markSessionStarted(
   db: DbExecutor,
   guildId: string,
   sessionId: number,
   at: Date,
+  guard: SessionStepGuard = {},
 ): Promise<SquadSession | null> {
   const [row] = await db
     .update(squadSessions)
@@ -1423,6 +1510,7 @@ export async function markSessionStarted(
         eq(squadSessions.id, sessionId),
         isNull(squadSessions.startedAt),
         isNull(squadSessions.cancelledAt),
+        ...startsByFilter(guard),
       ),
     )
     .returning();
