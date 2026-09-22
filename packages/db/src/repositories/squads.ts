@@ -2100,6 +2100,25 @@ export async function listPlayedSessionsByGame(
     .orderBy(asc(squadSessions.startsAt));
 }
 
+/**
+ * **Toda** jogatina da guild desde `since`, da mais recente: a que rolou, a
+ * que ninguém apareceu e a cancelada. É a leitura da aba JOGATINAS do painel,
+ * que mostra o que foi marcado e não só o que rolou, porque "marcaram cinco e
+ * rolaram duas" é justamente o número que a staff quer ver. O filtro por jogo
+ * e por squad é da tela, sobre a mesma leitura.
+ */
+export async function listSessionsInWindow(
+  db: DbExecutor,
+  guildId: string,
+  since: Date,
+): Promise<SquadSession[]> {
+  return db
+    .select()
+    .from(squadSessions)
+    .where(and(eq(squadSessions.guildId, guildId), gte(squadSessions.startsAt, since)))
+    .orderBy(desc(squadSessions.startsAt));
+}
+
 export interface PlayedSessionTotals {
   squadId: string;
   played: number;
