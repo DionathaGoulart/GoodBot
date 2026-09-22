@@ -1458,7 +1458,12 @@ level)`. A guild conferida é sempre a que vai ser lida ou escrita, e ela
   `actorId` do dono, como o resto do `/admin`), feita de dentro do container
   pelo `scripts/deploy-notice.sh`, que nunca falha o deploy. O estado mora em
   `meta` (`deploy_notice`), porque quem avisa e quem confirma são processos
-  diferentes.
+  diferentes. O aviso vai para o **canal de avisos** da guild
+  (`guild_settings.notice_channel_id`, configurável na página Geral do
+  painel), o mesmo do broadcast do dono e do fim da demonstração. Sem escolha,
+  vale o canal de sistema do Discord, e depois dele o primeiro canal de texto
+  onde o bot consiga falar: é melhor avisar no lugar errado do que sumir
+  calado.
 - O painel na Vercel é stateless: qualquer instância pode atender qualquer
   request; nada de estado em memória entre requests.
 - Graceful shutdown: flush de stats, fechar HTTP, destruir client, 10s de
@@ -1482,7 +1487,10 @@ guild_registry    (guild_id PK text, status enum(pending|approved|demo|blocked|e
                    -- `invited_at` é o relógio da fila: `expired` sai dele, e só reinicia
                    -- quando um convite reabre a linha (nunca para quem já está em pending)
 guild_settings    (guild_id PK/FK, timezone, embed_color, mod_role_ids[], admin_role_ids[],
-                   dashboard_access_role_ids[], log_channel_id, dm_on_punish jsonb, bot_bio, updated_at)
+                   dashboard_access_role_ids[], log_channel_id, notice_channel_id,
+                   dm_on_punish jsonb, bot_bio, updated_at)
+                   -- `notice_channel_id` é onde o bot fala de si mesmo (manutenção, broadcast,
+                   -- fim da demo); vazio cai no canal de sistema do Discord, como antes dele
                    -- `bot_bio` é espelho do perfil do bot na guild (§6.6): o Discord aceita
                    -- escrever a bio do membro e não a devolve, então sem cópia o painel fica cego
 module_configs    (guild_id, module PK(guild_id,module), enabled, config jsonb, version, updated_at, updated_by)

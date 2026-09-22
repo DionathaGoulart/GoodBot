@@ -164,6 +164,12 @@ fino: valida entrada, chama um service, responde. Os principais:
 | `AlertService`            | manda alerta operacional por webhook                       |
 | `DeployNoticeService`     | aviso de manutenção do deploy: o bot velho publica, o novo edita para "voltou" |
 
+> Tudo o que o bot fala **sobre si mesmo** (manutenção, broadcast do dono, fim
+> da demo) escolhe o canal pelo `noticeChannel` de `lib/channels.ts`: primeiro
+> o `notice_channel_id` da guild, depois o canal de sistema do Discord, depois
+> o primeiro canal de texto onde ele consiga falar. Quem chama precisa passar o
+> id configurado (`config.getSettings`), senão o campo do painel não vale nada.
+
 > **Regra dura:** config de módulo é lida **sempre** pelo `ConfigService`,
 > nunca por query direta dentro de um comando ou evento. O cache existe e uma
 > leitura por fora dele devolve dado velho.
