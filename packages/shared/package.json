@@ -12,10 +12,12 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "deploy-kind": "tsx src/deploy-kind.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.3",
+    "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "vitest": "^5.0.1"
   },
