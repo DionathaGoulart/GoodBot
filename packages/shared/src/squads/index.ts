@@ -3,6 +3,7 @@ export * from './history';
 export * from './join-vote';
 export * from './manual';
 export * from './match';
+export * from './session';
 export * from './stats';
 export * from './when';
 export * from './zoned';
