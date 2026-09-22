@@ -7,6 +7,7 @@ import type { AuditEntry, AuditService } from '../audit';
 import type { ConfigService } from '../config';
 import type { CallService } from './calls';
 import type { AdminDmKind } from './embeds';
+import type { GuestService } from './guests';
 import type { GuideService } from './guide';
 import type { HistoryService } from './history';
 import type { ManualMatchService } from './manual';
@@ -20,13 +21,7 @@ import type { SessionService } from './sessions';
 import type { SquadLifecycleService } from './squads';
 import type { Db, Squad } from '@goodbot/db';
 import type { SquadsConfig } from '@goodbot/shared';
-import type {
-  BaseMessageOptions,
-  Client,
-  Guild,
-  GuildBasedChannel,
-  TextChannel,
-} from 'discord.js';
+import type { BaseMessageOptions, Client, Guild, GuildBasedChannel, TextChannel } from 'discord.js';
 
 export const log = childLogger('squads');
 
@@ -52,6 +47,7 @@ export interface SquadParts {
   requests: JoinRequestService;
   sessions: SessionService;
   calls: CallService;
+  guests: GuestService;
   history: HistoryService;
   guide: GuideService;
   search: SearchService;

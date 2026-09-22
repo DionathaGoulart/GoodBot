@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   adminActionDm,
+  guestInviteMessage,
+  guestNoticeMessage,
+  guestPickMessage,
+  guestSentText,
   guideMessage,
   inviteMessage,
   joinableSquadsMessage,
@@ -17,7 +21,14 @@ import {
 } from './embeds';
 import { parseSquadCustomId } from './ids';
 
-import type { AdminDmKind, AdminDmView, GuideView, JoinVoteView, SessionView } from './embeds';
+import type {
+  AdminDmKind,
+  AdminDmView,
+  GuestInviteView,
+  GuideView,
+  JoinVoteView,
+  SessionView,
+} from './embeds';
 import type { BaseMessageOptions, EmbedBuilder } from 'discord.js';
 
 const REASON = 'Motivo escrito pelo admin.';
@@ -170,8 +181,8 @@ function rowsOf(message: BaseMessageOptions) {
   const rows = message.components as unknown as {
     toJSON: () => { components: { custom_id: string }[] };
   }[];
-  return rows.map(
-    (row) => row.toJSON().components.map((button) => parseSquadCustomId(button.custom_id)?.kind),
+  return rows.map((row) =>
+    row.toJSON().components.map((button) => parseSquadCustomId(button.custom_id)?.kind),
   );
 }
 
@@ -283,10 +294,12 @@ describe('histórico e chamada pública', () => {
       },
       squad: { name: 'Os Bravos' },
       memberIds: ['300000000000000001', '300000000000000002'],
+      guestIds: [],
       partySize: 4,
       voiceChannelId: null,
       voiceTemporary: false,
       canCall: true,
+      canBringGuest: false,
       callChannelId: null,
       state: 'scheduled',
       reminderMinutesBefore: 30,
@@ -305,8 +318,142 @@ describe('histórico e chamada pública', () => {
     expect(embedOf(called)?.fields?.find((field) => field.name === 'Chamada')?.value).toContain(
       '<#400000000000000001>',
     );
-    const started = sessionMessage({ ...view, state: 'started', callChannelId: '400000000000000001' });
+    const started = sessionMessage({
+      ...view,
+      state: 'started',
+      callChannelId: '400000000000000001',
+    });
     expect(embedOf(started)?.fields?.some((field) => field.name === 'Chamada')).toBe(false);
+  });
+
+  it('TRAZER CONVIDADO fica na linha de cima, também rolando, e o convidado conta na party', () => {
+    const [a, b, guest] = ['300000000000000001', '300000000000000002', '300000000000000009'];
+    const view: SessionView = {
+      session: {
+        id: 7,
+        startsAt: new Date('2026-09-18T00:00:00Z'),
+        endsAt: new Date('2026-09-18T03:00:00Z'),
+        goingIds: [a, b],
+        notGoingIds: [],
+        createdBy: a,
+        cancelledBy: null,
+        remindedAt: null,
+      },
+      squad: { name: 'Os Bravos' },
+      memberIds: [a, b],
+      guestIds: [guest],
+      partySize: 4,
+      voiceChannelId: null,
+      voiceTemporary: false,
+      canCall: true,
+      canBringGuest: true,
+      callChannelId: null,
+      state: 'scheduled',
+      reminderMinutesBefore: 30,
+      embedColor: 0,
+      mentionMembers: true,
+    };
+    const scheduled = sessionMessage(view);
+    expect(rowsOf(scheduled)).toEqual([
+      ['session', 'session', 'call', 'guest-pick'],
+      ['session', 'session'],
+    ]);
+    const fields = embedOf(scheduled)?.fields ?? [];
+    expect(fields.find((field) => field.name === 'Convidados')?.value).toBe(`<@${guest}>`);
+    expect(fields.find((field) => field.name === 'Party')?.value).toBe('3 de 4, ainda cabe gente.');
+    // O convidado aparece no embed, mas o anúncio chama só o squad.
+    expect(scheduled.allowedMentions).toEqual({ users: [a, b] });
+
+    expect(rowsOf(sessionMessage({ ...view, state: 'started' }))).toEqual([
+      ['session', 'guest-pick'],
+    ]);
+    expect(rowsOf(sessionMessage({ ...view, state: 'started', canBringGuest: false }))).toEqual([
+      ['session'],
+    ]);
+    const none = sessionMessage({ ...view, guestIds: [] });
+    expect(embedOf(none)?.fields?.some((field) => field.name === 'Convidados')).toBe(false);
+  });
+
+  it('o convite do convidado diz quem chamou, quando e a sala, e chama só ele', () => {
+    const [inviter, guest, voice] = [
+      '300000000000000001',
+      '300000000000000009',
+      '400000000000000002',
+    ];
+    const startsAt = new Date('2026-09-18T00:00:00Z');
+    const view: GuestInviteView = {
+      guestId: guest,
+      invitedBy: inviter,
+      squad: { name: 'Os Bravos' },
+      game: { name: 'Helldivers 2' },
+      session: { startsAt, endsAt: new Date('2026-09-18T03:00:00Z'), remindedAt: null },
+      started: false,
+      voiceChannelId: null,
+      voiceTemporary: false,
+      reminderMinutesBefore: 30,
+      embedColor: 0,
+    };
+    const later = guestInviteMessage(view);
+    const embed = embedOf(later);
+    expect(later.content).toBe(`<@${guest}>`);
+    expect(later.allowedMentions).toEqual({ users: [guest] });
+    expect(embed?.description).toContain(`<@${inviter}> chamou você para jogar **Helldivers 2**`);
+    expect(embed?.description).toContain(`<t:${String(startsAt.getTime() / 1000)}:F>`);
+    expect(embed?.description).toContain('sem entrar no squad');
+    expect(embed?.fields?.[0]?.value).toContain('30 minutos antes');
+
+    const room = embedOf(guestInviteMessage({ ...view, voiceChannelId: voice }));
+    expect(room?.fields?.[0]?.value).toContain(`<#${voice}>, já liberada para você`);
+    const noRoom = embedOf(
+      guestInviteMessage({ ...view, session: { ...view.session, remindedAt: startsAt } }),
+    );
+    expect(noRoom?.fields?.[0]?.value).toContain(`combine com <@${inviter}>`);
+    const now = embedOf(guestInviteMessage({ ...view, started: true, voiceChannelId: voice }));
+    expect(now?.description).toContain('que está jogando agora');
+    expect(JSON.stringify([embed, room, noRoom, now])).not.toMatch(/[—–]/);
+  });
+
+  it('os avisos ao convidado: começou, remarcada e cancelada', () => {
+    const guest = '300000000000000009';
+    const squad = { name: 'Os Bravos' };
+    const from = new Date('2026-09-18T01:00:00Z');
+    const startsAt = new Date('2026-09-18T00:00:00Z');
+    const notice = (n: Parameters<typeof guestNoticeMessage>[0]['notice']) =>
+      guestNoticeMessage({ guestId: guest, squad, notice: n });
+
+    const started = notice({ kind: 'started', voiceChannelId: '400000000000000002' });
+    expect(started.content).toBe(
+      `<@${guest}> a jogatina do **Os Bravos** começou! Entre em <#400000000000000002>.`,
+    );
+    expect(started.allowedMentions).toEqual({ users: [guest] });
+    expect(notice({ kind: 'started', voiceChannelId: null }).content).toContain('sem sala');
+    expect(notice({ kind: 'rescheduled', from, startsAt }).content).toContain(
+      `era <t:${String(from.getTime() / 1000)}:f>, agora é <t:${String(startsAt.getTime() / 1000)}:f>`,
+    );
+    expect(notice({ kind: 'cancelled', startsAt }).content).toContain('foi cancelada');
+  });
+
+  it('o select e a resposta do TRAZER CONVIDADO', () => {
+    const pick = guestPickMessage(
+      { id: 7, startsAt: new Date('2026-09-18T00:00:00Z') },
+      {
+        name: 'Os Bravos',
+      },
+    );
+    const [row] = pick.components as unknown as {
+      toJSON: () => { components: { custom_id: string }[] };
+    }[];
+    expect(parseSquadCustomId(row!.toJSON().components[0]!.custom_id)).toEqual({
+      kind: 'guest-user',
+      sessionId: 7,
+    });
+    expect(pick.content).toContain('sem entrar no squad');
+
+    const sent = { guestId: '300000000000000009', squad: { name: 'Os Bravos' } };
+    expect(guestSentText({ ...sent, voiceChannelId: null })).not.toContain('sala');
+    expect(guestSentText({ ...sent, voiceChannelId: '400000000000000002' })).toContain(
+      'A sala <#400000000000000002> já está liberada',
+    );
   });
 
   it('o aviso do REMARCAR chama quem precisa rever a resposta, sem notificar quem remarcou', () => {
@@ -332,13 +479,23 @@ describe('histórico e chamada pública', () => {
     expect(later.allowedMentions).toEqual({ users: [b, c] });
     expect(later.content).not.toMatch(/[—–]/);
 
-    const withRoom = sessionRescheduledMessage({ ...base, userIds: [b], voiceChannelId: voice, reminded: true });
+    const withRoom = sessionRescheduledMessage({
+      ...base,
+      userIds: [b],
+      voiceChannelId: voice,
+      reminded: true,
+    });
     expect(withRoom.content).toContain(`A sala é <#${voice}>.`);
     const noRoom = sessionRescheduledMessage({ ...base, userIds: [b], reminded: true });
     expect(noRoom.content).toContain(NO_RESERVED_VOICE_NOTE);
 
     // Começando agora, sem ninguém a chamar: só o registro, com maiúscula.
-    const now = sessionRescheduledMessage({ ...base, userIds: [], startsNow: true, voiceChannelId: voice });
+    const now = sessionRescheduledMessage({
+      ...base,
+      userIds: [],
+      startsNow: true,
+      voiceChannelId: voice,
+    });
     expect(now.content).toBe(
       `A jogatina do squad foi remarcada por <@${a}>: era ${t(from, 'f')} e começa agora. Quem puder, entra em <#${voice}>.`,
     );
@@ -354,7 +511,10 @@ describe('histórico e chamada pública', () => {
       sessionRescheduledText({ outcome: 'rescheduled', session: { startsAt, startedAt: null } }),
     ).toContain(`<t:${String(startsAt.getTime() / 1000)}:F>`);
     expect(
-      sessionRescheduledText({ outcome: 'rescheduled', session: { startsAt, startedAt: startsAt } }),
+      sessionRescheduledText({
+        outcome: 'rescheduled',
+        session: { startsAt, startedAt: startsAt },
+      }),
     ).toContain('já começou');
   });
 

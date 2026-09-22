@@ -14,6 +14,7 @@ import {
   listLiveTemporaryVoiceIds,
   listOpenAttendance,
   listPendingTemporaryVoices,
+  listSessionGuests,
   listSessionsStartingBetween,
   listSessionsToRelease,
   listSquadMembers,
@@ -60,6 +61,7 @@ import {
   temporaryVoiceName,
 } from './embeds';
 import { rescheduleModal } from './forms';
+import { guestBlocker } from './guests';
 import {
   encodeVoiceSnapshot,
   hasTemporaryVoiceSignature,
@@ -179,7 +181,9 @@ export type RescheduleResult =
 const isReserved = (session: SquadSession) =>
   session.voiceReservedAt !== null && session.voiceReleasedAt === null;
 
-export function sessionState(session: Pick<SquadSession, 'cancelledAt' | 'startedAt'>): SessionState {
+export function sessionState(
+  session: Pick<SquadSession, 'cancelledAt' | 'startedAt'>,
+): SessionState {
   if (session.cancelledAt) return 'cancelled';
   return session.startedAt ? 'started' : 'scheduled';
 }
@@ -271,7 +275,11 @@ export class SessionService {
       source: options.source,
       actor: by,
       target: { type: 'squad', id: squad.id },
-      after: { sessionId: session.id, startsAt: startsAt.toISOString(), reopened: existing !== null },
+      after: {
+        sessionId: session.id,
+        startsAt: startsAt.toISOString(),
+        reopened: existing !== null,
+      },
     });
 
     session = await this.announce(guild, squad, session);
@@ -336,6 +344,10 @@ export class SessionService {
     });
     await this.ctx.parts.calls.close(guild, cancelled);
     if (isReserved(cancelled)) await this.release(guild, cancelled);
+    await this.ctx.parts.guests.notify(guild, cancelled, {
+      kind: 'cancelled',
+      startsAt: cancelled.startsAt,
+    });
     await this.renderSession(guild, cancelled, squad);
     await this.ctx.parts.guide.refresh(guild, squad.id);
     return { outcome: 'cancelled', session: cancelled };
@@ -483,6 +495,14 @@ export class SessionService {
       }
     }
     await this.noticeReschedule(guild, squad, session, { from, by, startsNow });
+    // Começando agora, o aviso do início já diz ao convidado onde entrar.
+    if (!startsNow) {
+      await this.ctx.parts.guests.notify(guild, session, {
+        kind: 'rescheduled',
+        from,
+        startsAt: session.startsAt,
+      });
+    }
     if (startsNow) {
       await this.start(guild, session);
       session = (await getSquadSession(db, guildId, session.id)) ?? session;
@@ -512,7 +532,11 @@ export class SessionService {
       );
     }
     const { timezone } = await this.ctx.config.getSettings(guildId);
-    const nearby = describeWhen(new Date(startsAt.getTime() + 5 * MINUTE_MS), this.ctx.date(), timezone);
+    const nearby = describeWhen(
+      new Date(startsAt.getTime() + 5 * MINUTE_MS),
+      this.ctx.date(),
+      timezone,
+    );
     throw new UserFacingError(
       `Esse horário tem uma jogatina cancelada do squad, e duas não cabem no mesmo minuto. Use um minuto diferente, como ${nearby}.`,
       { code: 'SESSION_TAKEN' },
@@ -716,7 +740,13 @@ export class SessionService {
       }
 
       const memberIds = await this.memberIds(guildId, squad.id);
-      const targets = { everyoneId: guild.roles.everyone.id, botId: me.id, memberIds };
+      const guestIds = await this.guestIds(guildId, session.id);
+      // Convidado entra na sala como membro, e o snapshot guarda o voice dele também.
+      const targets = {
+        everyoneId: guild.roles.everyone.id,
+        botId: me.id,
+        memberIds: [...memberIds, ...guestIds],
+      };
       const affected = voiceReservationAffectedIds(targets);
       const reserved = await reserveSessionVoice(db, guildId, session.id, {
         voiceChannelId: voiceId,
@@ -747,7 +777,12 @@ export class SessionService {
         action: 'squad.voice.reserve',
         source: 'job',
         target: { type: 'channel', id: voiceId },
-        after: { squadId: squad.id, sessionId: session.id, memberIds },
+        after: {
+          squadId: squad.id,
+          sessionId: session.id,
+          memberIds,
+          ...(guestIds.length > 0 ? { guestIds } : {}),
+        },
       });
       return voiceId;
     } catch (error) {
@@ -773,7 +808,10 @@ export class SessionService {
     try {
       for (const session of await this.liveReservations(guild.id)) {
         if (session.squadId !== squadId || session.cancelledAt || !session.voiceChannelId) continue;
-        if (await this.grantVoice(guild, session, session.voiceChannelId, userId)) granted++;
+        const reason = 'Entrou no squad com a jogatina de sala reservada';
+        if (await this.grantVoice(guild, session, session.voiceChannelId, userId, reason)) {
+          granted++;
+        }
       }
     } catch (error) {
       log.warn(
@@ -784,11 +822,36 @@ export class SessionService {
     return granted;
   }
 
+  /**
+   * Dá o voice reservado de uma jogatina só, com a mesma regra da
+   * `grantLiveVoice`: é o convidado avulso chegando com a sala já trancada.
+   * Sem reserva viva não concede nada, porque a reserva, quando sair, já
+   * inclui os convidados. Nunca lança; `true` quando concedeu.
+   */
+  async grantSessionVoice(
+    guild: Guild,
+    session: SquadSession,
+    userId: string,
+    reason: string,
+  ): Promise<boolean> {
+    if (!isReserved(session) || session.cancelledAt || !session.voiceChannelId) return false;
+    try {
+      return await this.grantVoice(guild, session, session.voiceChannelId, userId, reason);
+    } catch (error) {
+      log.warn(
+        { err: error, guildId: guild.id, sessionId: session.id, userId },
+        'falha ao dar o voice da jogatina ao convidado',
+      );
+      return false;
+    }
+  }
+
   private async grantVoice(
     guild: Guild,
     session: SquadSession,
     voiceId: string,
     userId: string,
+    reason: string,
   ): Promise<boolean> {
     const voice = guild.channels.cache.get(voiceId);
     if (voice?.type !== ChannelType.GuildVoice) return false;
@@ -803,13 +866,13 @@ export class SessionService {
     try {
       await channel.permissionOverwrites.edit(userId, SQUAD_VOICE_MEMBER_EDIT, {
         type: OverwriteType.Member,
-        reason: 'Entrou no squad com a jogatina de sala reservada',
+        reason,
       });
       return true;
     } catch (error) {
       log.warn(
         { err: error, guildId: guild.id, sessionId: session.id, voiceChannelId: voiceId, userId },
-        'não foi possível dar o voice da jogatina a quem entrou no squad',
+        'não foi possível dar o voice da jogatina',
       );
       return false;
     }
@@ -857,14 +920,18 @@ export class SessionService {
     if (!voiceId && marked.goingIds.length >= 2) {
       await markSessionPlayed(db, guild.id, marked.id, this.ctx.date());
     }
+    // O convidado não é movido (não pediu para ir) nem chamado no canal do
+    // squad, que ele não vê: o aviso vai na thread dele.
+    await this.ctx.parts.guests.notify(guild, marked, { kind: 'started', voiceChannelId: voiceId });
     if (result.pinged.length > 0) {
       const channel = await this.ctx.textChannel(guild, squad);
+      const guestIds = await this.guestIds(guild.id, marked.id);
       await channel
         ?.send(
           sessionStartMessage({
             userIds: result.pinged,
             voiceChannelId: voiceId,
-            goingCount: marked.goingIds.length,
+            goingCount: marked.goingIds.length + guestIds.length,
             partySize: (await this.game(guild.id, squad))?.partySize ?? null,
           }),
         )
@@ -923,6 +990,7 @@ export class SessionService {
     }
 
     const memberIds = await this.memberIds(guildId, squad.id);
+    const guestIds = await this.guestIds(guildId, session.id);
     let voice: VoiceChannel;
     try {
       voice = await guild.channels.create({
@@ -932,7 +1000,7 @@ export class SessionService {
         permissionOverwrites: temporaryVoiceOverwrites({
           everyoneId: guild.roles.everyone.id,
           botId: me.id,
-          memberIds,
+          memberIds: [...memberIds, ...guestIds],
         }),
         reason: `Jogatina do squad ${squad.name} (pool de voices cheio)`,
       });
@@ -976,7 +1044,13 @@ export class SessionService {
       action: 'squad.voice.reserve',
       source: 'job',
       target: { type: 'channel', id: voice.id },
-      after: { squadId: squad.id, sessionId: session.id, memberIds, temporary: true },
+      after: {
+        squadId: squad.id,
+        sessionId: session.id,
+        memberIds,
+        ...(guestIds.length > 0 ? { guestIds } : {}),
+        temporary: true,
+      },
     });
     return voice.id;
   }
@@ -1224,22 +1298,27 @@ export class SessionService {
    * Alguém entrou num voice. Se é o voice reservado de uma jogatina viva e a
    * pessoa é do squad, é a prova mais forte de que o squad joga: a presença
    * entra no histórico, a jogatina rolou, vale como sinal de vida e desfaz o
-   * aviso de inatividade. `true` quando contou.
+   * aviso de inatividade. Convidado da jogatina também tem a presença contada
+   * (tempo e formações), mas nada além disso: jogatina em que só apareceu
+   * convidado não rolou para o squad. `true` quando contou.
    */
   async confirmPresence(guild: Guild, voiceChannelId: string, userId: string): Promise<boolean> {
     const { db } = this.ctx;
     const session = await getActiveSessionByVoice(db, guild.id, voiceChannelId, this.ctx.date());
     if (!session || session.cancelledAt) return false;
     const members = await this.memberIds(guild.id, session.squadId);
-    if (!members.includes(userId)) return false;
+    const asGuest =
+      !members.includes(userId) && (await this.guestIds(guild.id, session.id)).includes(userId);
+    if (!asGuest && !members.includes(userId)) return false;
     const at = this.ctx.date();
     await openSessionAttendance(db, {
       guildId: guild.id,
       sessionId: session.id,
       userId,
       joinedAt: at,
+      asGuest,
     });
-    await this.markPlayed(guild.id, session, at);
+    if (!asGuest) await this.markPlayed(guild.id, session, at);
     return true;
   }
 
@@ -1298,16 +1377,27 @@ export class SessionService {
       else if (await closeAttendanceRow(db, guildId, row, at)) result.closed++;
     }
 
+    const guests = await listSessionGuests(
+      db,
+      guildId,
+      live.map((session) => session.id),
+    );
     for (const session of live) {
-      const arrived = (await this.memberIds(guildId, session.squadId)).filter(
-        (userId) =>
-          channelOf(userId) === session.voiceChannelId &&
-          !stillOpen.has(`${String(session.id)}:${userId}`),
-      );
-      for (const userId of arrived) {
-        const input = { guildId, sessionId: session.id, userId, joinedAt: at };
+      const inRoom = (userId: string) =>
+        channelOf(userId) === session.voiceChannelId &&
+        !stillOpen.has(`${String(session.id)}:${userId}`);
+      const members = await this.memberIds(guildId, session.squadId);
+      const arrived = members.filter(inRoom);
+      const guestsArrived = guests
+        .filter((guest) => guest.sessionId === session.id && !members.includes(guest.userId))
+        .map((guest) => guest.userId)
+        .filter(inRoom);
+      for (const userId of [...arrived, ...guestsArrived]) {
+        const asGuest = !arrived.includes(userId);
+        const input = { guildId, sessionId: session.id, userId, joinedAt: at, asGuest };
         if (await openSessionAttendance(db, input)) result.opened++;
       }
+      // Só membro faz a jogatina ter rolado, como no evento de voz.
       if (arrived.length > 0) await this.markPlayed(guildId, session, at);
     }
 
@@ -1500,6 +1590,13 @@ export class SessionService {
     return (await listSquadMembers(this.ctx.db, guildId, squadId)).map((member) => member.userId);
   }
 
+  /** Os convidados avulsos da jogatina, na ordem em que foram trazidos. */
+  private async guestIds(guildId: string, sessionId: number): Promise<string[]> {
+    return (await listSessionGuests(this.ctx.db, guildId, [sessionId])).map(
+      (guest) => guest.userId,
+    );
+  }
+
   /** Quem pediu uma jogatina que já existe vira "vou" nela. */
   private async joinExisting(
     guild: Guild,
@@ -1541,25 +1638,43 @@ export class SessionService {
     squad: Squad,
     options: { mentionMembers: boolean },
   ) {
-    const [config, embedColor, memberIds, game] = await Promise.all([
+    const [config, embedColor, memberIds, guestIds, game] = await Promise.all([
       this.ctx.config.get(guild.id, 'squads'),
       this.ctx.embedColor(guild.id),
       this.memberIds(guild.id, squad.id),
+      this.guestIds(guild.id, session.id),
       this.game(guild.id, squad),
     ]);
+    const now = this.ctx.now();
+    const live = squad.status !== 'archived';
     const canCall =
       game !== null &&
       config.searchChannelId !== null &&
-      squad.status !== 'archived' &&
-      callBlocker(session, { now: this.ctx.now(), memberCount: memberIds.length, game }) === null;
+      live &&
+      callBlocker(session, {
+        now,
+        memberCount: memberIds.length,
+        guestCount: guestIds.length,
+        game,
+      }) === null;
+    const canBringGuest =
+      config.searchChannelId !== null &&
+      live &&
+      guestBlocker(session, {
+        now,
+        guestCount: guestIds.length,
+        max: config.maxSessionGuests,
+      }) === null;
     return sessionMessage({
       session,
       squad,
       memberIds,
+      guestIds,
       partySize: game?.partySize ?? null,
       voiceChannelId: isReserved(session) ? session.voiceChannelId : null,
       voiceTemporary: isReserved(session) && session.voiceTemporary,
       canCall,
+      canBringGuest,
       callChannelId: session.callMessageId ? session.callChannelId : null,
       state: sessionState(session),
       reminderMinutesBefore: config.reminderMinutesBefore,

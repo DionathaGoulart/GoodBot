@@ -10,6 +10,8 @@ import {
   enterButtonId,
   gridSaveButtonId,
   gridSelectId,
+  guestPickButtonId,
+  guestUserSelectId,
   inviteButtonId,
   invitePickButtonId,
   inviteUserSelectId,
@@ -52,6 +54,8 @@ describe('custom_id de squads', () => {
     [callButtonId(11), { kind: 'call', sessionId: 11 }],
     [callNextButtonId(UUID), { kind: 'call-next', squadId: UUID }],
     [enterButtonId(12), { kind: 'enter', sessionId: 12 }],
+    [guestPickButtonId(13), { kind: 'guest-pick', sessionId: 13 }],
+    [guestUserSelectId(13), { kind: 'guest-user', sessionId: 13 }],
     [boraButtonId(UUID), { kind: 'bora-open', squadId: UUID }],
     [boraModalId(UUID), { kind: 'bora-modal', squadId: UUID }],
     [renameButtonId(UUID), { kind: 'rename-open', squadId: UUID }],
@@ -118,6 +122,11 @@ describe('custom_id de squads', () => {
     'squad:enter:0',
     'squad:enter:abc',
     'squad:enter:3:extra',
+    'squad:guest:pick:0',
+    'squad:guest:pick:abc',
+    'squad:guest:user:3:extra',
+    'squad:guest:kick:3',
+    `squad:guest:pick:${UUID}`,
     `squad:bora:start:${UUID}`,
     `squad:bora:open:${UUID}:extra`,
     'squad:rename:modal:nao-e-uuid',
@@ -155,6 +164,8 @@ describe('custom_id de squads', () => {
     expect(() => callButtonId(0)).toThrow(RangeError);
     expect(() => callNextButtonId('x')).toThrow(RangeError);
     expect(() => enterButtonId(-3)).toThrow(RangeError);
+    expect(() => guestPickButtonId(0)).toThrow(RangeError);
+    expect(() => guestUserSelectId(2.5)).toThrow(RangeError);
     expect(() => gridSelectId(UUID, 4, 0)).toThrow(RangeError);
     expect(() => gridSaveButtonId(UUID, -1)).toThrow(RangeError);
     expect(() => gridSaveButtonId(UUID, FULL + 1)).toThrow(RangeError);

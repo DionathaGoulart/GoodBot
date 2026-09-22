@@ -5,6 +5,7 @@ import { CooldownStore } from '../lib/cooldown';
 import {
   callRequestSentText,
   callSentText,
+  guestSentText,
   inviteAnswerText,
   invitePickMessage,
   inviteSentText,
@@ -110,6 +111,28 @@ export async function handleSquadComponent(
     await interaction.update(
       await ctx.squads.availabilityGrid(guild.id, userId, parsed.gameId, mask),
     );
+    return true;
+  }
+  if (parsed.kind === 'guest-user') {
+    if (!interaction.isUserSelectMenu()) return false;
+    const target = interaction.users.first();
+    if (!target) {
+      throw new UserFacingError('Escolha a pessoa que você quer trazer.', { code: 'NO_USER' });
+    }
+    // Atualiza a própria mensagem do select: em erro ele continua ali para outra escolha.
+    await interaction.deferUpdate();
+    const result = await ctx.squads.bringGuest(
+      guild,
+      parsed.sessionId,
+      userId,
+      { id: target.id, bot: target.bot },
+      'event',
+    );
+    await interaction.editReply({
+      content: guestSentText(result),
+      components: [],
+      allowedMentions: { parse: [] },
+    });
     return true;
   }
   if (parsed.kind === 'invite-user') {
@@ -224,6 +247,15 @@ export async function handleSquadComponent(
         ...EPHEMERAL,
       });
       return true;
+
+    case 'guest-pick': {
+      // Confere quem clicou e a jogatina antes de mostrar o select: leitura no banco.
+      await interaction.deferReply(EPHEMERAL);
+      await interaction.editReply(
+        await ctx.squads.guestPickMessage(guild, parsed.sessionId, userId),
+      );
+      return true;
+    }
 
     case 'session': {
       // Modal exige a interação intacta: o REMARCAR confere e abre antes de adiar.

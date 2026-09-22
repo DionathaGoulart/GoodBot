@@ -4,6 +4,7 @@ import {
   getSquad,
   getSquadSession,
   listOpenSessionCalls,
+  listSessionGuests,
   listSquadMembers,
   listUpcomingSessions,
   releaseSessionCall,
@@ -39,11 +40,17 @@ export interface CallSent {
 /**
  * Por que uma jogatina não aceita chamada agora; `null` = aceita. É a mesma
  * regra que esconde o botão CHAMAR GENTE da mensagem da jogatina, para o botão
- * só aparecer quando funciona.
+ * só aparecer quando funciona. Convidado avulso ocupa lugar na party como
+ * quem disse "vou".
  */
 export function callBlocker(
   session: Pick<SquadSession, 'startsAt' | 'startedAt' | 'cancelledAt' | 'calledAt' | 'goingIds'>,
-  context: { now: number; memberCount: number; game: Pick<SquadGame, 'groupSize' | 'partySize'> },
+  context: {
+    now: number;
+    memberCount: number;
+    guestCount: number;
+    game: Pick<SquadGame, 'groupSize' | 'partySize'>;
+  },
 ): UserFacingError | null {
   if (session.cancelledAt) {
     return new UserFacingError('Esta jogatina foi cancelada.', { code: 'SESSION_CANCELLED' });
@@ -64,7 +71,7 @@ export function callBlocker(
       { code: 'SQUAD_FULL' },
     );
   }
-  if (session.goingIds.length >= context.game.partySize) {
+  if (session.goingIds.length + context.guestCount >= context.game.partySize) {
     return new UserFacingError(
       `A party desta jogatina já fechou: cada partida leva até ${String(context.game.partySize)}.`,
       { code: 'PARTY_FULL' },
@@ -98,9 +105,11 @@ export class CallService {
     await this.ctx.parts.squads.assertMember(guildId, squad.id, by, 'chamar gente');
     const game = await this.ctx.parts.profiles.requireGame(guildId, squad.gameId);
     const members = await listSquadMembers(db, guildId, squad.id);
+    const guestCount = (await listSessionGuests(db, guildId, [session.id])).length;
     const blocked = callBlocker(session, {
       now: this.ctx.now(),
       memberCount: members.length,
+      guestCount,
       game,
     });
     if (blocked) throw blocked;
@@ -110,7 +119,12 @@ export class CallService {
     if (!claimed) {
       const fresh = (await getSquadSession(db, guildId, session.id)) ?? session;
       throw (
-        callBlocker(fresh, { now: this.ctx.now(), memberCount: members.length, game }) ??
+        callBlocker(fresh, {
+          now: this.ctx.now(),
+          memberCount: members.length,
+          guestCount,
+          game,
+        }) ??
         new UserFacingError('Esta jogatina já tem uma chamada aberta no canal de busca.', {
           code: 'CALL_EXISTS',
         })
@@ -186,9 +200,19 @@ export class CallService {
     const upcoming = (
       await listUpcomingSessions(db, guildId, this.ctx.date(), { squadIds: [squad.id] })
     ).filter((session) => !session.startedAt && session.startsAt.getTime() > now);
-    const context = { now, memberCount: members.length, game };
+    const guests = await listSessionGuests(
+      db,
+      guildId,
+      upcoming.map((session) => session.id),
+    );
+    const context = (session: SquadSession) => ({
+      now,
+      memberCount: members.length,
+      guestCount: guests.filter((guest) => guest.sessionId === session.id).length,
+      game,
+    });
     const target =
-      upcoming.find((session) => callBlocker(session, context) === null) ?? upcoming[0];
+      upcoming.find((session) => callBlocker(session, context(session)) === null) ?? upcoming[0];
     if (!target) {
       throw new UserFacingError(
         'Não há jogatina marcada para chamar gente. Marque uma com BORA primeiro.',

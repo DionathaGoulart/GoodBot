@@ -640,7 +640,13 @@ describe('SquadService: marcar jogatina', () => {
     const s = scenario();
     store.sessions = [];
 
-    const result = await s.service.scheduleSession(s.discordGuild, s.squad.id, A, 'hoje 21h', 'command');
+    const result = await s.service.scheduleSession(
+      s.discordGuild,
+      s.squad.id,
+      A,
+      'hoje 21h',
+      'command',
+    );
 
     expect(result.outcome).toBe('created');
     expect(sessionRow()).toMatchObject({
@@ -654,7 +660,14 @@ describe('SquadService: marcar jogatina', () => {
     const announce = messageById(s, sessionRow().messageId)!;
     expect(announce.payload.content).toBe(`<@${A}> <@${B}>`);
     expect(embedOf(announce)?.title).toBe('> JOGATINA MARCADA');
-    expect(buttonLabels(announce)).toEqual(['VOU', 'NÃO VOU', 'CHAMAR GENTE', 'REMARCAR', 'CANCELAR']);
+    expect(buttonLabels(announce)).toEqual([
+      'VOU',
+      'NÃO VOU',
+      'CHAMAR GENTE',
+      'TRAZER CONVIDADO',
+      'REMARCAR',
+      'CANCELAR',
+    ]);
     expect(squadRow().lastConfirmedAt).not.toBeNull();
     expect(s.audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'squad.session.schedule', source: 'command', actor: A }),
@@ -680,11 +693,11 @@ describe('SquadService: marcar jogatina', () => {
     expect(stateB.setChannel).toHaveBeenCalledWith(s.voice.id, expect.any(String));
     const announce = messageById(s, sessionRow().messageId)!;
     expect(embedOf(announce)?.title).toBe('> JOGATINA COMEÇOU');
-    expect(buttonLabels(announce)).toEqual(['REPETIR']);
+    expect(buttonLabels(announce)).toEqual(['REPETIR', 'TRAZER CONVIDADO']);
     // Anúncio já chamou todo mundo: não sai lembrete à parte.
-    expect(s.channel.sent.some((message) => String(message.payload.content).includes('começa'))).toBe(
-      false,
-    );
+    expect(
+      s.channel.sent.some((message) => String(message.payload.content).includes('começa')),
+    ).toBe(false);
   });
 
   it('o mesmo minuto duas vezes vira uma jogatina, e quem pediu de novo passa a ir', async () => {
@@ -692,7 +705,13 @@ describe('SquadService: marcar jogatina', () => {
     store.sessions = [];
     await s.service.scheduleSession(s.discordGuild, s.squad.id, A, 'hoje 21h', 'command');
 
-    const again = await s.service.scheduleSession(s.discordGuild, s.squad.id, B, 'hoje 21:00', 'event');
+    const again = await s.service.scheduleSession(
+      s.discordGuild,
+      s.squad.id,
+      B,
+      'hoje 21:00',
+      'event',
+    );
 
     expect(again.outcome).toBe('exists');
     expect(store.sessions).toHaveLength(1);
@@ -735,7 +754,13 @@ describe('SquadService: cancelar e repetir', () => {
   async function scheduled(by = A, when = 'hoje 21h') {
     const s = scenario();
     store.sessions = [];
-    const { session } = await s.service.scheduleSession(s.discordGuild, s.squad.id, by, when, 'command');
+    const { session } = await s.service.scheduleSession(
+      s.discordGuild,
+      s.squad.id,
+      by,
+      when,
+      'command',
+    );
     return { ...s, session };
   }
 
@@ -782,7 +807,13 @@ describe('SquadService: cancelar e repetir', () => {
     expect(overwritesOf(s.voice.permissionOverwrites)).toEqual(BEFORE);
     expect(sessionRow().voiceReleasedAt).not.toBeNull();
 
-    const again = await s.service.scheduleSession(s.discordGuild, s.squad.id, B, 'hoje 9h20', 'event');
+    const again = await s.service.scheduleSession(
+      s.discordGuild,
+      s.squad.id,
+      B,
+      'hoje 9h20',
+      'event',
+    );
     expect(again.outcome).toBe('created');
     expect(store.sessions).toHaveLength(1);
     expect(sessionRow()).toMatchObject({ id: s.session.id, cancelledAt: null, createdBy: B });
@@ -820,7 +851,13 @@ describe('SquadService: remarcar', () => {
   async function scheduled(by = A, when = 'hoje 21h') {
     const s = scenario();
     store.sessions = [];
-    const { session } = await s.service.scheduleSession(s.discordGuild, s.squad.id, by, when, 'command');
+    const { session } = await s.service.scheduleSession(
+      s.discordGuild,
+      s.squad.id,
+      by,
+      when,
+      'command',
+    );
     return { ...s, session };
   }
 
@@ -828,7 +865,13 @@ describe('SquadService: remarcar', () => {
     const s = await scheduled();
     await s.service.vote(s.discordGuild, s.session.id, B, false);
 
-    const result = await s.service.rescheduleSession(s.discordGuild, s.session.id, A, 'hoje 22h', 'event');
+    const result = await s.service.rescheduleSession(
+      s.discordGuild,
+      s.session.id,
+      A,
+      'hoje 22h',
+      'event',
+    );
 
     const later = TONIGHT.getTime() + HOUR_MS;
     expect(result).toMatchObject({ outcome: 'rescheduled', from: TONIGHT });
@@ -841,7 +884,9 @@ describe('SquadService: remarcar', () => {
     });
     // Quem disse NÃO VOU para as 21h é chamado: pode poder às 22h. Quem remarcou, não.
     const notice = s.channel.sent.at(-1)!;
-    expect(notice.payload.content).toContain(`<@${B}> a jogatina do squad foi remarcada por <@${A}>`);
+    expect(notice.payload.content).toContain(
+      `<@${B}> a jogatina do squad foi remarcada por <@${A}>`,
+    );
     expect(notice.payload.allowedMentions).toEqual({ users: [B] });
     expect(notice.payload.content).toContain(`<t:${unix(later)}:f>`);
     expect(s.audit.record).toHaveBeenCalledWith(
@@ -907,7 +952,13 @@ describe('SquadService: remarcar', () => {
     fillPool(s);
     store.sessions = store.sessions.filter((session) => session.id !== s.session.id);
     s.guild.channels.create.mockRejectedValueOnce(new Error('Request aborted'));
-    const { session } = await s.service.scheduleSession(s.discordGuild, s.squad.id, A, 'hoje 9h20', 'command');
+    const { session } = await s.service.scheduleSession(
+      s.discordGuild,
+      s.squad.id,
+      A,
+      'hoje 9h20',
+      'command',
+    );
     const pending = () => store.sessions.find((row) => row.id === session.id)!;
     expect(pending()).toMatchObject({ voiceTemporary: true, voiceChannelId: null });
 
@@ -940,7 +991,13 @@ describe('SquadService: remarcar', () => {
     const lobby = s.guild.add(fakeVoice());
     const stateB = s.guild.putInVoice(B, lobby.id);
 
-    const result = await s.service.rescheduleSession(s.discordGuild, s.session.id, A, 'agora', 'event');
+    const result = await s.service.rescheduleSession(
+      s.discordGuild,
+      s.session.id,
+      A,
+      'agora',
+      'event',
+    );
 
     expect(result.session.startedAt).not.toBeNull();
     expect(stateB.setChannel).toHaveBeenCalledWith(s.voice.id, expect.any(String));
@@ -971,7 +1028,13 @@ describe('SquadService: remarcar', () => {
 
     const started = await scheduled(A, 'agora');
     await expect(
-      started.service.rescheduleSession(started.discordGuild, started.session.id, A, 'hoje 22h', 'event'),
+      started.service.rescheduleSession(
+        started.discordGuild,
+        started.session.id,
+        A,
+        'hoje 22h',
+        'event',
+      ),
     ).rejects.toMatchObject({ code: 'SESSION_STARTED' });
 
     const cancelled = await scheduled();
@@ -1011,7 +1074,13 @@ describe('SquadService: remarcar', () => {
     });
 
     const sent = s.channel.sent.length;
-    const same = await s.service.rescheduleSession(s.discordGuild, s.session.id, A, 'hoje 21h', 'event');
+    const same = await s.service.rescheduleSession(
+      s.discordGuild,
+      s.session.id,
+      A,
+      'hoje 21h',
+      'event',
+    );
     expect(same.outcome).toBe('unchanged');
     expect(s.channel.sent).toHaveLength(sent);
   });
@@ -1039,7 +1108,11 @@ describe('SquadService: remarcar', () => {
 
     expect(await s.service.remindSession(s.discordGuild, due.remind[0]!)).toBeNull();
     expect(await s.service.startSession(s.discordGuild, due.start[0]!)).toBeNull();
-    expect(sessionRow()).toMatchObject({ remindedAt: null, startedAt: null, voiceReservedAt: null });
+    expect(sessionRow()).toMatchObject({
+      remindedAt: null,
+      startedAt: null,
+      voiceReservedAt: null,
+    });
   });
 
   it('o modal abre com o horário atual no fuso do servidor', async () => {
@@ -1066,7 +1139,14 @@ describe('SquadService: lembrete, início e presença', () => {
     expect(second).toBeNull();
     const message = messageById(s, sessionRow().messageId)!;
     expect(message.payload.content).toBe(`<@${A}> <@${B}>`);
-    expect(buttonLabels(message)).toEqual(['VOU', 'NÃO VOU', 'CHAMAR GENTE', 'REMARCAR', 'CANCELAR']);
+    expect(buttonLabels(message)).toEqual([
+      'VOU',
+      'NÃO VOU',
+      'CHAMAR GENTE',
+      'TRAZER CONVIDADO',
+      'REMARCAR',
+      'CANCELAR',
+    ]);
   });
 
   it('jogatina anunciada ganha a sala na mensagem e um lembrete curto para quem não recusou', async () => {
@@ -1184,9 +1264,7 @@ describe('SquadService: lembrete, início e presença', () => {
     expect(partyField()?.value).toBe('Fechada, 2 de 2.');
 
     await s.service.vote(s.discordGuild, s.session.id, C, true);
-    expect(partyField()?.value).toBe(
-      'Dá 2 parties: 3 vão e cada partida leva até 2. Dividam-se.',
-    );
+    expect(partyField()?.value).toBe('Dá 2 parties: 3 vão e cada partida leva até 2. Dividam-se.');
 
     s.clock.now = s.session.startsAt.getTime();
     await s.service.startSession(s.discordGuild, sessionRow());

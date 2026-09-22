@@ -65,6 +65,11 @@ export function renderInviteThreadName(squadName: string): string {
   return slugifyChannelName(`convite-${squadName}`) || SQUAD_CHANNEL_FALLBACK;
 }
 
+/** Nome da thread privada de um convidado avulso: `jogatina-<squad>`. */
+export function renderGuestThreadName(squadName: string): string {
+  return slugifyChannelName(`jogatina-${squadName}`) || SQUAD_CHANNEL_FALLBACK;
+}
+
 /** Nome inicial de um squad: `<jogo> #<n>`, cortando o jogo para caber no teto de nome. */
 export function defaultSquadName(gameName: string, number: number): string {
   const suffix = ` #${String(number)}`;

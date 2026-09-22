@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import {
   HOUR_MS,
+  isSessionOver,
   joinRequestKey,
   MINUTE_MS,
   pairKey,
@@ -21,6 +22,7 @@ import type {
   SquadProposal,
   SquadSession,
   SquadSessionAttendance,
+  SquadSessionGuest,
 } from '@goodbot/db';
 import type {
   SquadAnswers,
@@ -49,6 +51,7 @@ export interface FakeStore {
   requests: SquadJoinRequest[];
   sessions: SquadSession[];
   attendance: SquadSessionAttendance[];
+  guests: SquadSessionGuest[];
   meta: Map<string, unknown>;
 }
 
@@ -61,6 +64,7 @@ const emptyStore = (): FakeStore => ({
   requests: [],
   sessions: [],
   attendance: [],
+  guests: [],
   meta: new Map(),
 });
 
@@ -1049,7 +1053,10 @@ export const impl = {
     );
   },
   async countPlayedSessions(_db: unknown, guildId: string, squadIds: readonly string[]) {
-    const totals = new Map<string, { squadId: string; played: number; lastPlayedAt: Date | null }>();
+    const totals = new Map<
+      string,
+      { squadId: string; played: number; lastPlayedAt: Date | null }
+    >();
     for (const s of store.sessions) {
       if (s.guildId !== guildId || !squadIds.includes(s.squadId)) continue;
       if (s.playedAt === null || s.cancelledAt !== null) continue;
@@ -1062,7 +1069,13 @@ export const impl = {
   },
   async openSessionAttendance(
     _db: unknown,
-    input: { guildId: string; sessionId: number; userId: string; joinedAt: Date },
+    input: {
+      guildId: string;
+      sessionId: number;
+      userId: string;
+      joinedAt: Date;
+      asGuest?: boolean;
+    },
   ) {
     const taken = store.attendance.some(
       (a) =>
@@ -1071,7 +1084,7 @@ export const impl = {
         a.joinedAt.getTime() === input.joinedAt.getTime(),
     );
     if (taken) return false;
-    store.attendance.push({ ...input, leftAt: null });
+    store.attendance.push({ ...input, leftAt: null, asGuest: input.asGuest ?? false });
     return true;
   },
   async closeSessionAttendance(_db: unknown, guildId: string, userId: string, at: Date) {
@@ -1089,11 +1102,12 @@ export const impl = {
       store.attendance
         .filter((a) => a.guildId === guildId && sessionIds.includes(a.sessionId))
         .sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())
-        .map(({ sessionId, userId, joinedAt, leftAt }) => ({
+        .map(({ sessionId, userId, joinedAt, leftAt, asGuest }) => ({
           sessionId,
           userId,
           joinedAt,
           leftAt,
+          asGuest,
         })),
     );
   },
@@ -1126,6 +1140,68 @@ export const impl = {
     if (!found) return false;
     found.leftAt = at;
     return true;
+  },
+
+  // ── convidados
+  async addSessionGuest(
+    _db: unknown,
+    input: {
+      guildId: string;
+      sessionId: number;
+      userId: string;
+      invitedBy: string;
+      max: number;
+      now: Date;
+    },
+  ) {
+    const session = findSession(input.guildId, input.sessionId);
+    if (!session || session.cancelledAt || isSessionOver(session, input.now.getTime())) {
+      return { outcome: 'closed' as const };
+    }
+    const guests = store.guests.filter(
+      (g) => g.guildId === input.guildId && g.sessionId === input.sessionId,
+    );
+    if (guests.some((g) => g.userId === input.userId)) return { outcome: 'exists' as const };
+    if (guests.length >= input.max) return { outcome: 'full' as const };
+    const guest: SquadSessionGuest = {
+      guildId: input.guildId,
+      sessionId: input.sessionId,
+      userId: input.userId,
+      invitedBy: input.invitedBy,
+      threadId: null,
+      invitedAt: input.now,
+    };
+    store.guests.push(guest);
+    return { outcome: 'added' as const, guest: copy(guest) };
+  },
+  async setSessionGuestThread(
+    _db: unknown,
+    guildId: string,
+    sessionId: number,
+    userId: string,
+    threadId: string,
+  ) {
+    const row = store.guests.find(
+      (g) => g.guildId === guildId && g.sessionId === sessionId && g.userId === userId,
+    );
+    if (!row) return null;
+    row.threadId = threadId;
+    return copy(row);
+  },
+  async removeSessionGuest(_db: unknown, guildId: string, sessionId: number, userId: string) {
+    const index = store.guests.findIndex(
+      (g) => g.guildId === guildId && g.sessionId === sessionId && g.userId === userId,
+    );
+    if (index < 0) return false;
+    store.guests.splice(index, 1);
+    return true;
+  },
+  async listSessionGuests(_db: unknown, guildId: string, sessionIds: readonly number[]) {
+    return copy(
+      store.guests
+        .filter((g) => g.guildId === guildId && sessionIds.includes(g.sessionId))
+        .sort((a, b) => a.invitedAt.getTime() - b.invitedAt.getTime()),
+    );
   },
 
   async listSessionsToRelease(_db: unknown, guildId: string, now: Date) {

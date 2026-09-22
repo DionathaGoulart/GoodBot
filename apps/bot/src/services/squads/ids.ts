@@ -47,6 +47,8 @@ export type SquadCustomId =
   | { kind: 'invite-user'; squadId: string }
   | { kind: 'session'; action: SquadSessionAction; sessionId: number }
   | { kind: 'call'; sessionId: number }
+  | { kind: 'guest-pick'; sessionId: number }
+  | { kind: 'guest-user'; sessionId: number }
   | { kind: 'call-next'; squadId: string }
   | { kind: 'enter'; sessionId: number }
   | { kind: 'bora-open'; squadId: string }
@@ -126,6 +128,16 @@ export function callButtonId(sessionId: number): string {
 /** CHAMAR GENTE, no guia do squad: chama gente para a próxima jogatina com lugar. */
 export function callNextButtonId(squadId: string): string {
   return build('call', 'next', assertUuid(squadId, 'squadId'));
+}
+
+/** TRAZER CONVIDADO, na mensagem da jogatina: abre a escolha de quem trazer. */
+export function guestPickButtonId(sessionId: number): string {
+  return build('guest', 'pick', assertSessionId(sessionId));
+}
+
+/** O select de pessoa da mensagem efêmera do TRAZER CONVIDADO. */
+export function guestUserSelectId(sessionId: number): string {
+  return build('guest', 'user', assertSessionId(sessionId));
 }
 
 /** ENTRAR, na chamada pública do canal de busca: pede para entrar no squad da jogatina. */
@@ -274,6 +286,11 @@ export function parseSquadCustomId(customId: string): SquadCustomId | null {
       if (second !== 'session') return null;
       const sessionId = parseSessionId(third);
       return sessionId === null ? null : { kind: 'call', sessionId };
+    }
+    case 'guest': {
+      if (size !== 4 || (second !== 'pick' && second !== 'user')) return null;
+      const sessionId = parseSessionId(third);
+      return sessionId === null ? null : { kind: `guest-${second}`, sessionId };
     }
     case 'enter': {
       const sessionId = size === 3 ? parseSessionId(second) : null;

@@ -80,6 +80,7 @@ describe('GuideService', () => {
       userId: A,
       joinedAt: new Date('2026-09-12T00:05:00Z'),
       leftAt: null,
+      asGuest: false,
     });
 
     await s.parts.guide.publish(s.discordGuild, s.squad.id, { mentionMembers: false });

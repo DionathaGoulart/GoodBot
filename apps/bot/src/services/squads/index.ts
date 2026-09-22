@@ -2,6 +2,7 @@ import { getSquad, listSquadsForUser } from '@goodbot/db';
 
 import { CallService } from './calls';
 import { SquadContext } from './context';
+import { GuestService } from './guests';
 import { GuideService } from './guide';
 import { HistoryService } from './history';
 import { ManualMatchService } from './manual';
@@ -16,6 +17,7 @@ import { SquadLifecycleService } from './squads';
 
 import type { CallSent } from './calls';
 import type { SquadServiceDeps } from './context';
+import type { GuestSent } from './guests';
 import type { SquadHistoryView } from './history';
 import type { ManualOutcome } from './manual';
 import type { MatchResult } from './matcher';
@@ -58,6 +60,7 @@ import type { BaseMessageOptions, Guild, ModalBuilder } from 'discord.js';
 
 export type { CallSent } from './calls';
 export type { SquadServiceDeps } from './context';
+export type { GuestSent } from './guests';
 export type { SquadHistoryView } from './history';
 export type { ManualOutcome } from './manual';
 export type { MatchResult } from './matcher';
@@ -113,6 +116,7 @@ export class SquadService {
       requests: new JoinRequestService(this.ctx),
       sessions: new SessionService(this.ctx),
       calls: new CallService(this.ctx),
+      guests: new GuestService(this.ctx),
       history: new HistoryService(this.ctx),
       guide: new GuideService(this.ctx),
       search: new SearchService(this.ctx),
@@ -482,7 +486,7 @@ export class SquadService {
     return this.ctx.parts.sessions.checkInactivity(guild);
   }
 
-  // ── chamada pública e histórico ───────────────────────────────────────────
+  // ── chamada pública, convidados e histórico ───────────────────────────────
 
   /** CHAMAR GENTE na mensagem da jogatina. */
   callForPlayers(
@@ -502,6 +506,22 @@ export class SquadService {
     source: AuditSource,
   ): Promise<CallSent> {
     return this.ctx.parts.calls.callNext(guild, squadId, userId, source);
+  }
+
+  /** TRAZER CONVIDADO: o select de pessoa, depois de conferir que quem clicou pode trazer. */
+  guestPickMessage(guild: Guild, sessionId: number, userId: string): Promise<BaseMessageOptions> {
+    return this.ctx.parts.guests.pickMessage(guild.id, sessionId, userId);
+  }
+
+  /** TRAZER CONVIDADO: a pessoa escolhida joga só esta jogatina, sem entrar no squad. */
+  bringGuest(
+    guild: Guild,
+    sessionId: number,
+    userId: string,
+    target: InviteTarget,
+    source: AuditSource,
+  ): Promise<GuestSent> {
+    return this.ctx.parts.guests.bring(guild, sessionId, userId, target, source);
   }
 
   /** ENTRAR na chamada pública: pedido de entrada em votação, ligado à jogatina. */

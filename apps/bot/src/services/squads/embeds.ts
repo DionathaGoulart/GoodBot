@@ -7,6 +7,8 @@ import {
   callNextButtonId,
   confirmLeaveButtonId,
   enterButtonId,
+  guestPickButtonId,
+  guestUserSelectId,
   inviteButtonId,
   invitePickButtonId,
   inviteUserSelectId,
@@ -525,13 +527,7 @@ export function adminActionDm(view: AdminDmView): BaseMessageOptions {
  * sumiu antes (squad cheio ou arquivado, ou a pessoa no teto de squads).
  */
 export type InviteState =
-  | 'invited'
-  | 'voting'
-  | 'joined'
-  | 'passed'
-  | 'refused'
-  | 'expired'
-  | 'closed';
+  'invited' | 'voting' | 'joined' | 'passed' | 'refused' | 'expired' | 'closed';
 
 export interface InviteView {
   request: Pick<SquadJoinRequest, 'id' | 'userId' | 'invitedBy' | 'expiresAt'>;
@@ -557,7 +553,9 @@ function inviteDescription(view: InviteView): string {
       return `Pedido enviado ao ${squad}. O squad está votando, e eu aviso aqui quando decidirem.`;
     case 'joined': {
       const where = channelOf(view.squad);
-      return where ? `Você entrou no ${squad}. A casa do squad é ${where}.` : `Você entrou no ${squad}.`;
+      return where
+        ? `Você entrou no ${squad}. A casa do squad é ${where}.`
+        : `Você entrou no ${squad}.`;
     }
     case 'passed':
       return `Você passou neste convite para o ${squad}.`;
@@ -790,11 +788,18 @@ export interface SessionView {
   voiceChannelId: string | null;
   /** O voice reservado foi criado só para esta jogatina e vai ser apagado. */
   voiceTemporary: boolean;
+  /** Convidados avulsos da jogatina: aparecem à parte e contam na party. */
+  guestIds: readonly string[];
   /**
    * CHAMAR GENTE ainda vale: antes do início, sem chamada feita, com vaga no
    * squad e lugar na party. O botão só aparece quando funciona.
    */
   canCall: boolean;
+  /**
+   * TRAZER CONVIDADO ainda vale: ligado no servidor, jogatina viva (marcada ou
+   * rolando) e teto de convidados com lugar.
+   */
+  canBringGuest: boolean;
   /** Onde a chamada pública desta jogatina está no ar; `null` = nenhuma no ar. */
   callChannelId: string | null;
   state: SessionState;
@@ -872,8 +877,12 @@ export function sessionMessage(view: SessionView): BaseMessageOptions {
         inline: true,
       });
     }
-    const party =
-      view.partySize === null ? null : partyText(session.goingIds.length, view.partySize);
+    if (view.guestIds.length > 0) {
+      fields.push({ name: 'Convidados', value: mentionList(view.guestIds), inline: true });
+    }
+    // Convidado ocupa lugar na partida como qualquer um que vai.
+    const playing = session.goingIds.length + view.guestIds.length;
+    const party = view.partySize === null ? null : partyText(playing, view.partySize);
     if (party) fields.push({ name: 'Party', value: party });
     if (view.state === 'scheduled' && view.callChannelId) {
       fields.push({
@@ -903,6 +912,14 @@ export function sessionMessage(view: SessionView): BaseMessageOptions {
         .setStyle(ButtonStyle.Secondary),
     );
   }
+  const guest = view.canBringGuest
+    ? [
+        new ButtonBuilder()
+          .setCustomId(guestPickButtonId(session.id))
+          .setLabel('TRAZER CONVIDADO')
+          .setStyle(ButtonStyle.Secondary),
+      ]
+    : [];
   const manage = [
     new ButtonBuilder()
       .setCustomId(sessionButtonId('reschedule', session.id))
@@ -916,7 +933,7 @@ export function sessionMessage(view: SessionView): BaseMessageOptions {
   const components =
     view.state === 'scheduled'
       ? [
-          new ActionRowBuilder<ButtonBuilder>().addComponents(answer),
+          new ActionRowBuilder<ButtonBuilder>().addComponents(...answer, ...guest),
           new ActionRowBuilder<ButtonBuilder>().addComponents(manage),
         ]
       : view.state === 'started'
@@ -925,6 +942,7 @@ export function sessionMessage(view: SessionView): BaseMessageOptions {
               .setCustomId(sessionButtonId('repeat', session.id))
               .setLabel('REPETIR')
               .setStyle(ButtonStyle.Primary),
+            ...guest,
           )
         : [];
 
@@ -1084,6 +1102,125 @@ export function publicCallMessage(view: PublicCallView): BaseMessageOptions {
   };
 }
 
+// ── convidado avulso ────────────────────────────────────────────────────────
+
+/** O passo do TRAZER CONVIDADO: escolher a pessoa num select, sem digitar nome. */
+export function guestPickMessage(
+  session: Pick<SquadSession, 'id' | 'startsAt'>,
+  squad: Pick<Squad, 'name'>,
+): BaseMessageOptions {
+  return {
+    content: `Quem você quer trazer para a jogatina do **${squad.name}** de ${timestamp(session.startsAt, 'f')}? A pessoa joga só esta, sem entrar no squad, e recebe o aviso numa conversa privada no canal de busca.`,
+    components: [
+      new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(
+        new UserSelectMenuBuilder()
+          .setCustomId(guestUserSelectId(session.id))
+          .setPlaceholder('Escolha a pessoa')
+          .setMinValues(1)
+          .setMaxValues(1),
+      ),
+    ],
+  };
+}
+
+export interface GuestInviteView {
+  guestId: string;
+  invitedBy: string;
+  squad: Pick<Squad, 'name'>;
+  game: Pick<SquadGame, 'name'>;
+  session: Pick<SquadSession, 'startsAt' | 'endsAt' | 'remindedAt'>;
+  /** A jogatina já começou: o convite diz "estão jogando agora". */
+  started: boolean;
+  /** O voice reservado agora; `null` = ainda não reservou ou não conseguiu. */
+  voiceChannelId: string | null;
+  voiceTemporary: boolean;
+  /** Antecedência da reserva, para dizer quando a sala sai. */
+  reminderMinutesBefore: number;
+  embedColor: number;
+}
+
+function guestRoomText(view: GuestInviteView): string {
+  if (view.voiceChannelId && view.voiceTemporary) {
+    return `<#${view.voiceChannelId}>, já liberada para você (${TEMPORARY_VOICE_NOTE}).`;
+  }
+  if (view.voiceChannelId) {
+    return `<#${view.voiceChannelId}>, já liberada para você até ${timestamp(view.session.endsAt, 't')}.`;
+  }
+  if (view.session.remindedAt) {
+    return `Sem sala reservada desta vez: combine com ${mention(view.invitedBy)} onde entrar.`;
+  }
+  const when =
+    view.reminderMinutesBefore > 0
+      ? `${String(view.reminderMinutesBefore)} minutos antes`
+      : 'na hora';
+  return `Eu libero a sala para você ${when} e aviso aqui quando começar.`;
+}
+
+/**
+ * O convite do convidado avulso, na thread privada com quem trouxe: o squad,
+ * o jogo, quando e a sala. É uma thread do canal de busca porque o convidado
+ * não vê o canal do squad. Chama só o convidado; quem trouxe já está na
+ * conversa.
+ */
+export function guestInviteMessage(view: GuestInviteView): BaseMessageOptions {
+  const who = `${mention(view.invitedBy)} chamou você para jogar **${view.game.name}** com o squad **${view.squad.name}**`;
+  const when = view.started
+    ? ', que está jogando agora.'
+    : ` ${timestamp(view.session.startsAt, 'F')} (${timestamp(view.session.startsAt, 'R')}).`;
+  return {
+    content: mention(view.guestId),
+    embeds: [
+      infoEmbed(
+        {
+          title: 'Convite para jogar',
+          description: `${who}${when} Você joga só esta jogatina, sem entrar no squad.`,
+          fields: [{ name: 'Sala', value: guestRoomText(view) }],
+          footer: SQUADS_FOOTER,
+        },
+        view.embedColor,
+      ),
+    ],
+    allowedMentions: { users: [view.guestId] },
+  };
+}
+
+/** O que muda na jogatina e o convidado precisa saber. */
+export type GuestNotice =
+  | { kind: 'started'; voiceChannelId: string | null }
+  | { kind: 'rescheduled'; from: Date; startsAt: Date }
+  | { kind: 'cancelled'; startsAt: Date };
+
+/**
+ * Aviso ao convidado na thread dele, à parte porque editar o convite não
+ * notifica: a jogatina começou, mudou de horário ou foi cancelada.
+ */
+export function guestNoticeMessage(view: {
+  guestId: string;
+  squad: Pick<Squad, 'name'>;
+  notice: GuestNotice;
+}): BaseMessageOptions {
+  const { notice } = view;
+  const squad = `**${view.squad.name}**`;
+  let text: string;
+  switch (notice.kind) {
+    case 'started':
+      text = notice.voiceChannelId
+        ? `a jogatina do ${squad} começou! Entre em <#${notice.voiceChannelId}>.`
+        : `a jogatina do ${squad} começou, mas sem sala reservada: combine com quem chamou você onde entrar.`;
+      break;
+    case 'rescheduled':
+      text = `a jogatina do ${squad} foi remarcada: era ${timestamp(notice.from, 'f')}, agora é ${timestamp(notice.startsAt, 'f')} (${timestamp(notice.startsAt, 'R')}).`;
+      break;
+    case 'cancelled':
+      text = `a jogatina do ${squad} de ${timestamp(notice.startsAt, 'f')} foi cancelada.`;
+      break;
+  }
+  return {
+    content: `${mention(view.guestId)} ${text}`,
+    allowedMentions: { users: [view.guestId] },
+  };
+}
+
 export function inactivityWarningMessage(view: {
   squad: Pick<Squad, 'id' | 'name'>;
   memberIds: readonly string[];
@@ -1211,7 +1348,9 @@ export function profileSavedMessage(view: ProfileSavedView): BaseMessageOptions 
         {
           name: 'Horários',
           value:
-            cells === 1 ? '1 faixa marcada na semana' : `${String(cells)} faixas marcadas na semana`,
+            cells === 1
+              ? '1 faixa marcada na semana'
+              : `${String(cells)} faixas marcadas na semana`,
         },
       ],
       footer: SQUADS_FOOTER,
@@ -1293,10 +1432,11 @@ export function joinableSquadsMessage(view: JoinableView): BaseMessageOptions {
             'Estes squads têm vaga e jogam em horários parecidos com os seus. O pedido vai para o canal do squad, e eles votam: com metade a favor, você entra.',
           fields: entries.map((entry, index) => ({
             name: `${String(index + 1)}. ${entry.squad.name}`,
-            value: `${String(entry.memberCount)} de ${String(view.game.groupSize)} jogadores. ${entry.history}`.slice(
-              0,
-              MAX_FIELD_VALUE,
-            ),
+            value:
+              `${String(entry.memberCount)} de ${String(view.game.groupSize)} jogadores. ${entry.history}`.slice(
+                0,
+                MAX_FIELD_VALUE,
+              ),
           })),
           footer: SQUADS_FOOTER,
         },
@@ -1440,6 +1580,18 @@ export function callRequestSentText(result: {
   session: Pick<SquadSession, 'startsAt'>;
 }): string {
   return `Pedido enviado ao **${result.squad.name}**. O squad vota: com metade dele a favor, você entra e já fica marcado na jogatina de ${timestamp(result.session.startsAt, 'f')}.`;
+}
+
+export function guestSentText(result: {
+  guestId: string;
+  squad: Pick<Squad, 'name'>;
+  /** O voice que a pessoa já ganhou; `null` = a sala sai depois (ou não sai). */
+  voiceChannelId: string | null;
+}): string {
+  const room = result.voiceChannelId
+    ? ` A sala <#${result.voiceChannelId}> já está liberada para a pessoa.`
+    : '';
+  return `Pronto: ${mention(result.guestId)} vai na jogatina do **${result.squad.name}** como convidado. Mandei o aviso numa conversa privada no canal de busca, com vocês dois.${room}`;
 }
 
 export function sessionCancelledText(outcome: 'cancelled' | 'already'): string {

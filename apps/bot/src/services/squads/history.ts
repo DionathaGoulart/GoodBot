@@ -49,6 +49,8 @@ export class HistoryService {
     const squadOf = new Map(sessions.map((session) => [session.id, session.squadId]));
     const presentBySquad = new Map<string, SquadHistoryAttendance[]>();
     for (const row of attendance) {
+      // O histórico é do squad: convidado avulso não está entre quem mais aparece.
+      if (row.asGuest) continue;
       const squadId = squadOf.get(row.sessionId);
       if (squadId) presentBySquad.set(squadId, [...(presentBySquad.get(squadId) ?? []), row]);
     }
