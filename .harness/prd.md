@@ -21,8 +21,11 @@ Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (
 > ganha a sala na hora, e a liberação devolve o voice ao que era também para
 > essa pessoa. E a jogatina ganhou **convidado avulso**: quem é do squad traz
 > gente de fora para jogar só aquela, com a sala liberada e o aviso numa
-> thread privada, sem entrar no squad. O que mudou no documento: "Jogatina",
-> "Convidado avulso", "Histórico", "Números" e "O relógio" na §5.11,
+> thread privada, sem entrar no squad. O **CHAMAR GENTE** deixou de morrer no
+> início: a chamada pública vale até o fim da jogatina, porque falta gente é
+> o que se descobre jogando, e quem é aceito no meio cai direto na sala.
+> O que mudou no documento: "Jogatina",
+> "Convidado avulso", "Chamada pública", "Histórico", "Números" e "O relógio" na §5.11,
 > `squad_session_guests` e o snapshot de
 > `squad_sessions` na §8, o REMARCAR e o TRAZER CONVIDADO na §9.1, a aba de
 > configuração na §6.2 e o aviso de manutenção do deploy na §7.5. O que **não** mudou: o resto do módulo e os
@@ -850,9 +853,10 @@ jogatina que foi para mais tarde.
 
 **CANCELAR** vale só antes do início: para quem marcou, ou para qualquer membro
 enquanto ninguém além dele disse "vou". A sala reservada volta para o pool.
-Depois do início, a mensagem troca os botões por **REPETIR**, que marca a mesma
-hora de parede uma semana depois (clicado semanas mais tarde, pula para a
-primeira semana que ainda não passou). Não existe agendamento automático:
+Depois do início, a mensagem troca os botões pelos três que ainda valem com a
+jogatina rolando: **REPETIR**, que marca a mesma hora de parede uma semana
+depois (clicado semanas mais tarde, pula para a primeira semana que ainda não
+passou), **CHAMAR GENTE** e **TRAZER CONVIDADO**. Não existe agendamento automático:
 repetir é a rotina. `played_at` marca a jogatina que rolou, na primeira presença
 de um membro no voice reservado ou, sem sala, no início com dois "vou".
 
@@ -883,11 +887,14 @@ jogatina ou no guia (que escolhe a próxima jogatina que aceita chamada), posta
 a jogatina no canal de busca: o squad, o jogo, quando, o tamanho da party, o
 tamanho do squad, o histórico e **ENTRAR**. Ela não traz a contagem de quem
 vai, que mudaria a cada voto sem a mensagem acompanhar, e não chama ninguém:
-quem lê o canal de busca está lá para isso. Vale só antes do início, uma por
-jogatina, com vaga no squad e lugar na party; o botão só aparece na mensagem
-da jogatina quando essas condições valem, e a mensagem passa a dizer onde a
-chamada está aberta. A trava é `called_at`, gravada antes de postar: a
-mensagem que não sai desfaz a trava, e dá para chamar de novo.
+quem lê o canal de busca está lá para isso. Vale **até o fim da jogatina**,
+uma por jogatina, com vaga no squad e lugar na party: falta gente é o que se
+descobre jogando, e quem entra no meio ainda pega partida. O botão só aparece
+na mensagem da jogatina quando essas condições valem (marcada ou em
+andamento), e a mensagem passa a dizer onde a chamada está aberta. Depois do
+início a chamada é reeditada e passa a dizer "está jogando agora, começou há
+X". A trava é `called_at`, gravada antes de postar: a mensagem que não sai
+desfaz a trava, e dá para chamar de novo.
 
 ENTRAR é o pedido de entrada do `/squad procurar`, com duas diferenças. Não
 exige perfil nem grade que combine, porque a pessoa respondeu a uma jogatina
@@ -895,9 +902,14 @@ com dia e hora; e o pedido guarda a jogatina (`session_id`), para a votação
 dizer "respondeu à chamada da jogatina de sexta 21h" em vez de "joga em
 horários parecidos", e para quem entra já ficar como "vou" nela. O resto é o
 mesmo: não ser do squad, vaga, teto de squads, nenhum pedido aberto e o
-cooldown. A chamada **sai do ar** (a mensagem é apagada) quando a jogatina
-começa, é cancelada ou o squad é arquivado; um ENTRAR atrasado numa chamada
-que ficou no ar responde que ela acabou e a tira dali.
+cooldown. Com a jogatina **em andamento** vale igual: a votação é do squad, e
+quem for aceito ganha o voice reservado ao entrar (a mesma concessão de quem
+entra com a reserva viva) e é avisado no canal do squad em qual sala cair, que
+é o único aviso que ele vê (o pedido da chamada não tem thread privada).
+A chamada **sai do ar** (a mensagem é apagada) quando a jogatina **acaba** (o
+fim previsto, num passo do job, ou o voice reservado liberado depois do
+início), quando ela é cancelada ou quando o squad é arquivado; um ENTRAR
+atrasado numa chamada que ficou no ar responde que ela acabou e a tira dali.
 
 **Histórico.** O bot registra a presença de verdade: cada entrada de um membro
 no voice reservado de uma jogatina viva abre uma linha em
@@ -959,8 +971,9 @@ a vaga (`full` volta a `open`); o último a sair arquiva.
 
 **O relógio.** Um job a cada 5 minutos, por guild atendida com o módulo ligado,
 na ordem: expira propostas, fecha convites e votações vencidos, lembra (e reserva), começa (e move),
-libera o voice das jogatinas encerradas e acerta a presença (a varredura do
-histórico). Ele não marca jogatina. O passo diário
+libera o voice das jogatinas encerradas, tira do ar a chamada pública das que
+acabaram e acerta a presença (a varredura do histórico). Ele não marca
+jogatina. O passo diário
 (inatividade, guias em dia e um match novo) roda uma vez por dia **depois das 12 h locais**,
 porque aviso e proposta chamam gente pelo nome. O dia fica marcado em `meta`
 antes do trabalho: falha espera o dia seguinte em vez de se repetir a cada 5
@@ -1647,7 +1660,7 @@ provedor, documentada em `docs/runbook.md`.
 | **Pool de voices cheio** (v1.5)                                   | a reserva pega o voice preferido do squad ou o primeiro livre; sem nenhum, cria um voice temporário da jogatina e o apaga no fim            | feito: `temporaryVoices`, apagado só vazio; sem permissão, no teto de 500 canais ou com a opção desligada, a jogatina fica sem sala e o lembrete avisa. Voice órfão (reinício ou Discord sem resposta no meio da criação) é resolvido pela reconciliação do job |
 | **Horário do `/bora` mal entendido** (v1.6)                       | `parseWhen` puro no fuso da guild, erro que traz exemplos, autocomplete que ecoa o que o bot entendeu antes de enviar e mensagem da jogatina com a data completa | feito: `shared/squads/when.ts`, com testes de tabela |
 | **Vaga presa em convite ou votação parada** (v1.6)                | convite e votação vencem em `proposalTtlHours`; no prazo, a votação decide com os votos que tem (um a favor sem maioria contra entra) e a vaga volta para a busca | feito: `JoinRequestService.expireDue` no job, `decideJoinVote` com testes de tabela |
-| **Chamada pública parada no canal de busca** (v1.6)               | a chamada sai do ar no início, no cancelamento e no arquivamento, com a trava no banco antes do Discord; ENTRAR confere a jogatina e tira a chamada que ficou | feito: `CallService.close` e `SearchService.requestFromCall`, com testes |
+| **Chamada pública parada no canal de busca** (v1.6)               | a chamada sai do ar no fim da jogatina, no cancelamento e no arquivamento, com a trava no banco antes do Discord; ENTRAR confere a jogatina e tira a chamada que ficou | feito: `CallService.close`, o passo `closeFinished` do job (v1.7, para o fim previsto) e `SearchService.requestFromCall`, com testes |
 | **Histórico que mente** (v1.6)                                    | só conta jogatina com `played_at`; quem esteve sai da presença no voice, e "vou" só vale quando ninguém foi registrado; "geralmente" pede duas jogatinas na célula | parcial: presença perdida com o bot fora do ar cai no "vou"; ninguém confere quanto tempo a pessoa ficou |
 | **Voice do pool preso com `Connect` negado** (v1.5)               | snapshot dos overwrites na sessão; o restore no Discord vem antes de marcar a sessão como liberada, e o job tenta de novo a cada 5 min     | feito: `SessionService.release`, com teste |
 

@@ -282,7 +282,7 @@ usa `/bora hoje 21h`. O bot entende `agora`, `hoje 21h`, `hoje 21:30`,
 autocomplete mostra o que ele entendeu antes de enviar. Quem marcou já vai. A
 mensagem da jogatina chama o squad e tem duas linhas de botões: `VOU`,
 `NÃO VOU`, `CHAMAR GENTE` e `TRAZER CONVIDADO` em cima; `REMARCAR` e `CANCELAR`
-embaixo. Ela dura 3 h
+embaixo. Começada, ficam `REPETIR`, `CHAMAR GENTE` e `TRAZER CONVIDADO`. Ela dura 3 h
 (`sessionHours`) e cada squad tem até 5 marcadas (`maxUpcomingSessions`).
 A contagem diz se a party fechou ("fechada, 4 de 4") ou, com mais gente que a
 party, quantas dá ("dá 2 parties: 7 vão e cada partida leva até 4"); o bot
@@ -323,9 +323,12 @@ jogatina ou no guia (que pega a próxima jogatina com lugar), posta a jogatina n
 canal de busca com o histórico do squad e um botão `ENTRAR`. Quem aperta vira
 pedido de entrada e o squad vota, como no `/squad procurar`, mas sem precisar de
 perfil: a pessoa respondeu a uma jogatina com dia e hora. Quem entra já fica
-como `VOU` nela. Uma chamada por jogatina, só antes do início, com vaga no squad
-e lugar na party (o botão some quando não dá). A chamada é apagada quando a
-jogatina começa, é cancelada ou o squad é arquivado.
+como `VOU` nela. Uma chamada por jogatina, com vaga no squad e lugar na party (o
+botão some quando não dá), e ela vale **até o fim da jogatina**: dá para chamar
+gente no meio, porque é jogando que se descobre que falta gente. Depois do
+início a chamada diz que a partida já está rolando, e quem for aceito ganha a
+sala na hora e é avisado no canal do squad em qual voice entrar. A chamada é
+apagada quando a jogatina acaba, é cancelada ou o squad é arquivado.
 
 **Trazer alguém de fora.** `TRAZER CONVIDADO`, na mensagem da jogatina (marcada
 ou rolando), abre um select de pessoa para quem é do squad. O convidado joga só

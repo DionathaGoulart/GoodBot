@@ -132,7 +132,8 @@ src/
                   demo vence), pending-expiry (recusa o convite parado uma
                   semana na fila, avisa, sai e marca `expired`), squads
                   (convites e votações vencidos, lembrete, voice reservado e
-                  início das jogatinas, varredura de presença, e o passo
+                  início das jogatinas, chamada pública das encerradas,
+                  varredura de presença, e o passo
                   diário de inatividade, guias e match), capacity (RAM e
                   tamanho do banco contra as linhas de aviso, alerta no
                   webhook)
@@ -620,8 +621,8 @@ matcher (vaga) ou CONVIDAR / `/squad convidar` ─▶ JoinRequestService.invite
   ─▶ TRAZER CONVIDADO ─▶ GuestService.bring: addSessionGuest (teto sob `for update` da jogatina)
      ─▶ thread privada no canal de busca com o convidado e quem trouxe (falha desfaz a linha)
      ─▶ grantSessionVoice; trazido antes da reserva, ele já entra nos alvos dela
-  ─▶ na hora, move os membros (nunca o convidado) e tira do ar a chamada pública;
-     início, remarcação e cancelamento avisam cada convidado na thread dele
+  ─▶ na hora, move os membros (nunca o convidado) e reedita a chamada pública, que
+     segue no ar; início, remarcação e cancelamento avisam cada convidado na thread dele
   ─▶ voiceStateUpdate (events/community/squads-voice.ts): quem é do squad no voice reservado
      abre presença em squad_session_attendance e marca played_at; sair de um voice do pool
      ou temporário (lista em memória, carregada do banco uma vez por guild) fecha
@@ -641,13 +642,17 @@ REMARCAR (quem está no VOU, antes do início) ─▶ SessionService.rescheduleF
 **Uma chamada pública e o histórico**
 
 ```
-CHAMAR GENTE na jogatina (ou no guia: a próxima que aceita) ─▶ CallService.call
-  ─▶ callBlocker: antes do início, sem chamada, vaga no squad, lugar na party
+CHAMAR GENTE na jogatina (ou no guia: a primeira que aceita, a que rola inclusive)
+  ─▶ CallService.call ─▶ callBlocker: jogatina viva (isSessionOver), sem chamada,
+     vaga no squad, lugar na party
   ─▶ claimSessionCall (called_at) ─▶ post no canal de busca com ENTRAR ─▶ grava canal e mensagem
      (a mensagem que não sai desfaz a trava) ─▶ a mensagem da jogatina perde o botão
+  ─▶ início: a chamada é reeditada ("está jogando agora"), não sai do ar
   ─▶ ENTRAR ─▶ SearchService.requestFromCall: sem perfil nem grade, mesmas travas do procurar
   ─▶ JoinRequestService.open com session_id ─▶ votação "respondeu à chamada" ─▶ entrou: "vou" na jogatina
-  ─▶ início, cancelamento ou arquivamento: closeSessionCall e apaga a mensagem
+     (com a jogatina rolando, addMember dá o voice e o "chegou reforço" diz a sala: runningRoom)
+  ─▶ fim (release depois do início, ou o passo closeFinished do job no ends_at),
+     cancelamento ou arquivamento: closeSessionCall e apaga a mensagem
 
 guia, convite, /squad procurar, chamada e overview da API ─▶ HistoryService.load(squadIds)
   ─▶ três leituras: jogatinas que rolaram (90 dias), totais por squad, presença dessas jogatinas
