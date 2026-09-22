@@ -15,9 +15,12 @@ Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (
 > tamanho de grupo (solo, dupla, trio, party cheia) e por grupo exato, com
 > quem cada um mais joga, e por jogatina quem foi, quem faltou e quem
 > apareceu sem avisar. A fonte é só o voice das jogatinas: nada de presença
-> de perfil nem de tempo fora de jogatina marcada. O que mudou no documento:
-> "Histórico", "Números" e "O relógio" na §5.11, e o aviso de manutenção do
-> deploy na §7.5. O que **não** mudou: o resto do módulo e os outros módulos.
+> de perfil nem de tempo fora de jogatina marcada. A jogatina ganhou
+> **REMARCAR**: quem está no "vou" muda o horário sem cancelar, e o squad é
+> avisado numa mensagem nova. O que mudou no documento: "Jogatina",
+> "Histórico", "Números" e "O relógio" na §5.11, o REMARCAR na §9.1 e o aviso
+> de manutenção do deploy na §7.5. O que **não** mudou: o resto do módulo e os
+> outros módulos.
 
 > **v1.6: jogatina sob demanda.** O squad deixou de ter janela semanal fixa:
 > a grade do perfil serve só para o match, e quem marca a hora de jogar é o
@@ -747,9 +750,10 @@ de enviar. Dentro do canal de um squad o padrão é esse squad.
 
 Marcar uma jogatina grava a linha em `squad_sessions` com quem marcou
 (`created_by`, que já entra como "vou") e o fim em `starts_at + sessionHours`
-(3 h); anuncia no canal do squad chamando os membros, com **VOU / NÃO VOU /
-CANCELAR** e a contagem viva de quem vai, quem não vai e quem não respondeu; e
-atualiza o guia. Dois pedidos para o mesmo minuto viram uma jogatina só (índice
+(3 h); anuncia no canal do squad chamando os membros, com os botões em duas
+linhas (**VOU**, **NÃO VOU** e **CHAMAR GENTE** em cima; **REMARCAR** e
+**CANCELAR** embaixo) e a contagem viva de quem vai, quem não vai e quem não
+respondeu; e atualiza o guia. Dois pedidos para o mesmo minuto viram uma jogatina só (índice
 único), e quem chegou depois vira "vou" nela. Cada squad tem no máximo
 `maxUpcomingSessions` (5) jogatinas marcadas. Marcada para dentro da
 antecedência do lembrete, a jogatina já sai com sala; marcada para `agora`, já
@@ -803,6 +807,29 @@ no voice libera quando ele sai, mesmo antes do início. O evento de voz
 reconhece os temporários por uma lista em memória, carregada do banco na
 primeira pergunta de cada guild, para uma troca de canal fora do pool não
 custar query.
+
+**REMARCAR** muda o horário sem cancelar, só antes do início. Remarca quem vai
+participar: quem está no "vou" (quem marcou entra assim; trocando para "não
+vou", perde o direito). O botão confere isso antes de abrir o modal, que é o
+mesmo "quando" do BORA com o horário atual escrito, e a remarcação confere de
+novo. O horário muda e o resto fica: votos, mensagem e chamada pública, que é
+reeditada com o horário novo. A trava é uma `UPDATE` condicional (não
+começou, não foi cancelada), e o minuto de outra jogatina do squad, mesmo
+cancelada, recusa com um erro que ensina, porque `(squad_id, starts_at)` é
+único. A sala acompanha o horário: com o lembrete já dado e o horário novo fora
+da antecedência dele, a reserva volta ao pool (Discord antes do banco, como na
+liberação; sala que não volta deixa a jogatina no horário antigo) e o lembrete
+é zerado, para o job lembrar e reservar de novo perto da hora, senão um voice
+do pool ficaria trancado até lá. Horário novo dentro da antecedência reserva na
+hora, e `agora` também começa. O squad inteiro, menos quem remarcou, é chamado
+numa mensagem à parte ("era 22:00, agora é 21:00, daqui a 15 minutos", com a
+sala), porque quem disse "não vou" para o horário antigo pode poder no novo e
+editar a mensagem não notifica; começando agora, o aviso chama só quem tinha
+dito "não vou", porque o início já chama e move o resto. A auditoria guarda o
+antes e o depois (`squad.session.reschedule`). O job lê a lista de jogatinas
+uma vez por passada, e por isso o lembrete e o início conferem o horário na
+própria trava: a lista lida antes de uma remarcação não lembra nem começa a
+jogatina que foi para mais tarde.
 
 **CANCELAR** vale só antes do início: para quem marcou, ou para qualquer membro
 enquanto ninguém além dele disse "vou". A sala reservada volta para o pool.
@@ -1464,8 +1491,9 @@ re-verifica (o registro é dica de UI, não segurança).
 No módulo `squads` (§5.11), `/squad` e `/bora` são de `member`, com duas
 exceções: `/squad painel` (publicar a mensagem fixa) é de `admin`, e
 `/squad renomear` e `/squad convidar` exigem ser do squad. `/bora`, os botões da
-jogatina (VOU, NÃO VOU, CANCELAR, REPETIR, CHAMAR GENTE), o CONVIDAR e o CHAMAR
-GENTE do guia e a votação de entrada (A FAVOR, CONTRA) exigem ser do squad;
+jogatina (VOU, NÃO VOU, REMARCAR, CANCELAR, REPETIR, CHAMAR GENTE), o CONVIDAR e o
+CHAMAR GENTE do guia e a votação de entrada (A FAVOR, CONTRA) exigem ser do
+squad, e REMARCAR exige também estar no "vou" da jogatina;
 ENTRAR e PASSO do convite só valem para quem foi convidado, e o ENTRAR da
 chamada pública vale para qualquer membro do servidor que não seja do squad. Pela API do bot, publicar a mensagem fixa, rodar o match,
 o match manual (revisar e propor ao grupo) e a gestão de perfis (pausar,

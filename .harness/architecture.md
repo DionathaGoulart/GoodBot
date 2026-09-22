@@ -611,7 +611,7 @@ matcher (vaga) ou CONVIDAR / `/squad convidar` ─▶ JoinRequestService.invite
 ```
 /bora hoje 21h (commands/community/bora.ts) ou BORA no guia ─▶ modal (quando)
   ─▶ SessionService.scheduleFromText ─▶ parseWhen (shared, fuso da guild)
-  ─▶ INSERT squad_sessions (quem marcou já vai) ─▶ mensagem com VOU / NÃO VOU / CANCELAR
+  ─▶ INSERT squad_sessions (quem marcou já vai) ─▶ mensagem com VOU / NÃO VOU / REMARCAR / CANCELAR
   ─▶ GuideService.refresh ─▶ SquadsJob (5 min): lembrete + reserva do voice (snapshot na jogatina)
      pool cheio: grava a reserva sem canal, cria o voice temporário, grava o id
      (criação interrompida: o job reconcilia, adotando ou apagando o órfão)
@@ -625,6 +625,11 @@ matcher (vaga) ou CONVIDAR / `/squad convidar` ─▶ JoinRequestService.invite
   ─▶ fim da jogatina ou voice vazio: restaura os overwrites (temporário: apaga, só vazio)
      e só então marca liberado
   ─▶ REPETIR marca a mesma hora na semana seguinte
+
+REMARCAR (quem está no VOU, antes do início) ─▶ SessionService.rescheduleForm confere e abre o modal
+  ─▶ reschedule: minuto livre? lembrete dado e horário novo fora da antecedência: release() primeiro
+  ─▶ rescheduleSquadSession (UPDATE condicional; zera lembrete e reserva só com a sala devolvida)
+  ─▶ chamada pública reeditada ─▶ dentro da antecedência: remind quieto ─▶ aviso à parte ─▶ agora: start()
 ```
 
 **Uma chamada pública e o histórico**

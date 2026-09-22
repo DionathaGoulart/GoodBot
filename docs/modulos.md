@@ -280,8 +280,9 @@ e o servidor tem teto de 500 canais.
 usa `/bora hoje 21h`. O bot entende `agora`, `hoje 21h`, `hoje 21:30`,
 `amanhã 20h`, `sex 22h`, `dom 15h` e `16/09 21h`, no fuso do servidor, e o
 autocomplete mostra o que ele entendeu antes de enviar. Quem marcou já vai. A
-mensagem da jogatina chama o squad e tem `VOU`, `NÃO VOU` e `CANCELAR`; ela dura
-3 h (`sessionHours`) e cada squad tem até 5 marcadas (`maxUpcomingSessions`).
+mensagem da jogatina chama o squad e tem duas linhas de botões: `VOU`, `NÃO VOU`
+e `CHAMAR GENTE` em cima; `REMARCAR` e `CANCELAR` embaixo. Ela dura 3 h
+(`sessionHours`) e cada squad tem até 5 marcadas (`maxUpcomingSessions`).
 A contagem diz se a party fechou ("fechada, 4 de 4") ou, com mais gente que a
 party, quantas dá ("dá 2 parties: 7 vão e cada partida leva até 4"); o bot
 reserva um voice só e deixa o squad se dividir.
@@ -297,6 +298,16 @@ nunca com gente dentro. A opção fica na aba de configuração ("Voice temporá
 com o rodízio cheio"); desligada, ou sem permissão do bot para criar canal, a
 jogatina acontece sem sala e o lembrete avisa. Se o bot cair no meio da
 criação da sala, o job acha o canal que sobrou e o adota ou apaga sozinho.
+
+`REMARCAR` muda o horário sem cancelar: marcaram para 22h e dá para começar
+21h? Quem está no `VOU` aperta, digita o horário novo (o mesmo "quando" do
+`BORA`) e o bot chama o squad inteiro numa mensagem nova, para quem não pode no
+horário novo trocar para `NÃO VOU` e quem agora pode trocar para `VOU`. Os votos,
+a mensagem e a chamada pública continuam, com o horário novo. A sala acompanha:
+adiantar para daqui a pouco reserva na hora, `agora` já começa, e adiar para
+longe devolve a sala reservada ao pool (o bot reserva de novo meia hora antes do
+horário novo). Minuto de outra jogatina do squad não serve: o bot explica e
+nada muda.
 
 `CANCELAR` vale antes do início, para quem marcou ou para qualquer membro
 enquanto ninguém mais confirmou. Depois do início, a mensagem ganha `REPETIR`,
