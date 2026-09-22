@@ -850,12 +850,13 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
     it('histórico: só as que rolaram desde since, com totais por squad', async () => {
       const squad = await newSquad('Histórico');
       const other = await newSquad('Histórico vazio');
+      const mate = await newSquad('Histórico vizinho');
       const at = (days: number) => new Date(Date.now() - days * DAY);
-      const session = async (days: number, played: boolean, cancel = false) => {
+      const session = async (days: number, played: boolean, cancel = false, squadId = squad.id) => {
         const startsAt = at(days);
         const row = await createSquadSession(db, {
           guildId: GUILD_ID,
-          squadId: squad.id,
+          squadId,
           startsAt,
           endsAt: new Date(startsAt.getTime() + 3 * HOUR),
           createdBy: USER_A,
@@ -870,6 +871,7 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       const old = await session(120, true);
       await session(3, false);
       const cancelled = await session(5, false, true);
+      const neighbour = await session(1, true, false, mate.id);
 
       const listed = await listPlayedSessions(db, GUILD_ID, [squad.id, other.id], at(90));
       expect(listed.map((row) => row.id)).toEqual([recent.id]);
@@ -877,9 +879,15 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect(await listPlayedSessions(db, OTHER_GUILD_ID, [squad.id], at(90))).toEqual([]);
       expect(await markSessionPlayed(db, GUILD_ID, cancelled.id, new Date())).toBeNull();
 
-      // Por jogo: as jogatinas de todos os squads dele, e só dele.
+      // Por jogo: as jogatinas de todos os squads dele, e só dele. A leitura
+      // alcança o arquivo inteiro, que compartilha um jogo só, então aqui se
+      // afirma o que entra e o que fica de fora, e não a lista exata.
       const byGame = await listPlayedSessionsByGame(db, GUILD_ID, game.id, at(90));
-      expect(byGame.map((row) => row.id)).toEqual([recent.id]);
+      const byGameIds = byGame.map((row) => row.id);
+      expect(byGameIds).toContain(recent.id);
+      expect(byGameIds).toContain(neighbour.id);
+      expect(byGameIds).not.toContain(old.id);
+      expect(byGameIds).not.toContain(cancelled.id);
       const quiet = await createSquadGame(db, {
         guildId: GUILD_ID,
         name: 'Jogo sem jogatina',
