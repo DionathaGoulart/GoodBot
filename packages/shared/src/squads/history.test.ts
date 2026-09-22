@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_SQUAD_BLOCKS } from '../config/squads';
-import { DAY_MS } from '../constants';
+import { DAY_MS, HOUR_MS } from '../constants';
 import {
   EMPTY_SQUAD_HISTORY,
   formatHistory,
   summarizeHistory,
+  type SquadHistoryAttendance,
   type SquadHistorySession,
   type SummarizeHistoryInput,
 } from './history';
@@ -21,6 +22,21 @@ let nextId = 0;
 function played(localIso: string, goingIds: string[] = []): SquadHistorySession {
   nextId++;
   return { id: nextId, startsAt: new Date(`${localIso}-03:00`), goingIds };
+}
+
+/** Uma presença fechada, com as horas em hora de São Paulo. */
+function at(
+  sessionId: number,
+  userId: string,
+  from: string,
+  to: string,
+): SquadHistoryAttendance {
+  return {
+    sessionId,
+    userId,
+    joinedAt: new Date(`${from}-03:00`),
+    leftAt: new Date(`${to}-03:00`),
+  };
 }
 
 function summarize(input: Partial<SummarizeHistoryInput>) {
@@ -105,10 +121,10 @@ describe('summarizeHistory', () => {
       ],
     });
     expect(history.regulars).toEqual([
-      { userId: 'a', count: 1 },
-      { userId: 'b', count: 1 },
-      { userId: 'c', count: 1 },
-      { userId: 'd', count: 1 },
+      { userId: 'a', count: 1, ms: 0 },
+      { userId: 'b', count: 1, ms: 0 },
+      { userId: 'c', count: 1, ms: 0 },
+      { userId: 'd', count: 1, ms: 0 },
     ]);
   });
 
@@ -119,12 +135,60 @@ describe('summarizeHistory', () => {
       played('2026-09-13T21:00:00', ['b']),
     ];
     expect(summarize({ sessions }).regulars).toEqual([
-      { userId: 'b', count: 3 },
-      { userId: 'a', count: 2 },
-      { userId: 'c', count: 1 },
-      { userId: 'd', count: 1 },
-      { userId: 'e', count: 1 },
+      { userId: 'b', count: 3, ms: 0 },
+      { userId: 'a', count: 2, ms: 0 },
+      { userId: 'c', count: 1, ms: 0 },
+      { userId: 'd', count: 1, ms: 0 },
+      { userId: 'e', count: 1, ms: 0 },
     ]);
+  });
+
+  it('as horas do mês vão da primeira entrada à última saída de cada jogatina', () => {
+    const one = played('2026-09-11T21:00:00', ['a', 'b']);
+    const old = played('2026-07-11T21:00:00', ['a']);
+    const history = summarize({
+      sessions: [one, old],
+      attendance: [
+        // A das 21h às 23h, B das 21h30 à meia-noite: a jogatina durou 3 h.
+        at(one.id, 'a', '2026-09-11T21:00:00', '2026-09-11T23:00:00'),
+        at(one.id, 'b', '2026-09-11T21:30:00', '2026-09-12T00:00:00'),
+        // Fora do último mês: conta no total, não nas horas do mês.
+        at(old.id, 'a', '2026-07-11T21:00:00', '2026-07-11T23:00:00'),
+      ],
+    });
+    expect(history.msLast30d).toBe(3 * HOUR_MS);
+    expect(history.regulars).toEqual([
+      { userId: 'a', count: 2, ms: 4 * HOUR_MS },
+      { userId: 'b', count: 1, ms: 2.5 * HOUR_MS },
+    ]);
+  });
+
+  it('linha ainda aberta conta até agora, e entradas repetidas contam uma vez', () => {
+    const one = played('2026-09-14T06:00:00', ['a']);
+    const history = summarize({
+      sessions: [one],
+      attendance: [
+        at(one.id, 'a', '2026-09-14T06:00:00', '2026-09-14T07:00:00'),
+        // Sobreposta à de cima e ainda aberta: das 6h30 às 9h de agora.
+        { sessionId: one.id, userId: 'a', joinedAt: new Date('2026-09-14T06:30:00-03:00') },
+      ],
+    });
+    expect(history.regulars).toEqual([{ userId: 'a', count: 1, ms: 3 * HOUR_MS }]);
+  });
+
+  it('presença é VOU cumprido; sem presença medida, o VOU vale', () => {
+    const inVoice = played('2026-09-11T21:00:00', ['a', 'b']);
+    const noRoom = played('2026-09-12T21:00:00', ['a', 'b']);
+    const history = summarize({
+      sessions: [inVoice, noRoom],
+      // Na primeira só A foi; na segunda não houve sala, e os dois contam.
+      attendance: [at(inVoice.id, 'a', '2026-09-11T21:00:00', '2026-09-11T23:00:00')],
+    });
+    expect(history.attendanceRate).toBe(3 / 4);
+  });
+
+  it('sem ninguém no VOU não há presença a mostrar', () => {
+    expect(summarize({ sessions: [played('2026-09-11T21:00:00')] }).attendanceRate).toBeNull();
   });
 
   it('os totais cobrem o que ficou fora da janela', () => {
@@ -191,6 +255,21 @@ describe('formatHistory', () => {
     ).toBe(
       '4 jogatinas no último mês, geralmente domingo de manhã e sábado de madrugada. Última ontem.',
     );
+  });
+
+  it('horas e presença entram na frase quando há o que dizer', () => {
+    const one = played('2026-09-11T21:00:00', ['a', 'b']);
+    const two = played('2026-09-12T21:00:00', ['a', 'b']);
+    expect(
+      format({
+        sessions: [one, two],
+        attendance: [
+          at(one.id, 'a', '2026-09-11T21:00:00', '2026-09-11T23:30:00'),
+          at(one.id, 'b', '2026-09-11T21:00:00', '2026-09-11T23:00:00'),
+          at(two.id, 'a', '2026-09-12T21:00:00', '2026-09-12T23:00:00'),
+        ],
+      }),
+    ).toBe('2 jogatinas e 4 h 30 no último mês, 75% de presença. Última há 2 dias.');
   });
 
   it('uma jogatina só, hoje', () => {

@@ -4,6 +4,7 @@ import { MINUTE_MS } from '../constants';
 import {
   formationSegments,
   formationSize,
+  formatPlaytime,
   mergeIntervals,
   pairOverlapMs,
   presenceMs,
@@ -383,5 +384,20 @@ describe('summarizePlayers', () => {
 
   it('sem jogatinas, ninguém', () => {
     expect(summarizePlayers([], [], OPTIONS)).toEqual([]);
+  });
+});
+
+describe('formatPlaytime', () => {
+  it.each([
+    [0, 'menos de 1 min'],
+    [min(0.5), 'menos de 1 min'],
+    [min(1), '1 min'],
+    [min(59), '59 min'],
+    [min(60), '1 h'],
+    [min(100), '1 h 40'],
+    [min(120), '2 h'],
+    [min(725), '12 h 5'],
+  ])('%i ms: %s', (ms, text) => {
+    expect(formatPlaytime(ms)).toBe(text);
   });
 });

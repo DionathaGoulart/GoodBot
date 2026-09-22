@@ -1,8 +1,10 @@
 import { DAY_MS, SQUAD_BLOCKS } from '../constants';
+import { formatPlaytime, mergeIntervals } from './stats';
 import { WEEKDAY_NAMES } from './when';
 import { toLocalDateTime } from './zoned';
 
 import type { SquadSlot } from './availability';
+import type { TimeInterval } from './stats';
 import type { SquadBlockConfig } from '../config/squads';
 
 /**
@@ -34,10 +36,17 @@ export interface SquadHistorySession {
   goingIds: readonly string[];
 }
 
-/** Alguém do squad no voice reservado de uma jogatina. */
+/**
+ * Alguém do squad no voice reservado de uma jogatina. O intervalo é opcional
+ * porque quem só conta presença (quem esteve) não precisa dele; sem ele, as
+ * horas do resumo ficam em zero.
+ */
 export interface SquadHistoryAttendance {
   sessionId: number;
   userId: string;
+  joinedAt?: Date;
+  /** `null` = ainda no voice: conta até `now`. */
+  leftAt?: Date | null;
 }
 
 /** Contagem de todas as jogatinas que rolaram, sem janela. */
@@ -50,10 +59,24 @@ export interface SquadRegular {
   userId: string;
   /** Em quantas jogatinas da janela a pessoa esteve. */
   count: number;
+  /** Tempo dela no voice das jogatinas da janela, em ms; 0 sem presença medida. */
+  ms: number;
 }
 
 export interface SquadHistory {
   playedLast30d: number;
+  /**
+   * Quanto o squad jogou no último mês, em ms: por jogatina, da primeira
+   * entrada à última saída, somado. É tempo de jogatina, não a soma do tempo
+   * de cada um. 0 quando nenhuma delas teve presença medida.
+   */
+  msLast30d: number;
+  /**
+   * VOU cumpridos sobre VOU dados, nas jogatinas da janela; `null` quando
+   * ninguém disse VOU. Jogatina sem presença medida não conta falta para
+   * ninguém: ela entra como cumprida, do mesmo jeito que já conta no histórico.
+   */
+  attendanceRate: number | null;
   playedTotal: number;
   /** O início da última jogatina que rolou; `null` = nunca jogaram. */
   lastPlayedAt: Date | null;
@@ -76,6 +99,8 @@ export interface SummarizeHistoryInput {
 
 export const EMPTY_SQUAD_HISTORY: SquadHistory = {
   playedLast30d: 0,
+  msLast30d: 0,
+  attendanceRate: null,
   playedTotal: 0,
   lastPlayedAt: null,
   usualCells: [],
@@ -91,6 +116,39 @@ function blockAt(hour: number, blocks: readonly SquadBlockConfig[]): number | nu
 const byUserId = (a: SquadRegular, b: SquadRegular) =>
   a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0;
 
+/** As linhas de presença viram intervalos; sem `joined_at` não há tempo a contar. */
+function intervalsOf(rows: readonly SquadHistoryAttendance[], now: Date): TimeInterval[] {
+  return rows.flatMap((row) =>
+    row.joinedAt ? [{ start: row.joinedAt.getTime(), end: (row.leftAt ?? now).getTime() }] : [],
+  );
+}
+
+const lengthOf = (intervals: readonly TimeInterval[]) =>
+  intervals.reduce((total, interval) => total + interval.end - interval.start, 0);
+
+/** Da primeira entrada à última saída de uma jogatina; 0 sem presença medida. */
+function sessionSpanMs(rows: readonly SquadHistoryAttendance[], now: Date): number {
+  const intervals = intervalsOf(rows, now);
+  if (intervals.length === 0) return 0;
+  const start = Math.min(...intervals.map((interval) => interval.start));
+  const end = Math.max(...intervals.map((interval) => interval.end));
+  return Math.max(0, end - start);
+}
+
+/** O tempo de cada pessoa numa jogatina, com entradas repetidas contadas uma vez. */
+function timeByUser(
+  rows: readonly SquadHistoryAttendance[],
+  now: Date,
+): Map<string, TimeInterval[]> {
+  const raw = new Map<string, TimeInterval[]>();
+  for (const row of rows) {
+    if (!row.joinedAt) continue;
+    const interval = { start: row.joinedAt.getTime(), end: (row.leftAt ?? now).getTime() };
+    raw.set(row.userId, [...(raw.get(row.userId) ?? []), interval]);
+  }
+  return new Map([...raw.entries()].map(([userId, list]) => [userId, mergeIntervals(list)]));
+}
+
 /**
  * O resumo do histórico. A célula de uma jogatina é o dia e a faixa do início
  * no fuso da guild. Quem esteve é quem apareceu no voice reservado; jogatina
@@ -103,19 +161,29 @@ export function summarizeHistory(input: SummarizeHistoryInput): SquadHistory {
   const recentFrom = now - SQUAD_HISTORY_RECENT_DAYS * DAY_MS;
 
   const present = new Map<number, Set<string>>();
+  const rowsOf = new Map<number, SquadHistoryAttendance[]>();
   for (const row of input.attendance) {
     const users = present.get(row.sessionId) ?? new Set<string>();
     users.add(row.userId);
     present.set(row.sessionId, users);
+    rowsOf.set(row.sessionId, [...(rowsOf.get(row.sessionId) ?? []), row]);
   }
 
   let playedLast30d = 0;
+  let msLast30d = 0;
+  let going = 0;
+  let kept = 0;
   let lastPlayed: number | null = null;
   const cells = new Map<number, SquadSlot>();
   const regulars = new Map<string, number>();
+  const regularMs = new Map<string, number>();
   for (const session of input.sessions) {
     const startsAt = session.startsAt.getTime();
-    if (startsAt >= recentFrom) playedLast30d++;
+    const rows = rowsOf.get(session.id) ?? [];
+    if (startsAt >= recentFrom) {
+      playedLast30d++;
+      msLast30d += sessionSpanMs(rows, input.now);
+    }
     if (lastPlayed === null || startsAt > lastPlayed) lastPlayed = startsAt;
 
     const local = toLocalDateTime(session.startsAt, input.timeZone);
@@ -127,8 +195,19 @@ export function summarizeHistory(input: SummarizeHistoryInput): SquadHistory {
       cells.set(bit, cell);
     }
 
-    const who = present.get(session.id) ?? new Set(session.goingIds);
+    const measured = present.get(session.id);
+    const who = measured ?? new Set(session.goingIds);
     for (const userId of who) regulars.set(userId, (regulars.get(userId) ?? 0) + 1);
+    for (const [userId, intervals] of timeByUser(rows, input.now)) {
+      regularMs.set(userId, (regularMs.get(userId) ?? 0) + lengthOf(intervals));
+    }
+
+    going += session.goingIds.length;
+    // Sem presença medida (jogatina sem sala, ou o bot fora do ar), o VOU vale
+    // como presença: é a mesma regra que põe essa gente entre os frequentes.
+    kept += measured
+      ? session.goingIds.filter((userId) => measured.has(userId)).length
+      : session.goingIds.length;
   }
 
   const totals = input.totals;
@@ -137,6 +216,8 @@ export function summarizeHistory(input: SummarizeHistoryInput): SquadHistory {
 
   return {
     playedLast30d,
+    msLast30d,
+    attendanceRate: going > 0 ? kept / going : null,
     playedTotal: Math.max(totals?.played ?? 0, input.sessions.length),
     lastPlayedAt: lastPlayed === null ? null : new Date(lastPlayed),
     usualCells: [...cells.entries()]
@@ -144,8 +225,8 @@ export function summarizeHistory(input: SummarizeHistoryInput): SquadHistory {
       .slice(0, SQUAD_HISTORY_CELLS)
       .map(([, cell]) => cell),
     regulars: [...regulars.entries()]
-      .map(([userId, count]) => ({ userId, count }))
-      .sort((a, b) => b.count - a.count || byUserId(a, b))
+      .map(([userId, count]) => ({ userId, count, ms: regularMs.get(userId) ?? 0 }))
+      .sort((a, b) => b.count - a.count || b.ms - a.ms || byUserId(a, b))
       .slice(0, SQUAD_HISTORY_REGULARS),
   };
 }
@@ -204,19 +285,33 @@ function agoText(at: Date, now: Date, timeZone: string): string {
   return `há ${String(Math.floor(days / 30))} meses`;
 }
 
+/** "80% de presença": VOU cumpridos, arredondado. */
+function attendanceText(rate: number): string {
+  return `${String(Math.round(rate * 100))}% de presença`;
+}
+
 /**
  * O histórico numa frase curta em pt-BR, sem menção nem timestamp do Discord:
- * serve ao embed e ao painel. "6 jogatinas no último mês, geralmente sexta e
- * sábado à noite. Última há 3 dias." ou "Ainda não jogaram.".
+ * serve ao embed e ao painel. "6 jogatinas e 11 h no último mês, 80% de
+ * presença, geralmente sexta e sábado à noite. Última há 3 dias." ou "Ainda não
+ * jogaram.".
+ *
+ * As horas só entram quando houve presença medida, e a presença só quando
+ * alguém disse VOU: um número em zero por falta de dado diria "não jogam", que
+ * é outra coisa.
  */
 export function formatHistory(history: SquadHistory, options: FormatHistoryOptions): string {
   if (history.playedTotal === 0 || history.lastPlayedAt === null) return 'Ainda não jogaram.';
 
   const recent = history.playedLast30d;
+  const played = `${String(recent)} ${recent === 1 ? 'jogatina' : 'jogatinas'}`;
   let text =
     recent === 0
       ? `Nenhuma jogatina no último mês (${String(history.playedTotal)} no total)`
-      : `${String(recent)} ${recent === 1 ? 'jogatina' : 'jogatinas'} no último mês`;
+      : history.msLast30d > 0
+        ? `${played} e ${formatPlaytime(history.msLast30d)} no último mês`
+        : `${played} no último mês`;
+  if (history.attendanceRate !== null) text += `, ${attendanceText(history.attendanceRate)}`;
   const habits = history.usualCells.filter((cell) => cell.count >= SQUAD_HISTORY_HABIT);
   const usual = usualText(habits, options.blocks);
   if (usual) text += `, geralmente ${usual}`;

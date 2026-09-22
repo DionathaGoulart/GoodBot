@@ -59,6 +59,13 @@ export type SquadSessionSummary = z.infer<typeof SquadSessionSummarySchema>;
 /** O histórico de jogatinas de um squad (`summarizeHistory`), com a data em ISO 8601. */
 export const SquadHistorySummarySchema = z.object({
   playedLast30d: z.number().int().min(0),
+  /**
+   * Tempo de jogatina no último mês, em ms. Default 0: um bot anterior à v1.7
+   * não manda o campo.
+   */
+  msLast30d: z.number().int().min(0).default(0),
+  /** VOU cumpridos sobre VOU dados; `null` = ninguém disse VOU na janela. */
+  attendanceRate: z.number().min(0).max(1).nullable().default(null),
   playedTotal: z.number().int().min(0),
   /** Início da última jogatina que rolou; `null` = nunca jogaram. */
   lastPlayedAt: z.iso.datetime().nullable(),
@@ -69,7 +76,14 @@ export const SquadHistorySummarySchema = z.object({
       count: z.number().int().positive(),
     }),
   ),
-  regulars: z.array(z.object({ userId: SnowflakeSchema, count: z.number().int().positive() })),
+  regulars: z.array(
+    z.object({
+      userId: SnowflakeSchema,
+      count: z.number().int().positive(),
+      /** Tempo no voice das jogatinas da janela, em ms; 0 sem presença medida. */
+      ms: z.number().int().min(0).default(0),
+    }),
+  ),
 });
 export type SquadHistorySummary = z.infer<typeof SquadHistorySummarySchema>;
 

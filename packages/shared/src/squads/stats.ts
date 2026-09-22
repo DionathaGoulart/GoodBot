@@ -14,6 +14,22 @@
  * `now`.
  */
 
+import { MINUTE_MS } from '../constants';
+
+/**
+ * Tempo de jogatina em pt-BR: "40 min", "2 h", "1 h 40". Hora e minuto bastam,
+ * porque a jogatina dura no máximo 12 h, e o segundo só faria ruído. Abaixo de
+ * um minuto não vira "0 min": quem entrou e saiu esteve lá.
+ */
+export function formatPlaytime(ms: number): string {
+  if (!Number.isFinite(ms) || ms < MINUTE_MS) return 'menos de 1 min';
+  const minutes = Math.floor(ms / MINUTE_MS);
+  if (minutes < 60) return `${String(minutes)} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${String(hours)} h` : `${String(hours)} h ${String(rest)}`;
+}
+
 /** Uma entrada de alguém no voice de uma jogatina. */
 export interface SquadAttendanceRow {
   sessionId: number;
