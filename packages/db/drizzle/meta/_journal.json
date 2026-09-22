@@ -141,6 +141,13 @@
       "when": 1789566168246,
       "tag": "0019_squad_temporary_voice",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790098832301,
+      "tag": "0020_squad_session_guests",
+      "breakpoints": true
     }
   ]
 }

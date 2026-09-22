@@ -6,6 +6,7 @@ import { createDb, type Db } from '../client';
 import { loadRootEnv } from '../env';
 import {
   acceptSquadProposal,
+  addSessionGuest,
   addSquadMember,
   appendSessionVoiceSnapshot,
   archiveSquad,
@@ -43,6 +44,7 @@ import {
   listRecentJoinRequestsFor,
   listRecentProposalPairs,
   listSessionAttendance,
+  listSessionGuests,
   listSessionsToRelease,
   listSquadProfilesByGame,
   listSquads,
@@ -54,10 +56,12 @@ import {
   openSessionAttendance,
   releaseSessionCall,
   releaseSessionVoice,
+  removeSessionGuest,
   reopenSquadSession,
   rescheduleSquadSession,
   reserveSessionVoice,
   setSessionCallMessage,
+  setSessionGuestThread,
   setSessionMessage,
   setSquadGuideMessage,
   setSquadStatus,
@@ -101,8 +105,7 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
   let end: () => Promise<void>;
   let game: SquadGame;
 
-  const newSquad = (name: string) =>
-    createSquad(db, { guildId: GUILD_ID, gameId: game.id, name });
+  const newSquad = (name: string) => createSquad(db, { guildId: GUILD_ID, gameId: game.id, name });
 
   const newProposal = (userIds: string[], gameId = game.id) =>
     createSquadProposal(db, {
@@ -517,10 +520,12 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
           goingIds: [USER_B],
         }),
       ).toBeNull();
+      expect((await getSquadSessionAt(db, GUILD_ID, session.squadId, session.startsAt))?.id).toBe(
+        session.id,
+      );
       expect(
-        (await getSquadSessionAt(db, GUILD_ID, session.squadId, session.startsAt))?.id,
-      ).toBe(session.id);
-      expect(await getSquadSessionAt(db, OTHER_GUILD_ID, session.squadId, session.startsAt)).toBeNull();
+        await getSquadSessionAt(db, OTHER_GUILD_ID, session.squadId, session.startsAt),
+      ).toBeNull();
 
       expect(await voteSquadSession(db, GUILD_ID, session.id, USER_A, true)).toBeNull();
       let row = await voteSquadSession(db, GUILD_ID, session.id, USER_A, false);
@@ -535,14 +540,20 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
     it('cancelar trava votos, some das próximas e reabre no mesmo minuto', async () => {
       const session = await newSession('Cancelar');
       const now = new Date();
-      expect((await listUpcomingSessions(db, GUILD_ID, now, { squadIds: [session.squadId] })).map((row) => row.id)).toEqual([session.id]);
+      expect(
+        (await listUpcomingSessions(db, GUILD_ID, now, { squadIds: [session.squadId] })).map(
+          (row) => row.id,
+        ),
+      ).toEqual([session.id]);
 
       const cancelled = await cancelSquadSession(db, GUILD_ID, session.id, USER_A, now);
       expect(cancelled?.cancelledBy).toBe(USER_A);
       expect(await cancelSquadSession(db, GUILD_ID, session.id, USER_A, now)).toBeNull();
       expect(await voteSquadSession(db, GUILD_ID, session.id, USER_B, true)).toBeNull();
       expect(await markSessionPlayed(db, GUILD_ID, session.id, now)).toBeNull();
-      expect(await listUpcomingSessions(db, GUILD_ID, now, { squadIds: [session.squadId] })).toEqual([]);
+      expect(
+        await listUpcomingSessions(db, GUILD_ID, now, { squadIds: [session.squadId] }),
+      ).toEqual([]);
       expect(await listUpcomingSessions(db, GUILD_ID, now, { squadIds: [] })).toEqual([]);
 
       const reopened = await reopenSquadSession(db, GUILD_ID, session.id, {
@@ -577,7 +588,9 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       const input = { endsAt: session.endsAt, createdBy: USER_A, goingIds: [USER_A] };
       expect(await reopenSquadSession(db, GUILD_ID, session.id, input)).toBeNull();
       await releaseSessionVoice(db, GUILD_ID, session.id, new Date());
-      expect((await reopenSquadSession(db, GUILD_ID, session.id, input))?.voiceReservedAt).toBeNull();
+      expect(
+        (await reopenSquadSession(db, GUILD_ID, session.id, input))?.voiceReservedAt,
+      ).toBeNull();
     });
 
     it('remarcar troca o horário, esbarra em minuto ocupado e só zera a reserva devolvida', async () => {
@@ -597,7 +610,10 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
         session: { id: session.id, ...later, goingIds: [USER_A] },
       });
       expect(
-        await rescheduleSquadSession(db, OTHER_GUILD_ID, session.id, { ...later, resetReminder: false }),
+        await rescheduleSquadSession(db, OTHER_GUILD_ID, session.id, {
+          ...later,
+          resetReminder: false,
+        }),
       ).toEqual({ outcome: 'stale' });
 
       // O minuto antigo ficou livre e outra jogatina o ocupou: voltar para ele esbarra no índice.
@@ -797,7 +813,9 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       // Com a mensagem no ar, a trava não se desfaz.
       expect(await releaseSessionCall(db, GUILD_ID, session.id)).toBeNull();
       expect(
-        (await listOpenSessionCalls(db, GUILD_ID, { squadId: session.squadId })).map((row) => row.id),
+        (await listOpenSessionCalls(db, GUILD_ID, { squadId: session.squadId })).map(
+          (row) => row.id,
+        ),
       ).toEqual([session.id]);
 
       expect(await closeSessionCall(db, GUILD_ID, session.id, '400000000000000099')).toBeNull();
@@ -880,7 +898,7 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect(await openSessionAttendance(db, input)).toBe(true);
       expect(await openSessionAttendance(db, input)).toBe(false);
       await openSessionAttendance(db, { ...input, joinedAt: later });
-      await openSessionAttendance(db, { ...input, userId: USER_C });
+      await openSessionAttendance(db, { ...input, userId: USER_C, asGuest: true });
 
       const leftAt = new Date(joinedAt.getTime() + 60_000);
       expect(await closeSessionAttendance(db, OTHER_GUILD_ID, USER_B, leftAt)).toBe(0);
@@ -889,9 +907,9 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
 
       const rows = await listSessionAttendance(db, GUILD_ID, [session.id]);
       expect(rows.sort((a, b) => (a.userId < b.userId ? -1 : 1))).toEqual([
-        { sessionId: session.id, userId: USER_B, joinedAt, leftAt },
-        { sessionId: session.id, userId: USER_B, joinedAt: later, leftAt },
-        { sessionId: session.id, userId: USER_C, joinedAt, leftAt: null },
+        { sessionId: session.id, userId: USER_B, joinedAt, leftAt, asGuest: false },
+        { sessionId: session.id, userId: USER_B, joinedAt: later, leftAt, asGuest: false },
+        { sessionId: session.id, userId: USER_C, joinedAt, leftAt: null, asGuest: true },
       ]);
       expect(await listSessionAttendance(db, GUILD_ID, [])).toEqual([]);
       expect(await listSessionAttendance(db, OTHER_GUILD_ID, [session.id])).toEqual([]);
@@ -930,18 +948,106 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
         (await listOpenAttendance(db, GUILD_ID)).some((row) => row.sessionId === session.id),
       ).toBe(false);
     });
+
+    it('convidado: um por pessoa, respeita o teto e só entra em jogatina viva', async () => {
+      const session = await newSession('Convidados');
+      const now = new Date();
+      const input = {
+        guildId: GUILD_ID,
+        sessionId: session.id,
+        invitedBy: USER_A,
+        max: 2,
+        now,
+      };
+      const added = await addSessionGuest(db, { ...input, userId: USER_B });
+      expect(added).toMatchObject({
+        outcome: 'added',
+        guest: { sessionId: session.id, userId: USER_B, invitedBy: USER_A, threadId: null },
+      });
+      expect(await addSessionGuest(db, { ...input, userId: USER_B })).toEqual({
+        outcome: 'exists',
+      });
+      expect(await addSessionGuest(db, { ...input, userId: USER_C })).toMatchObject({
+        outcome: 'added',
+      });
+      expect(await addSessionGuest(db, { ...input, userId: USER_D })).toEqual({ outcome: 'full' });
+      // O teto vale sob a trava: dois pedidos juntos não passam os dois.
+      const other = await newSession('Convidados juntos');
+      const race = await Promise.all(
+        [USER_B, USER_C, USER_D].map((userId) =>
+          addSessionGuest(db, { ...input, sessionId: other.id, userId, max: 1 }),
+        ),
+      );
+      expect(race.filter((result) => result.outcome === 'added')).toHaveLength(1);
+
+      expect(await setSessionGuestThread(db, GUILD_ID, session.id, USER_B, '5100')).toMatchObject({
+        threadId: '5100',
+      });
+      expect(
+        await setSessionGuestThread(db, OTHER_GUILD_ID, session.id, USER_B, '5101'),
+      ).toBeNull();
+      expect(
+        (await listSessionGuests(db, GUILD_ID, [session.id])).map((guest) => guest.userId),
+      ).toEqual([USER_B, USER_C]);
+      expect(await listSessionGuests(db, GUILD_ID, [])).toEqual([]);
+      expect(await listSessionGuests(db, OTHER_GUILD_ID, [session.id])).toEqual([]);
+
+      expect(await removeSessionGuest(db, OTHER_GUILD_ID, session.id, USER_C)).toBe(false);
+      expect(await removeSessionGuest(db, GUILD_ID, session.id, USER_C)).toBe(true);
+      expect(await removeSessionGuest(db, GUILD_ID, session.id, USER_C)).toBe(false);
+
+      const cancelled = await newSession('Convidado cancelada');
+      await cancelSquadSession(db, GUILD_ID, cancelled.id, USER_A, now);
+      expect(
+        await addSessionGuest(db, { ...input, sessionId: cancelled.id, userId: USER_B }),
+      ).toEqual({ outcome: 'closed' });
+      const ended = { ...input, sessionId: session.id, userId: USER_E };
+      expect(await addSessionGuest(db, { ...ended, now: session.endsAt })).toEqual({
+        outcome: 'closed',
+      });
+      expect(
+        await addSessionGuest(db, { ...input, guildId: OTHER_GUILD_ID, userId: USER_E }),
+      ).toEqual({ outcome: 'closed' });
+
+      // Começou e o voice esvaziou: a reserva liberada depois do início encerra.
+      const emptied = await newSession('Convidado esvaziou');
+      await reserveSessionVoice(db, GUILD_ID, emptied.id, {
+        voiceChannelId: '300000000000000098',
+        overwrites: [],
+        at: now,
+      });
+      await markSessionStarted(db, GUILD_ID, emptied.id, now);
+      const live = { ...input, sessionId: emptied.id, userId: USER_B };
+      expect(await addSessionGuest(db, live)).toMatchObject({ outcome: 'added' });
+      await releaseSessionVoice(db, GUILD_ID, emptied.id, new Date(now.getTime() + 1_000));
+      expect(await addSessionGuest(db, { ...live, userId: USER_C })).toEqual({ outcome: 'closed' });
+    });
   });
 
   describe('squads e membros', () => {
     it('o guia só é gravado sobre o valor esperado', async () => {
       const squad = await newSquad('Guia');
-      expect((await setSquadGuideMessage(db, GUILD_ID, squad.id, '300000000000000010', null))?.guideMessageId).toBe('300000000000000010');
-      expect(await setSquadGuideMessage(db, GUILD_ID, squad.id, '300000000000000011', null)).toBeNull();
       expect(
-        (await setSquadGuideMessage(db, GUILD_ID, squad.id, '300000000000000011', '300000000000000010'))
+        (await setSquadGuideMessage(db, GUILD_ID, squad.id, '300000000000000010', null))
           ?.guideMessageId,
+      ).toBe('300000000000000010');
+      expect(
+        await setSquadGuideMessage(db, GUILD_ID, squad.id, '300000000000000011', null),
+      ).toBeNull();
+      expect(
+        (
+          await setSquadGuideMessage(
+            db,
+            GUILD_ID,
+            squad.id,
+            '300000000000000011',
+            '300000000000000010',
+          )
+        )?.guideMessageId,
       ).toBe('300000000000000011');
-      expect(await setSquadGuideMessage(db, OTHER_GUILD_ID, squad.id, null, '300000000000000011')).toBeNull();
+      expect(
+        await setSquadGuideMessage(db, OTHER_GUILD_ID, squad.id, null, '300000000000000011'),
+      ).toBeNull();
     });
 
     it('syncSquadStatusesToGroupSize reabre ou fecha a vaga pelo tamanho novo, só no jogo', async () => {

@@ -49,5 +49,6 @@ export type NewSquadProposal = InferInsertModel<typeof s.squadProposals>;
 export type SquadJoinRequest = InferSelectModel<typeof s.squadJoinRequests>;
 export type SquadSession = InferSelectModel<typeof s.squadSessions>;
 export type SquadSessionAttendance = InferSelectModel<typeof s.squadSessionAttendance>;
+export type SquadSessionGuest = InferSelectModel<typeof s.squadSessionGuests>;
 export type AuditLog = InferSelectModel<typeof s.auditLogs>;
 export type NewAuditLog = InferInsertModel<typeof s.auditLogs>;

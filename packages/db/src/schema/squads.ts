@@ -334,9 +334,42 @@ export const squadSessionAttendance = pgTable(
     userId: snowflake('user_id').notNull(),
     joinedAt: timestamptz('joined_at').notNull(),
     leftAt: timestamptz('left_at'),
+    /**
+     * Presença de convidado avulso (`squad_session_guests`): conta no tempo e
+     * nas formações, mas não marca `played_at`, não é sinal de vida do squad
+     * e fica fora do histórico. Decidido na entrada: quem entra no squad
+     * depois passa a contar como membro dali em diante.
+     */
+    asGuest: boolean('as_guest').notNull().default(false),
   },
   (t) => [
     primaryKey({ columns: [t.sessionId, t.userId, t.joinedAt] }),
     index('squad_session_attendance_guild_user_idx').on(t.guildId, t.userId),
+  ],
+);
+
+/**
+ * Convidado avulso de uma jogatina (TRAZER CONVIDADO): joga só aquela, sem
+ * entrar no squad. Ganha o voice reservado como um membro, e a liberação o
+ * devolve junto. O aviso vai numa thread privada do canal de busca com quem
+ * convidou, porque o convidado não vê o canal do squad.
+ */
+export const squadSessionGuests = pgTable(
+  'squad_session_guests',
+  {
+    guildId: guildRef(),
+    sessionId: bigint('session_id', { mode: 'number' })
+      .notNull()
+      .references(() => squadSessions.id, { onDelete: 'cascade' }),
+    userId: snowflake('user_id').notNull(),
+    /** O membro do squad que trouxe. */
+    invitedBy: snowflake('invited_by').notNull(),
+    /** A thread privada do aviso; `null` enquanto ela nasce. */
+    threadId: snowflake('thread_id'),
+    invitedAt: timestamptz('invited_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sessionId, t.userId] }),
+    index('squad_session_guests_guild_user_idx').on(t.guildId, t.userId),
   ],
 );

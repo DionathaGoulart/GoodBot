@@ -1,4 +1,5 @@
 import {
+  isSessionOver,
   joinRequestKey,
   pairKey,
   SQUAD_OPEN_REQUEST_STATUSES,
@@ -40,6 +41,7 @@ import {
   squadProposals,
   squads,
   squadSessionAttendance,
+  squadSessionGuests,
   squadSessions,
 } from '../schema/squads';
 
@@ -53,6 +55,7 @@ import type {
   SquadProfile,
   SquadProposal,
   SquadSession,
+  SquadSessionGuest,
 } from '../types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
@@ -1663,7 +1666,10 @@ export async function listOpenSessionCalls(
   guildId: string,
   options: { squadId?: string } = {},
 ): Promise<SquadSession[]> {
-  const filters: SQL[] = [eq(squadSessions.guildId, guildId), isNotNull(squadSessions.callMessageId)];
+  const filters: SQL[] = [
+    eq(squadSessions.guildId, guildId),
+    isNotNull(squadSessions.callMessageId),
+  ];
   if (options.squadId) filters.push(eq(squadSessions.squadId, options.squadId));
   return db
     .select()
@@ -2034,11 +2040,14 @@ export interface OpenAttendanceInput {
   sessionId: number;
   userId: string;
   joinedAt: Date;
+  /** Convidado avulso da jogatina, e não membro do squad. */
+  asGuest?: boolean;
 }
 
 /**
- * Alguém do squad entrou no voice reservado. Uma linha por entrada; o mesmo
- * instante duas vezes (evento repetido) não duplica.
+ * Alguém do squad (ou um convidado da jogatina) entrou no voice reservado.
+ * Uma linha por entrada; o mesmo instante duas vezes (evento repetido) não
+ * duplica.
  */
 export async function openSessionAttendance(
   db: DbExecutor,
@@ -2083,6 +2092,8 @@ export interface SessionAttendanceRow {
   joinedAt: Date;
   /** `null` = ainda no voice (ou saiu sem a varredura ter visto ainda). */
   leftAt: Date | null;
+  /** Presença de convidado avulso: fica fora do histórico e dos VOU. */
+  asGuest: boolean;
 }
 
 /**
@@ -2102,6 +2113,7 @@ export async function listSessionAttendance(
       userId: squadSessionAttendance.userId,
       joinedAt: squadSessionAttendance.joinedAt,
       leftAt: squadSessionAttendance.leftAt,
+      asGuest: squadSessionAttendance.asGuest,
     })
     .from(squadSessionAttendance)
     .where(
@@ -2167,4 +2179,145 @@ export async function closeAttendanceRow(
     )
     .returning({ sessionId: squadSessionAttendance.sessionId });
   return rows.length > 0;
+}
+
+// ── convidados ──────────────────────────────────────────────────────────────
+
+export interface AddSessionGuestInput {
+  guildId: string;
+  sessionId: number;
+  userId: string;
+  invitedBy: string;
+  /** `maxSessionGuests` do config: o teto confere sob a trava da jogatina. */
+  max: number;
+  now: Date;
+}
+
+export type AddSessionGuestResult =
+  | { outcome: 'added'; guest: SquadSessionGuest }
+  /** A pessoa já é convidada desta jogatina. */
+  | { outcome: 'exists' }
+  /** O teto de convidados já estava cheio. */
+  | { outcome: 'full' }
+  /** A jogatina não existe, foi cancelada ou acabou (`isSessionOver`). */
+  | { outcome: 'closed' };
+
+/**
+ * Grava um convidado avulso. A linha da jogatina fica travada (`for update`)
+ * enquanto o teto é conferido: dois TRAZER CONVIDADO ao mesmo tempo passariam
+ * os dois pelo teto se cada um contasse antes de o outro gravar.
+ */
+export async function addSessionGuest(
+  db: DbExecutor,
+  input: AddSessionGuestInput,
+): Promise<AddSessionGuestResult> {
+  return db.transaction(async (tx) => {
+    const [session] = await tx
+      .select({
+        endsAt: squadSessions.endsAt,
+        startedAt: squadSessions.startedAt,
+        cancelledAt: squadSessions.cancelledAt,
+        voiceReleasedAt: squadSessions.voiceReleasedAt,
+      })
+      .from(squadSessions)
+      .where(and(eq(squadSessions.guildId, input.guildId), eq(squadSessions.id, input.sessionId)))
+      .limit(1)
+      .for('update');
+    if (!session || session.cancelledAt || isSessionOver(session, input.now.getTime())) {
+      return { outcome: 'closed' };
+    }
+
+    const guests = await tx
+      .select({ userId: squadSessionGuests.userId })
+      .from(squadSessionGuests)
+      .where(
+        and(
+          eq(squadSessionGuests.guildId, input.guildId),
+          eq(squadSessionGuests.sessionId, input.sessionId),
+        ),
+      );
+    if (guests.some((guest) => guest.userId === input.userId)) return { outcome: 'exists' };
+    if (guests.length >= input.max) return { outcome: 'full' };
+
+    const [guest] = await tx
+      .insert(squadSessionGuests)
+      .values({
+        guildId: input.guildId,
+        sessionId: input.sessionId,
+        userId: input.userId,
+        invitedBy: input.invitedBy,
+        invitedAt: input.now,
+      })
+      .onConflictDoNothing()
+      .returning();
+    return guest ? { outcome: 'added', guest } : { outcome: 'exists' };
+  });
+}
+
+/** Grava a thread do aviso ao convidado. `null` quando ele não está mais lá. */
+export async function setSessionGuestThread(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+  userId: string,
+  threadId: string,
+): Promise<SquadSessionGuest | null> {
+  const [row] = await db
+    .update(squadSessionGuests)
+    .set({ threadId })
+    .where(
+      and(
+        eq(squadSessionGuests.guildId, guildId),
+        eq(squadSessionGuests.sessionId, sessionId),
+        eq(squadSessionGuests.userId, userId),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * Tira o convidado. Só desfaz um convite que não chegou ao Discord: tirar
+ * convidado de uma jogatina está fora do produto, e o acesso dele acaba na
+ * liberação da reserva. `true` quando havia linha.
+ */
+export async function removeSessionGuest(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+  userId: string,
+): Promise<boolean> {
+  const rows = await db
+    .delete(squadSessionGuests)
+    .where(
+      and(
+        eq(squadSessionGuests.guildId, guildId),
+        eq(squadSessionGuests.sessionId, sessionId),
+        eq(squadSessionGuests.userId, userId),
+      ),
+    )
+    .returning({ userId: squadSessionGuests.userId });
+  return rows.length > 0;
+}
+
+/**
+ * Os convidados das jogatinas pedidas, na ordem em que foram trazidos. Lista
+ * vazia de jogatinas não consulta nada.
+ */
+export async function listSessionGuests(
+  db: DbExecutor,
+  guildId: string,
+  sessionIds: readonly number[],
+): Promise<SquadSessionGuest[]> {
+  if (sessionIds.length === 0) return [];
+  return db
+    .select()
+    .from(squadSessionGuests)
+    .where(
+      and(
+        eq(squadSessionGuests.guildId, guildId),
+        inArray(squadSessionGuests.sessionId, [...sessionIds]),
+      ),
+    )
+    .orderBy(asc(squadSessionGuests.invitedAt), asc(squadSessionGuests.userId));
 }
