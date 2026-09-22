@@ -183,9 +183,10 @@ const isReserved = (session: SquadSession) =>
   session.voiceReservedAt !== null && session.voiceReleasedAt === null;
 
 export function sessionState(
-  session: Pick<SquadSession, 'cancelledAt' | 'startedAt'>,
+  session: Pick<SquadSession, 'cancelledAt' | 'startedAt' | 'reportedAt'>,
 ): SessionState {
   if (session.cancelledAt) return 'cancelled';
+  if (session.reportedAt) return 'ended';
   return session.startedAt ? 'started' : 'scheduled';
 }
 
@@ -1714,6 +1715,10 @@ export class SessionService {
         guestCount: guestIds.length,
         max: config.maxSessionGuests,
       }) === null;
+    const state = sessionState(session);
+    // Os números são lidos na hora, e não guardados: uma presença que fechou
+    // depois do relatório (alguém que ficou na sala) entra na próxima edição.
+    const report = state === 'ended' ? await this.ctx.parts.reports.load(guild.id, session) : null;
     return sessionMessage({
       session,
       squad,
@@ -1725,7 +1730,8 @@ export class SessionService {
       canCall,
       canBringGuest,
       callChannelId: session.callMessageId ? session.callChannelId : null,
-      state: sessionState(session),
+      state,
+      report,
       reminderMinutesBefore: config.reminderMinutesBefore,
       embedColor,
       mentionMembers: options.mentionMembers,

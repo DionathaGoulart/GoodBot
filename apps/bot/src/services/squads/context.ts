@@ -15,6 +15,7 @@ import type { MatcherService } from './matcher';
 import type { PlayerAdminService } from './players';
 import type { ProfileService } from './profiles';
 import type { ProposalService } from './proposals';
+import type { ReportService } from './reports';
 import type { JoinRequestService } from './requests';
 import type { SearchService } from './search';
 import type { SessionService } from './sessions';
@@ -48,6 +49,7 @@ export interface SquadParts {
   sessions: SessionService;
   calls: CallService;
   guests: GuestService;
+  reports: ReportService;
   history: HistoryService;
   guide: GuideService;
   search: SearchService;

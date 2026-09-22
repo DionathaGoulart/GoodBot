@@ -1,4 +1,4 @@
-import { HOUR_MS } from '@goodbot/shared';
+import { HOUR_MS, MINUTE_MS } from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -423,6 +423,109 @@ describe('histórico e chamada pública', () => {
     ).toEqual([['session']]);
     const none = sessionMessage({ ...view, guestIds: [] });
     expect(embedOf(none)?.fields?.some((field) => field.name === 'Convidados')).toBe(false);
+  });
+
+  it('a jogatina encerrada vira o relatório do que rolou, e o REPETIR fica', () => {
+    const [a, b, c, guest] = [
+      '300000000000000001',
+      '300000000000000002',
+      '300000000000000003',
+      '300000000000000009',
+    ];
+    const startsAt = new Date('2026-09-18T00:00:00Z');
+    const view: SessionView = {
+      session: {
+        id: 7,
+        startsAt,
+        endsAt: new Date('2026-09-18T03:00:00Z'),
+        goingIds: [a, b],
+        notGoingIds: [],
+        createdBy: a,
+        cancelledBy: null,
+        remindedAt: startsAt,
+      },
+      squad: { name: 'Os Bravos' },
+      memberIds: [a, b, c],
+      guestIds: [guest],
+      partySize: 4,
+      voiceChannelId: null,
+      voiceTemporary: false,
+      canCall: false,
+      canBringGuest: false,
+      callChannelId: null,
+      state: 'ended',
+      report: {
+        sessionId: 7,
+        outcome: 'measured',
+        firstJoinAt: startsAt,
+        lastLeaveAt: new Date('2026-09-18T02:30:00Z'),
+        durationMs: 2.5 * HOUR_MS,
+        open: false,
+        players: [
+          { userId: a, ms: 2.5 * HOUR_MS, status: 'attended' },
+          { userId: c, ms: HOUR_MS, status: 'walk_in' },
+          { userId: b, ms: 0, status: 'no_show' },
+        ],
+        guests: [{ userId: guest, ms: 40 * MINUTE_MS }],
+        formations: {
+          bySize: [
+            { size: 1, label: 'solo', party: 'partial', ms: 30 * MINUTE_MS },
+            { size: 3, label: 'trio', party: 'partial', ms: 60 * MINUTE_MS },
+            { size: 4, label: 'quarteto', party: 'full', ms: 100 * MINUTE_MS },
+          ],
+          groups: [],
+        },
+      },
+      reminderMinutesBefore: 30,
+      embedColor: 0,
+      mentionMembers: false,
+    };
+    const message = sessionMessage(view);
+    const embed = embedOf(message);
+    expect(embed?.title).toBe('> JOGATINA ENCERRADA');
+    expect(embed?.description).toContain('durou 2 h 30');
+    const fields = embed?.fields ?? [];
+    expect(fields.find((field) => field.name === 'Quem jogou')?.value).toBe(
+      `<@${a}> (2 h 30), <@${c}> (1 h)`,
+    );
+    expect(fields.find((field) => field.name === 'Convidados')?.value).toBe(`<@${guest}> (40 min)`);
+    expect(fields.find((field) => field.name === 'Formações')?.value).toBe(
+      '1 h 40 de quarteto (party cheia), 1 h de trio, 30 min solo',
+    );
+    expect(fields.find((field) => field.name === 'Faltaram')?.value).toBe(`<@${b}>`);
+    expect(fields.find((field) => field.name === 'Apareceram sem avisar')?.value).toBe(`<@${c}>`);
+    // Só o REPETIR: a chamada e o convidado já não valem numa jogatina que acabou.
+    expect(rowsOf(message)).toEqual([['session']]);
+    expect(message.allowedMentions).toEqual({ users: [] });
+    expect(JSON.stringify(embed)).not.toMatch(/[—–]/);
+
+    // Jogatina que rolou sem ninguém no voice: o VOU é tudo o que há.
+    const noRoom = embedOf(
+      sessionMessage({
+        ...view,
+        report: {
+          ...view.report!,
+          outcome: 'unmeasured',
+          durationMs: 0,
+          players: [
+            { userId: a, ms: 0, status: 'attended' },
+            { userId: b, ms: 0, status: 'attended' },
+          ],
+          guests: [],
+          formations: { bySize: [], groups: [] },
+        },
+      }),
+    );
+    expect(noRoom?.description).toContain('não dá para medir o tempo');
+    expect(noRoom?.fields?.map((field) => field.name)).toEqual(['Disseram que iam']);
+
+    // Não rolou: nada a listar, só a frase.
+    const empty = sessionMessage({
+      ...view,
+      report: { ...view.report!, outcome: 'not_played', durationMs: 0, players: [], guests: [] },
+    });
+    expect(embedOf(empty)?.description).toContain('não rolou');
+    expect(embedOf(empty)?.fields).toBeUndefined();
   });
 
   it('o convite do convidado diz quem chamou, quando e a sala, e chama só ele', () => {

@@ -2,7 +2,7 @@ import { DAY_MS, HOUR_MS, MINUTE_MS, WEEK_MS } from '@goodbot/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SquadsJob } from './squads';
-import { fakeTextChannel } from '../services/squads/__fixtures__/discord';
+import { embedOf, fakeTextChannel } from '../services/squads/__fixtures__/discord';
 import { A, B, createHarness, NOW } from '../services/squads/__fixtures__/harness';
 
 import type { ConfigService } from '../services/config';
@@ -152,6 +152,72 @@ describe('SquadsJob', () => {
     expect(await s.run()).toMatchObject({ swept: 1 });
     expect(store.attendance[0]?.leftAt).toEqual(new Date(s.clock.now));
     expect(await s.run()).toMatchObject({ swept: 0 });
+  });
+
+  it('a jogatina encerrada vira relatório uma vez só, com o tempo de quem jogou', async () => {
+    const s = jobScenario();
+    await s.schedule('hoje 12h');
+    s.clock.now = at('2026-09-14T14:40:00Z');
+    await s.run();
+
+    // A joga das 15h às 17h; B entra às 16h e fica até o fim.
+    s.clock.now = at('2026-09-14T15:00:00Z');
+    await s.run();
+    await s.service.confirmVoicePresence(s.discordGuild, s.voices[0]!.id, A);
+    s.clock.now = at('2026-09-14T16:00:00Z');
+    await s.service.confirmVoicePresence(s.discordGuild, s.voices[0]!.id, B);
+    s.clock.now = at('2026-09-14T17:00:00Z');
+    await s.service.recordVoiceLeave(s.discordGuild, A);
+    await s.service.recordVoiceLeave(s.discordGuild, B);
+
+    s.clock.now = at('2026-09-14T18:00:00Z');
+    expect(await s.run()).toMatchObject({ reported: 1 });
+    expect(store.sessions[0]?.reportedAt).toEqual(new Date(s.clock.now));
+    expect(await s.run()).toMatchObject({ reported: 0 });
+
+    const embed = embedOf(s.channel.sent[0]);
+    expect(embed?.title).toBe('> JOGATINA ENCERRADA');
+    expect(String(embed?.description)).toContain('durou 2 h');
+    const fields = embed?.fields ?? [];
+    expect(fields.find((field) => field.name === 'Quem jogou')?.value).toBe(
+      `<@${A}> (2 h), <@${B}> (1 h)`,
+    );
+    expect(fields.find((field) => field.name === 'Formações')?.value).toBe(
+      '1 h de dupla, 1 h solo',
+    );
+  });
+
+  it('o relatório espera quem ainda está na sala sair', async () => {
+    const s = jobScenario();
+    await s.schedule('hoje 12h');
+    s.clock.now = at('2026-09-14T14:40:00Z');
+    await s.run();
+    s.clock.now = at('2026-09-14T15:00:00Z');
+    await s.run();
+    // A entra e continua no voice depois do fim previsto.
+    s.guild.putInVoice(A, s.voices[0]!.id);
+    await s.service.confirmVoicePresence(s.discordGuild, s.voices[0]!.id, A);
+
+    s.clock.now = at('2026-09-14T18:00:00Z');
+    expect(await s.run()).toMatchObject({ reported: 0 });
+
+    s.guild.voiceStates.cache.delete(A);
+    s.clock.now = at('2026-09-14T18:05:00Z');
+    expect(await s.run()).toMatchObject({ swept: 1, reported: 1 });
+  });
+
+  it('jogatina que ninguém foi é relatada como não rolou', async () => {
+    const s = jobScenario();
+    await s.schedule('hoje 12h');
+    s.clock.now = at('2026-09-14T15:00:00Z');
+    await s.run();
+
+    s.clock.now = at('2026-09-14T18:00:00Z');
+    expect(await s.run()).toMatchObject({ reported: 1 });
+
+    const embed = embedOf(s.channel.sent[0]);
+    expect(String(embed?.description)).toContain('não rolou');
+    expect(embed?.fields).toBeUndefined();
   });
 
   it('jogatina cancelada não é lembrada nem começa', async () => {

@@ -38,6 +38,8 @@ export interface SquadsPass {
   released: number;
   /** Chamadas públicas tiradas do ar por a jogatina ter acabado. */
   calls: number;
+  /** Jogatinas encerradas cuja mensagem virou relatório nesta passada. */
+  reported: number;
   /** Presenças abertas e fechadas pela varredura (o que o evento de voz não viu). */
   swept: number;
   /** Criações de voice temporário que não terminaram, resolvidas nesta passada. */
@@ -111,6 +113,7 @@ export class SquadsJob {
       started: 0,
       released: 0,
       calls: 0,
+      reported: 0,
       swept: 0,
       reconciled: 0,
       daily: false,
@@ -145,6 +148,10 @@ export class SquadsJob {
     await this.step(guild, 'varrer presença', async () => {
       const swept = await squads.sweepPresence(guild);
       pass.swept = swept.opened + swept.closed;
+    });
+    // Depois da varredura: o relatório espera a presença de quem saiu fechar.
+    await this.step(guild, 'relatar jogatinas encerradas', async () => {
+      pass.reported = await squads.reportFinishedSessions(guild);
     });
     await this.step(guild, 'reconciliar voices temporários', async () => {
       pass.reconciled = await squads.reconcileTemporaryVoices(guild);

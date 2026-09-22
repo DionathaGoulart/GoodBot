@@ -35,6 +35,8 @@ import type {
   SquadSession,
 } from '@goodbot/db';
 import type {
+  FormationSummary,
+  SessionSummary,
   SquadAnswers,
   SquadBlockConfig,
   SquadCell,
@@ -796,11 +798,12 @@ export function invitePickMessage(squad: Pick<Squad, 'id' | 'name'>): BaseMessag
 // ── jogatina ────────────────────────────────────────────────────────────────
 
 /**
- * Em que pé a jogatina está. `started` vale depois do início e fica assim: a
+ * Em que pé a jogatina está. `started` vale do início até o relatório sair: a
  * mensagem diz "começou há X" com timestamp relativo, que o Discord atualiza
- * sozinho, e oferece REPETIR.
+ * sozinho, e oferece REPETIR. `ended` é a mesma mensagem depois do relatório
+ * (`reported_at`): ela vira o registro do que rolou, e REPETIR continua.
  */
-export type SessionState = 'scheduled' | 'started' | 'cancelled';
+export type SessionState = 'scheduled' | 'started' | 'cancelled' | 'ended';
 
 export interface SessionView {
   session: Pick<
@@ -838,6 +841,8 @@ export interface SessionView {
   /** Onde a chamada pública desta jogatina está no ar; `null` = nenhuma no ar. */
   callChannelId: string | null;
   state: SessionState;
+  /** Os números do que rolou; só no estado `ended`, e é o que a mensagem vira. */
+  report?: SessionSummary | null;
   /** Antecedência da reserva, para dizer quando a sala sai. */
   reminderMinutesBefore: number;
   embedColor: number;
@@ -881,6 +886,8 @@ function sessionDescription(view: SessionView): string {
     }
     case 'started':
       return `A jogatina do **${squad.name}** começou ${timestamp(session.startsAt, 'R')}. Querem de novo na mesma hora da semana que vem? Aperte **REPETIR**.`;
+    case 'ended':
+      return reportText(view);
     case 'cancelled':
       return session.cancelledBy
         ? `A jogatina de ${timestamp(session.startsAt, 'F')} foi cancelada por ${mention(session.cancelledBy)}.`
@@ -892,13 +899,93 @@ const SESSION_TITLE: Record<SessionState, string> = {
   scheduled: 'Jogatina marcada',
   started: 'Jogatina começou',
   cancelled: 'Jogatina cancelada',
+  ended: 'Jogatina encerrada',
 };
+
+/** "@a (2 h), @b (40 min)", do que mais jogou; vazio vira o travessão do `mentionList`. */
+function playtimeList(players: readonly { userId: string; ms: number }[]): string {
+  return players.length === 0
+    ? mentionList([])
+    : players.map((player) => `${mention(player.userId)} (${formatPlaytime(player.ms)})`).join(', ');
+}
+
+/**
+ * "1 h 40 de quarteto, 30 min de trio, 10 min solo", do trecho mais longo. A
+ * party cheia é dita porque é o que o squad persegue; acima dela, o rótulo já
+ * avisa que se dividiram.
+ */
+export function formationsText(formations: FormationSummary): string {
+  return formations.bySize
+    .filter((size) => size.ms > 0)
+    // Empate no tempo: o grupo maior primeiro, que é o que o squad persegue.
+    .sort((a, b) => b.ms - a.ms || b.size - a.size)
+    .map((size) => {
+      const time = formatPlaytime(size.ms);
+      const label = size.size === 1 ? size.label : `de ${size.label}`;
+      const party =
+        size.party === 'full'
+          ? ' (party cheia)'
+          : size.party === 'over'
+            ? ' (mais que uma party)'
+            : '';
+      return `${time} ${label}${party}`;
+    })
+    .join(', ');
+}
+
+/** O que a mensagem da jogatina encerrada mostra: duração, quem jogou e as formações. */
+function reportFields(report: SessionSummary): APIEmbedField[] {
+  if (report.outcome === 'not_played') return [];
+  const fields: APIEmbedField[] = [];
+  const played = report.players.filter((player) => player.status !== 'no_show');
+  if (report.outcome === 'unmeasured') {
+    fields.push({ name: 'Disseram que iam', value: mentionList(played.map((p) => p.userId)) });
+  } else {
+    fields.push({ name: 'Quem jogou', value: playtimeList(played) });
+  }
+  if (report.guests.length > 0) {
+    fields.push({ name: 'Convidados', value: playtimeList(report.guests) });
+  }
+  const formations = formationsText(report.formations);
+  if (formations) fields.push({ name: 'Formações', value: formations });
+
+  const missed = report.players.filter((player) => player.status === 'no_show');
+  if (missed.length > 0) {
+    fields.push({ name: 'Faltaram', value: mentionList(missed.map((p) => p.userId)), inline: true });
+  }
+  const walkIns = report.players.filter((player) => player.status === 'walk_in');
+  if (walkIns.length > 0) {
+    fields.push({
+      name: 'Apareceram sem avisar',
+      value: mentionList(walkIns.map((p) => p.userId)),
+      inline: true,
+    });
+  }
+  return fields;
+}
+
+/** A frase do relatório: quanto durou, ou por que não há número. */
+function reportText(view: SessionView): string {
+  const when = timestamp(view.session.startsAt, 'F');
+  const squad = `A jogatina do **${view.squad.name}** de ${when}`;
+  const again = ' Querem de novo na mesma hora da semana que vem? Aperte **REPETIR**.';
+  switch (view.report?.outcome) {
+    case 'measured':
+      return `${squad} durou ${formatPlaytime(view.report.durationMs)}.${again}`;
+    case 'unmeasured':
+      return `${squad} rolou, mas sem ninguém no voice reservado: não dá para medir o tempo.${again}`;
+    default:
+      return `${squad} não rolou: ninguém apareceu.${again}`;
+  }
+}
 
 /** A mensagem de uma jogatina no canal do squad, com a contagem viva dos votos. */
 export function sessionMessage(view: SessionView): BaseMessageOptions {
   const { session } = view;
   const fields: APIEmbedField[] = [];
-  if (view.state !== 'cancelled') {
+  if (view.state === 'ended') {
+    fields.push(...(view.report ? reportFields(view.report) : []));
+  } else if (view.state !== 'cancelled') {
     const answered = new Set([...session.goingIds, ...session.notGoingIds]);
     fields.push(
       { name: 'Sala', value: roomText(view) },
@@ -968,6 +1055,10 @@ export function sessionMessage(view: SessionView): BaseMessageOptions {
       .setLabel('CANCELAR')
       .setStyle(ButtonStyle.Danger),
   ];
+  const repeat = new ButtonBuilder()
+    .setCustomId(sessionButtonId('repeat', session.id))
+    .setLabel('REPETIR')
+    .setStyle(ButtonStyle.Primary);
   const components =
     view.state === 'scheduled'
       ? [
@@ -975,15 +1066,11 @@ export function sessionMessage(view: SessionView): BaseMessageOptions {
           new ActionRowBuilder<ButtonBuilder>().addComponents(manage),
         ]
       : view.state === 'started'
-        ? buttons(
-            new ButtonBuilder()
-              .setCustomId(sessionButtonId('repeat', session.id))
-              .setLabel('REPETIR')
-              .setStyle(ButtonStyle.Primary),
-            ...call,
-            ...guest,
-          )
-        : [];
+        ? buttons(repeat, ...call, ...guest)
+        : // Encerrada: a chamada e o convidado já não valem, o REPETIR sim.
+          view.state === 'ended'
+          ? buttons(repeat)
+          : [];
 
   const mentioned = view.mentionMembers ? [...view.memberIds] : [];
   return {

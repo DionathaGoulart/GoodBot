@@ -10,6 +10,7 @@ import { MatcherService } from './matcher';
 import { PlayerAdminService } from './players';
 import { ProfileService } from './profiles';
 import { ProposalService } from './proposals';
+import { ReportService } from './reports';
 import { JoinRequestService } from './requests';
 import { SearchService } from './search';
 import { SessionService } from './sessions';
@@ -117,6 +118,7 @@ export class SquadService {
       sessions: new SessionService(this.ctx),
       calls: new CallService(this.ctx),
       guests: new GuestService(this.ctx),
+      reports: new ReportService(this.ctx),
       history: new HistoryService(this.ctx),
       guide: new GuideService(this.ctx),
       search: new SearchService(this.ctx),
@@ -501,6 +503,11 @@ export class SquadService {
   /** Job: tira do ar a chamada pública das jogatinas que acabaram. */
   closeFinishedCalls(guild: Guild): Promise<number> {
     return this.ctx.parts.calls.closeFinished(guild);
+  }
+
+  /** Job: a mensagem das jogatinas que acabaram vira o relatório do que rolou. */
+  reportFinishedSessions(guild: Guild): Promise<number> {
+    return this.ctx.parts.reports.reportFinished(guild);
   }
 
   /** CHAMAR GENTE no guia: a próxima jogatina com lugar. */

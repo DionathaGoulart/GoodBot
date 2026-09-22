@@ -754,6 +754,7 @@ export const impl = {
       messageId: null,
       startedAt: null,
       playedAt: null,
+      reportedAt: null,
       cancelledAt: null,
       cancelledBy: null,
       calledAt: null,
@@ -1032,6 +1033,34 @@ export const impl = {
       .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
     return maybe(found[0]);
   },
+  async listSessionsToReport(
+    _db: unknown,
+    guildId: string,
+    options: { now: Date; since: Date },
+  ) {
+    return copy(
+      store.sessions
+        .filter(
+          (s) =>
+            s.guildId === guildId &&
+            s.startedAt !== null &&
+            s.reportedAt === null &&
+            s.cancelledAt === null &&
+            s.startsAt.getTime() >= options.since.getTime() &&
+            (s.endsAt.getTime() <= options.now.getTime() ||
+              (s.voiceReleasedAt !== null &&
+                s.voiceReleasedAt.getTime() >= s.startedAt.getTime())) &&
+            !store.attendance.some((a) => a.sessionId === s.id && a.leftAt === null),
+        )
+        .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()),
+    );
+  },
+  async markSessionReported(_db: unknown, guildId: string, sessionId: number, at: Date) {
+    const row = findSession(guildId, sessionId);
+    if (!row || row.reportedAt || row.cancelledAt) return null;
+    row.reportedAt = at;
+    return copy(row);
+  },
   // ── histórico
   async listPlayedSessions(
     _db: unknown,
@@ -1267,6 +1296,7 @@ function blankSession(input: Partial<SquadSession> & Pick<SquadSession, 'squadId
     voiceReservedAt: null,
     voiceReleasedAt: null,
     playedAt: null,
+    reportedAt: null,
     cancelledAt: null,
     cancelledBy: null,
     calledAt: null,
