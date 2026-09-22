@@ -130,6 +130,11 @@ export const SquadsConfigSchema = z.object({
   sessionHours: z.number().int().min(1).max(12).default(3),
   /** Jogatinas futuras que um squad pode ter marcadas ao mesmo tempo. */
   maxUpcomingSessions: z.number().int().min(1).max(10).default(5),
+  /**
+   * Convidados avulsos por jogatina (TRAZER CONVIDADO): jogam só aquela, sem
+   * entrar no squad. 0 desliga o botão.
+   */
+  maxSessionGuests: z.number().int().min(0).max(10).default(4),
   /** Semanas seguidas sem sinal de vida (jogatina, "vou", presença) até o squad ser questionado. */
   inactiveWeeks: z.number().int().min(1).max(52).default(4),
   /** Em quantos squads uma pessoa pode estar ao mesmo tempo. */

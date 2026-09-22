@@ -42,6 +42,7 @@ describe('SquadsConfigSchema', () => {
       reminderMinutesBefore: 30,
       sessionHours: 3,
       maxUpcomingSessions: 5,
+      maxSessionGuests: 4,
       inactiveWeeks: 4,
       maxSquadsPerUser: 1,
       channelNaming: 'squad-{name}',
@@ -133,6 +134,10 @@ describe('SquadsConfigSchema', () => {
     expect(SquadsConfigSchema.safeParse({ sessionHours: 13 }).success).toBe(false);
     expect(SquadsConfigSchema.safeParse({ maxUpcomingSessions: 0 }).success).toBe(false);
     expect(SquadsConfigSchema.safeParse({ maxUpcomingSessions: 11 }).success).toBe(false);
+    // 0 desliga o convidado avulso; mais de 10 não.
+    expect(SquadsConfigSchema.safeParse({ maxSessionGuests: 0 }).success).toBe(true);
+    expect(SquadsConfigSchema.safeParse({ maxSessionGuests: 11 }).success).toBe(false);
+    expect(SquadsConfigSchema.safeParse({ maxSessionGuests: 1.5 }).success).toBe(false);
     expect(SquadsConfigSchema.safeParse({ inactiveWeeks: 0 }).success).toBe(false);
     expect(SquadsConfigSchema.safeParse({ maxSquadsPerUser: 6 }).success).toBe(false);
   });
