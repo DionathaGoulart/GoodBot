@@ -1,6 +1,7 @@
 import { OverwriteType, PermissionFlagsBits } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 
+import { fakeOverwriteManager, overwritesOf } from './__fixtures__/discord';
 import {
   ABSENT_OVERWRITE_TYPE,
   archivedTextOverwrites,
@@ -10,9 +11,11 @@ import {
   SQUAD_BOT_TEXT_BITS,
   SQUAD_MEMBER_TEXT_BITS,
   SQUAD_VOICE_MEMBER_BITS,
+  SQUAD_VOICE_MEMBER_EDIT,
   squadTextOverwrites,
   voiceReservationAffectedIds,
   voiceReservationOverwrites,
+  voiceSnapshotEntry,
 } from './overwrites';
 
 import type { ExactOverwrite } from '../../lib/overwrites';
@@ -136,6 +139,39 @@ describe('reserva do voice', () => {
     // A liberação não recebe membros: B só volta ao normal porque o id está gravado.
     const restored = restoreVoiceOverwrites(reserved, stored, EVERYONE);
     expect(restored.some((overwrite) => overwrite.id === B)).toBe(false);
+  });
+
+  it('quem entra no squad com a reserva viva volta ao que tinha na liberação', async () => {
+    const C = '300000000000000003';
+    const D = '300000000000000004';
+    const withC: ExactOverwrite[] = [
+      ...before,
+      { id: C, type: OverwriteType.Member, allow: 0n, deny: PermissionFlagsBits.Stream },
+    ];
+    const affected = voiceReservationAffectedIds(targets);
+    let stored = encodeVoiceSnapshot(affected, snapshotOf(withC, affected));
+    const voice = {
+      permissionOverwrites: fakeOverwriteManager(voiceReservationOverwrites(withC, targets)),
+    };
+
+    // C tinha overwrite antes, D não: a entrada no snapshot vem antes da concessão.
+    for (const id of [C, D]) {
+      stored = [...stored, voiceSnapshotEntry(voice, id)];
+      await voice.permissionOverwrites.edit(id, SQUAD_VOICE_MEMBER_EDIT, {
+        type: OverwriteType.Member,
+      });
+    }
+
+    expect(stored.at(-1)).toEqual({ id: D, type: ABSENT_OVERWRITE_TYPE, allow: '0', deny: '0' });
+    const granted = overwritesOf(voice.permissionOverwrites);
+    expect(granted.find((overwrite) => overwrite.id === C)).toEqual({
+      id: C,
+      type: OverwriteType.Member,
+      allow: SQUAD_VOICE_MEMBER_BITS,
+      deny: PermissionFlagsBits.Stream,
+    });
+    expect(granted.find((overwrite) => overwrite.id === D)?.allow).toBe(SQUAD_VOICE_MEMBER_BITS);
+    expect(restoreVoiceOverwrites(granted, stored, EVERYONE)).toEqual(withC);
   });
 
   it('o snapshot grava marcador para quem não tinha overwrite', () => {

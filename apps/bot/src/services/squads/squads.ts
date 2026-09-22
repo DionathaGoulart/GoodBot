@@ -256,6 +256,8 @@ export class SquadLifecycleService {
     let current = (await getSquad(db, guildId, squadId)) ?? squad;
     const channel = await this.ctx.textChannel(guild, current);
     if (channel) await this.grantText(channel, userId, current.name);
+    // A sala já trancada para a jogatina só liberou quem era membro.
+    await this.ctx.parts.sessions.grantLiveVoice(guild, squadId, userId);
     await this.ctx.parts.profiles.markInSquad(guildId, userId, squad.gameId);
 
     const memberCount = Math.min(after.length, game.groupSize);

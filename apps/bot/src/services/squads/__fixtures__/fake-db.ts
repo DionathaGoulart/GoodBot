@@ -949,6 +949,19 @@ export const impl = {
     row.voiceReservedAt = input.at;
     return copy(row);
   },
+  async appendSessionVoiceSnapshot(
+    _db: unknown,
+    guildId: string,
+    sessionId: number,
+    entry: LockOverwrite,
+  ) {
+    const row = findSession(guildId, sessionId);
+    if (!row || !row.voiceReservedAt || row.voiceReleasedAt || !row.voiceOverwrites) return null;
+    if (!row.voiceOverwrites.some((overwrite) => overwrite.id === entry.id)) {
+      row.voiceOverwrites = [...row.voiceOverwrites, { ...entry }];
+    }
+    return copy(row);
+  },
   async setSessionTemporaryVoice(
     _db: unknown,
     guildId: string,

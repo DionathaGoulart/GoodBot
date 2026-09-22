@@ -4,7 +4,9 @@ import {
   allowOverwriteBits,
   denyOverwriteBits,
   restoreOverwrites,
+  snapshotOverwrites,
   type ExactOverwrite,
+  type OverwriteSource,
 } from '../../lib/overwrites';
 
 import type { LockOverwrite } from '@goodbot/db';
@@ -35,6 +37,13 @@ export const SQUAD_VOICE_LOCK_BITS = PermissionFlagsBits.Connect;
 /** O que a reserva garante a cada membro no voice. */
 export const SQUAD_VOICE_MEMBER_BITS =
   PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect | PermissionFlagsBits.Speak;
+
+/** `SQUAD_VOICE_MEMBER_BITS` para `permissionOverwrites.edit`, a quem entra com a reserva viva. */
+export const SQUAD_VOICE_MEMBER_EDIT = {
+  ViewChannel: true,
+  Connect: true,
+  Speak: true,
+} as const;
 
 /**
  * O bot entra na reserva como membro: com `Connect` negado a `@everyone`, ele
@@ -219,6 +228,16 @@ export function encodeVoiceSnapshot(
   return [...new Set(affectedIds)].map(
     (id) => saved.get(id) ?? { id, type: ABSENT_OVERWRITE_TYPE, allow: '0', deny: '0' },
   );
+}
+
+/**
+ * A entrada do snapshot de quem ganha o voice com a reserva já viva: o
+ * overwrite que a pessoa tem agora, ou o marcador de ausência. Vai para o
+ * banco antes da concessão, senão a liberação não saberia que o id é dela.
+ */
+export function voiceSnapshotEntry(channel: OverwriteSource, userId: string): LockOverwrite {
+  const [entry] = encodeVoiceSnapshot([userId], snapshotOverwrites(channel, [userId]));
+  return entry ?? { id: userId, type: ABSENT_OVERWRITE_TYPE, allow: '0', deny: '0' };
 }
 
 export function decodeVoiceSnapshot(stored: readonly LockOverwrite[]): {

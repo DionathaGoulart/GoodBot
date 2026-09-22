@@ -13,7 +13,7 @@ import {
   overwritesOf,
   snowflakeAt,
 } from './__fixtures__/discord';
-import { A, B, C, createHarness, NOW } from './__fixtures__/harness';
+import { A, B, C, createHarness, D, NOW } from './__fixtures__/harness';
 import { NO_RESERVED_VOICE_NOTE, TEMPORARY_VOICE_NOTE } from './embeds';
 import {
   SQUAD_VOICE_MEMBER_BITS,
@@ -400,6 +400,110 @@ describe('SquadService: voice temporário com o pool cheio', () => {
       (field) => field.name === 'Sala',
     );
     expect(room?.value).toBe(note);
+  });
+});
+
+describe('SquadService: quem entra no squad com a reserva viva', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const join = (s: ReturnType<typeof scenario>, userId: string) =>
+    s.parts.squads.addMember(s.discordGuild, s.squad.id, userId, { source: 'event', ping: true });
+  const overwriteOf = (voice: FakeVoice, id: string) =>
+    overwritesOf(voice.permissionOverwrites).find((overwrite) => overwrite.id === id);
+
+  it('ganha o voice do pool, e a liberação o devolve ao que era, mesmo saindo e voltando', async () => {
+    const s = scenario();
+    await s.voice.permissionOverwrites.edit(C, { Stream: false }, { type: OverwriteType.Member });
+    s.voice.permissionOverwrites.edit.mockClear();
+    const original = overwritesOf(s.voice.permissionOverwrites);
+    await s.service.reserveVoice(s.discordGuild, s.session);
+
+    await join(s, C);
+
+    expect(overwriteOf(s.voice, C)).toEqual({
+      id: C,
+      type: OverwriteType.Member,
+      allow: SQUAD_VOICE_MEMBER_BITS,
+      deny: PermissionFlagsBits.Stream,
+    });
+    // O snapshot vem antes da concessão: sem ele, a liberação não devolveria o id.
+    const [appendOrder] = repositories.appendSessionVoiceSnapshot.mock.invocationCallOrder;
+    const [grantOrder] = s.voice.permissionOverwrites.edit.mock.invocationCallOrder;
+    expect(appendOrder).toBeLessThan(grantOrder!);
+    expect(sessionRow().voiceOverwrites).toContainEqual({
+      id: C,
+      type: OverwriteType.Member,
+      allow: '0',
+      deny: PermissionFlagsBits.Stream.toString(),
+    });
+
+    // Sair e voltar com a mesma reserva não troca o que o snapshot guardou.
+    await s.parts.squads.removeMember(s.discordGuild, s.squad.id, C, null);
+    await join(s, C);
+    expect(sessionRow().voiceOverwrites?.filter((overwrite) => overwrite.id === C)).toHaveLength(1);
+
+    expect(await s.service.releaseVoice(s.discordGuild, sessionRow())).toBe(true);
+    expect(overwritesOf(s.voice.permissionOverwrites)).toEqual(original);
+  });
+
+  it('no voice temporário só concede: ele é apagado no fim e não tem snapshot', async () => {
+    const s = await withTemporaryVoice();
+
+    await join(s, C);
+
+    expect(overwriteOf(s.temporary, C)?.allow).toBe(SQUAD_VOICE_MEMBER_BITS);
+    expect(repositories.appendSessionVoiceSnapshot).not.toHaveBeenCalled();
+    expect(sessionRow().voiceOverwrites).toBeNull();
+  });
+
+  it('a reserva de outro squad no mesmo voice não concede', async () => {
+    const s = scenario();
+    fillPool(s);
+
+    await join(s, C);
+
+    expect(s.voice.permissionOverwrites.edit).not.toHaveBeenCalled();
+    expect(repositories.appendSessionVoiceSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('jogatina cancelada ou sala já devolvida não concede', async () => {
+    const s = scenario();
+    await s.service.reserveVoice(s.discordGuild, s.session);
+    // Cancelada com a liberação ainda pendente: a sala está voltando ao pool.
+    sessionRow().cancelledAt = new Date(NOW);
+    await join(s, C);
+    expect(overwriteOf(s.voice, C)).toBeUndefined();
+
+    sessionRow().cancelledAt = null;
+    await s.service.releaseVoice(s.discordGuild, sessionRow());
+    await join(s, D);
+    expect(overwriteOf(s.voice, D)).toBeUndefined();
+  });
+
+  it('liberada entre a leitura das reservas e o snapshot: não concede', async () => {
+    const s = scenario();
+    await s.service.reserveVoice(s.discordGuild, s.session);
+    repositories.appendSessionVoiceSnapshot.mockResolvedValueOnce(null);
+
+    await join(s, C);
+
+    expect(overwriteOf(s.voice, C)).toBeUndefined();
+  });
+
+  it('o Discord recusando a concessão não derruba a entrada no squad', async () => {
+    const s = scenario();
+    await s.service.reserveVoice(s.discordGuild, s.session);
+    s.voice.permissionOverwrites.edit.mockRejectedValueOnce(
+      discordError('Missing Permissions', 50013),
+    );
+
+    const { joined } = await join(s, C);
+
+    expect(joined).toBe(true);
+    expect(store.members.some((member) => member.userId === C)).toBe(true);
+    expect(overwriteOf(s.voice, C)).toBeUndefined();
   });
 });
 

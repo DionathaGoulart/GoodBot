@@ -1,4 +1,5 @@
 import {
+  appendSessionVoiceSnapshot,
   cancelSquadSession,
   clearSquadWarned,
   closeAttendanceRow,
@@ -44,7 +45,7 @@ import {
   UserFacingError,
   WEEK_MS,
 } from '@goodbot/shared';
-import { ChannelType } from 'discord.js';
+import { ChannelType, OverwriteType } from 'discord.js';
 
 import { currentOverwrites, snapshotOverwrites } from '../../lib/overwrites';
 import { isLockable } from '../locks';
@@ -63,10 +64,12 @@ import {
   encodeVoiceSnapshot,
   hasTemporaryVoiceSignature,
   restoreVoiceOverwrites,
+  SQUAD_VOICE_MEMBER_EDIT,
   SQUAD_VOICE_REQUIRED_BITS,
   temporaryVoiceOverwrites,
   voiceReservationAffectedIds,
   voiceReservationOverwrites,
+  voiceSnapshotEntry,
 } from './overwrites';
 
 import type { LockableChannel } from '../locks';
@@ -750,6 +753,65 @@ export class SessionService {
     } catch (error) {
       log.error({ err: error, guildId, sessionId: session.id }, 'falha na reserva do voice');
       return null;
+    }
+  }
+
+  /**
+   * Dá o voice das reservas vivas do squad a quem acabou de entrar nele. A
+   * reserva libera quem era membro quando saiu, e sem isto quem é aceito com a
+   * sala já trancada fica do lado de fora da jogatina do próprio squad.
+   *
+   * No voice do pool, o overwrite que a pessoa tinha entra no snapshot
+   * **antes** de mexer no canal: a liberação só restaura os ids do snapshot, e
+   * um overwrite concedido fora dele ficaria no voice para sempre. O voice
+   * temporário é apagado no fim e não tem snapshot: só concede. Jogatina
+   * cancelada fica de fora, porque a sala dela está voltando ao pool. Nunca
+   * lança; devolve em quantos voices concedeu.
+   */
+  async grantLiveVoice(guild: Guild, squadId: string, userId: string): Promise<number> {
+    let granted = 0;
+    try {
+      for (const session of await this.liveReservations(guild.id)) {
+        if (session.squadId !== squadId || session.cancelledAt || !session.voiceChannelId) continue;
+        if (await this.grantVoice(guild, session, session.voiceChannelId, userId)) granted++;
+      }
+    } catch (error) {
+      log.warn(
+        { err: error, guildId: guild.id, squadId, userId },
+        'falha ao dar o voice da jogatina a quem entrou no squad',
+      );
+    }
+    return granted;
+  }
+
+  private async grantVoice(
+    guild: Guild,
+    session: SquadSession,
+    voiceId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const voice = guild.channels.cache.get(voiceId);
+    if (voice?.type !== ChannelType.GuildVoice) return false;
+    const channel = voice as VoiceChannel;
+    if (!session.voiceTemporary) {
+      const entry = voiceSnapshotEntry(channel, userId);
+      // Liberada no meio do caminho: a sala voltou ao pool e não é mais do squad.
+      if (!(await appendSessionVoiceSnapshot(this.ctx.db, guild.id, session.id, entry))) {
+        return false;
+      }
+    }
+    try {
+      await channel.permissionOverwrites.edit(userId, SQUAD_VOICE_MEMBER_EDIT, {
+        type: OverwriteType.Member,
+        reason: 'Entrou no squad com a jogatina de sala reservada',
+      });
+      return true;
+    } catch (error) {
+      log.warn(
+        { err: error, guildId: guild.id, sessionId: session.id, voiceChannelId: voiceId, userId },
+        'não foi possível dar o voice da jogatina a quem entrou no squad',
+      );
+      return false;
     }
   }
 
