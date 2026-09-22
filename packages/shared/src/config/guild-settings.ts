@@ -32,6 +32,11 @@ export const GuildSettingsSchema = z.object({
   adminRoleIds: SnowflakeListSchema,
   dashboardAccessRoleIds: SnowflakeListSchema,
   logChannelId: NullableSnowflakeSchema,
+  /**
+   * Onde o bot avisa sobre si mesmo (manutenção, broadcast, fim da demo).
+   * `null` = canal de sistema do Discord, o mesmo destino de antes do campo.
+   */
+  noticeChannelId: NullableSnowflakeSchema,
   /** `null` = herdar o `dmOnPunish` do módulo de moderação. */
   dmOnPunish: DmOnPunishSchema.nullable().default(null),
 });

@@ -216,6 +216,7 @@ describe('GuildSettingsSchema', () => {
       adminRoleIds: [],
       dashboardAccessRoleIds: [],
       logChannelId: null,
+      noticeChannelId: null,
       dmOnPunish: null,
     });
   });

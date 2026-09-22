@@ -187,6 +187,7 @@ export type GuildSettingsInput = Pick<
   | 'adminRoleIds'
   | 'dashboardAccessRoleIds'
   | 'logChannelId'
+  | 'noticeChannelId'
   | 'dmOnPunish'
 >;
 

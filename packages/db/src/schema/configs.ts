@@ -19,6 +19,12 @@ export const guildSettings = pgTable('guild_settings', {
   dashboardAccessRoleIds: snowflakeArray('dashboard_access_role_ids'),
   /** Canal de logs geral; tipos sem canal próprio herdam dele. */
   logChannelId: snowflake('log_channel_id'),
+  /**
+   * Onde o bot fala com o servidor sobre si mesmo: manutenção de deploy,
+   * broadcast do dono e fim da demonstração. Vazio cai no canal de sistema do
+   * Discord, que é onde essas mensagens iam parar antes desta coluna.
+   */
+  noticeChannelId: snowflake('notice_channel_id'),
   dmOnPunish: jsonb('dm_on_punish').$type<DmOnPunish>(),
   /**
    * Espelho da bio do bot **nesta** guild (PRD §6.6). O Discord aceita

@@ -1,0 +1,1 @@
+ALTER TABLE "guild_settings" ADD COLUMN "notice_channel_id" text;
