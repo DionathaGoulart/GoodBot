@@ -149,12 +149,16 @@ describe('GET /guilds/:id/squads/overview', () => {
     const [summary] = SquadOverviewSchema.parse(await res.json()).squads;
     expect(summary?.history).toEqual({
       playedLast30d: 1,
+      // Jogatina sem ninguém no voice reservado: o "vou" conta como presença,
+      // e não há tempo a medir.
+      msLast30d: 0,
+      attendanceRate: 1,
       playedTotal: 1,
       lastPlayedAt: startsAt.toISOString(),
       usualCells: [{ day: 6, block: 2, count: 1 }],
       regulars: [
-        { userId: A, count: 1 },
-        { userId: B, count: 1 },
+        { userId: A, count: 1, ms: 0 },
+        { userId: B, count: 1, ms: 0 },
       ],
     });
   });

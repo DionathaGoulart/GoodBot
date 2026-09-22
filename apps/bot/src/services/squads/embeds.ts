@@ -1,4 +1,4 @@
-import { countCells, tallyJoinVote } from '@goodbot/shared';
+import { countCells, formatPlaytime, tallyJoinVote } from '@goodbot/shared';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, UserSelectMenuBuilder } from 'discord.js';
 
 import {
@@ -207,18 +207,29 @@ export interface GuideView {
 export interface GuideHistory {
   /** `formatHistory`. */
   text: string;
-  /** Os mais presentes, do mais presente; vazio = ninguém ainda. */
-  regularIds: readonly string[];
+  /**
+   * Os mais presentes, do mais presente, com as horas de cada um; vazio =
+   * ninguém ainda.
+   */
+  regulars: readonly { userId: string; ms: number }[];
 }
 
 /** Quantos frequentes o guia cita. */
 export const GUIDE_REGULARS_LISTED = 3;
 
 function historyText(history: GuideHistory): string {
-  const regulars = history.regularIds.slice(0, GUIDE_REGULARS_LISTED);
-  return regulars.length > 0
-    ? `${history.text}\nQuem mais aparece: ${mentionList(regulars)}.`
-    : history.text;
+  const regulars = history.regulars.slice(0, GUIDE_REGULARS_LISTED);
+  if (regulars.length === 0) return history.text;
+  // Sem presença medida (jogatina sem sala) não há hora a citar, e um "0 min"
+  // ao lado do nome diria o contrário do que aconteceu.
+  const who = regulars
+    .map((regular) =>
+      regular.ms > 0
+        ? `${mention(regular.userId)} (${formatPlaytime(regular.ms)})`
+        : mention(regular.userId),
+    )
+    .join(', ');
+  return `${history.text}\nQuem mais aparece: ${who}.`;
 }
 
 function upcomingText(upcoming: GuideView['upcoming']): string {

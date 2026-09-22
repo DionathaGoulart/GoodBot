@@ -1,3 +1,4 @@
+import { HOUR_MS } from '@goodbot/shared';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -156,7 +157,7 @@ describe('party', () => {
           memberIds: ['300000000000000001', '300000000000000002'],
           upcoming: [],
           canJoinAnother: false,
-          history: { text: 'Ainda não jogaram.', regularIds: [] },
+          history: { text: 'Ainda não jogaram.', regulars: [] },
           embedColor: 0,
           mentionMembers: false,
         }),
@@ -194,7 +195,13 @@ describe('histórico e chamada pública', () => {
       memberIds: ['300000000000000001', '300000000000000002'],
       upcoming: [],
       canJoinAnother: true,
-      history: { text: HISTORY, regularIds: ['300000000000000002', '300000000000000001'] },
+      history: {
+        text: HISTORY,
+        regulars: [
+          { userId: '300000000000000002', ms: 2 * HOUR_MS },
+          { userId: '300000000000000001', ms: 0 },
+        ],
+      },
       embedColor: 0,
       mentionMembers: false,
       ...overrides,
@@ -204,12 +211,12 @@ describe('histórico e chamada pública', () => {
     const embed = embedOf(guide());
     const history = embed?.fields?.find((field) => field.name === 'Histórico');
     expect(history?.value).toBe(
-      `${HISTORY}\nQuem mais aparece: <@300000000000000002>, <@300000000000000001>.`,
+      `${HISTORY}\nQuem mais aparece: <@300000000000000002> (2 h), <@300000000000000001>.`,
     );
     expect(embed?.fields?.find((field) => field.name === 'Como usar')?.value).toContain(
       '**CHAMAR GENTE**',
     );
-    const quiet = embedOf(guide({ history: { text: 'Ainda não jogaram.', regularIds: [] } }));
+    const quiet = embedOf(guide({ history: { text: 'Ainda não jogaram.', regulars: [] } }));
     expect(quiet?.fields?.find((field) => field.name === 'Histórico')?.value).toBe(
       'Ainda não jogaram.',
     );

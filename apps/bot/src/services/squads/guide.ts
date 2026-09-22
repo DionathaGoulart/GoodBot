@@ -57,9 +57,9 @@ export class GuideService {
       // Só quem ainda é do squad: citar quem saiu no guia de quem ficou confunde.
       history: {
         text: history.text,
-        regularIds: history.summary.regulars
-          .map((regular) => regular.userId)
-          .filter((userId) => memberIds.includes(userId)),
+        regulars: history.summary.regulars.filter((regular) =>
+          memberIds.includes(regular.userId),
+        ),
       },
       embedColor,
       mentionMembers: options.mentionMembers,

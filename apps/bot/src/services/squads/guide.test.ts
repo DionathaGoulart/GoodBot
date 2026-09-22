@@ -79,14 +79,16 @@ describe('GuideService', () => {
       sessionId: friday.id,
       userId: A,
       joinedAt: new Date('2026-09-12T00:05:00Z'),
-      leftAt: null,
+      leftAt: new Date('2026-09-12T02:05:00Z'),
       asGuest: false,
     });
 
     await s.parts.guide.publish(s.discordGuild, s.squad.id, { mentionMembers: false });
 
+    // A sexta durou 2 h medidas; o sábado rolou sem ninguém no voice e não
+    // soma hora nenhuma, mas o "vou" de lá conta como presença cumprida.
     expect(fieldOf(s.channel.sent[0], 'Histórico')).toBe(
-      `2 jogatinas no último mês. Última há 2 dias.\nQuem mais aparece: <@${A}>.`,
+      `2 jogatinas e 2 h no último mês, 75% de presença. Última há 2 dias.\nQuem mais aparece: <@${A}> (2 h).`,
     );
   });
 
