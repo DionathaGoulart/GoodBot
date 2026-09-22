@@ -9,6 +9,60 @@ some ou muda de forma).
 
 ## [Não lançado]
 
+## [1.1.0] - 2026-09-22
+
+Jogatinas monitoradas. A presença no voice reservado deixou de servir só para
+contar jogatinas: ela passou a medir tempo, e desse tempo saem os números do
+squad. A jogatina ganhou remarcação, convidado avulso e chamada pública que
+não morre no início.
+
+### Adicionado
+
+- **Números do squad**: horas por pessoa, por tamanho de grupo (solo, dupla,
+  trio, party cheia) e por grupo exato, com quem cada um mais joga, e por
+  jogatina quem foi, quem faltou e quem apareceu sem avisar. A fonte é só o
+  voice das jogatinas marcadas.
+- **Relatório de fim de jogatina**: a mensagem da jogatina vira o registro do
+  que rolou (duração, quem jogou e por quanto tempo, convidados, formações,
+  faltas). É uma edição da mensagem, não um aviso novo: registro não chama
+  ninguém de volta.
+- **`/squad stats`** com os seus números num jogo (ou os de quem você
+  apontar) e o botão **NÚMEROS** no guia, com os do squad inteiro.
+- **Aba JOGATINAS no painel**: filtros por jogo, squad e período, resumo,
+  tabela com detalhe por jogatina, ranking por jogador, formações e duplas.
+  É o único lugar que mostra a jogatina que não rolou, porque jogatina
+  cancelada e jogatina vazia não geram relatório no Discord.
+- **REMARCAR**: quem está no "vou" muda o horário sem cancelar a jogatina. O
+  squad é avisado numa mensagem nova e a sala reservada acompanha o horário
+  novo.
+- **TRAZER CONVIDADO**: quem é do squad traz alguém de fora para jogar só
+  aquela jogatina, com a sala liberada e o aviso numa thread privada, sem
+  entrar no squad. O teto por servidor (`maxSessionGuests`, padrão 4, 0
+  desliga o botão) é configurável no painel.
+- **CHAMAR GENTE durante a jogatina**: a chamada pública vale até o fim, e
+  quem é aceito no meio entra no squad e cai direto na sala.
+- O guia do squad passou a dizer as horas e a presença média do último mês.
+- **Aviso de manutenção no deploy**: antes de reiniciar, o bot avisa nos
+  servidores que atende quanto tempo deve ficar fora, e edita o aviso quando
+  volta. Depende de `OWNER_DISCORD_ID` na VM, que já existia.
+
+### Corrigido
+
+- Presença no voice das jogatinas tinha dois furos: quem já estava na sala
+  quando ela foi reservada (ou quando a jogatina começou) não gerava presença
+  nenhuma, e quem saía com o bot fora do ar deixava a presença aberta para
+  sempre. Uma varredura acerta os dois na reserva, no início e a cada passada
+  do job. O tempo de quem saiu com o bot fora do ar é contado até a varredura
+  seguinte: não existe dado melhor.
+- Quem entrava no squad com a sala já reservada ficava trancado do lado de
+  fora da própria jogatina até a liberação. Agora ganha a sala na hora, e a
+  liberação devolve o voice ao que era também para essa pessoa.
+
+### Alterado
+
+- Push na `main` que mexe só no painel ou na documentação não reinicia mais o
+  bot.
+
 ## [1.0.1] - 2026-09-21
 
 ### Corrigido
@@ -98,6 +152,7 @@ aqui:
 | v1.5    | módulo de squads                                              |
 | v1.6    | jogatina sob demanda, parties, convite com votação, histórico |
 
-[Não lançado]: https://github.com/DionathaGoulart/GoodBot/compare/v1.0.1...HEAD
+[Não lançado]: https://github.com/DionathaGoulart/GoodBot/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/DionathaGoulart/GoodBot/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/DionathaGoulart/GoodBot/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/DionathaGoulart/GoodBot/releases/tag/v1.0.0

@@ -6,7 +6,7 @@
  * bundle do bot e o do painel não dependerem de um arquivo fora do pacote;
  * o `version.test.ts` reprova a CI se os dois divergirem.
  */
-export const VERSION = '1.0.1';
+export const VERSION = '1.1.0';
 
 export * from './constants';
 export * from './deploy';
