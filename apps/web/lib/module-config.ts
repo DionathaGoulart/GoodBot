@@ -76,6 +76,7 @@ export async function loadGeneralPage(guildId: string): Promise<GeneralPageValue
           adminRoleIds: row.adminRoleIds,
           dashboardAccessRoleIds: row.dashboardAccessRoleIds,
           logChannelId: row.logChannelId,
+          noticeChannelId: row.noticeChannelId,
           dmOnPunish: row.dmOnPunish,
         }
       : DEFAULT_GUILD_SETTINGS,

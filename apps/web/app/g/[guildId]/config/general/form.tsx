@@ -154,6 +154,13 @@ export function GeneralConfigForm({
             description="Usado pelos tipos de log que não tiverem canal próprio."
             placeholder="Nenhum canal"
           />
+          <DiscordField
+            kind="channel"
+            name="settings.noticeChannelId"
+            label="Canal de avisos do bot"
+            description="Onde o bot avisa manutenção e recados do dono. Vazio usa o canal de sistema do Discord."
+            placeholder="Canal de sistema"
+          />
         </Panel>
 
         <Panel title="RESPOSTAS.CFG">
