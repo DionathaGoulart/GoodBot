@@ -550,7 +550,7 @@ describe('SquadService: marcar jogatina', () => {
     const announce = messageById(s, sessionRow().messageId)!;
     expect(announce.payload.content).toBe(`<@${A}> <@${B}>`);
     expect(embedOf(announce)?.title).toBe('> JOGATINA MARCADA');
-    expect(buttonLabels(announce)).toEqual(['VOU', 'NÃO VOU', 'CHAMAR GENTE', 'CANCELAR']);
+    expect(buttonLabels(announce)).toEqual(['VOU', 'NÃO VOU', 'CHAMAR GENTE', 'REMARCAR', 'CANCELAR']);
     expect(squadRow().lastConfirmedAt).not.toBeNull();
     expect(s.audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'squad.session.schedule', source: 'command', actor: A }),
@@ -706,6 +706,247 @@ describe('SquadService: cancelar e repetir', () => {
   });
 });
 
+describe('SquadService: remarcar', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const unix = (ms: number) => String(ms / 1000);
+
+  async function scheduled(by = A, when = 'hoje 21h') {
+    const s = scenario();
+    store.sessions = [];
+    const { session } = await s.service.scheduleSession(s.discordGuild, s.squad.id, by, when, 'command');
+    return { ...s, session };
+  }
+
+  it('adiar: horário e fim novos, votos ficam, o squad inteiro é chamado e o guia acompanha', async () => {
+    const s = await scheduled();
+    await s.service.vote(s.discordGuild, s.session.id, B, false);
+
+    const result = await s.service.rescheduleSession(s.discordGuild, s.session.id, A, 'hoje 22h', 'event');
+
+    const later = TONIGHT.getTime() + HOUR_MS;
+    expect(result).toMatchObject({ outcome: 'rescheduled', from: TONIGHT });
+    expect(sessionRow()).toMatchObject({
+      startsAt: new Date(later),
+      endsAt: new Date(later + 3 * HOUR_MS),
+      goingIds: [A],
+      notGoingIds: [B],
+      remindedAt: null,
+    });
+    // Quem disse NÃO VOU para as 21h é chamado: pode poder às 22h. Quem remarcou, não.
+    const notice = s.channel.sent.at(-1)!;
+    expect(notice.payload.content).toContain(`<@${B}> a jogatina do squad foi remarcada por <@${A}>`);
+    expect(notice.payload.allowedMentions).toEqual({ users: [B] });
+    expect(notice.payload.content).toContain(`<t:${unix(later)}:f>`);
+    expect(s.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'squad.session.reschedule',
+        actor: A,
+        before: expect.objectContaining({ startsAt: TONIGHT.toISOString() }),
+        after: expect.objectContaining({ startsAt: new Date(later).toISOString() }),
+      }),
+    );
+    const announce = embedOf(messageById(s, sessionRow().messageId));
+    expect(announce?.description).toContain(`<t:${unix(later)}:F>`);
+    const guide = embedOf(messageById(s, squadRow().guideMessageId));
+    expect(guide?.fields?.find((field) => field.name === 'Próximas jogatinas')?.value).toContain(
+      `<t:${unix(later)}:f>`,
+    );
+  });
+
+  it('com a sala reservada, adiar para longe devolve a sala e o job reserva de novo perto da hora', async () => {
+    const s = await scheduled(A, 'hoje 9h20');
+    expect(sessionRow().voiceChannelId).toBe(s.voice.id);
+
+    await s.service.rescheduleSession(s.discordGuild, s.session.id, A, 'hoje 21h', 'event');
+
+    expect(overwritesOf(s.voice.permissionOverwrites)).toEqual(BEFORE);
+    expect(sessionRow()).toMatchObject({
+      startsAt: TONIGHT,
+      remindedAt: null,
+      voiceChannelId: null,
+      voiceReservedAt: null,
+      voiceReleasedAt: null,
+    });
+    const room = embedOf(messageById(s, sessionRow().messageId))?.fields?.find(
+      (field) => field.name === 'Sala',
+    );
+    expect(room?.value).toBe('Reservo uma sala 30 minutos antes.');
+
+    s.clock.now = TONIGHT.getTime() - 20 * MINUTE_MS;
+    const due = await s.service.dueSessions(GUILD_ID);
+    expect(due.remind.map((session) => session.id)).toEqual([s.session.id]);
+    expect((await s.service.remindSession(s.discordGuild, sessionRow()))?.voiceChannelId).toBe(
+      s.voice.id,
+    );
+  });
+
+  it('sala que não volta ao pool deixa a jogatina no horário antigo', async () => {
+    const s = await scheduled(A, 'hoje 9h20');
+    const before = sessionRow().startsAt;
+    s.voice.permissionOverwrites.set.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+
+    await expect(
+      s.service.rescheduleSession(s.discordGuild, s.session.id, A, 'hoje 21h', 'event'),
+    ).rejects.toMatchObject({ code: 'SESSION_VOICE_BUSY' });
+    expect(sessionRow().startsAt).toEqual(before);
+    expect(sessionRow().voiceReleasedAt).toBeNull();
+    expect(s.audit.record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'squad.session.reschedule' }),
+    );
+  });
+
+  it('voice temporário ainda nascendo segura a remarcação para a reconciliação não perder o rastro', async () => {
+    const s = scenario();
+    fillPool(s);
+    store.sessions = store.sessions.filter((session) => session.id !== s.session.id);
+    s.guild.channels.create.mockRejectedValueOnce(new Error('Request aborted'));
+    const { session } = await s.service.scheduleSession(s.discordGuild, s.squad.id, A, 'hoje 9h20', 'command');
+    const pending = () => store.sessions.find((row) => row.id === session.id)!;
+    expect(pending()).toMatchObject({ voiceTemporary: true, voiceChannelId: null });
+
+    await expect(
+      s.service.rescheduleSession(s.discordGuild, session.id, A, 'hoje 21h', 'event'),
+    ).rejects.toMatchObject({ code: 'SESSION_VOICE_BUSY' });
+    expect(pending().startsAt).toEqual(session.startsAt);
+    expect(pending().voiceReservedAt).not.toBeNull();
+    expect(pending().voiceReleasedAt).toBeNull();
+  });
+
+  it('adiantar para dentro da antecedência reserva na hora, sem lembrete à parte', async () => {
+    const s = await scheduled();
+
+    await s.service.rescheduleSession(s.discordGuild, s.session.id, A, 'hoje 9h20', 'event');
+
+    expect(sessionRow().voiceChannelId).toBe(s.voice.id);
+    expect(sessionRow().remindedAt).not.toBeNull();
+    const notice = s.channel.sent.at(-1)!;
+    expect(notice.payload.content).toContain(`A sala é <#${s.voice.id}>.`);
+    expect(
+      s.channel.sent.some((message) => String(message.payload.content).includes('squad começa')),
+    ).toBe(false);
+  });
+
+  it('agora: começa, puxa quem está em outro voice, e o aviso chama só quem tinha recusado', async () => {
+    const s = await scheduled();
+    seedMember(s.squad.id, C);
+    await s.service.vote(s.discordGuild, s.session.id, C, false);
+    const lobby = s.guild.add(fakeVoice());
+    const stateB = s.guild.putInVoice(B, lobby.id);
+
+    const result = await s.service.rescheduleSession(s.discordGuild, s.session.id, A, 'agora', 'event');
+
+    expect(result.session.startedAt).not.toBeNull();
+    expect(stateB.setChannel).toHaveBeenCalledWith(s.voice.id, expect.any(String));
+    const notice = s.channel.sent.find((message) =>
+      String(message.payload.content).includes('foi remarcada'),
+    )!;
+    expect(notice.payload.content).toContain('começa agora');
+    expect(notice.payload.allowedMentions).toEqual({ users: [C] });
+    expect(embedOf(messageById(s, sessionRow().messageId))?.title).toBe('> JOGATINA COMEÇOU');
+  });
+
+  it('só quem está no VOU remarca, e só antes do início', async () => {
+    const s = await scheduled();
+    const reschedule = (by: string, when = 'hoje 22h') =>
+      s.service.rescheduleSession(s.discordGuild, s.session.id, by, when, 'event');
+
+    await expect(reschedule(B)).rejects.toMatchObject({ code: 'SESSION_NOT_GOING' });
+    await expect(s.service.rescheduleForm(s.discordGuild, s.session.id, B)).rejects.toMatchObject({
+      code: 'SESSION_NOT_GOING',
+    });
+    await expect(reschedule(C)).rejects.toMatchObject({ code: 'NOT_A_MEMBER' });
+
+    // Quem marcou e trocou para NÃO VOU perde o direito; quem passou a ir ganha.
+    await s.service.vote(s.discordGuild, s.session.id, A, false);
+    await expect(reschedule(A)).rejects.toMatchObject({ code: 'SESSION_NOT_GOING' });
+    await s.service.vote(s.discordGuild, s.session.id, B, true);
+    expect((await reschedule(B)).outcome).toBe('rescheduled');
+
+    const started = await scheduled(A, 'agora');
+    await expect(
+      started.service.rescheduleSession(started.discordGuild, started.session.id, A, 'hoje 22h', 'event'),
+    ).rejects.toMatchObject({ code: 'SESSION_STARTED' });
+
+    const cancelled = await scheduled();
+    await cancelled.service.cancelSession(cancelled.discordGuild, cancelled.session.id, A, 'event');
+    await expect(
+      cancelled.service.rescheduleSession(
+        cancelled.discordGuild,
+        cancelled.session.id,
+        A,
+        'hoje 22h',
+        'event',
+      ),
+    ).rejects.toMatchObject({ code: 'SESSION_CANCELLED' });
+  });
+
+  it('minuto de outra jogatina do squad ensina em vez de remarcar; o mesmo horário não muda nada', async () => {
+    const s = await scheduled();
+    const { session: other } = await s.service.scheduleSession(
+      s.discordGuild,
+      s.squad.id,
+      A,
+      'hoje 22h',
+      'command',
+    );
+    const reschedule = () =>
+      s.service.rescheduleSession(s.discordGuild, s.session.id, A, 'hoje 22h', 'event');
+
+    await expect(reschedule()).rejects.toMatchObject({
+      code: 'SESSION_TAKEN',
+      message: expect.stringContaining('Aperte VOU nela'),
+    });
+
+    await s.service.cancelSession(s.discordGuild, other.id, A, 'event');
+    await expect(reschedule()).rejects.toMatchObject({
+      code: 'SESSION_TAKEN',
+      message: expect.stringContaining('hoje às 22:05'),
+    });
+
+    const sent = s.channel.sent.length;
+    const same = await s.service.rescheduleSession(s.discordGuild, s.session.id, A, 'hoje 21h', 'event');
+    expect(same.outcome).toBe('unchanged');
+    expect(s.channel.sent).toHaveLength(sent);
+  });
+
+  it('a chamada pública no ar passa a anunciar o horário novo', async () => {
+    const s = await scheduled();
+    await s.service.callForPlayers(s.discordGuild, s.session.id, A, 'event');
+    const call = s.search.sent.at(-1)!;
+
+    await s.service.rescheduleSession(s.discordGuild, s.session.id, A, 'hoje 22h', 'event');
+
+    expect(embedOf(call)?.description).toContain(`<t:${unix(TONIGHT.getTime() + HOUR_MS)}:F>`);
+    expect(call.deleted).toBe(false);
+  });
+
+  it('a lista velha do job não lembra nem começa a jogatina remarcada para mais tarde', async () => {
+    const s = await scheduled();
+    s.clock.now = TONIGHT.getTime();
+    // O job listou a jogatina das 21h para lembrar e começar...
+    const due = await s.service.dueSessions(GUILD_ID);
+    expect(due.start.map((session) => session.id)).toEqual([s.session.id]);
+
+    // ...e ela foi para as 23h antes de o job chegar nela.
+    await s.service.rescheduleSession(s.discordGuild, s.session.id, A, 'hoje 23h', 'event');
+
+    expect(await s.service.remindSession(s.discordGuild, due.remind[0]!)).toBeNull();
+    expect(await s.service.startSession(s.discordGuild, due.start[0]!)).toBeNull();
+    expect(sessionRow()).toMatchObject({ remindedAt: null, startedAt: null, voiceReservedAt: null });
+  });
+
+  it('o modal abre com o horário atual no fuso do servidor', async () => {
+    const s = await scheduled();
+
+    const modal = await s.service.rescheduleForm(s.discordGuild, s.session.id, A);
+
+    expect(JSON.stringify(modal.toJSON())).toContain('Marcada para hoje às 21:00.');
+  });
+});
+
 describe('SquadService: lembrete, início e presença', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -721,7 +962,7 @@ describe('SquadService: lembrete, início e presença', () => {
     expect(second).toBeNull();
     const message = messageById(s, sessionRow().messageId)!;
     expect(message.payload.content).toBe(`<@${A}> <@${B}>`);
-    expect(buttonLabels(message)).toEqual(['VOU', 'NÃO VOU', 'CHAMAR GENTE', 'CANCELAR']);
+    expect(buttonLabels(message)).toEqual(['VOU', 'NÃO VOU', 'CHAMAR GENTE', 'REMARCAR', 'CANCELAR']);
   });
 
   it('jogatina anunciada ganha a sala na mensagem e um lembrete curto para quem não recusou', async () => {
@@ -759,6 +1000,7 @@ describe('SquadService: lembrete, início e presença', () => {
     const lobby = s.guild.add(fakeVoice());
     const stateA = s.guild.putInVoice(A, lobby.id);
     await s.service.reserveVoice(s.discordGuild, s.session);
+    s.clock.now = s.session.startsAt.getTime();
 
     const first = await s.service.startSession(s.discordGuild, sessionRow());
     const second = await s.service.startSession(s.discordGuild, sessionRow());
@@ -786,6 +1028,7 @@ describe('SquadService: lembrete, início e presença', () => {
   it('sem sala, dois vou contam como jogatina que rolou no início', async () => {
     const s = scenario({ voicePermissions: ALL_BUT_ADMIN & ~PermissionFlagsBits.Connect });
     sessionRow().goingIds = [A, B];
+    s.clock.now = s.session.startsAt.getTime();
 
     await s.service.startSession(s.discordGuild, sessionRow());
 
@@ -841,6 +1084,7 @@ describe('SquadService: lembrete, início e presença', () => {
       'Dá 2 parties: 3 vão e cada partida leva até 2. Dividam-se.',
     );
 
+    s.clock.now = s.session.startsAt.getTime();
     await s.service.startSession(s.discordGuild, sessionRow());
     const ping = s.channel.sent.find((message) =>
       String(message.payload.content).includes('começou'),

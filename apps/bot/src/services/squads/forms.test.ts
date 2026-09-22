@@ -9,6 +9,8 @@ import {
   parseGridDays,
   profileModal,
   readProfileAnswers,
+  RESCHEDULE_WHEN_FIELD,
+  rescheduleModal,
   setBlockDays,
 } from './forms';
 import { parseSquadCustomId } from './ids';
@@ -105,6 +107,19 @@ describe('modal do perfil', () => {
 
     const partial = readProfileAnswers(FIELDS, { text: () => null, select: () => null });
     expect(partial).toEqual({});
+  });
+
+  it('o modal do REMARCAR leva a jogatina no custom_id e o horário atual na descrição', () => {
+    const json = rescheduleModal({ id: 42 }, 'hoje às 22:00').toJSON();
+    expect(parseSquadCustomId(json.custom_id)).toEqual({ kind: 'reschedule-modal', sessionId: 42 });
+    const [when] = json.components as unknown as LabelJson[];
+    expect(when?.description).toContain('Marcada para hoje às 22:00.');
+    expect(when?.description?.length).toBeLessThanOrEqual(100);
+    expect(when?.component).toMatchObject({
+      type: ComponentType.TextInput,
+      custom_id: RESCHEDULE_WHEN_FIELD,
+      required: true,
+    });
   });
 
   it('o leitor do discord.js vira null quando o componente não existe', () => {

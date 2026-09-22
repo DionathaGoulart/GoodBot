@@ -17,11 +17,12 @@ import {
   gridSelectId,
   profileModalId,
   renameModalId,
+  rescheduleModalId,
 } from './ids';
 import { SQUAD_DAY_NAMES } from './slots';
 import { infoEmbed } from '../../lib/embeds';
 
-import type { Squad, SquadGame } from '@goodbot/db';
+import type { Squad, SquadGame, SquadSession } from '@goodbot/db';
 import type { SquadAnswers, SquadBlockConfig, SquadGameField } from '@goodbot/shared';
 import type { BaseMessageOptions, ModalSubmitFields } from 'discord.js';
 
@@ -29,8 +30,8 @@ import type { BaseMessageOptions, ModalSubmitFields } from 'discord.js';
  * Os formulários do módulo. Os dois do perfil (o modal com os campos do jogo e
  * a grade de horários) são separados porque o modal do Discord aceita só cinco
  * componentes, e a grade sozinha já precisa de quatro selects. Os dos botões do
- * guia (BORA e RENOMEAR) têm um campo só: quem aperta um botão não quer
- * preencher formulário.
+ * guia e da jogatina (BORA, RENOMEAR e REMARCAR) têm um campo só: quem aperta
+ * um botão não quer preencher formulário.
  */
 
 /** Teto do Discord para o título de um modal. */
@@ -134,7 +135,7 @@ export function readProfileAnswers(
   return answers;
 }
 
-// ── modais do guia ──────────────────────────────────────────────────────────
+// ── modais do guia e da jogatina ────────────────────────────────────────────
 
 /** `custom_id` do campo do modal BORA. */
 export const BORA_WHEN_FIELD = 'when';
@@ -157,6 +158,33 @@ export function boraModal(squad: Pick<Squad, 'id' | 'name'>): ModalBuilder {
             .setCustomId(BORA_WHEN_FIELD)
             .setStyle(TextInputStyle.Short)
             .setPlaceholder('agora, hoje 21h, amanhã 20:30, sex 22h')
+            .setMaxLength(MAX_WHEN_LENGTH)
+            .setRequired(true),
+        ),
+    );
+}
+
+/** `custom_id` do campo do modal REMARCAR. */
+export const RESCHEDULE_WHEN_FIELD = 'when';
+
+/**
+ * O modal do REMARCAR: o mesmo "quando" do BORA, com o horário atual na
+ * descrição. `current` já vem escrito no fuso da guild ("hoje às 22:00"),
+ * porque texto de modal não renderiza o timestamp do Discord.
+ */
+export function rescheduleModal(session: Pick<SquadSession, 'id'>, current: string): ModalBuilder {
+  return new ModalBuilder()
+    .setCustomId(rescheduleModalId(session.id))
+    .setTitle('Remarcar a jogatina')
+    .setLabelComponents(
+      new LabelBuilder()
+        .setLabel('Novo horário')
+        .setDescription(`Marcada para ${current}. Hora do servidor; eu aviso o squad.`)
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId(RESCHEDULE_WHEN_FIELD)
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('agora, hoje 21h, 21:30, amanhã 20h')
             .setMaxLength(MAX_WHEN_LENGTH)
             .setRequired(true),
         ),

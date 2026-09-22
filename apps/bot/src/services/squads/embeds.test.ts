@@ -8,9 +8,12 @@ import {
   joinVoteMessage,
   manualProposalNote,
   memberLeftMessage,
+  NO_RESERVED_VOICE_NOTE,
   partyText,
   publicCallMessage,
   sessionMessage,
+  sessionRescheduledMessage,
+  sessionRescheduledText,
 } from './embeds';
 import { parseSquadCustomId } from './ids';
 
@@ -290,14 +293,69 @@ describe('histórico e chamada pública', () => {
       embedColor: 0,
       mentionMembers: false,
     };
-    expect(rowsOf(sessionMessage(view))).toEqual([['session', 'session', 'call', 'session']]);
+    expect(rowsOf(sessionMessage(view))).toEqual([
+      ['session', 'session', 'call'],
+      ['session', 'session'],
+    ]);
     const called = sessionMessage({ ...view, canCall: false, callChannelId: '400000000000000001' });
-    expect(rowsOf(called)).toEqual([['session', 'session', 'session']]);
+    expect(rowsOf(called)).toEqual([
+      ['session', 'session'],
+      ['session', 'session'],
+    ]);
     expect(embedOf(called)?.fields?.find((field) => field.name === 'Chamada')?.value).toContain(
       '<#400000000000000001>',
     );
     const started = sessionMessage({ ...view, state: 'started', callChannelId: '400000000000000001' });
     expect(embedOf(started)?.fields?.some((field) => field.name === 'Chamada')).toBe(false);
+  });
+
+  it('o aviso do REMARCAR chama quem precisa rever a resposta, sem notificar quem remarcou', () => {
+    const [a, b, c] = ['300000000000000001', '300000000000000002', '300000000000000003'];
+    const voice = '400000000000000002';
+    const from = new Date('2026-09-18T01:00:00Z');
+    const startsAt = new Date('2026-09-18T00:00:00Z');
+    const t = (date: Date, style: string) => `<t:${String(date.getTime() / 1000)}:${style}>`;
+    const base = {
+      by: a,
+      from,
+      startsAt,
+      startsNow: false,
+      voiceChannelId: null,
+      voiceTemporary: false,
+      reminded: false,
+    };
+
+    const later = sessionRescheduledMessage({ ...base, userIds: [b, c] });
+    expect(later.content).toBe(
+      `<@${b}> <@${c}> a jogatina do squad foi remarcada por <@${a}>: era ${t(from, 'f')}, agora é ${t(startsAt, 'f')} (${t(startsAt, 'R')}). Quem não puder no horário novo aperta NÃO VOU; quem agora pode aperta VOU.`,
+    );
+    expect(later.allowedMentions).toEqual({ users: [b, c] });
+    expect(later.content).not.toMatch(/[—–]/);
+
+    const withRoom = sessionRescheduledMessage({ ...base, userIds: [b], voiceChannelId: voice, reminded: true });
+    expect(withRoom.content).toContain(`A sala é <#${voice}>.`);
+    const noRoom = sessionRescheduledMessage({ ...base, userIds: [b], reminded: true });
+    expect(noRoom.content).toContain(NO_RESERVED_VOICE_NOTE);
+
+    // Começando agora, sem ninguém a chamar: só o registro, com maiúscula.
+    const now = sessionRescheduledMessage({ ...base, userIds: [], startsNow: true, voiceChannelId: voice });
+    expect(now.content).toBe(
+      `A jogatina do squad foi remarcada por <@${a}>: era ${t(from, 'f')} e começa agora. Quem puder, entra em <#${voice}>.`,
+    );
+    expect(now.allowedMentions).toEqual({ users: [] });
+  });
+
+  it('a resposta do REMARCAR diz o horário novo, o começo na hora ou que nada mudou', () => {
+    const startsAt = new Date('2026-09-18T00:00:00Z');
+    expect(sessionRescheduledText({ outcome: 'unchanged' })).toBe(
+      'A jogatina já estava marcada para esse horário.',
+    );
+    expect(
+      sessionRescheduledText({ outcome: 'rescheduled', session: { startsAt, startedAt: null } }),
+    ).toContain(`<t:${String(startsAt.getTime() / 1000)}:F>`);
+    expect(
+      sessionRescheduledText({ outcome: 'rescheduled', session: { startsAt, startedAt: startsAt } }),
+    ).toContain('já começou');
   });
 
   it('a votação de quem veio pela chamada diz de qual jogatina', () => {

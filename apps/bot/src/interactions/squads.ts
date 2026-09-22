@@ -18,6 +18,7 @@ import {
   proposalDeclinedText,
   renamedText,
   sessionCancelledText,
+  sessionRescheduledText,
   sessionScheduledText,
   voteText,
 } from '../services/squads/embeds';
@@ -29,6 +30,7 @@ import {
   readProfileAnswers,
   RENAME_NAME_FIELD,
   renameModal,
+  RESCHEDULE_WHEN_FIELD,
   setBlockDays,
 } from '../services/squads/forms';
 import { parseSquadCustomId } from '../services/squads/ids';
@@ -224,6 +226,13 @@ export async function handleSquadComponent(
       return true;
 
     case 'session': {
+      // Modal exige a interação intacta: o REMARCAR confere e abre antes de adiar.
+      if (parsed.action === 'reschedule') {
+        await interaction.showModal(
+          await ctx.squads.rescheduleForm(guild, parsed.sessionId, userId),
+        );
+        return true;
+      }
       await interaction.deferReply(EPHEMERAL);
       switch (parsed.action) {
         case 'going':
@@ -336,7 +345,7 @@ export async function handleSquadComponent(
 
 /**
  * Os modais do módulo: o do perfil (grava as respostas e troca para a grade),
- * o do BORA (marca a jogatina) e o do RENOMEAR.
+ * o do BORA (marca a jogatina), o do REMARCAR e o do RENOMEAR.
  */
 export async function handleSquadModal(
   ctx: BotContext,
@@ -364,6 +373,20 @@ export async function handleSquadModal(
       const when = interaction.fields.getTextInputValue(BORA_WHEN_FIELD);
       const result = await ctx.squads.scheduleSession(guild, parsed.squadId, userId, when, 'event');
       await interaction.editReply({ content: sessionScheduledText(result) });
+      return true;
+    }
+
+    case 'reschedule-modal': {
+      await interaction.deferReply(EPHEMERAL);
+      const when = interaction.fields.getTextInputValue(RESCHEDULE_WHEN_FIELD);
+      const result = await ctx.squads.rescheduleSession(
+        guild,
+        parsed.sessionId,
+        userId,
+        when,
+        'event',
+      );
+      await interaction.editReply({ content: sessionRescheduledText(result) });
       return true;
     }
 

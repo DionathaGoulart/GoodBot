@@ -225,6 +225,43 @@ export class CallService {
     }
   }
 
+  /**
+   * Reedita a chamada no ar com a jogatina de agora: a remarcação muda o
+   * horário que ela anuncia. Nunca lança; chamada que sumiu fica para o
+   * ENTRAR, que já responde que ela acabou.
+   */
+  async refreshMessage(guild: Guild, session: SquadSession): Promise<void> {
+    const { callMessageId, callChannelId } = session;
+    if (!callMessageId || !callChannelId) return;
+    const guildId = guild.id;
+    const bindings = { guildId, sessionId: session.id };
+    try {
+      const squad = await getSquad(this.ctx.db, guildId, session.squadId);
+      const channel = await this.ctx.fetchChannel(guild, callChannelId);
+      if (!squad || channel?.type !== ChannelType.GuildText) return;
+      const [game, members, history, embedColor] = await Promise.all([
+        this.ctx.parts.profiles.requireGame(guildId, squad.gameId),
+        listSquadMembers(this.ctx.db, guildId, squad.id),
+        this.ctx.parts.history.one(guildId, squad.id),
+        this.ctx.embedColor(guildId),
+      ]);
+      await (channel as TextChannel).messages.edit(
+        callMessageId,
+        publicCallMessage({
+          session,
+          squad,
+          game,
+          memberCount: members.length,
+          history: history.text,
+          embedColor,
+        }),
+      );
+    } catch (error) {
+      if (discordErrorCode(error) === DISCORD_UNKNOWN_MESSAGE) return;
+      log.warn({ err: error, ...bindings }, 'não foi possível atualizar a chamada pública');
+    }
+  }
+
   /** Squad arquivado: as chamadas dele saem do ar. Nunca lança. */
   async closeForSquad(guild: Guild, squadId: string): Promise<void> {
     try {

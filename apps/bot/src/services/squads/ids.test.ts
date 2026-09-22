@@ -24,6 +24,7 @@ import {
   renameButtonId,
   renameModalId,
   requestButtonId,
+  rescheduleModalId,
   searchButtonId,
   sessionButtonId,
   statusButtonId,
@@ -46,6 +47,8 @@ describe('custom_id de squads', () => {
     [sessionButtonId('notgoing', 7), { kind: 'session', action: 'notgoing', sessionId: 7 }],
     [sessionButtonId('cancel', 7), { kind: 'session', action: 'cancel', sessionId: 7 }],
     [sessionButtonId('repeat', 9), { kind: 'session', action: 'repeat', sessionId: 9 }],
+    [sessionButtonId('reschedule', 9), { kind: 'session', action: 'reschedule', sessionId: 9 }],
+    [rescheduleModalId(9), { kind: 'reschedule-modal', sessionId: 9 }],
     [callButtonId(11), { kind: 'call', sessionId: 11 }],
     [callNextButtonId(UUID), { kind: 'call-next', squadId: UUID }],
     [enterButtonId(12), { kind: 'enter', sessionId: 12 }],
@@ -102,6 +105,9 @@ describe('custom_id de squads', () => {
     'squad:session:going:abc',
     'squad:session:going:12345678901234567',
     'squad:session:maybe:3',
+    'squad:reschedule:open:3',
+    'squad:reschedule:modal:0',
+    'squad:reschedule:modal:3:extra',
     'squad:call:session:0',
     'squad:call:session:abc',
     'squad:call:session:3:extra',
@@ -145,6 +151,7 @@ describe('custom_id de squads', () => {
     expect(() => keepButtonId('')).toThrow(RangeError);
     expect(() => sessionButtonId('going', 0)).toThrow(RangeError);
     expect(() => sessionButtonId('going', 1.5)).toThrow(RangeError);
+    expect(() => rescheduleModalId(0)).toThrow(RangeError);
     expect(() => callButtonId(0)).toThrow(RangeError);
     expect(() => callNextButtonId('x')).toThrow(RangeError);
     expect(() => enterButtonId(-3)).toThrow(RangeError);

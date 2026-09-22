@@ -35,6 +35,7 @@ import type {
   DueSessions,
   InactivityResult,
   RemindResult,
+  RescheduleResult,
   ScheduleResult,
   StartResult,
   SweepResult,
@@ -53,7 +54,7 @@ import type {
   SquadManualCheckInput,
   SquadsConfig,
 } from '@goodbot/shared';
-import type { BaseMessageOptions, Guild } from 'discord.js';
+import type { BaseMessageOptions, Guild, ModalBuilder } from 'discord.js';
 
 export type { CallSent } from './calls';
 export type { SquadServiceDeps } from './context';
@@ -82,6 +83,7 @@ export type {
   DueSessions,
   InactivityResult,
   RemindResult,
+  RescheduleResult,
   ScheduleResult,
   StartResult,
   SweepResult,
@@ -393,6 +395,22 @@ export class SquadService {
     source: AuditSource,
   ): Promise<CancelResult> {
     return this.ctx.parts.sessions.cancel(guild, sessionId, userId, source);
+  }
+
+  /** O modal do REMARCAR, depois de conferir que quem clicou pode remarcar. */
+  rescheduleForm(guild: Guild, sessionId: number, userId: string): Promise<ModalBuilder> {
+    return this.ctx.parts.sessions.rescheduleForm(guild, sessionId, userId);
+  }
+
+  /** REMARCAR: o horário novo digitado, no fuso da guild. */
+  rescheduleSession(
+    guild: Guild,
+    sessionId: number,
+    userId: string,
+    when: string,
+    source: AuditSource,
+  ): Promise<RescheduleResult> {
+    return this.ctx.parts.sessions.rescheduleFromText(guild, sessionId, userId, when, source);
   }
 
   /** REPETIR: a mesma hora na semana seguinte. */

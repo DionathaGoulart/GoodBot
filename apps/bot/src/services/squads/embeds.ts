@@ -883,7 +883,9 @@ export function sessionMessage(view: SessionView): BaseMessageOptions {
     }
   }
 
-  const scheduled = [
+  // Duas linhas: em cima a resposta de cada um e quem mais chamar; embaixo o
+  // que muda a jogatina para todo mundo.
+  const answer = [
     new ButtonBuilder()
       .setCustomId(sessionButtonId('going', session.id))
       .setLabel('VOU')
@@ -894,22 +896,29 @@ export function sessionMessage(view: SessionView): BaseMessageOptions {
       .setStyle(ButtonStyle.Secondary),
   ];
   if (view.canCall) {
-    scheduled.push(
+    answer.push(
       new ButtonBuilder()
         .setCustomId(callButtonId(session.id))
         .setLabel('CHAMAR GENTE')
         .setStyle(ButtonStyle.Secondary),
     );
   }
-  scheduled.push(
+  const manage = [
+    new ButtonBuilder()
+      .setCustomId(sessionButtonId('reschedule', session.id))
+      .setLabel('REMARCAR')
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(sessionButtonId('cancel', session.id))
       .setLabel('CANCELAR')
       .setStyle(ButtonStyle.Danger),
-  );
+  ];
   const components =
     view.state === 'scheduled'
-      ? buttons(...scheduled)
+      ? [
+          new ActionRowBuilder<ButtonBuilder>().addComponents(answer),
+          new ActionRowBuilder<ButtonBuilder>().addComponents(manage),
+        ]
       : view.state === 'started'
         ? buttons(
             new ButtonBuilder()
@@ -956,6 +965,47 @@ export function sessionReminderMessage(view: {
       : `A sala é <#${view.voiceChannelId}>.`;
   return {
     content: `${view.userIds.map(mention).join(' ')} a jogatina do squad começa ${timestamp(view.startsAt, 'R')}. ${where}`,
+    allowedMentions: { users: [...view.userIds] },
+  };
+}
+
+/**
+ * O aviso do REMARCAR, à parte porque editar a mensagem da jogatina não
+ * notifica. Chama quem precisa rever a resposta: o squad inteiro (menos quem
+ * remarcou) ou, começando agora, só quem tinha dito NÃO VOU, porque o início
+ * já chama e move o resto. Quem remarcou aparece sem ser notificado.
+ */
+export function sessionRescheduledMessage(view: {
+  userIds: readonly string[];
+  by: string;
+  from: Date;
+  startsAt: Date;
+  startsNow: boolean;
+  voiceChannelId: string | null;
+  voiceTemporary: boolean;
+  /** O lembrete já saiu: sem sala agora é sem sala desta vez. */
+  reminded: boolean;
+}): BaseMessageOptions {
+  const who = view.userIds.map(mention).join(' ');
+  const change = `a jogatina do squad foi remarcada por ${mention(view.by)}: era ${timestamp(view.from, 'f')}`;
+  let text: string;
+  if (view.startsNow) {
+    const where = view.voiceChannelId
+      ? `Quem puder, entra em <#${view.voiceChannelId}>.`
+      : 'Quem puder, escolha um voice livre.';
+    text = `${change} e começa agora. ${where}`;
+  } else {
+    const where = view.voiceChannelId
+      ? view.voiceTemporary
+        ? ` A sala é <#${view.voiceChannelId}>, ${TEMPORARY_VOICE_NOTE}.`
+        : ` A sala é <#${view.voiceChannelId}>.`
+      : view.reminded
+        ? ` ${NO_RESERVED_VOICE_NOTE}`
+        : '';
+    text = `${change}, agora é ${timestamp(view.startsAt, 'f')} (${timestamp(view.startsAt, 'R')}).${where} Quem não puder no horário novo aperta NÃO VOU; quem agora pode aperta VOU.`;
+  }
+  return {
+    content: who ? `${who} ${text}` : `${text.charAt(0).toUpperCase()}${text.slice(1)}`,
     allowedMentions: { users: [...view.userIds] },
   };
 }
@@ -1365,6 +1415,17 @@ export function sessionScheduledText(result: {
   return where
     ? `Jogatina marcada para ${when}. Chamei o squad em ${where}.`
     : `Jogatina marcada para ${when}.`;
+}
+
+export function sessionRescheduledText(
+  result:
+    | { outcome: 'rescheduled'; session: Pick<SquadSession, 'startsAt' | 'startedAt'> }
+    | { outcome: 'unchanged' },
+): string {
+  if (result.outcome === 'unchanged') return 'A jogatina já estava marcada para esse horário.';
+  if (result.session.startedAt) return 'Jogatina remarcada para agora: já começou. Avisei o squad.';
+  const when = `${timestamp(result.session.startsAt, 'F')} (${timestamp(result.session.startsAt, 'R')})`;
+  return `Jogatina remarcada para ${when}. Avisei o squad.`;
 }
 
 export function callSentText(result: {

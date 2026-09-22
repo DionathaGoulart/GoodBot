@@ -24,6 +24,7 @@ import {
   openSessionAttendance,
   releaseSessionVoice,
   reopenSquadSession,
+  rescheduleSquadSession,
   reserveSessionVoice,
   setSessionMessage,
   setSessionTemporaryVoice,
@@ -33,6 +34,7 @@ import {
 import {
   addLocalDays,
   DAY_MS,
+  describeWhen,
   HOUR_MS,
   MINUTE_MS,
   parseWhen,
@@ -52,9 +54,11 @@ import {
   inactivityWarningMessage,
   sessionMessage,
   sessionReminderMessage,
+  sessionRescheduledMessage,
   sessionStartMessage,
   temporaryVoiceName,
 } from './embeds';
+import { rescheduleModal } from './forms';
 import {
   encodeVoiceSnapshot,
   hasTemporaryVoiceSignature,
@@ -70,7 +74,7 @@ import type { SquadContext } from './context';
 import type { SessionState } from './embeds';
 import type { Squad, SquadGame, SquadSession } from '@goodbot/db';
 import type { AuditSource } from '@goodbot/shared';
-import type { Guild, VoiceChannel } from 'discord.js';
+import type { Guild, ModalBuilder, VoiceChannel } from 'discord.js';
 
 /** Depois do aviso de inatividade, quanto o squad tem para responder antes de ser arquivado. */
 export const INACTIVITY_GRACE_MS = WEEK_MS;
@@ -156,6 +160,18 @@ export interface CancelResult {
   outcome: 'cancelled' | 'already';
   session: SquadSession;
 }
+
+export interface RescheduleOptions {
+  startsAt: Date;
+  /** Quem remarca; precisa estar no VOU. */
+  by: string;
+  source: AuditSource;
+}
+
+export type RescheduleResult =
+  | { outcome: 'rescheduled'; session: SquadSession; squad: Squad; from: Date }
+  /** Já era esse o horário: nada mudou e ninguém foi avisado. */
+  | { outcome: 'unchanged'; session: SquadSession; squad: Squad };
 
 const isReserved = (session: SquadSession) =>
   session.voiceReservedAt !== null && session.voiceReleasedAt === null;
@@ -323,6 +339,219 @@ export class SessionService {
   }
 
   /**
+   * Quem pode remarcar a jogatina agora: membro do squad, no VOU, antes do
+   * início. O botão confere antes de abrir o modal, para ninguém digitar um
+   * horário e só então ouvir que não pode; a remarcação confere de novo.
+   */
+  async requireReschedulable(
+    guildId: string,
+    sessionId: number,
+    by: string,
+  ): Promise<{ session: SquadSession; squad: Squad }> {
+    await this.ctx.requireConfig(guildId);
+    const session = await this.requireSession(guildId, sessionId);
+    const squad = await this.requireLiveSquad(guildId, session.squadId);
+    await this.ctx.parts.squads.assertMember(guildId, squad.id, by, 'remarcar a jogatina');
+    if (session.cancelledAt) {
+      throw new UserFacingError('Esta jogatina foi cancelada.', { code: 'SESSION_CANCELLED' });
+    }
+    if (session.startedAt) {
+      throw new UserFacingError('A jogatina já começou: não dá mais para remarcar.', {
+        code: 'SESSION_STARTED',
+      });
+    }
+    if (!session.goingIds.includes(by)) {
+      throw new UserFacingError('Só quem vai remarca. Aperte VOU para poder remarcar.', {
+        code: 'SESSION_NOT_GOING',
+      });
+    }
+    return { session, squad };
+  }
+
+  /** O modal do REMARCAR, com o horário atual escrito no fuso da guild. */
+  async rescheduleForm(guild: Guild, sessionId: number, by: string): Promise<ModalBuilder> {
+    const { session } = await this.requireReschedulable(guild.id, sessionId, by);
+    const { timezone } = await this.ctx.config.getSettings(guild.id);
+    return rescheduleModal(session, describeWhen(session.startsAt, this.ctx.date(), timezone));
+  }
+
+  /** O "quando" novo digitado no modal, lido no fuso da guild. */
+  async rescheduleFromText(
+    guild: Guild,
+    sessionId: number,
+    by: string,
+    when: string,
+    source: AuditSource,
+  ): Promise<RescheduleResult> {
+    await this.ctx.requireConfig(guild.id);
+    const { timezone } = await this.ctx.config.getSettings(guild.id);
+    const startsAt = parseWhen(when, this.ctx.date(), timezone);
+    return this.reschedule(guild, sessionId, { startsAt, by, source });
+  }
+
+  /**
+   * REMARCAR: o horário muda e o resto fica (votos, mensagem, chamada). Quem
+   * remarca é quem está no VOU, e só antes do início.
+   *
+   * A sala acompanha o horário novo. Com o lembrete já dado e o horário novo
+   * fora da antecedência dele, a reserva volta ao pool e o lembrete é zerado,
+   * para o job lembrar e reservar de novo perto da hora; senão um voice do pool
+   * ficaria trancado até lá. Como na liberação, o Discord vem antes do banco:
+   * sala que não volta deixa a jogatina no horário antigo. Horário novo dentro
+   * da antecedência reserva na hora; `agora` também começa.
+   *
+   * O squad inteiro é chamado numa mensagem à parte (editar a da jogatina não
+   * notifica): quem disse NÃO VOU para o horário antigo pode poder no novo.
+   */
+  async reschedule(
+    guild: Guild,
+    sessionId: number,
+    options: RescheduleOptions,
+  ): Promise<RescheduleResult> {
+    const { db } = this.ctx;
+    const guildId = guild.id;
+    const config = await this.ctx.requireConfig(guildId);
+    const { startsAt, by } = options;
+    const found = await this.requireReschedulable(guildId, sessionId, by);
+    const { squad } = found;
+    let session = found.session;
+    const from = session.startsAt;
+    if (startsAt.getTime() === from.getTime()) return { outcome: 'unchanged', session, squad };
+
+    const now = this.ctx.now();
+    const endsAt = new Date(startsAt.getTime() + config.sessionHours * HOUR_MS);
+    if (endsAt.getTime() <= now) {
+      throw new UserFacingError('Esse horário já passou.', { code: 'WHEN_PAST' });
+    }
+    await this.assertMinuteFree(guildId, session, startsAt);
+
+    const lead = config.reminderMinutesBefore * MINUTE_MS;
+    const resetReminder = session.remindedAt !== null && startsAt.getTime() - now > lead;
+    // Voice temporário ainda sem id é criação pendente: zerar a reserva apagaria
+    // o rastro que a reconciliação usa para achar o canal que pode ter nascido.
+    const pendingVoice = session.voiceTemporary && session.voiceChannelId === null;
+    if (
+      resetReminder &&
+      isReserved(session) &&
+      (pendingVoice || !(await this.release(guild, session)))
+    ) {
+      throw new UserFacingError(
+        'Não consegui devolver a sala reservada agora, então a jogatina continua no horário antigo. Tente de novo em alguns minutos.',
+        { code: 'SESSION_VOICE_BUSY' },
+      );
+    }
+
+    const result = await rescheduleSquadSession(db, guildId, session.id, {
+      startsAt,
+      endsAt,
+      resetReminder,
+    });
+    if (result.outcome !== 'rescheduled') {
+      // Outra jogatina ocupou o minuto, ou esta começou ou foi cancelada no
+      // meio do caminho: as checagens de novo dizem o quê.
+      const fresh = await this.requireReschedulable(guildId, session.id, by);
+      await this.assertMinuteFree(guildId, fresh.session, startsAt);
+      throw new UserFacingError('Não consegui remarcar agora. Tente de novo em alguns minutos.', {
+        code: 'SESSION_BUSY',
+      });
+    }
+    session = result.session;
+
+    this.ctx.record({
+      guildId,
+      action: 'squad.session.reschedule',
+      source: options.source,
+      actor: by,
+      target: { type: 'squad', id: squad.id },
+      before: { sessionId: session.id, startsAt: from.toISOString() },
+      after: { sessionId: session.id, startsAt: startsAt.toISOString() },
+    });
+    // Quem estava na sala devolvida não está mais no voice de jogatina nenhuma.
+    if (resetReminder) await this.sweepSafely(guild);
+
+    const startsNow = startsAt.getTime() <= now;
+    if (!startsNow) await this.ctx.parts.calls.refreshMessage(guild, session);
+    let rendered = false;
+    if (startsAt.getTime() - now <= lead) {
+      const reminded = await this.remind(guild, session, { quiet: true });
+      if (reminded) {
+        session = reminded.session;
+        rendered = true;
+      }
+    }
+    await this.noticeReschedule(guild, squad, session, { from, by, startsNow });
+    if (startsNow) {
+      await this.start(guild, session);
+      session = (await getSquadSession(db, guildId, session.id)) ?? session;
+    } else if (!rendered) {
+      await this.renderSession(guild, session, squad);
+    }
+    await this.ctx.parts.guide.refresh(guild, squad.id);
+    return { outcome: 'rescheduled', session, squad, from };
+  }
+
+  /**
+   * O minuto novo não pode ser de outra jogatina do squad: `(squad_id,
+   * starts_at)` é único, e vale também para a cancelada, que segura o minuto
+   * para o BORA reabri-la.
+   */
+  private async assertMinuteFree(
+    guildId: string,
+    session: SquadSession,
+    startsAt: Date,
+  ): Promise<void> {
+    const other = await getSquadSessionAt(this.ctx.db, guildId, session.squadId, startsAt);
+    if (!other || other.id === session.id) return;
+    if (!other.cancelledAt) {
+      throw new UserFacingError(
+        'O squad já tem outra jogatina nesse horário. Aperte VOU nela em vez de remarcar esta.',
+        { code: 'SESSION_TAKEN' },
+      );
+    }
+    const { timezone } = await this.ctx.config.getSettings(guildId);
+    const nearby = describeWhen(new Date(startsAt.getTime() + 5 * MINUTE_MS), this.ctx.date(), timezone);
+    throw new UserFacingError(
+      `Esse horário tem uma jogatina cancelada do squad, e duas não cabem no mesmo minuto. Use um minuto diferente, como ${nearby}.`,
+      { code: 'SESSION_TAKEN' },
+    );
+  }
+
+  /** O aviso da remarcação no canal do squad; falha fica no log. */
+  private async noticeReschedule(
+    guild: Guild,
+    squad: Squad,
+    session: SquadSession,
+    change: { from: Date; by: string; startsNow: boolean },
+  ): Promise<void> {
+    const channel = await this.ctx.textChannel(guild, squad);
+    if (!channel) return;
+    // Começando agora, o início chama e move quem vai; o aviso chama só quem
+    // tinha recusado, que o início deixa em paz.
+    const called = change.startsNow
+      ? session.notGoingIds
+      : await this.memberIds(guild.id, squad.id);
+    await channel
+      .send(
+        sessionRescheduledMessage({
+          userIds: called.filter((id) => id !== change.by),
+          by: change.by,
+          from: change.from,
+          startsAt: session.startsAt,
+          startsNow: change.startsNow,
+          voiceChannelId: isReserved(session) ? session.voiceChannelId : null,
+          voiceTemporary: isReserved(session) && session.voiceTemporary,
+          reminded: session.remindedAt !== null,
+        }),
+      )
+      .catch(
+        logFailure('não foi possível avisar a remarcação', {
+          guildId: guild.id,
+          sessionId: session.id,
+        }),
+      );
+  }
+
+  /**
    * REPETIR: a mesma hora de parede uma semana depois (atravessando horário de
    * verão). Clicado semanas mais tarde, pula para a primeira semana que ainda
    * não passou.
@@ -382,7 +611,8 @@ export class SessionService {
    * dizer qual é a sala (ou que não há sala). Jogatina sem mensagem (a do
    * agendamento antigo, ou anúncio que falhou) ganha a mensagem completa
    * agora; as outras ganham a sala na mensagem e um lembrete curto à parte.
-   * `null` quando o lembrete já tinha saído.
+   * `null` quando o lembrete já tinha saído ou quando a jogatina, remarcada
+   * depois de o job listá-la, já não começa dentro da antecedência.
    */
   async remind(
     guild: Guild,
@@ -390,7 +620,11 @@ export class SessionService {
     options: RemindOptions = {},
   ): Promise<RemindResult | null> {
     const { db } = this.ctx;
-    const marked = await markSessionReminded(db, guild.id, session.id, this.ctx.date());
+    const { reminderMinutesBefore } = await this.ctx.config.get(guild.id, 'squads');
+    const startsBy = new Date(this.ctx.now() + reminderMinutesBefore * MINUTE_MS);
+    const marked = await markSessionReminded(db, guild.id, session.id, this.ctx.date(), {
+      startsBy,
+    });
     if (!marked) return null;
     if (marked.cancelledAt) return { session: marked, voiceChannelId: null };
 
@@ -523,11 +757,13 @@ export class SessionService {
    * Na hora: move para o voice reservado quem já está em outra sala da guild
    * e chama, numa mensagem só, quem não está em voice nenhum. Quem votou
    * "Não vou" fica em paz. Sem sala, dois "vou" já contam como jogatina que
-   * rolou. `null` quando a jogatina já tinha começado ou foi cancelada.
+   * rolou. `null` quando a jogatina já tinha começado, foi cancelada ou foi
+   * remarcada para mais tarde depois de o job listá-la.
    */
   async start(guild: Guild, session: SquadSession): Promise<StartResult | null> {
     const { db } = this.ctx;
-    const marked = await markSessionStarted(db, guild.id, session.id, this.ctx.date());
+    const now = this.ctx.date();
+    const marked = await markSessionStarted(db, guild.id, session.id, now, { startsBy: now });
     if (!marked) return null;
     // Chamada pública é para antes do início: sai do ar mesmo com o squad arquivado.
     await this.ctx.parts.calls.close(guild, marked);

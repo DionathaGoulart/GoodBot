@@ -24,8 +24,8 @@ export type SquadProposalAction = 'accept' | 'decline';
 export type SquadRequestAction = 'for' | 'against';
 /** A resposta do candidato ao convite. */
 export type SquadInviteAction = 'accept' | 'pass';
-export type SquadSessionAction = 'going' | 'notgoing' | 'cancel' | 'repeat';
-const SESSION_ACTIONS: readonly string[] = ['going', 'notgoing', 'cancel', 'repeat'];
+export type SquadSessionAction = 'going' | 'notgoing' | 'cancel' | 'repeat' | 'reschedule';
+const SESSION_ACTIONS: readonly string[] = ['going', 'notgoing', 'cancel', 'repeat', 'reschedule'];
 /**
  * `accept` e `decline` são os botões do pedido antigo ("basta um aceite"),
  * ainda no ar nos canais dos squads: viram voto, e a próxima edição da
@@ -51,6 +51,7 @@ export type SquadCustomId =
   | { kind: 'enter'; sessionId: number }
   | { kind: 'bora-open'; squadId: string }
   | { kind: 'bora-modal'; squadId: string }
+  | { kind: 'reschedule-modal'; sessionId: number }
   | { kind: 'rename-open'; squadId: string }
   | { kind: 'rename-modal'; squadId: string }
   | { kind: 'search'; gameId: string }
@@ -139,6 +140,11 @@ export function boraButtonId(squadId: string): string {
 
 export function boraModalId(squadId: string): string {
   return build('bora', 'modal', assertUuid(squadId, 'squadId'));
+}
+
+/** O modal do REMARCAR; o botão é `sessionButtonId('reschedule', id)`. */
+export function rescheduleModalId(sessionId: number): string {
+  return build('reschedule', 'modal', assertSessionId(sessionId));
 }
 
 /** RENOMEAR, no guia do squad: abre o modal com o nome atual. */
@@ -272,6 +278,10 @@ export function parseSquadCustomId(customId: string): SquadCustomId | null {
     case 'enter': {
       const sessionId = size === 3 ? parseSessionId(second) : null;
       return sessionId === null ? null : { kind: 'enter', sessionId };
+    }
+    case 'reschedule': {
+      const sessionId = size === 4 && second === 'modal' ? parseSessionId(third) : null;
+      return sessionId === null ? null : { kind: 'reschedule-modal', sessionId };
     }
     case 'bora':
     case 'rename': {

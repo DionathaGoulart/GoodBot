@@ -762,6 +762,37 @@ export const impl = {
     });
     return copy(row);
   },
+  async rescheduleSquadSession(
+    _db: unknown,
+    guildId: string,
+    sessionId: number,
+    input: { startsAt: Date; endsAt: Date; resetReminder: boolean },
+  ) {
+    const row = findSession(guildId, sessionId);
+    if (!row || row.startedAt || row.cancelledAt) return { outcome: 'stale' as const };
+    if (input.resetReminder && row.voiceReservedAt && !row.voiceReleasedAt) {
+      return { outcome: 'stale' as const };
+    }
+    const taken = store.sessions.some(
+      (s) =>
+        s.id !== row.id &&
+        s.squadId === row.squadId &&
+        s.startsAt.getTime() === input.startsAt.getTime(),
+    );
+    if (taken) return { outcome: 'taken' as const };
+    Object.assign(row, { startsAt: input.startsAt, endsAt: input.endsAt });
+    if (input.resetReminder) {
+      Object.assign(row, {
+        remindedAt: null,
+        voiceChannelId: null,
+        voiceOverwrites: null,
+        voiceTemporary: false,
+        voiceReservedAt: null,
+        voiceReleasedAt: null,
+      });
+    }
+    return { outcome: 'rescheduled' as const, session: copy(row) };
+  },
   async listUpcomingSessions(
     _db: unknown,
     guildId: string,
@@ -848,9 +879,16 @@ export const impl = {
       ),
     );
   },
-  async markSessionReminded(_db: unknown, guildId: string, sessionId: number, at: Date) {
+  async markSessionReminded(
+    _db: unknown,
+    guildId: string,
+    sessionId: number,
+    at: Date,
+    guard: { startsBy?: Date } = {},
+  ) {
     const row = findSession(guildId, sessionId);
     if (!row || row.remindedAt) return null;
+    if (guard.startsBy && row.startsAt.getTime() > guard.startsBy.getTime()) return null;
     row.remindedAt = at;
     return copy(row);
   },
@@ -860,9 +898,16 @@ export const impl = {
     row.messageId = messageId;
     return copy(row);
   },
-  async markSessionStarted(_db: unknown, guildId: string, sessionId: number, at: Date) {
+  async markSessionStarted(
+    _db: unknown,
+    guildId: string,
+    sessionId: number,
+    at: Date,
+    guard: { startsBy?: Date } = {},
+  ) {
     const row = findSession(guildId, sessionId);
     if (!row || row.startedAt || row.cancelledAt) return null;
+    if (guard.startsBy && row.startsAt.getTime() > guard.startsBy.getTime()) return null;
     row.startedAt = at;
     return copy(row);
   },
