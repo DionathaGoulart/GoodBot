@@ -33,6 +33,7 @@ roles:
       - SendMessages
       - SendTTSMessages
       - ManageMessages
+      - PinMessages
       - EmbedLinks
       - AttachFiles
       - ReadMessageHistory
@@ -73,6 +74,7 @@ roles:
       - SendMessages
       - SendTTSMessages
       - ManageMessages
+      - PinMessages
       - EmbedLinks
       - AttachFiles
       - ReadMessageHistory
@@ -352,6 +354,23 @@ categories:
         send: allow
       - role: "@everyone"
         view: deny
+  - name: Suporte
+    overrides:
+      - role: "@everyone"
+        view: deny
+      - role: Almirante
+        view: allow
+        send: allow
+    channels:
+      - name: abrir-ticket
+        topic: Precisa falar com a staff? Clique no botão abaixo e um canal privado é aberto só pra você.
+        overrides:
+          - role: "@everyone"
+            view: allow
+            send: deny
+          - role: Almirante
+            view: allow
+            send: allow
   - name: Staff
     overrides:
       - role: "@everyone"
@@ -407,6 +426,13 @@ categories:
           - role: Bots
             view: allow
             send: allow
+          - role: Almirante
+            view: allow
+          - role: "@everyone"
+            view: deny
+      - name: log-tickets
+        topic: Registro automático de tickets abertos e fechados, com o transcript de cada um.
+        overrides:
           - role: Almirante
             view: allow
           - role: "@everyone"
