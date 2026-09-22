@@ -29,6 +29,7 @@ import {
   rescheduleModalId,
   searchButtonId,
   sessionButtonId,
+  statsButtonId,
   statusButtonId,
 } from './ids';
 
@@ -61,6 +62,7 @@ describe('custom_id de squads', () => {
     [renameButtonId(UUID), { kind: 'rename-open', squadId: UUID }],
     [renameModalId(UUID), { kind: 'rename-modal', squadId: UUID }],
     [searchButtonId(UUID), { kind: 'search', gameId: UUID }],
+    [statsButtonId(UUID), { kind: 'stats', squadId: UUID }],
     [keepButtonId(UUID), { kind: 'keep', squadId: UUID }],
     [leaveButtonId(UUID), { kind: 'leave', squadId: UUID }],
     [confirmLeaveButtonId(UUID), { kind: 'leave-confirm', squadId: UUID }],

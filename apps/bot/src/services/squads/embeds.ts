@@ -21,6 +21,7 @@ import {
   requestButtonId,
   searchButtonId,
   sessionButtonId,
+  statsButtonId,
   statusButtonId,
 } from './ids';
 import { formatSlot } from './slots';
@@ -36,6 +37,10 @@ import type {
 } from '@goodbot/db';
 import type {
   FormationSummary,
+  FormationTime,
+  GroupTime,
+  PairTime,
+  PlayerStats,
   SessionSummary,
   SquadAnswers,
   SquadBlockConfig,
@@ -252,6 +257,7 @@ const GUIDE_HOW_TO = [
   '• Na mensagem da jogatina tem **VOU**, **NÃO VOU** e **CANCELAR**. Depois que ela começa, **REPETIR** marca a mesma hora na semana seguinte.',
   '• Falta gente na party? **CHAMAR GENTE** anuncia a próxima jogatina no canal de busca, e quem quiser jogar pede para entrar.',
   '• Amigo de fora? **CONVIDAR** ou `/squad convidar`: quem vocês chamam entra sem votação. Quem chega pela busca passa pelo voto de vocês.',
+  '• **NÚMEROS** mostra o quanto e com quem vocês jogam. Os seus: `/squad stats`.',
   '• Nome do squad: **RENOMEAR**. Para sair: **SAIR DO SQUAD**.',
 ].join('\n');
 
@@ -329,6 +335,10 @@ export function guideMessage(view: GuideView): BaseMessageOptions {
       .setCustomId(invitePickButtonId(squad.id))
       .setLabel('CONVIDAR')
       .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(statsButtonId(squad.id))
+      .setLabel('NÚMEROS')
+      .setStyle(ButtonStyle.Secondary),
   ];
   const manage = [
     new ButtonBuilder()
@@ -360,6 +370,198 @@ export function guideMessage(view: GuideView): BaseMessageOptions {
       new ActionRowBuilder<ButtonBuilder>().addComponents(manage),
     ],
     allowedMentions: { users: mentioned },
+  };
+}
+
+// ── números ─────────────────────────────────────────────────────────────────
+
+export interface PlayerStatsView {
+  userId: string;
+  game: Pick<SquadGame, 'name' | 'partySize'>;
+  /** A janela de detalhe, em dias. */
+  windowDays: number;
+  /** O "último mês" destacado à parte, em dias. */
+  recentDays: number;
+  /** Tempo da pessoa no voice das jogatinas da janela. */
+  ms: number;
+  /** O mesmo, só no último mês. */
+  msRecent: number;
+  /** O tempo dela por tamanho do grupo em que estava. */
+  bySize: readonly FormationTime[];
+  /** Jogatinas da janela em que esteve. */
+  sessions: number;
+  /** Jogatinas do jogo que rolaram na janela. */
+  played: number;
+  /** Em quantas ela disse VOU. */
+  going: number;
+  noShows: number;
+  attendanceRate: number | null;
+  /** Com quem mais jogou, do mais tempo. */
+  pairs: readonly PairTime[];
+  /** Os grupos exatos em que mais jogou, do mais tempo. */
+  groups: readonly GroupTime[];
+  embedColor: number;
+}
+
+export interface SquadStatsView {
+  squad: Pick<Squad, 'name'>;
+  game: Pick<SquadGame, 'name' | 'partySize'>;
+  windowDays: number;
+  /** Jogatinas do squad que rolaram na janela. */
+  played: number;
+  /** Tempo de sala: quanto tempo o voice teve alguém dentro. */
+  ms: number;
+  /** O ranking, do que mais jogou. */
+  players: readonly PlayerStats[];
+  formations: FormationSummary;
+  pairs: readonly PairTime[];
+  embedColor: number;
+}
+
+/** "80% de presença", como no histórico. */
+function attendanceText(rate: number): string {
+  return `${String(Math.round(rate * 100))}% de presença`;
+}
+
+/** "@b (12 h), @c (4 h)": o outro de cada dupla de quem se pediu. */
+function partnerList(pairs: readonly PairTime[], userId: string): string {
+  return playtimeList(
+    pairs.map((pair) => ({
+      userId: pair.userIds[0] === userId ? pair.userIds[1] : pair.userIds[0],
+      ms: pair.ms,
+    })),
+  );
+}
+
+/** Uma linha por grupo exato: "@a, @b e @c: 6 h". */
+function groupLines(groups: readonly GroupTime[]): string {
+  return groups
+    .map((group) => `${group.userIds.map(mention).join(', ')}: ${formatPlaytime(group.ms)}`)
+    .join('\n');
+}
+
+/**
+ * `/squad stats`: o quanto uma pessoa jogou um jogo, em que formações e com
+ * quem. Efêmero, e por isso sem botão: quem quiser os números do squad inteiro
+ * tem o NÚMEROS no guia.
+ */
+export function playerStatsMessage(view: PlayerStatsView): BaseMessageOptions {
+  const window = `nos últimos ${String(view.windowDays)} dias`;
+  if (view.sessions === 0) {
+    return {
+      embeds: [
+        infoEmbed(
+          {
+            title: `Números de ${view.game.name}`,
+            description: `${mention(view.userId)} não apareceu em nenhuma jogatina ${window}.`,
+            footer: SQUADS_FOOTER,
+          },
+          view.embedColor,
+        ),
+      ],
+      allowedMentions: { parse: [] },
+    };
+  }
+
+  const fields: APIEmbedField[] = [];
+  if (view.ms > 0) {
+    const recent =
+      view.msRecent > 0
+        ? `, ${formatPlaytime(view.msRecent)} no último mês`
+        : `, nada no último mês`;
+    fields.push({ name: 'Tempo de jogo', value: `${formatPlaytime(view.ms)} ${window}${recent}` });
+  }
+
+  const sessions = `Esteve em ${String(view.sessions)} das ${String(view.played)} que rolaram`;
+  const rate = view.attendanceRate === null ? '' : `, ${attendanceText(view.attendanceRate)}`;
+  const missed =
+    view.noShows === 0
+      ? ''
+      : `, ${String(view.noShows)} ${view.noShows === 1 ? 'falta' : 'faltas'}`;
+  fields.push({ name: 'Jogatinas', value: `${sessions}${rate}${missed}.` });
+
+  const formations = formationsText({ bySize: [...view.bySize], groups: [] });
+  if (formations) fields.push({ name: 'Formações', value: formations.slice(0, MAX_FIELD_VALUE) });
+  if (view.pairs.length > 0) {
+    fields.push({
+      name: 'Joga mais com',
+      value: partnerList(view.pairs, view.userId).slice(0, MAX_FIELD_VALUE),
+    });
+  }
+  if (view.groups.length > 0) {
+    fields.push({ name: 'Grupos', value: groupLines(view.groups).slice(0, MAX_FIELD_VALUE) });
+  }
+
+  return {
+    embeds: [
+      infoEmbed(
+        {
+          title: `Números de ${view.game.name}`,
+          description: `${mention(view.userId)} ${window}.`,
+          fields,
+          footer: SQUADS_FOOTER,
+        },
+        view.embedColor,
+      ),
+    ],
+    allowedMentions: { parse: [] },
+  };
+}
+
+/** O botão NÚMEROS do guia: o quanto e com quem o squad joga. */
+export function squadStatsMessage(view: SquadStatsView): BaseMessageOptions {
+  const window = `nos últimos ${String(view.windowDays)} dias`;
+  const fields: APIEmbedField[] = [];
+  if (view.played > 0) {
+    fields.push({
+      name: 'Quem mais joga',
+      value: view.players
+        .map((player) => {
+          const rate =
+            player.attendanceRate === null ? '' : `, ${attendanceText(player.attendanceRate)}`;
+          const sessions = `${String(player.sessions)} ${player.sessions === 1 ? 'jogatina' : 'jogatinas'}`;
+          return `${mention(player.userId)}: ${formatPlaytime(player.ms)}, ${sessions}${rate}`;
+        })
+        .join('\n')
+        .slice(0, MAX_FIELD_VALUE),
+    });
+    const formations = formationsText(view.formations);
+    if (formations) fields.push({ name: 'Formações', value: formations.slice(0, MAX_FIELD_VALUE) });
+    if (view.pairs.length > 0) {
+      fields.push({
+        name: 'Duplas',
+        value: view.pairs
+          .map((pair) => `${pair.userIds.map(mention).join(' e ')}: ${formatPlaytime(pair.ms)}`)
+          .join('\n')
+          .slice(0, MAX_FIELD_VALUE),
+      });
+    }
+    if (view.formations.groups.length > 0) {
+      fields.push({
+        name: 'Grupos',
+        value: groupLines(view.formations.groups).slice(0, MAX_FIELD_VALUE),
+      });
+    }
+  }
+
+  const played = `${String(view.played)} ${view.played === 1 ? 'jogatina' : 'jogatinas'}`;
+  const room = view.ms > 0 ? `, ${formatPlaytime(view.ms)} de sala` : '';
+  return {
+    embeds: [
+      infoEmbed(
+        {
+          title: `Números do ${view.squad.name}`,
+          description:
+            view.played === 0
+              ? `Nenhuma jogatina de **${view.game.name}** ${window}. Aperte **BORA** para marcar uma.`
+              : `${played} de **${view.game.name}** ${window}${room}.`,
+          fields,
+          footer: SQUADS_FOOTER,
+        },
+        view.embedColor,
+      ),
+    ],
+    allowedMentions: { parse: [] },
   };
 }
 

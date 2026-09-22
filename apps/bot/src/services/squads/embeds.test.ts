@@ -15,10 +15,12 @@ import {
   memberLeftMessage,
   NO_RESERVED_VOICE_NOTE,
   partyText,
+  playerStatsMessage,
   publicCallMessage,
   sessionMessage,
   sessionRescheduledMessage,
   sessionRescheduledText,
+  squadStatsMessage,
 } from './embeds';
 import { parseSquadCustomId } from './ids';
 
@@ -28,7 +30,9 @@ import type {
   GuestInviteView,
   GuideView,
   JoinVoteView,
+  PlayerStatsView,
   SessionView,
+  SquadStatsView,
 } from './embeds';
 import type { BaseMessageOptions, EmbedBuilder } from 'discord.js';
 
@@ -44,6 +48,9 @@ const base: Omit<AdminDmView, 'kind'> = {
 
 const embedOf = (message: BaseMessageOptions) =>
   (message.embeds as EmbedBuilder[] | undefined)?.[0]?.toJSON();
+
+const fieldOf = (embed: ReturnType<typeof embedOf>, name: string) =>
+  embed?.fields?.find((field) => field.name === name)?.value;
 
 /** O comando que cada aviso indica como próximo passo. */
 const NEXT_STEP: Record<AdminDmKind, string> = {
@@ -225,7 +232,7 @@ describe('histórico e chamada pública', () => {
 
   it('o guia divide os botões em jogar e cuidar do squad', () => {
     expect(rowsOf(guide())).toEqual([
-      ['bora-open', 'call-next', 'invite-pick'],
+      ['bora-open', 'call-next', 'invite-pick', 'stats'],
       ['rename-open', 'search', 'leave'],
     ]);
     expect(rowsOf(guide({ canJoinAnother: false }))[1]).toEqual(['rename-open', 'leave']);
@@ -697,5 +704,112 @@ describe('histórico e chamada pública', () => {
     expect(embedOf(joinVoteMessage({ ...view, session: null }))?.description).toContain(
       'joga em horários parecidos',
     );
+  });
+});
+
+describe('números', () => {
+  const A = '300000000000000001';
+  const B = '300000000000000002';
+  const C = '300000000000000003';
+
+  const player = (overrides: Partial<PlayerStatsView> = {}) =>
+    playerStatsMessage({
+      userId: A,
+      game: { name: 'Helldivers 2', partySize: 4 },
+      windowDays: 90,
+      recentDays: 30,
+      ms: 3 * HOUR_MS,
+      msRecent: 2 * HOUR_MS,
+      bySize: [
+        { size: 1, label: 'solo', party: 'partial', ms: HOUR_MS },
+        { size: 4, label: 'quarteto', party: 'full', ms: 2 * HOUR_MS },
+      ],
+      sessions: 2,
+      played: 3,
+      going: 2,
+      noShows: 1,
+      attendanceRate: 0.5,
+      pairs: [{ userIds: [A, B], ms: 2 * HOUR_MS }],
+      groups: [{ userIds: [A, B, C], ms: HOUR_MS }],
+      embedColor: 0,
+      ...overrides,
+    });
+
+  it('a pessoa: tempo, jogatinas, formações, com quem joga e os grupos', () => {
+    const embed = embedOf(player());
+    expect(embed?.title).toBe('> NÚMEROS DE HELLDIVERS 2');
+    expect(embed?.description).toBe(`<@${A}> nos últimos 90 dias.`);
+    expect(fieldOf(embed, 'Tempo de jogo')).toBe('3 h nos últimos 90 dias, 2 h no último mês');
+    expect(fieldOf(embed, 'Jogatinas')).toBe(
+      'Esteve em 2 das 3 que rolaram, 50% de presença, 1 falta.',
+    );
+    expect(fieldOf(embed, 'Formações')).toBe('2 h de quarteto (party cheia), 1 h solo');
+    expect(fieldOf(embed, 'Joga mais com')).toBe(`<@${B}> (2 h)`);
+    expect(fieldOf(embed, 'Grupos')).toBe(`<@${A}>, <@${B}>, <@${C}>: 1 h`);
+    expect(JSON.stringify(embed)).not.toMatch(/[—–]/);
+  });
+
+  it('quem não apareceu na janela ganha a frase, e não campos zerados', () => {
+    const embed = embedOf(player({ sessions: 0, ms: 0, msRecent: 0, bySize: [], pairs: [], groups: [] }));
+    expect(embed?.description).toBe(`<@${A}> não apareceu em nenhuma jogatina nos últimos 90 dias.`);
+    expect(embed?.fields ?? []).toEqual([]);
+  });
+
+  it('jogatina sem sala: sem tempo medido, os outros números ficam', () => {
+    const embed = embedOf(player({ ms: 0, msRecent: 0, bySize: [], pairs: [], groups: [] }));
+    expect(fieldOf(embed, 'Tempo de jogo')).toBeUndefined();
+    expect(fieldOf(embed, 'Jogatinas')).toContain('Esteve em 2 das 3');
+  });
+
+  const squad = (overrides: Partial<SquadStatsView> = {}) =>
+    squadStatsMessage({
+      squad: { name: 'Os Bravos' },
+      game: { name: 'Helldivers 2', partySize: 4 },
+      windowDays: 90,
+      played: 2,
+      ms: 3 * HOUR_MS,
+      players: [
+        {
+          userId: A,
+          ms: 3 * HOUR_MS,
+          bySize: [],
+          sessions: 2,
+          going: 2,
+          kept: 2,
+          noShows: 0,
+          walkIns: 0,
+          attendanceRate: 1,
+        },
+      ],
+      formations: {
+        bySize: [{ size: 2, label: 'dupla', party: 'partial', ms: 3 * HOUR_MS }],
+        groups: [{ userIds: [A, B], ms: 3 * HOUR_MS }],
+      },
+      pairs: [{ userIds: [A, B], ms: 3 * HOUR_MS }],
+      embedColor: 0,
+      ...overrides,
+    });
+
+  it('o squad: quantas jogatinas, tempo de sala, ranking, duplas e grupos', () => {
+    const embed = embedOf(squad());
+    expect(embed?.title).toBe('> NÚMEROS DO OS BRAVOS');
+    expect(embed?.description).toBe(
+      '2 jogatinas de **Helldivers 2** nos últimos 90 dias, 3 h de sala.',
+    );
+    expect(fieldOf(embed, 'Quem mais joga')).toBe(`<@${A}>: 3 h, 2 jogatinas, 100% de presença`);
+    expect(fieldOf(embed, 'Formações')).toBe('3 h de dupla');
+    expect(fieldOf(embed, 'Duplas')).toBe(`<@${A}> e <@${B}>: 3 h`);
+    expect(fieldOf(embed, 'Grupos')).toBe(`<@${A}>, <@${B}>: 3 h`);
+    expect(JSON.stringify(embed)).not.toMatch(/[—–]/);
+  });
+
+  it('squad que ainda não jogou aponta o BORA, sem campo nenhum', () => {
+    const embed = embedOf(
+      squad({ played: 0, ms: 0, players: [], formations: { bySize: [], groups: [] }, pairs: [] }),
+    );
+    expect(embed?.description).toBe(
+      'Nenhuma jogatina de **Helldivers 2** nos últimos 90 dias. Aperte **BORA** para marcar uma.',
+    );
+    expect(embed?.fields ?? []).toEqual([]);
   });
 });

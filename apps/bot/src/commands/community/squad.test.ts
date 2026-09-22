@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import squad, { pickGame, pickSquad } from './squad';
+import squad, { pickGame, pickSquad, pickStatsGame } from './squad';
 
 import type { Squad, SquadGame } from '@goodbot/db';
 
@@ -37,8 +37,18 @@ describe('/squad', () => {
       'procurar',
       'renomear',
       'sair',
+      'stats',
       'status',
     ]);
+  });
+
+  it('stats tem pessoa opcional e jogo com autocomplete', () => {
+    const stats = (json.options ?? []).find((option) => option.name === 'stats') as {
+      options?: { name: string; required?: boolean; autocomplete?: boolean }[];
+    };
+    expect(stats.options?.map((option) => option.name)).toEqual(['pessoa', 'jogo']);
+    expect(stats.options?.every((option) => !option.required)).toBe(true);
+    expect(stats.options?.find((option) => option.name === 'jogo')?.autocomplete).toBe(true);
   });
 });
 
@@ -59,6 +69,25 @@ describe('pickGame', () => {
     expect(codeOf(() => pickGame([], null))).toBe('SQUADS_NO_GAMES');
     expect(codeOf(() => pickGame([hd2, drg], null))).toBe('CHOOSE_GAME');
     expect(codeOf(() => pickGame([hd2], 'Minecraft'))).toBe('GAME_NOT_FOUND');
+  });
+});
+
+describe('pickStatsGame', () => {
+  const hd2 = game('g1', 'Helldivers 2');
+  const drg = game('g2', 'Deep Rock Galactic');
+  const alfa = { ...squadRow('s1', 'Alfa', '800000000000000001'), gameId: 'g2' } as Squad;
+
+  it('sem opção, usa o jogo do squad de cujo canal o comando saiu', () => {
+    expect(pickStatsGame([hd2, drg], [alfa], null, '800000000000000001')).toBe(drg);
+  });
+
+  it('a opção ganha do canal', () => {
+    expect(pickStatsGame([hd2, drg], [alfa], 'g1', '800000000000000001')).toBe(hd2);
+  });
+
+  it('fora do canal de um squad, vale a regra do jogo único', () => {
+    expect(pickStatsGame([hd2], [alfa], null, '900000000000000001')).toBe(hd2);
+    expect(codeOf(() => pickStatsGame([hd2, drg], [], null, null))).toBe('CHOOSE_GAME');
   });
 });
 

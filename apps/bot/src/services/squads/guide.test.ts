@@ -192,7 +192,7 @@ describe('GuideService', () => {
       toJSON(): { components: { label?: string }[] };
     }[];
     expect(rows.map((row) => row.toJSON().components.map((button) => button.label))).toEqual([
-      ['BORA', 'CHAMAR GENTE', 'CONVIDAR'],
+      ['BORA', 'CHAMAR GENTE', 'CONVIDAR', 'NÚMEROS'],
       ['RENOMEAR', 'PROCURAR OUTRO SQUAD', 'SAIR DO SQUAD'],
     ]);
   });

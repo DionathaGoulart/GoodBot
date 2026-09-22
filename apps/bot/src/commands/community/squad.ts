@@ -8,6 +8,7 @@ import { levelAtLeast } from '../../services/permissions';
 import {
   inviteSentText,
   joinableSquadsMessage,
+  playerStatsMessage,
   renamedText,
   searchMessagePublishedText,
   statusChangedText,
@@ -88,6 +89,25 @@ export function pickSquad(
     });
   }
   return only;
+}
+
+/**
+ * O jogo dos números: o da opção, o do squad de cujo canal o comando saiu (é
+ * de longe o caso mais comum, e evita escolher jogo num servidor com vários)
+ * e, por fim, o único jogo do servidor.
+ */
+export function pickStatsGame(
+  games: readonly SquadGame[],
+  squads: readonly Squad[],
+  option: string | null,
+  channelId: string | null,
+): SquadGame {
+  if (!option?.trim() && channelId) {
+    const here = squads.find((squad) => squad.textChannelId === channelId);
+    const game = here ? games.find((candidate) => candidate.id === here.gameId) : undefined;
+    if (game) return game;
+  }
+  return pickGame(games, option);
 }
 
 function requireGuild(ctx: CommandContext): Guild {
@@ -171,6 +191,17 @@ export default defineCommand({
         .setDescription('Lista squads com vaga que combinam com você')
         .addStringOption((option) =>
           option.setName('jogo').setDescription('Jogo dos squads').setAutocomplete(true),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('stats')
+        .setDescription('Quanto você joga, em que formações e com quem')
+        .addUserOption((option) =>
+          option.setName('pessoa').setDescription('De quem são os números (padrão: você)'),
+        )
+        .addStringOption((option) =>
+          option.setName('jogo').setDescription('Jogo dos números').setAutocomplete(true),
         ),
     )
     .addSubcommand((sub) =>
@@ -301,6 +332,20 @@ export default defineCommand({
         const entries = await ctx.squads.listJoinableSquads(ctx.guildId, ctx.member.id, game.id);
         await ctx.interaction.editReply(
           joinableSquadsMessage({ game, entries, embedColor: ctx.settings.embedColor }),
+        );
+        return;
+      }
+
+      case 'stats': {
+        const game = pickStatsGame(
+          await ctx.squads.listGames(ctx.guildId),
+          await ctx.squads.listSquadsForUser(ctx.guildId, ctx.member.id),
+          ctx.interaction.options.getString('jogo'),
+          ctx.interaction.channelId,
+        );
+        const target = ctx.interaction.options.getUser('pessoa') ?? ctx.interaction.user;
+        await ctx.interaction.editReply(
+          playerStatsMessage(await ctx.squads.playerStats(ctx.guildId, game.id, target.id)),
         );
         return;
       }

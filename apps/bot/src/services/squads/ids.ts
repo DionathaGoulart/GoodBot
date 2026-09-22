@@ -56,6 +56,7 @@ export type SquadCustomId =
   | { kind: 'reschedule-modal'; sessionId: number }
   | { kind: 'rename-open'; squadId: string }
   | { kind: 'rename-modal'; squadId: string }
+  | { kind: 'stats'; squadId: string }
   | { kind: 'search'; gameId: string }
   | { kind: 'keep'; squadId: string }
   | { kind: 'leave'; squadId: string }
@@ -166,6 +167,11 @@ export function renameButtonId(squadId: string): string {
 
 export function renameModalId(squadId: string): string {
   return build('rename', 'modal', assertUuid(squadId, 'squadId'));
+}
+
+/** NÚMEROS, no guia do squad: o quanto e com quem o squad joga. */
+export function statsButtonId(squadId: string): string {
+  return build('stats', assertUuid(squadId, 'squadId'));
 }
 
 /** Squads com vaga num jogo, na mensagem de perfil salvo e no guia. */
@@ -312,6 +318,7 @@ export function parseSquadCustomId(customId: string): SquadCustomId | null {
     case 'keep':
     case 'leave':
     case 'join':
+    case 'stats':
     case 'quit': {
       if (size !== 3 || !isUuid(second)) return null;
       return { kind: subject === 'quit' ? 'leave-confirm' : subject, squadId: second };

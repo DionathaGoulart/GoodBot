@@ -20,6 +20,7 @@ import type { JoinRequestService } from './requests';
 import type { SearchService } from './search';
 import type { SessionService } from './sessions';
 import type { SquadLifecycleService } from './squads';
+import type { StatsService } from './stats';
 import type { Db, Squad } from '@goodbot/db';
 import type { SquadsConfig } from '@goodbot/shared';
 import type { BaseMessageOptions, Client, Guild, GuildBasedChannel, TextChannel } from 'discord.js';
@@ -55,6 +56,7 @@ export interface SquadParts {
   search: SearchService;
   manual: ManualMatchService;
   players: PlayerAdminService;
+  stats: StatsService;
 }
 
 /**

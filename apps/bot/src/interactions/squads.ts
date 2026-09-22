@@ -21,6 +21,7 @@ import {
   sessionCancelledText,
   sessionRescheduledText,
   sessionScheduledText,
+  squadStatsMessage,
   voteText,
 } from '../services/squads/embeds';
 import {
@@ -343,6 +344,13 @@ export async function handleSquadComponent(
           embedColor: (await ctx.config.getSettings(guild.id)).embedColor,
         }),
       );
+      return true;
+    }
+
+    case 'stats': {
+      // Ler a janela inteira de presença passa dos 3 s da resposta direta.
+      await interaction.deferReply(EPHEMERAL);
+      await interaction.editReply(squadStatsMessage(await ctx.squads.squadStats(guild.id, parsed.squadId)));
       return true;
     }
 

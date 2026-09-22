@@ -1081,6 +1081,23 @@ export const impl = {
         .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()),
     );
   },
+  async listPlayedSessionsByGame(_db: unknown, guildId: string, gameId: string, since: Date) {
+    const squadIds = store.squads
+      .filter((s) => s.guildId === guildId && s.gameId === gameId)
+      .map((s) => s.id);
+    return copy(
+      store.sessions
+        .filter(
+          (s) =>
+            s.guildId === guildId &&
+            squadIds.includes(s.squadId) &&
+            s.playedAt !== null &&
+            s.cancelledAt === null &&
+            s.startsAt.getTime() >= since.getTime(),
+        )
+        .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()),
+    );
+  },
   async countPlayedSessions(_db: unknown, guildId: string, squadIds: readonly string[]) {
     const totals = new Map<
       string,

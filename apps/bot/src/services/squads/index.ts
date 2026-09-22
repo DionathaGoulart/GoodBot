@@ -15,9 +15,11 @@ import { JoinRequestService } from './requests';
 import { SearchService } from './search';
 import { SessionService } from './sessions';
 import { SquadLifecycleService } from './squads';
+import { StatsService } from './stats';
 
 import type { CallSent } from './calls';
 import type { SquadServiceDeps } from './context';
+import type { PlayerStatsView, SquadStatsView } from './embeds';
 import type { GuestSent } from './guests';
 import type { SquadHistoryView } from './history';
 import type { ManualOutcome } from './manual';
@@ -124,6 +126,7 @@ export class SquadService {
       search: new SearchService(this.ctx),
       manual: new ManualMatchService(this.ctx),
       players: new PlayerAdminService(this.ctx),
+      stats: new StatsService(this.ctx),
     };
   }
 
@@ -544,6 +547,18 @@ export class SquadService {
   /** O histórico de jogatinas de cada squad pedido (o painel lê por aqui). */
   historyFor(guildId: string, squadIds: readonly string[]): Promise<Map<string, SquadHistoryView>> {
     return this.ctx.parts.history.load(guildId, squadIds);
+  }
+
+  // ── números ───────────────────────────────────────────────────────────────
+
+  /** `/squad stats`: o quanto uma pessoa joga um jogo, em que formações e com quem. */
+  playerStats(guildId: string, gameId: string, userId: string): Promise<PlayerStatsView> {
+    return this.ctx.parts.stats.forPlayer(guildId, gameId, userId);
+  }
+
+  /** NÚMEROS, no guia: o ranking do squad, as formações, as duplas e os grupos. */
+  squadStats(guildId: string, squadId: string): Promise<SquadStatsView> {
+    return this.ctx.parts.stats.forSquad(guildId, squadId);
   }
 
   // ── guia ──────────────────────────────────────────────────────────────────
