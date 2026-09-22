@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 
+import { isUniqueViolation } from './pg-errors';
 import { cases, scheduledActions } from '../schema/cases';
 
 import type { Db, DbExecutor } from '../client';
@@ -11,19 +12,8 @@ export type CreateCaseInput = Omit<
   'id' | 'caseNumber' | 'createdAt' | 'editedAt' | 'editedBy' | 'deletedAt'
 >;
 
-/** Código do Postgres para violação de unique (`cases_guild_number_uidx`). */
-const UNIQUE_VIOLATION = '23505';
+/** Tentativas quando `cases_guild_number_uidx` reclama. */
 const MAX_ATTEMPTS = 5;
-
-/** O Drizzle embrulha o `PostgresError` em `DrizzleQueryError`; o código fica em `cause`. */
-function isUniqueViolation(error: unknown): boolean {
-  for (let current = error, depth = 0; current && depth < 5; depth++) {
-    if (typeof current !== 'object') return false;
-    if ((current as { code?: unknown }).code === UNIQUE_VIOLATION) return true;
-    current = (current as { cause?: unknown }).cause;
-  }
-  return false;
-}
 
 /**
  * Insere um caso com `case_number = max + 1` por guild, em transação. Um
