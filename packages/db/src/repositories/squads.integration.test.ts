@@ -7,6 +7,7 @@ import { loadRootEnv } from '../env';
 import {
   acceptSquadProposal,
   addSquadMember,
+  appendSessionVoiceSnapshot,
   archiveSquad,
   cancelSquadSession,
   claimProposalSquad,
@@ -712,6 +713,40 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect(
         (await listSessionsToRelease(db, GUILD_ID, afterEnd)).map((row) => row.id),
       ).not.toContain(session.id);
+    });
+
+    it('o snapshot ganha quem entrou com a reserva viva, uma vez, e só com ela viva e do pool', async () => {
+      const session = await newSession('Snapshot');
+      const everyone: LockOverwrite = { id: GUILD_ID, type: 0, allow: '0', deny: '0' };
+      const late: LockOverwrite = { id: USER_C, type: -1, allow: '0', deny: '0' };
+      expect(await appendSessionVoiceSnapshot(db, GUILD_ID, session.id, late)).toBeNull();
+
+      await reserveSessionVoice(db, GUILD_ID, session.id, {
+        voiceChannelId: '400000000000000013',
+        overwrites: [everyone],
+        at: new Date(),
+      });
+      expect(await appendSessionVoiceSnapshot(db, OTHER_GUILD_ID, session.id, late)).toBeNull();
+      const appended = await appendSessionVoiceSnapshot(db, GUILD_ID, session.id, late);
+      expect(appended?.voiceOverwrites).toEqual([everyone, late]);
+
+      // A segunda entrada guardaria o overwrite que a própria reserva deu.
+      const granted: LockOverwrite = { id: USER_C, type: 1, allow: '3146752', deny: '0' };
+      const again = await appendSessionVoiceSnapshot(db, GUILD_ID, session.id, granted);
+      expect(again?.voiceOverwrites).toEqual([everyone, late]);
+
+      await releaseSessionVoice(db, GUILD_ID, session.id, new Date());
+      const other: LockOverwrite = { id: USER_D, type: -1, allow: '0', deny: '0' };
+      expect(await appendSessionVoiceSnapshot(db, GUILD_ID, session.id, other)).toBeNull();
+
+      const temporary = await newSession('Snapshot temporário');
+      await reserveSessionVoice(db, GUILD_ID, temporary.id, {
+        voiceChannelId: '400000000000000014',
+        overwrites: null,
+        temporary: true,
+        at: new Date(),
+      });
+      expect(await appendSessionVoiceSnapshot(db, GUILD_ID, temporary.id, late)).toBeNull();
     });
 
     it('getActiveSessionByVoice: reserva viva, de 60 min antes do início até o fim', async () => {

@@ -1772,6 +1772,44 @@ export async function reserveSessionVoice(
 }
 
 /**
+ * Acrescenta ao snapshot da reserva o overwrite que `entry.id` tinha antes de
+ * ganhar o voice: quem entra no squad com a reserva viva também precisa voltar
+ * ao estado de antes na liberação, que só restaura os ids do snapshot. Id que
+ * já está lá fica como está, porque a primeira entrada é o estado de antes da
+ * reserva e uma segunda gravaria o que a própria reserva deu (é o caso de quem
+ * saiu do squad e voltou com a mesma reserva viva).
+ *
+ * `null` quando não há reserva viva com snapshot: liberada no meio do caminho,
+ * ou voice temporário, que é apagado no fim e não tem o que restaurar. Com
+ * `null`, quem chama não concede o voice.
+ */
+export async function appendSessionVoiceSnapshot(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+  entry: LockOverwrite,
+): Promise<SquadSession | null> {
+  const column = squadSessions.voiceOverwrites;
+  const known = JSON.stringify([{ id: entry.id }]);
+  const [row] = await db
+    .update(squadSessions)
+    .set({
+      voiceOverwrites: sql`case when ${column} @> ${known}::jsonb then ${column} else ${column} || ${JSON.stringify([entry])}::jsonb end`,
+    })
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.id, sessionId),
+        isNotNull(squadSessions.voiceReservedAt),
+        isNull(squadSessions.voiceReleasedAt),
+        isNotNull(column),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/**
  * Marca a liberação e devolve a linha com o snapshot para restaurar. `null`
  * quando não havia reserva ou ela já foi liberada: o restore roda uma vez.
  */
