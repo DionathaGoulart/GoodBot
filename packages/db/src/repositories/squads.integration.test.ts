@@ -46,12 +46,14 @@ import {
   listSessionAttendance,
   listSessionGuests,
   listSessionsToRelease,
+  listSessionsToReport,
   listSquadProfilesByGame,
   listSquads,
   listSquadsForUser,
   listUpcomingSessions,
   markSessionPlayed,
   markSessionReminded,
+  markSessionReported,
   markSessionStarted,
   openSessionAttendance,
   releaseSessionCall,
@@ -947,6 +949,67 @@ describe.skipIf(!url)('squads repositories (integração com Postgres)', () => {
       expect(
         (await listOpenAttendance(db, GUILD_ID)).some((row) => row.sessionId === session.id),
       ).toBe(false);
+    });
+
+    it('relatório: só o que começou, acabou, não foi relatado e não tem ninguém na sala', async () => {
+      const session = await newSession('Relatório');
+      const now = new Date(session.endsAt.getTime() + HOUR);
+      const window = { now, since: new Date(session.startsAt.getTime() - DAY) };
+      const listed = async () =>
+        (await listSessionsToReport(db, GUILD_ID, window)).map((row) => row.id);
+
+      // Marcada e não começada: nada a relatar.
+      expect(await listed()).not.toContain(session.id);
+      await markSessionStarted(db, GUILD_ID, session.id, session.startsAt);
+      // Ainda rolando (o fim é depois de agora).
+      expect(
+        (
+          await listSessionsToReport(db, GUILD_ID, { now: session.startsAt, since: window.since })
+        ).map((row) => row.id),
+      ).not.toContain(session.id);
+      expect(await listed()).toContain(session.id);
+
+      // Alguém ainda no voice segura o relatório até a presença fechar.
+      const joinedAt = session.startsAt;
+      const key = { sessionId: session.id, userId: USER_B, joinedAt };
+      await openSessionAttendance(db, { guildId: GUILD_ID, ...key });
+      expect(await listed()).not.toContain(session.id);
+      await closeAttendanceRow(db, GUILD_ID, key, now);
+      expect(await listed()).toContain(session.id);
+
+      // Velha demais para a janela, e de outra guild: fora dos dois jeitos.
+      expect(
+        (
+          await listSessionsToReport(db, GUILD_ID, { now, since: new Date(now.getTime() + DAY) })
+        ).map((row) => row.id),
+      ).not.toContain(session.id);
+      expect(await listSessionsToReport(db, OTHER_GUILD_ID, window)).toEqual([]);
+
+      expect(await markSessionReported(db, OTHER_GUILD_ID, session.id, now)).toBeNull();
+      expect((await markSessionReported(db, GUILD_ID, session.id, now))?.reportedAt).toEqual(now);
+      expect(await markSessionReported(db, GUILD_ID, session.id, now)).toBeNull();
+      expect(await listed()).not.toContain(session.id);
+    });
+
+    it('relatório: a sala devolvida depois do início encerra antes do fim previsto', async () => {
+      const session = await newSession('Relatório cedo');
+      const startedAt = new Date(session.startsAt.getTime());
+      await markSessionStarted(db, GUILD_ID, session.id, startedAt);
+      const window = {
+        now: new Date(startedAt.getTime() + HOUR),
+        since: new Date(session.startsAt.getTime() - DAY),
+      };
+      const listed = async () =>
+        (await listSessionsToReport(db, GUILD_ID, window)).map((row) => row.id);
+      expect(await listed()).not.toContain(session.id);
+
+      await reserveSessionVoice(db, GUILD_ID, session.id, {
+        voiceChannelId: '300000000000000098',
+        overwrites: [],
+        at: startedAt,
+      });
+      await releaseSessionVoice(db, GUILD_ID, session.id, window.now);
+      expect(await listed()).toContain(session.id);
     });
 
     it('convidado: um por pessoa, respeita o teto e só entra em jogatina viva', async () => {

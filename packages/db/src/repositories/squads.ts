@@ -25,6 +25,7 @@ import {
   lt,
   lte,
   ne,
+  notExists,
   notInArray,
   or,
   sql,
@@ -1965,6 +1966,79 @@ export async function listSessionsToRelease(
       ),
     )
     .orderBy(asc(squadSessions.endsAt));
+}
+
+/**
+ * Jogatinas que já acabaram e ainda não viraram relatório: começaram, não
+ * foram canceladas, passaram do fim (`ends_at`) ou tiveram a sala devolvida
+ * depois do início, e não têm mais ninguém no voice (presença aberta).
+ *
+ * A presença aberta é a condição que segura o relatório: enquanto alguém está
+ * na sala, o tempo dela ainda corre e o número sairia menor do que foi. Quem
+ * ficou no voice depois do fim fecha na varredura da saída, e o relatório sai
+ * na passada seguinte.
+ *
+ * `since` corta o que é velho demais: jogatina que acabou com o bot fora do ar
+ * por dias fica sem relatório em vez de encher o canal do squad quando ele
+ * voltar.
+ */
+export async function listSessionsToReport(
+  db: DbExecutor,
+  guildId: string,
+  options: { now: Date; since: Date },
+): Promise<SquadSession[]> {
+  const open = db
+    .select({ one: sql`1` })
+    .from(squadSessionAttendance)
+    .where(
+      and(
+        eq(squadSessionAttendance.sessionId, squadSessions.id),
+        isNull(squadSessionAttendance.leftAt),
+      ),
+    );
+  return db
+    .select()
+    .from(squadSessions)
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        isNotNull(squadSessions.startedAt),
+        isNull(squadSessions.reportedAt),
+        isNull(squadSessions.cancelledAt),
+        gte(squadSessions.startsAt, options.since),
+        or(
+          lte(squadSessions.endsAt, options.now),
+          gte(squadSessions.voiceReleasedAt, squadSessions.startedAt),
+        ),
+        notExists(open),
+      ),
+    )
+    .orderBy(asc(squadSessions.startsAt));
+}
+
+/**
+ * Trava o relatório de uma jogatina antes de editar a mensagem. `null` quando
+ * outra passada do job já relatou: o relatório sai uma vez só.
+ */
+export async function markSessionReported(
+  db: DbExecutor,
+  guildId: string,
+  sessionId: number,
+  at: Date,
+): Promise<SquadSession | null> {
+  const [row] = await db
+    .update(squadSessions)
+    .set({ reportedAt: at })
+    .where(
+      and(
+        eq(squadSessions.guildId, guildId),
+        eq(squadSessions.id, sessionId),
+        isNull(squadSessions.reportedAt),
+        isNull(squadSessions.cancelledAt),
+      ),
+    )
+    .returning();
+  return row ?? null;
 }
 
 // ── histórico ───────────────────────────────────────────────────────────────

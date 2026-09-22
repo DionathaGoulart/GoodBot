@@ -290,6 +290,14 @@ export const squadSessions = pgTable(
      * histórico conta.
      */
     playedAt: timestamptz('played_at'),
+    /**
+     * Quando o relatório de fim saiu: a mensagem da jogatina virou "Jogatina
+     * encerrada", com duração, quem jogou e as formações. É a trava de "um
+     * relatório por jogatina", gravada antes de editar a mensagem. `null` =
+     * ainda não acabou, ou acabou com o bot fora do ar (a janela da varredura
+     * passou).
+     */
+    reportedAt: timestamptz('reported_at'),
     cancelledAt: timestamptz('cancelled_at'),
     cancelledBy: snowflake('cancelled_by'),
     /**
@@ -309,6 +317,13 @@ export const squadSessions = pgTable(
     index('squad_sessions_to_release_idx')
       .on(t.guildId, t.endsAt)
       .where(sql`${t.voiceReservedAt} is not null and ${t.voiceReleasedAt} is null`),
+    // O passo do relatório passa a cada 5 min e só olha o que começou e ainda
+    // não foi relatado, que é sempre um punhado de linhas.
+    index('squad_sessions_to_report_idx')
+      .on(t.guildId, t.startsAt)
+      .where(
+        sql`${t.startedAt} is not null and ${t.reportedAt} is null and ${t.cancelledAt} is null`,
+      ),
     index('squad_sessions_guild_starts_idx').on(t.guildId, t.startsAt),
   ],
 );

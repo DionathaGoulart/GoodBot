@@ -1,0 +1,2 @@
+ALTER TABLE "squad_sessions" ADD COLUMN "reported_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "squad_sessions_to_report_idx" ON "squad_sessions" USING btree ("guild_id","starts_at") WHERE "squad_sessions"."started_at" is not null and "squad_sessions"."reported_at" is null and "squad_sessions"."cancelled_at" is null;

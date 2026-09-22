@@ -148,6 +148,13 @@
       "when": 1790098832301,
       "tag": "0020_squad_session_guests",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790100964441,
+      "tag": "0021_squad_session_report",
+      "breakpoints": true
     }
   ]
 }
