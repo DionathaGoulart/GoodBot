@@ -1,11 +1,23 @@
 # Goodbot: PRD (Product Requirements Document)
 
-Versão 1.6 · 2026-09-16 · Documento de referência para todas as sessões.
+Versão 1.7 · 2026-09-22 · Documento de referência para todas as sessões.
 Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (UI).
 
-> As versões v1.0 a v1.6 citadas aqui são **revisões deste documento**, não
+> As versões v1.0 a v1.7 citadas aqui são **revisões deste documento**, não
 > versões do software. O software segue SemVer a partir da 1.0.0, e o que muda
 > entre uma versão e outra está no [`CHANGELOG.md`](../CHANGELOG.md).
+
+> **v1.7: jogatinas monitoradas.** A presença no voice reservado deixou de
+> servir só para contar jogatinas: ela passou a medir **tempo**. Uma varredura
+> acerta a presença com quem está em voice na reserva, no início e a cada
+> passada do job, cobrindo quem já estava na sala e quem entrou ou saiu com o
+> bot fora do ar. Dela saem os números do squad: horas por pessoa, por
+> tamanho de grupo (solo, dupla, trio, party cheia) e por grupo exato, com
+> quem cada um mais joga, e por jogatina quem foi, quem faltou e quem
+> apareceu sem avisar. A fonte é só o voice das jogatinas: nada de presença
+> de perfil nem de tempo fora de jogatina marcada. O que mudou no documento:
+> "Histórico", "Números" e "O relógio" na §5.11. O que **não** mudou: o resto
+> do módulo e os outros módulos.
 
 > **v1.6: jogatina sob demanda.** O squad deixou de ter janela semanal fixa:
 > a grade do perfil serve só para o match, e quem marca a hora de jogar é o
@@ -825,7 +837,21 @@ que ficou no ar responde que ela acabou e a tira dali.
 no voice reservado de uma jogatina viva abre uma linha em
 `squad_session_attendance`, e sair de um voice do pool a fecha (por pessoa,
 porque a reserva pode ter sido liberada antes da saída; sair e voltar abre
-outra). Só conta jogatina que **rolou** (`played_at`), porque marcar e ninguém
+outra). O evento de voz só vê quem entra e sai, e por isso uma **varredura**
+acerta a presença com quem está em voice agora: na reserva, no início e a
+cada passada do job. Quem é do squad e está no voice reservado, na mesma
+janela do evento (de uma hora antes do início até o fim), sem presença
+aberta, ganha uma a partir dali: é quem já estava na sala quando a reserva
+saiu (o início não move quem já está nela) e quem entrou com o bot fora do
+ar. Presença aberta de quem não está mais no voice da jogatina fecha na hora
+da varredura. É o limite honesto do bot fora do ar: a saída de verdade não
+chegou a ninguém, e o tempo de quem saiu nessa janela conta até a primeira
+varredura depois da volta, maior do que foi. Quem continua no voice depois
+da liberação continua contando até sair, salvo quando a mesma sala entra na
+janela de outra jogatina: aí a presença passa para ela, para as duas não
+contarem o mesmo tempo.
+
+Só conta jogatina que **rolou** (`played_at`), porque marcar e ninguém
 aparecer não é histórico. `summarizeHistory`, em `shared`, resume por squad:
 jogatinas no último mês e no total, a última, as três células da grade (dia e
 faixa do início, no fuso da guild) com mais jogatinas e os cinco que mais
@@ -838,6 +864,25 @@ noite. Última há 3 dias." ou "Ainda não jogaram.". "Geralmente" só entra com
 duas jogatinas ou mais na mesma célula, e o "há 3 dias" é em dias do
 calendário da guild.
 
+**Números.** A mesma presença dá o tempo, e não só a contagem. A regra mora
+em `shared` (`squads/stats.ts`) e é uma varredura de linha do tempo por
+jogatina: entre duas entradas ou saídas, quem está no voice não muda, e cada
+trecho é uma **formação** (quem estava e por quanto tempo). Dela saem o
+tempo por tamanho de grupo (solo, dupla, trio, quarteto, "grupo de N";
+marcado como party cheia quando bate com a `party_size` do jogo e como mais
+que uma party quando passa), os grupos exatos que mais jogam juntos ("A, B, C
+e D" conta só o tempo em que eram esses quatro) e o tempo de cada dupla junta,
+com ou sem mais gente. O tempo de uma pessoa numa jogatina é a união das
+entradas dela, então entrada repetida não conta duas vezes, e linha aberta
+conta até agora. Por jogatina: a duração (primeira entrada à última saída),
+quem **foi** (disse VOU e apareceu), quem **faltou** (disse VOU e não
+apareceu), quem apareceu **sem avisar** e, à parte, os convidados; jogatina
+que rolou sem presença medida vale o VOU, como no histórico. Por pessoa:
+horas, horas por tamanho de grupo, jogatinas em que esteve, VOU cumpridos,
+faltas e presença (VOU cumpridos sobre VOU). Jogatina que não rolou fica de
+fora dos números por pessoa, pela mesma razão do histórico. Os números saem
+das tabelas na hora da leitura, sem `stat_buckets`.
+
 **Ciclo de vida.** Contam como sinal de vida: marcar jogatina, "Vou", a
 presença de um membro no voice reservado (de uma hora antes do início até o fim
 da jogatina) e o botão **Ainda jogamos**. Squad sem sinal por `inactiveWeeks` (4) semanas recebe um
@@ -847,8 +892,9 @@ pausados e o guia trocado pelo aviso de arquivado. Sair do squad reabre
 a vaga (`full` volta a `open`); o último a sair arquiva.
 
 **O relógio.** Um job a cada 5 minutos, por guild atendida com o módulo ligado,
-na ordem: expira propostas, fecha convites e votações vencidos, lembra (e reserva), começa (e move) e
-libera o voice das jogatinas encerradas. Ele não marca jogatina. O passo diário
+na ordem: expira propostas, fecha convites e votações vencidos, lembra (e reserva), começa (e move),
+libera o voice das jogatinas encerradas e acerta a presença (a varredura do
+histórico). Ele não marca jogatina. O passo diário
 (inatividade, guias em dia e um match novo) roda uma vez por dia **depois das 12 h locais**,
 porque aviso e proposta chamam gente pelo nome. O dia fica marcado em `meta`
 antes do trabalho: falha espera o dia seguinte em vez de se repetir a cada 5
@@ -1368,8 +1414,9 @@ squad_sessions    (id bigserial PK, guild_id, squad_id FK, starts_at, ends_at, c
 squad_session_attendance (guild_id, session_id FK cascade, user_id, joined_at, left_at,
                    PK(session_id, user_id, joined_at))
                    idx (guild_id, user_id)
-                   -- presença no voice reservado, uma linha por entrada; é o que o histórico conta.
-                   -- `left_at` nulo = ainda no voice, ou saiu com o bot fora do ar
+                   -- presença no voice reservado, uma linha por entrada; é o que o histórico e os
+                   -- números contam. Evento de voz + varredura; `left_at` nulo = ainda no voice
+                   -- (quem saiu com o bot fora do ar fecha na varredura seguinte)
 ```
 
 Relações principais: `guilds 1—N cases`, `cases 1—0..1 scheduled_actions`,

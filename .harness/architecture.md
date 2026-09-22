@@ -132,8 +132,9 @@ src/
                   demo vence), pending-expiry (recusa o convite parado uma
                   semana na fila, avisa, sai e marca `expired`), squads
                   (convites e votações vencidos, lembrete, voice reservado e
-                  início das jogatinas, e o passo diário de inatividade,
-                  guias e match), capacity (RAM e tamanho do banco contra
+                  início das jogatinas, varredura de presença, e o passo
+                  diário de inatividade, guias e match), capacity (RAM e
+                  tamanho do banco contra
                   as linhas de aviso, alerta no webhook)
   lib/            utilitários sem estado: embeds, template, cooldown, purge,
                   channels (onde o bot pode falar), guild-setup,
@@ -615,6 +616,9 @@ matcher (vaga) ou CONVIDAR / `/squad convidar` ─▶ JoinRequestService.invite
   ─▶ voiceStateUpdate (events/community/squads-voice.ts): quem é do squad no voice reservado
      abre presença em squad_session_attendance e marca played_at; sair de um voice do pool
      ou temporário (lista em memória, carregada do banco uma vez por guild) fecha
+  ─▶ SessionService.sweepPresence (na reserva, no início e a cada passada do job): confere
+     guild.voiceStates contra as presenças abertas; abre a de quem já estava na sala (sem
+     evento de entrada) e fecha a de quem saiu com o bot fora do ar
   ─▶ fim da jogatina ou voice vazio: restaura os overwrites (temporário: apaga, só vazio)
      e só então marca liberado
   ─▶ REPETIR marca a mesma hora na semana seguinte
@@ -634,16 +638,21 @@ CHAMAR GENTE na jogatina (ou no guia: a próxima que aceita) ─▶ CallService.
 guia, convite, /squad procurar, chamada e overview da API ─▶ HistoryService.load(squadIds)
   ─▶ três leituras: jogatinas que rolaram (90 dias), totais por squad, presença dessas jogatinas
   ─▶ summarizeHistory + formatHistory (shared, fuso e faixas da guild)
+
+números (relatório, guia, /squad stats, painel) ─▶ listSessionAttendance (com joined_at/left_at)
+  ─▶ shared/squads/stats.ts: formationSegments (linha do tempo por jogatina) ─▶ summarizeSession,
+     summarizePlayers, summarizeFormations, summarizePairs
 ```
 
 Três coisas nesses caminhos não são gosto:
 
 - **A regra mora em `shared`, o efeito no bot.** `squads/availability.ts`,
-  `squads/match.ts`, `squads/join-vote.ts`, `squads/when.ts`, `squads/history.ts`
-  e `squads/zoned.ts` são puros: máscara da grade, agrupamento determinístico em
-  parties, "cabe no squad" (`fitsSquad`), a regra da votação de entrada, o
-  "quando" do `/bora`, o resumo e a frase do histórico e o relógio de parede no
-  fuso da guild (com horário de verão). O painel e os testes usam
+  `squads/match.ts`, `squads/join-vote.ts`, `squads/when.ts`, `squads/history.ts`,
+  `squads/stats.ts` e `squads/zoned.ts` são puros: máscara da grade, agrupamento
+  determinístico em parties, "cabe no squad" (`fitsSquad`), a regra da votação
+  de entrada, o "quando" do `/bora`, o resumo e a frase do histórico, os
+  números das jogatinas (tempo, formações, duplas, faltas) e o relógio de
+  parede no fuso da guild (com horário de verão). O painel e os testes usam
   as mesmas funções, sem Discord nem banco.
 - **A trava é do banco, não da memória.** Botão é clicado duas vezes e por
   várias pessoas ao mesmo tempo, e o job passa de novo a cada 5 minutos. Todo
@@ -748,6 +757,7 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | mexer no convite ou na votação de entrada | `apps/bot/src/services/squads/requests.ts` + regra em `packages/shared/src/squads/join-vote.ts` |
 | mexer no CHAMAR GENTE (chamada pública) | `apps/bot/src/services/squads/calls.ts` (ENTRAR em `search.ts`, texto em `publicCallMessage`) |
 | mexer no histórico de jogatinas   | `apps/bot/src/services/squads/history.ts` (leitura) + `packages/shared/src/squads/history.ts` (resumo e frase) |
+| mexer nos números das jogatinas   | regra pura em `packages/shared/src/squads/stats.ts`; presença em `sessions.ts` (`confirmPresence`, `sweepPresence`) |
 | mexer no match manual             | `apps/bot/src/services/squads/manual.ts` + regra pura em `packages/shared/src/squads/manual.ts` |
 | mexer na gestão de jogadores      | `apps/bot/src/services/squads/players.ts` (texto da DM em `embeds.ts`)   |
 | entender um servidor              | `pnpm guild scan "<nome>"` → `infra/discord/<slug>/servidor.md`          |
