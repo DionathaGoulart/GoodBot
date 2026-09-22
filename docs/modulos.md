@@ -212,6 +212,7 @@ roda na hora.
 | `/squad convidar`        | chama alguém para o seu squad; quem aceita entra sem votação                    |
 | `/squad sair`            | sai do squad; o último a sair arquiva                                           |
 | `/squad renomear`        | só quem é do squad                                                              |
+| `/squad stats`           | seus números num jogo, ou os de quem você apontar                               |
 | `/squad painel`          | admin: publica ou reedita a mensagem fixa                                       |
 
 Os comandos são atalho: tudo o que eles fazem está também num botão de uma
@@ -269,7 +270,7 @@ compatível.
 **A casa do squad.** Um canal de texto privado na categoria escolhida. A primeira
 mensagem dele é o **guia**, pinado: membros e vagas, sala preferida, próximas
 jogatinas, o histórico com quem mais aparece e os botões em duas linhas: `BORA`,
-`CHAMAR GENTE` e `CONVIDAR` em cima; `RENOMEAR`, `PROCURAR OUTRO SQUAD` (quando o
+`CHAMAR GENTE`, `CONVIDAR` e `NÚMEROS` em cima; `RENOMEAR`, `PROCURAR OUTRO SQUAD` (quando o
 servidor deixa estar em mais de um squad) e `SAIR DO SQUAD` embaixo. O bot reedita o
 guia a cada mudança e publica de novo se alguém o apagar. Voice não se cria por
 squad: os voices do pool (os Hellpods, no Goodivers) são emprestados por
@@ -356,6 +357,15 @@ convite, no `/squad procurar`, no guia (com quem mais aparece e as horas de cada
 um), na chamada pública e no painel. Só conta jogatina em que alguém do squad
 apareceu no voice (ou, sem sala, que começou com dois `VOU`); marcar e ninguém
 ir não entra.
+
+**Números.** A mesma presença vira tempo. `/squad stats` responde só para quem
+pediu: tempo de jogo (no total da janela e no último mês), tempo por tamanho de
+grupo (solo, dupla, trio, party cheia), jogatinas em que esteve sobre as que
+rolaram, presença, faltas, com quem mais joga e os grupos exatos em que mais
+joga. Sem `pessoa`, é você; sem `jogo`, o do canal do squad em que você está ou,
+fora dele, o único jogo do servidor. O botão `NÚMEROS` do guia mostra o mesmo
+para o squad inteiro: ranking de quem mais joga, formações, duplas e grupos.
+Os dois olham os últimos 90 dias.
 
 > O retrato das permissões do voice mora em `squad_sessions`, não em
 > `channel_locks`: um `/lock` num voice reservado trocaria o que a liberação

@@ -666,6 +666,12 @@ números (relatório, guia, /squad stats, painel) ─▶ listSessionAttendance (
   e as_guest; o histórico descarta convidado, os números o contam à parte)
   ─▶ shared/squads/stats.ts: formationSegments (linha do tempo por jogatina) ─▶ summarizeSession,
      summarizePlayers, summarizeFormations, summarizePairs
+
+/squad stats e o NÚMEROS do guia ─▶ StatsService (services/squads/stats.ts), na janela de 90 dias
+  do histórico ─▶ pessoa: listPlayedSessionsByGame (todos os squads do jogo dela) ─▶ summarizePlayers,
+     com as duplas e os grupos filtrados por ela ANTES do corte do top 5
+  ─▶ squad: listPlayedSessions do squad ─▶ ranking, formações, duplas e grupos
+  ─▶ playerStatsMessage / squadStatsMessage, sempre efêmeros
 ```
 
 Três coisas nesses caminhos não são gosto:
@@ -782,7 +788,7 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | mexer no CHAMAR GENTE (chamada pública) | `apps/bot/src/services/squads/calls.ts` (ENTRAR em `search.ts`, texto em `publicCallMessage`) |
 | mexer no convidado avulso        | `apps/bot/src/services/squads/guests.ts` (regra do botão em `guestBlocker`, texto em `embeds.ts`) |
 | mexer no histórico de jogatinas   | `apps/bot/src/services/squads/history.ts` (leitura) + `packages/shared/src/squads/history.ts` (resumo e frase) |
-| mexer nos números das jogatinas   | regra pura em `packages/shared/src/squads/stats.ts`; presença em `sessions.ts` (`confirmPresence`, `sweepPresence`) |
+| mexer nos números das jogatinas   | regra pura em `packages/shared/src/squads/stats.ts`; presença em `sessions.ts` (`confirmPresence`, `sweepPresence`); leitura e janela em `services/squads/stats.ts` (`/squad stats` e o NÚMEROS do guia) |
 | mexer no relatório de fim da jogatina | `apps/bot/src/services/squads/reports.ts` (texto em `sessionMessage`, estado `ended`) |
 | mexer no match manual             | `apps/bot/src/services/squads/manual.ts` + regra pura em `packages/shared/src/squads/manual.ts` |
 | mexer na gestão de jogadores      | `apps/bot/src/services/squads/players.ts` (texto da DM em `embeds.ts`)   |

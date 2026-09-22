@@ -26,10 +26,12 @@ Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (
 > o que se descobre jogando, e quem é aceito no meio cai direto na sala.
 > No fim, a mensagem da jogatina vira o **relatório** do que rolou (duração,
 > quem jogou com o tempo de cada um, formações, faltas), e o guia passa a
-> dizer as horas e a presença do último mês.
+> dizer as horas e a presença do último mês. Para olhar o conjunto há
+> `/squad stats` (os seus números num jogo, ou os de quem você apontar) e o
+> botão **NÚMEROS** do guia (os do squad inteiro).
 > O que mudou no documento: "Jogatina",
-> "Convidado avulso", "Chamada pública", "Histórico", "Números", "Relatório
-> de fim" e "O relógio" na §5.11,
+> "Convidado avulso", "Chamada pública", "Histórico", "Números", "Onde ver os
+> números", "Relatório de fim" e "O relógio" na §5.11,
 > `squad_session_guests` e o snapshot de
 > `squad_sessions` na §8, o REMARCAR e o TRAZER CONVIDADO na §9.1, a aba de
 > configuração na §6.2 e o aviso de manutenção do deploy na §7.5. O que **não** mudou: o resto do módulo e os
@@ -971,6 +973,31 @@ faltas e presença (VOU cumpridos sobre VOU). Jogatina que não rolou fica de
 fora dos números por pessoa, pela mesma razão do histórico. Os números saem
 das tabelas na hora da leitura, sem `stat_buckets`.
 
+**Onde ver os números.** Em quatro lugares, todos com as mesmas funções
+puras: o relatório de fim (abaixo), o guia, `/squad stats` e o painel.
+
+`/squad stats [pessoa] [jogo]` é de membro e responde só para quem pediu:
+tempo de jogo, tempo por tamanho de grupo, jogatinas em que esteve sobre as
+que rolaram, presença, faltas, com quem mais joga e os grupos exatos em que
+mais joga. Sem `pessoa`, é quem chamou (os números são do servidor, não
+segredo de ninguém: qualquer membro vê os de qualquer um). Sem `jogo`, vale o
+do squad de cujo canal o comando saiu e, na falta dele, o único jogo ligado;
+com mais de um e fora do canal de um squad, o comando pede qual, com
+autocomplete. A conta soma todos os squads da pessoa naquele jogo: trocar de
+squad não zera o tempo dela.
+
+O botão **NÚMEROS**, na primeira linha do guia, mostra o squad: quantas
+jogatinas rolaram e quanto tempo a sala teve gente, o ranking de quem mais
+joga (tempo, jogatinas e presença), as formações do squad, as duplas e os
+grupos exatos que mais jogam juntos. Também é efêmero: o guia é uma mensagem
+fixa, e um relatório novo a cada clique no canal seria ruído.
+
+Os dois olham os mesmos **90 dias** do histórico, com o último mês destacado
+à parte no tempo de jogo. Ler tudo desde sempre seria varrer a presença
+inteira do servidor a cada clique, e é justamente o que a janela do histórico
+evita; a contagem sem janela fica onde ela é barata, no total de jogatinas do
+histórico.
+
 **Relatório de fim.** Quando a jogatina acaba, a mensagem dela no canal do
 squad vira **Jogatina encerrada** e passa a ser o registro do que rolou:
 quanto durou, quem jogou e por quanto tempo, os convidados à parte, as
@@ -1590,7 +1617,9 @@ exceções: `/squad painel` (publicar a mensagem fixa) é de `admin`, e
 jogatina (VOU, NÃO VOU, REMARCAR, CANCELAR, REPETIR, CHAMAR GENTE, TRAZER
 CONVIDADO), o CONVIDAR e o
 CHAMAR GENTE do guia e a votação de entrada (A FAVOR, CONTRA) exigem ser do
-squad, e REMARCAR exige também estar no "vou" da jogatina;
+squad, e REMARCAR exige também estar no "vou" da jogatina; o NÚMEROS do guia
+só aparece no canal do squad, que já é privado, e `/squad stats` é de `member`
+em qualquer canal, porque olhar o tempo de jogo de alguém não muda nada;
 ENTRAR e PASSO do convite só valem para quem foi convidado, e o ENTRAR da
 chamada pública vale para qualquer membro do servidor que não seja do squad. Pela API do bot, publicar a mensagem fixa, rodar o match,
 o match manual (revisar e propor ao grupo) e a gestão de perfis (pausar,
