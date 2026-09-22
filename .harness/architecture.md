@@ -133,7 +133,7 @@ src/
                   semana na fila, avisa, sai e marca `expired`), squads
                   (convites e votações vencidos, lembrete, voice reservado e
                   início das jogatinas, chamada pública das encerradas,
-                  varredura de presença, e o passo
+                  varredura de presença, relatório das encerradas, e o passo
                   diário de inatividade, guias e match), capacity (RAM e
                   tamanho do banco contra as linhas de aviso, alerta no
                   webhook)
@@ -631,6 +631,9 @@ matcher (vaga) ou CONVIDAR / `/squad convidar` ─▶ JoinRequestService.invite
      evento de entrada) e fecha a de quem saiu com o bot fora do ar
   ─▶ fim da jogatina ou voice vazio: restaura os overwrites (temporário: apaga, só vazio)
      e só então marca liberado
+  ─▶ acabou, sem presença aberta e sem reported_at: ReportService.reportFinished trava
+     reported_at e a mensagem vira "Jogatina encerrada" (duração, quem jogou, formações,
+     faltas); é edição, que não notifica, e o REPETIR fica
   ─▶ REPETIR marca a mesma hora na semana seguinte
 
 REMARCAR (quem está no VOU, antes do início) ─▶ SessionService.rescheduleForm confere e abre o modal
@@ -656,7 +659,8 @@ CHAMAR GENTE na jogatina (ou no guia: a primeira que aceita, a que rola inclusiv
 
 guia, convite, /squad procurar, chamada e overview da API ─▶ HistoryService.load(squadIds)
   ─▶ três leituras: jogatinas que rolaram (90 dias), totais por squad, presença dessas jogatinas
-  ─▶ summarizeHistory + formatHistory (shared, fuso e faixas da guild)
+  ─▶ summarizeHistory + formatHistory (shared, fuso e faixas da guild): jogatinas, horas e
+     presença do último mês, e os frequentes com as horas de cada um
 
 números (relatório, guia, /squad stats, painel) ─▶ listSessionAttendance (com joined_at/left_at
   e as_guest; o histórico descarta convidado, os números o contam à parte)
@@ -779,6 +783,7 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | mexer no convidado avulso        | `apps/bot/src/services/squads/guests.ts` (regra do botão em `guestBlocker`, texto em `embeds.ts`) |
 | mexer no histórico de jogatinas   | `apps/bot/src/services/squads/history.ts` (leitura) + `packages/shared/src/squads/history.ts` (resumo e frase) |
 | mexer nos números das jogatinas   | regra pura em `packages/shared/src/squads/stats.ts`; presença em `sessions.ts` (`confirmPresence`, `sweepPresence`) |
+| mexer no relatório de fim da jogatina | `apps/bot/src/services/squads/reports.ts` (texto em `sessionMessage`, estado `ended`) |
 | mexer no match manual             | `apps/bot/src/services/squads/manual.ts` + regra pura em `packages/shared/src/squads/manual.ts` |
 | mexer na gestão de jogadores      | `apps/bot/src/services/squads/players.ts` (texto da DM em `embeds.ts`)   |
 | entender um servidor              | `pnpm guild scan "<nome>"` → `infra/discord/<slug>/servidor.md`          |

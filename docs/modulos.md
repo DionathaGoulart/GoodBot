@@ -339,12 +339,23 @@ até 4 por jogatina ("Convidados por jogatina" na aba de configuração; 0 desli
 o botão), e ele conta na party, no tempo e nas formações, mas não no histórico
 do squad. O bot não move convidado de voice: ele não pediu para ir.
 
+**No fim, o relatório.** Quando a jogatina acaba e todo mundo saiu da sala, a
+mensagem dela vira `Jogatina encerrada` e passa a ser o registro do que rolou:
+quanto durou, quem jogou e por quanto tempo, os convidados, as formações ("1 h
+40 de quarteto (party cheia), 1 h de trio, 30 min solo"), quem faltou depois de
+dizer `VOU` e quem apareceu sem avisar. Jogatina em que ninguém apareceu diz
+que não rolou. É uma edição, e não uma mensagem nova, para não chamar ninguém
+de novo; o `REPETIR` continua ali.
+
 **Histórico.** O bot anota quem do squad entra no voice reservado de cada
-jogatina e resume o que rolou: "6 jogatinas no último mês, geralmente sexta e
-sábado à noite. Última há 3 dias." ou "Ainda não jogaram.". A frase aparece no
-convite, no `/squad procurar`, no guia (com quem mais aparece), na chamada
-pública e no painel. Só conta jogatina em que alguém do squad apareceu no voice
-(ou, sem sala, que começou com dois `VOU`); marcar e ninguém ir não entra.
+jogatina e resume o que rolou: "6 jogatinas e 11 h no último mês, 80% de
+presença, geralmente sexta e sábado à noite. Última há 3 dias." ou "Ainda não
+jogaram.". As horas são o tempo de jogatina do último mês e a presença são os
+`VOU` cumpridos; cada uma só aparece quando há o que contar. A frase aparece no
+convite, no `/squad procurar`, no guia (com quem mais aparece e as horas de cada
+um), na chamada pública e no painel. Só conta jogatina em que alguém do squad
+apareceu no voice (ou, sem sala, que começou com dois `VOU`); marcar e ninguém
+ir não entra.
 
 > O retrato das permissões do voice mora em `squad_sessions`, não em
 > `channel_locks`: um `/lock` num voice reservado trocaria o que a liberação
@@ -357,7 +368,7 @@ chamadas públicas apagadas, convites, votações e propostas encerrados e perfi
 pausados.
 
 Quem move tudo isso é o job `squads`, a cada 5 minutos, em cada servidor com o
-módulo ligado: lembra, reserva, começa e libera as jogatinas, mas nunca marca
+módulo ligado: lembra, reserva, começa, libera e relata as jogatinas, mas nunca marca
 uma. O passo diário (inatividade, guias em dia e um match novo) roda uma vez por
 dia, depois das 12 h no fuso do servidor, para ninguém ser chamado de madrugada.
 

@@ -24,8 +24,12 @@ Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (
 > thread privada, sem entrar no squad. O **CHAMAR GENTE** deixou de morrer no
 > início: a chamada pública vale até o fim da jogatina, porque falta gente é
 > o que se descobre jogando, e quem é aceito no meio cai direto na sala.
+> No fim, a mensagem da jogatina vira o **relatório** do que rolou (duração,
+> quem jogou com o tempo de cada um, formações, faltas), e o guia passa a
+> dizer as horas e a presença do último mês.
 > O que mudou no documento: "Jogatina",
-> "Convidado avulso", "Chamada pública", "Histórico", "Números" e "O relógio" na §5.11,
+> "Convidado avulso", "Chamada pública", "Histórico", "Números", "Relatório
+> de fim" e "O relógio" na §5.11,
 > `squad_session_guests` e o snapshot de
 > `squad_sessions` na §8, o REMARCAR e o TRAZER CONVIDADO na §9.1, a aba de
 > configuração na §6.2 e o aviso de manutenção do deploy na §7.5. O que **não** mudou: o resto do módulo e os
@@ -937,10 +941,16 @@ estiveram. Quem esteve é quem apareceu no voice; jogatina sem ninguém
 registrado (sem sala, ou o bot fora do ar na hora) conta quem disse "vou". O
 detalhe olha 90 dias; total e última olham tudo. `formatHistory` escreve a
 frase curta que o convite, o `/squad procurar`, o guia, a chamada pública e o
-painel mostram: "6 jogatinas no último mês, geralmente sexta e sábado à
-noite. Última há 3 dias." ou "Ainda não jogaram.". "Geralmente" só entra com
-duas jogatinas ou mais na mesma célula, e o "há 3 dias" é em dias do
-calendário da guild.
+painel mostram: "6 jogatinas e 11 h no último mês, 80% de presença,
+geralmente sexta e sábado à noite. Última há 3 dias." ou "Ainda não
+jogaram.". As horas são o tempo de jogatina do último mês (por jogatina, da
+primeira entrada à última saída; não a soma do tempo de cada um), e a
+presença são os VOU cumpridos sobre os VOU dados. As duas só entram quando há
+o que dizer: sem presença medida não há horas, e sem ninguém no VOU não há
+presença, porque um zero por falta de dado diria o contrário do que
+aconteceu. "Geralmente" só entra com duas jogatinas ou mais na mesma célula,
+e o "há 3 dias" é em dias do calendário da guild. No guia, o "quem mais
+aparece" leva as horas de cada um ao lado do nome.
 
 **Números.** A mesma presença dá o tempo, e não só a contagem. A regra mora
 em `shared` (`squads/stats.ts`) e é uma varredura de linha do tempo por
@@ -961,6 +971,26 @@ faltas e presença (VOU cumpridos sobre VOU). Jogatina que não rolou fica de
 fora dos números por pessoa, pela mesma razão do histórico. Os números saem
 das tabelas na hora da leitura, sem `stat_buckets`.
 
+**Relatório de fim.** Quando a jogatina acaba, a mensagem dela no canal do
+squad vira **Jogatina encerrada** e passa a ser o registro do que rolou:
+quanto durou, quem jogou e por quanto tempo, os convidados à parte, as
+formações ("1 h 40 de quarteto (party cheia), 1 h de trio, 30 min solo"),
+quem faltou depois de dizer VOU e quem apareceu sem avisar. Jogatina que
+rolou sem ninguém no voice reservado diz que não dá para medir o tempo e
+lista quem disse VOU; jogatina em que ninguém apareceu diz que **não rolou**.
+O **REPETIR** continua ali.
+
+É uma edição, e não uma mensagem nova, de propósito: editar não notifica
+ninguém, e o relatório é registro, não chamado. Um passo do job (a cada 5
+minutos, depois da varredura de presença) procura o que já acabou (passou do
+`ends_at`, ou a sala foi devolvida depois do início), não foi cancelado, não
+foi relatado e **não tem presença aberta**: enquanto alguém está na sala, o
+tempo dela ainda corre e o número sairia menor do que foi. A trava é
+`reported_at`, gravada antes de editar, então duas passadas relatam uma vez
+só. A busca olha um dia para trás: jogatina que acabou com o bot fora do ar
+por mais que isso fica sem relatório, porque publicar uma semana de
+relatórios de uma vez quando ele volta é barulho.
+
 **Ciclo de vida.** Contam como sinal de vida: marcar jogatina, "Vou", a
 presença de um membro no voice reservado (de uma hora antes do início até o fim
 da jogatina) e o botão **Ainda jogamos**. Squad sem sinal por `inactiveWeeks` (4) semanas recebe um
@@ -972,8 +1002,8 @@ a vaga (`full` volta a `open`); o último a sair arquiva.
 **O relógio.** Um job a cada 5 minutos, por guild atendida com o módulo ligado,
 na ordem: expira propostas, fecha convites e votações vencidos, lembra (e reserva), começa (e move),
 libera o voice das jogatinas encerradas, tira do ar a chamada pública das que
-acabaram e acerta a presença (a varredura do histórico). Ele não marca
-jogatina. O passo diário
+acabaram, acerta a presença (a varredura do histórico) e relata as que
+acabaram. Ele não marca jogatina. O passo diário
 (inatividade, guias em dia e um match novo) roda uma vez por dia **depois das 12 h locais**,
 porque aviso e proposta chamam gente pelo nome. O dia fica marcado em `meta`
 antes do trabalho: falha espera o dia seguinte em vez de se repetir a cada 5
@@ -1496,9 +1526,12 @@ squad_join_requests (id uuid PK, guild_id, squad_id FK, user_id, message_id, inv
                    -- `session_id`: a jogatina cuja chamada pública trouxe o pedido (entra como "vou" nela)
 squad_sessions    (id bigserial PK, guild_id, squad_id FK, starts_at, ends_at, created_by, reminded_at, message_id,
                    started_at, going_ids[], not_going_ids[], voice_channel_id,
-                   voice_overwrites jsonb, voice_temporary bool, voice_reserved_at, voice_released_at, played_at, cancelled_at,
+                   voice_overwrites jsonb, voice_temporary bool, voice_reserved_at, voice_released_at, played_at,
+                   reported_at, cancelled_at,
                    cancelled_by, called_at, call_channel_id, call_message_id, created_at)
-                   unique (squad_id, starts_at); idx (guild_id, ends_at) where reservado e não liberado
+                   unique (squad_id, starts_at); idx (guild_id, ends_at) where reservado e não liberado;
+                   idx (guild_id, starts_at) where começada, não relatada e não cancelada
+                   -- `reported_at` é a trava do relatório de fim: a mensagem vira "Jogatina encerrada" uma vez só
                    -- a jogatina: `created_by` nulo = sessão semanal da v1.5; `ends_at` = início + `sessionHours`;
                    -- `message_id` é a mensagem com Vou / Não vou
                    -- o snapshot do voice mora aqui, e não em channel_locks: um /lock no voice reservado
@@ -1661,7 +1694,7 @@ provedor, documentada em `docs/runbook.md`.
 | **Horário do `/bora` mal entendido** (v1.6)                       | `parseWhen` puro no fuso da guild, erro que traz exemplos, autocomplete que ecoa o que o bot entendeu antes de enviar e mensagem da jogatina com a data completa | feito: `shared/squads/when.ts`, com testes de tabela |
 | **Vaga presa em convite ou votação parada** (v1.6)                | convite e votação vencem em `proposalTtlHours`; no prazo, a votação decide com os votos que tem (um a favor sem maioria contra entra) e a vaga volta para a busca | feito: `JoinRequestService.expireDue` no job, `decideJoinVote` com testes de tabela |
 | **Chamada pública parada no canal de busca** (v1.6)               | a chamada sai do ar no fim da jogatina, no cancelamento e no arquivamento, com a trava no banco antes do Discord; ENTRAR confere a jogatina e tira a chamada que ficou | feito: `CallService.close`, o passo `closeFinished` do job (v1.7, para o fim previsto) e `SearchService.requestFromCall`, com testes |
-| **Histórico que mente** (v1.6)                                    | só conta jogatina com `played_at`; quem esteve sai da presença no voice, e "vou" só vale quando ninguém foi registrado; "geralmente" pede duas jogatinas na célula | parcial: presença perdida com o bot fora do ar cai no "vou"; ninguém confere quanto tempo a pessoa ficou |
+| **Histórico que mente** (v1.6)                                    | só conta jogatina com `played_at`; quem esteve sai da presença no voice, e "vou" só vale quando ninguém foi registrado; "geralmente" pede duas jogatinas na célula; desde a v1.7 a presença tem intervalo, e horas e presença entram na frase | parcial: presença perdida com o bot fora do ar cai no "vou", e o tempo de quem saiu com ele fora sai maior do que foi (a varredura fecha na hora dela) |
 | **Voice do pool preso com `Connect` negado** (v1.5)               | snapshot dos overwrites na sessão; o restore no Discord vem antes de marcar a sessão como liberada, e o job tenta de novo a cada 5 min     | feito: `SessionService.release`, com teste |
 
 ## 12. Decisões arquiteturais (com justificativa)
