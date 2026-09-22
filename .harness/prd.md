@@ -974,7 +974,8 @@ fora dos números por pessoa, pela mesma razão do histórico. Os números saem
 das tabelas na hora da leitura, sem `stat_buckets`.
 
 **Onde ver os números.** Em quatro lugares, todos com as mesmas funções
-puras: o relatório de fim (abaixo), o guia, `/squad stats` e o painel.
+puras: o relatório de fim (abaixo), o guia, `/squad stats` e a aba
+`JOGATINAS` do painel (§6.2).
 
 `/squad stats [pessoa] [jogo]` é de membro e responde só para quem pediu:
 tempo de jogo, tempo por tamanho de grupo, jogatinas em que esteve sobre as
@@ -997,6 +998,12 @@ Os dois olham os mesmos **90 dias** do histórico, com o último mês destacado
 inteira do servidor a cada clique, e é justamente o que a janela do histórico
 evita; a contagem sem janela fica onde ela é barata, no total de jogatinas do
 histórico.
+
+No painel os mesmos números viram a aba **JOGATINAS** (§6.2), na mesma janela
+e com as mesmas funções puras. Ela é o único lugar que mostra também o que
+**não** rolou: a jogatina marcada que passou em branco e a cancelada não têm
+relatório no Discord, e é no painel que a staff vê quantas foram marcadas
+contra quantas aconteceram.
 
 **Relatório de fim.** Quando a jogatina acaba, a mensagem dela no canal do
 squad vira **Jogatina encerrada** e passa a ser o registro do que rolou:
@@ -1158,7 +1165,7 @@ grava, escreve auditoria (§6.5), chama `invalidate` no bot, toast.
   abertura, limite), painel (canal, embed, botões), transcript on/off, canal
   de log; lista de tickets abertos/fechados com link de transcript.
 - **Tags**: tabela CRUD com editor (texto/embed), permissão de criação.
-- **Squads** (§5.11), em quatro abas. `CONFIGURAÇÃO`: canal de busca, cargo de
+- **Squads** (§5.11), em cinco abas. `CONFIGURAÇÃO`: canal de busca, cargo de
   ping, categoria, nome do canal, voices do pool, voice temporário com o pool
   cheio, prazos, duração da jogatina,
   jogatinas marcadas por squad, convidados por jogatina e as 4 faixas da grade, com o painel da mensagem fixa (publicar ou atualizar) no topo.
@@ -1187,6 +1194,17 @@ grava, escreve auditoria (§6.5), chama `invalidate` no bot, toast.
   passa pela API do bot, que grava a auditoria. Salvar o config preserva o `searchMessageId`, que é do bot: um
   formulário aberto antes de uma publicação levaria o id velho, e a publicação
   seguinte mandaria uma segunda mensagem em vez de editar a primeira.
+  `JOGATINAS`: o que foi marcado e o que rolou de verdade, com filtro por jogo,
+  por squad e por período (30 dias ou a janela inteira); cartões de resumo
+  (marcadas, rolaram, tempo de sala e presença média); as formações do squad e
+  os grupos exatos que mais jogam juntos; as duplas, em lista e num heatmap da
+  matriz; o ranking por jogador (tempo, jogatinas, presença, faltas e o tamanho
+  de grupo em que mais joga); e a tabela das jogatinas, cuja linha abre o mesmo
+  relatório que o bot posta no canal do squad quando ela encerra. O sheet da
+  aba `JOGADORES` ganha os números da pessoa naquele jogo. Nada disso passa
+  pela API do bot: as jogatinas e a presença são lidas direto do banco e a
+  conta é a mesma regra pura de `shared/squads/stats.ts` que o relatório e o
+  `/squad stats` usam, na mesma janela de 90 dias do histórico.
 - **Comandos**: por comando: ativo, cargos permitidos, canais permitidos/
   negados (override de permissão do Discord via API de permissões de
   comando quando possível; senão checagem no handler).
