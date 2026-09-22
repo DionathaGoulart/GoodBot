@@ -105,6 +105,13 @@ export function SquadsConfigForm({
             max={10}
           />
           <NumberField
+            name="maxSessionGuests"
+            label="Convidados por jogatina"
+            description="Gente de fora do squad que um membro traz para jogar só uma jogatina, com o voice liberado. 0 desliga o botão TRAZER CONVIDADO."
+            min={0}
+            max={10}
+          />
+          <NumberField
             name="inactiveWeeks"
             label="Semanas sem jogatina"
             description="Semanas seguidas sem jogatina marcada, voto Vou ou presença no voice. Depois disso o squad é questionado; uma semana depois, arquivado."
