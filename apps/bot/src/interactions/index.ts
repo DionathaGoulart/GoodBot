@@ -1,6 +1,6 @@
 import { handlePollButton } from './poll-buttons';
 import { handleReactionRoleComponent } from './reaction-roles';
-import { handleSquadComponent } from './squads';
+import { handleSquadComponent, handleSquadModal } from './squads';
 import { handleTicketComponent, handleTicketModal } from './tickets';
 import { handleVerifyButton, VERIFY_BUTTON_ID } from './verify';
 import { POLL_BUTTON_PREFIX } from '../lib/poll-message';
@@ -54,7 +54,7 @@ export async function handleComponent(
   return handler(ctx, interaction);
 }
 
-/** Mesma ideia para modais: o motivo de fechamento de ticket. */
+/** Mesma ideia para modais: o motivo de fechamento de ticket e o "quando" da jogatina. */
 export async function handleModal(
   ctx: BotContext,
   interaction: ModalSubmitInteraction,
@@ -62,6 +62,8 @@ export async function handleModal(
   switch (componentPrefix(interaction.customId)) {
     case TICKET_PREFIX:
       return handleTicketModal(ctx, interaction);
+    case SQUAD_PREFIX:
+      return handleSquadModal(ctx, interaction);
     default:
       return false;
   }

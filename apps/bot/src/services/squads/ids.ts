@@ -4,6 +4,7 @@
  * builder e o parser nunca divergirem.
  *
  * - `squad:search` e `squad:optout`: os toggles, em mensagem de servidor.
+ * - `squad:schedule`: o botão MARCAR JOGATINA e o modal que ele abre.
  * - `squad:dm:<escolha>:<guildId>`: os botões do aviso automático. A DM não
  *   pertence a servidor nenhum, então a guild viaja no próprio `custom_id`.
  */
@@ -17,10 +18,16 @@ export type SquadDmChoice = 'search' | 'later' | 'optout';
 const DM_CHOICES: readonly string[] = ['search', 'later', 'optout'];
 
 export type SquadCustomId =
-  { kind: 'search' } | { kind: 'optout' } | { kind: 'dm'; choice: SquadDmChoice; guildId: string };
+  | { kind: 'search' }
+  | { kind: 'optout' }
+  | { kind: 'schedule' }
+  | { kind: 'dm'; choice: SquadDmChoice; guildId: string };
 
 export const SEARCH_TOGGLE_ID = `${SQUAD_PREFIX}:search`;
 export const OPT_OUT_TOGGLE_ID = `${SQUAD_PREFIX}:optout`;
+export const SCHEDULE_ID = `${SQUAD_PREFIX}:schedule`;
+/** O campo "quando" do modal da jogatina. */
+export const SCHEDULE_WHEN_FIELD = 'when';
 
 export function squadDmId(choice: SquadDmChoice, guildId: string): string {
   if (!SNOWFLAKE_RE.test(guildId)) throw new RangeError(`guildId inválido: ${guildId}`);
@@ -37,6 +44,7 @@ export function parseSquadId(customId: string): SquadCustomId | null {
   if (prefix !== SQUAD_PREFIX) return null;
   if (kind === 'search' && rest.length === 0) return { kind: 'search' };
   if (kind === 'optout' && rest.length === 0) return { kind: 'optout' };
+  if (kind === 'schedule' && rest.length === 0) return { kind: 'schedule' };
   if (kind === 'dm' && rest.length === 2) {
     const [choice, guildId] = rest as [string, string];
     if (!DM_CHOICES.includes(choice) || !SNOWFLAKE_RE.test(guildId)) return null;

@@ -1,14 +1,30 @@
-import { LFG_PROMPT_COOLDOWN_HOURS, UserFacingError } from '@goodbot/shared';
-import { MessageFlags } from 'discord.js';
+import {
+  describeWhen,
+  LFG_PROMPT_COOLDOWN_HOURS,
+  UserFacingError,
+  WHEN_EXAMPLES,
+} from '@goodbot/shared';
+import {
+  LabelBuilder,
+  MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} from 'discord.js';
 
 import { botFooter, infoEmbed } from '../lib/embeds';
-import { parseSquadId } from '../services/squads/ids';
+import { parseSquadId, SCHEDULE_ID, SCHEDULE_WHEN_FIELD } from '../services/squads/ids';
 
 import type { BotContext } from '../lib/command';
 import type { SquadDmChoice } from '../services/squads/ids';
 import type { SearchState } from '../services/squads/presence';
 import type { SquadsConfig } from '@goodbot/shared';
-import type { ButtonInteraction, GuildMember, MessageComponentInteraction } from 'discord.js';
+import type {
+  ButtonInteraction,
+  GuildMember,
+  MessageComponentInteraction,
+  ModalSubmitInteraction,
+} from 'discord.js';
 
 export const STALE_FLOW_TEXT =
   'Aquele fluxo de squad acabou. Agora é só entrar no **➕ Criar Squad** ou usar o botão ' +
@@ -38,6 +54,47 @@ export async function squadsConfigOrFail(ctx: BotContext, guildId: string): Prom
   return config;
 }
 
+/** Até onde o "quando" vai: `depois de amanhã às 21:30` cabe com folga. */
+const WHEN_MAX_LENGTH = 40;
+
+/** O modal do MARCAR JOGATINA: um campo só, o "quando". */
+export function scheduleModal(): ModalBuilder {
+  return new ModalBuilder()
+    .setCustomId(SCHEDULE_ID)
+    .setTitle('Marcar jogatina')
+    .setLabelComponents(
+      new LabelBuilder()
+        .setLabel('Quando')
+        .setDescription(`No horário do servidor. Exemplos: ${WHEN_EXAMPLES}.`)
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId(SCHEDULE_WHEN_FIELD)
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('hoje 21h')
+            .setMaxLength(WHEN_MAX_LENGTH)
+            .setRequired(true),
+        ),
+    );
+}
+
+export function scheduledText(startsAt: Date, now: Date, timeZone: string, url: string): string {
+  const unix = String(Math.floor(startsAt.getTime() / 1000));
+  return (
+    `Jogatina marcada para **${describeWhen(startsAt, now, timeZone)}** (<t:${unix}:F>). ` +
+    `[Ver evento](${url}): quem marcar "Tenho interesse" é avisado pelo Discord quando começar.`
+  );
+}
+
+/** Quem clicou, com a guild à mão: sem guild em cache não há cargo a ler. */
+function memberOf(interaction: MessageComponentInteraction | ModalSubmitInteraction): GuildMember {
+  if (!interaction.inCachedGuild()) {
+    throw new UserFacingError('Não consegui ler seus cargos. Tente de novo.', {
+      code: 'NO_MEMBER',
+    });
+  }
+  return interaction.member;
+}
+
 /**
  * Componentes do módulo em mensagem de servidor. Todo `custom_id` com o
  * prefixo é tratado aqui, inclusive os do squad fixo que ainda estão no ar:
@@ -52,12 +109,13 @@ export async function handleSquadComponent(
     await interaction.reply({ content: STALE_FLOW_TEXT, flags: MessageFlags.Ephemeral });
     return true;
   }
-  const guildId = interaction.guildId;
-  const member = interaction.member as GuildMember | null;
-  if (!guildId || !member || !('roles' in member)) {
-    throw new UserFacingError('Não consegui ler seus cargos. Tente de novo.', {
-      code: 'NO_MEMBER',
-    });
+  const member = memberOf(interaction);
+  const guildId = member.guild.id;
+  // O modal precisa da interação intacta: nada de `deferReply` antes dele.
+  if (parsed.kind === 'schedule') {
+    await squadsConfigOrFail(ctx, guildId);
+    await interaction.showModal(scheduleModal());
+    return true;
   }
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const config = await squadsConfigOrFail(ctx, guildId);
@@ -66,6 +124,27 @@ export async function handleSquadComponent(
       ? searchToggledText(await ctx.squads.toggleSearch(member, config), config)
       : optOutToggledText(await ctx.squads.toggleOptOut(member, config));
   await interaction.editReply({ content });
+  return true;
+}
+
+/**
+ * O "quando" digitado no modal da jogatina, venha ele do botão do painel ou do
+ * `/squad agendar`. O erro de leitura volta em efêmero, com exemplos.
+ */
+export async function handleSquadModal(
+  ctx: BotContext,
+  interaction: ModalSubmitInteraction,
+): Promise<boolean> {
+  if (parseSquadId(interaction.customId)?.kind !== 'schedule') return false;
+  const member = memberOf(interaction);
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const config = await squadsConfigOrFail(ctx, member.guild.id);
+  const when = interaction.fields.getTextInputValue(SCHEDULE_WHEN_FIELD);
+  const scheduled = await ctx.squadSessions.schedule(member.guild, member, when, config, 'command');
+  const { timezone } = await ctx.config.getSettings(member.guild.id);
+  await interaction.editReply({
+    content: scheduledText(scheduled.startsAt, new Date(), timezone, scheduled.url),
+  });
   return true;
 }
 

@@ -17,6 +17,7 @@ import type { YouTubeProvider } from '../services/social/index';
 import type { SquadPanelService } from '../services/squads/panel';
 import type { SquadPresenceService } from '../services/squads/presence';
 import type { SquadRoomService } from '../services/squads/rooms';
+import type { SquadSessionService } from '../services/squads/sessions';
 import type { StatsService } from '../services/stats';
 import type { TicketService } from '../services/tickets';
 import type { WelcomeService } from '../services/welcome';
@@ -71,6 +72,8 @@ export interface BotContext {
   squadRooms: SquadRoomService;
   /** Mensagem fixa com as salas abertas (§5.11). */
   squadPanel: SquadPanelService;
+  /** Jogatinas marcadas como evento do Discord (§5.11). */
+  squadSessions: SquadSessionService;
   /** Provider das notificações de rede social (§5.8). */
   social: YouTubeProvider;
   messageCache: MessageCacheService;

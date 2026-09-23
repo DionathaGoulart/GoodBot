@@ -38,6 +38,7 @@ import { YouTubeProvider } from './services/social/index';
 import { SquadPanelService } from './services/squads/panel';
 import { SquadPresenceService } from './services/squads/presence';
 import { SquadRoomService } from './services/squads/rooms';
+import { SquadSessionService } from './services/squads/sessions';
 import { StatsService } from './services/stats';
 import { TicketService } from './services/tickets';
 import { WelcomeService } from './services/welcome';
@@ -161,7 +162,16 @@ async function main(): Promise<void> {
   });
   const social = new YouTubeProvider();
   const squads = new SquadPresenceService({ client, config, registry });
-  const squadPanel = new SquadPanelService({ client, db, config, audit });
+  const squadSessions = new SquadSessionService({
+    client,
+    config,
+    registry,
+    audit,
+    onChange: (guildId) => {
+      squadPanel.schedule(guildId);
+    },
+  });
+  const squadPanel = new SquadPanelService({ client, db, config, audit, sessions: squadSessions });
   const squadRooms = new SquadRoomService({ client, config, registry, panel: squadPanel });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
@@ -255,6 +265,7 @@ async function main(): Promise<void> {
     squads,
     squadRooms,
     squadPanel,
+    squadSessions,
     social,
     messageCache,
     stats,
@@ -285,6 +296,7 @@ async function main(): Promise<void> {
     capacity.start();
     squads.start();
     squadRooms.start();
+    squadSessions.start();
     databaseProbe.start();
     void deployNotice.resolve();
     alerts.emit({
@@ -328,6 +340,7 @@ async function main(): Promise<void> {
       squads.stop();
       squadRooms.stop();
       squadPanel.stop();
+      squadSessions.stop();
       databaseProbe.stop();
       autorole.stop();
       await api.stop();

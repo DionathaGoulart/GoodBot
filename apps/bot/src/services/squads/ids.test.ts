@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { OPT_OUT_TOGGLE_ID, parseSquadId, SEARCH_TOGGLE_ID, squadDmId } from './ids';
+import { OPT_OUT_TOGGLE_ID, parseSquadId, SCHEDULE_ID, SEARCH_TOGGLE_ID, squadDmId } from './ids';
 
 const GUILD = '123456789012345678';
 
@@ -8,6 +8,7 @@ describe('custom_id do squad', () => {
   it('os toggles vão e voltam', () => {
     expect(parseSquadId(SEARCH_TOGGLE_ID)).toEqual({ kind: 'search' });
     expect(parseSquadId(OPT_OUT_TOGGLE_ID)).toEqual({ kind: 'optout' });
+    expect(parseSquadId(SCHEDULE_ID)).toEqual({ kind: 'schedule' });
   });
 
   it('o botão da DM leva a guild', () => {
@@ -34,6 +35,7 @@ describe('custom_id do squad', () => {
     expect(parseSquadId('squad:status:searching:abc')).toBeNull();
     expect(parseSquadId(`squad:dm:talvez:${GUILD}`)).toBeNull();
     expect(parseSquadId('squad:search:extra')).toBeNull();
+    expect(parseSquadId('squad:schedule:extra')).toBeNull();
   });
 
   it('outro prefixo não é do módulo', () => {

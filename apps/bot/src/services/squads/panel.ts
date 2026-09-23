@@ -10,13 +10,15 @@ import {
   RESTJSONErrorCodes,
 } from 'discord.js';
 
-import { OPT_OUT_TOGGLE_ID, SEARCH_TOGGLE_ID } from './ids';
+import { OPT_OUT_TOGGLE_ID, SCHEDULE_ID, SEARCH_TOGGLE_ID } from './ids';
 import { listRooms, occupantsOf } from './rooms';
+import { PANEL_SESSION_COUNT } from './sessions';
 import { infoEmbed } from '../../lib/embeds';
 import { childLogger } from '../../logger';
 
 import type { AuditService } from '../audit';
 import type { ConfigService } from '../config';
+import type { SessionSummary, SquadSessionService } from './sessions';
 import type { Db } from '@goodbot/db';
 import type { AuditSource, SquadsConfig } from '@goodbot/shared';
 import type { Client, Guild, TextChannel } from 'discord.js';
@@ -56,20 +58,40 @@ export function roomLine(room: PanelRoom): string {
   );
 }
 
-/** A mensagem fixa: as salas abertas e os toggles. */
-export function panelMessage(rooms: PanelRoom[], config: SquadsConfig, embedColor?: number) {
+/** A jogatina com a hora que o Discord mostra no fuso de quem lê. */
+export function sessionLine(session: SessionSummary): string {
+  const unix = String(Math.floor(session.startsAt / 1000));
+  return `📅 [${session.name}](${session.url}) · <t:${unix}:F> (<t:${unix}:R>)`;
+}
+
+/** A mensagem fixa: as salas abertas, as próximas jogatinas e os botões. */
+export function panelMessage(
+  rooms: PanelRoom[],
+  config: SquadsConfig,
+  embedColor?: number,
+  sessions: SessionSummary[] = [],
+) {
   const create = config.createChannelId ? `<#${config.createChannelId}>` : '**➕ Criar Squad**';
-  const list =
-    rooms.length > 0
-      ? rooms.map(roomLine).join('\n')
-      : `Ninguém em sala agora. Entre em ${create} para abrir uma e chamar o pessoal.`;
+  const canSchedule = config.createChannelId !== null;
+  const empty =
+    `Ninguém em sala agora. Entre em ${create} para abrir uma e chamar o pessoal` +
+    (canSchedule && sessions.length === 0 ? ', ou marque uma jogatina para mais tarde.' : '.');
+  const list = rooms.length > 0 ? rooms.map(roomLine).join('\n') : empty;
+  const agenda =
+    sessions.length > 0
+      ? `\n\n**Jogatinas marcadas**\n${sessions.map(sessionLine).join('\n')}`
+      : '';
   const embed = infoEmbed(
     {
       title: 'Buscar squad',
       description:
-        `${list}\n\n` +
+        `${list}${agenda}\n\n` +
         `Para abrir uma sala nova, entre em ${create}: o bot cria a sala e te leva para ela. ` +
-        '**BUSCAR SQUAD** mostra para o servidor que você quer jogar agora.',
+        '**BUSCAR SQUAD** mostra para o servidor que você quer jogar agora.' +
+        (canSchedule
+          ? ' **MARCAR JOGATINA** cria um evento do servidor: marque "Tenho interesse" ' +
+            'para ser avisado quando começar.'
+          : ''),
     },
     embedColor,
   );
@@ -87,6 +109,14 @@ export function panelMessage(rooms: PanelRoom[], config: SquadsConfig, embedColo
       new ButtonBuilder()
         .setCustomId(OPT_OUT_TOGGLE_ID)
         .setLabel('SEM AVISO')
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  if (canSchedule) {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(SCHEDULE_ID)
+        .setLabel('MARCAR JOGATINA')
         .setStyle(ButtonStyle.Secondary),
     );
   }
@@ -119,13 +149,15 @@ export interface SquadPanelDeps {
   db: Db;
   config: Pick<ConfigService, 'get' | 'getSettings' | 'publishInvalidate'>;
   audit: Pick<AuditService, 'record'>;
+  sessions: Pick<SquadSessionService, 'upcoming'>;
+  now?: () => number;
   coalesceMs?: number;
 }
 
 /**
  * O painel fixo do módulo (PRD §5.11). Quem publica é `/squad painel` ou o
  * painel web; depois disso o bot só edita, coalescido, a cada mudança numa
- * sala. Edição que falha fica para a mudança seguinte. A mensagem apagada é
+ * sala ou na lista de jogatinas. Edição que falha fica para a mudança seguinte. A mensagem apagada é
  * publicada de novo, mas só com "Unknown Message": republicar por falha
  * passageira deixaria duas mensagens fixas no canal.
  */
@@ -134,6 +166,8 @@ export class SquadPanelService {
   private readonly db: Db;
   private readonly config: SquadPanelDeps['config'];
   private readonly audit: Pick<AuditService, 'record'>;
+  private readonly sessions: SquadPanelDeps['sessions'];
+  private readonly now: () => number;
   private readonly coalesceMs: number;
   private readonly timers = new Map<string, NodeJS.Timeout>();
   /** Uma escrita por vez em cada guild, para refresh e publish nunca postarem duas. */
@@ -144,6 +178,8 @@ export class SquadPanelService {
     this.db = deps.db;
     this.config = deps.config;
     this.audit = deps.audit;
+    this.sessions = deps.sessions;
+    this.now = deps.now ?? Date.now;
     this.coalesceMs = deps.coalesceMs ?? PANEL_COALESCE_MS;
   }
 
@@ -265,7 +301,12 @@ export class SquadPanelService {
 
   private async render(guild: Guild, config: SquadsConfig) {
     const settings = await this.config.getSettings(guild.id);
-    return panelMessage(panelRooms(guild, config), config, settings.embedColor);
+    const now = this.now();
+    const sessions = this.sessions
+      .upcoming(guild.id)
+      .filter((session) => session.startsAt > now)
+      .slice(0, PANEL_SESSION_COUNT);
+    return panelMessage(panelRooms(guild, config), config, settings.embedColor, sessions);
   }
 
   /**

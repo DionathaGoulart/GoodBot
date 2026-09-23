@@ -10,16 +10,19 @@ import {
   PANEL,
   squadsConfig,
 } from './__fixtures__/rooms';
-import { OPT_OUT_TOGGLE_ID, SEARCH_TOGGLE_ID } from './ids';
+import { OPT_OUT_TOGGLE_ID, SCHEDULE_ID, SEARCH_TOGGLE_ID } from './ids';
 
+import type { SessionSummary } from './sessions';
 import type { SquadsConfig } from '@goodbot/shared';
 
 const { setModuleConfig } = vi.hoisted(() => ({ setModuleConfig: vi.fn() }));
 vi.mock('@goodbot/db', () => ({ setModuleConfig }));
 
-const { panelMessage, panelRooms, roomLine, SquadPanelService } = await import('./panel');
+const { panelMessage, panelRooms, roomLine, sessionLine, SquadPanelService } =
+  await import('./panel');
 
 const MESSAGE = '600000000000000001';
+const NOW = Date.parse('2026-09-14T12:00:00Z');
 
 function apiError(code: number): DiscordAPIError {
   return new DiscordAPIError(
@@ -46,14 +49,36 @@ describe('texto do painel', () => {
     expect(body.embeds[0]?.data.description).toContain('<#300000000000000002>');
   });
 
-  it('só mostra o botão do cargo que está configurado', () => {
+  it('só mostra o botão do que está configurado', () => {
     const ids = (config: SquadsConfig) =>
       panelMessage([], config).components.flatMap((row) =>
         row.components.map((button) => (button.data as { custom_id: string }).custom_id),
       );
-    expect(ids(squadsConfig())).toEqual([SEARCH_TOGGLE_ID, OPT_OUT_TOGGLE_ID]);
-    expect(ids(squadsConfig({ optOutRoleId: null }))).toEqual([SEARCH_TOGGLE_ID]);
-    expect(ids(squadsConfig({ searchRoleId: null, optOutRoleId: null }))).toEqual([]);
+    expect(ids(squadsConfig())).toEqual([SEARCH_TOGGLE_ID, OPT_OUT_TOGGLE_ID, SCHEDULE_ID]);
+    expect(ids(squadsConfig({ optOutRoleId: null }))).toEqual([SEARCH_TOGGLE_ID, SCHEDULE_ID]);
+    expect(ids(squadsConfig({ searchRoleId: null, optOutRoleId: null }))).toEqual([SCHEDULE_ID]);
+    expect(ids(squadsConfig({ createChannelId: null }))).toEqual([
+      SEARCH_TOGGLE_ID,
+      OPT_OUT_TOGGLE_ID,
+    ]);
+  });
+
+  it('lista as jogatinas marcadas com a hora no fuso de quem lê', () => {
+    const session = {
+      id: '700000000000000001',
+      name: 'Jogatina de Alice',
+      startsAt: Date.parse('2026-09-15T00:00:00Z'),
+      url: 'https://discord.com/events/1/700000000000000001',
+    };
+    expect(sessionLine(session)).toBe(
+      '📅 [Jogatina de Alice](https://discord.com/events/1/700000000000000001) · ' +
+        '<t:1789430400:F> (<t:1789430400:R>)',
+    );
+    const withSession = panelMessage([], squadsConfig(), undefined, [session]);
+    expect(withSession.embeds[0]?.data.description).toContain('**Jogatinas marcadas**');
+    expect(withSession.embeds[0]?.data.description).not.toContain('marque uma jogatina');
+    const without = panelMessage([], squadsConfig());
+    expect(without.embeds[0]?.data.description).toContain('marque uma jogatina');
   });
 
   it('lista só sala com gente, na ordem grega, com o teto do canal', () => {
@@ -101,6 +126,7 @@ function setup(config: SquadsConfig = squadsConfig({ panelMessageId: MESSAGE }))
   const current = { config };
   const invalidate = vi.fn();
   const record = vi.fn();
+  const sessions = { upcoming: vi.fn((): SessionSummary[] => []) };
   const service = new SquadPanelService({
     client: h.client,
     db: {} as never,
@@ -110,8 +136,10 @@ function setup(config: SquadsConfig = squadsConfig({ panelMessageId: MESSAGE }))
       publishInvalidate: invalidate,
     } as never,
     audit: { record },
+    sessions,
+    now: () => NOW,
   });
-  return { ...h, service, edit, send, pin, invalidate, record, current };
+  return { ...h, service, edit, send, pin, invalidate, record, current, sessions };
 }
 
 describe('SquadPanelService', () => {
@@ -206,6 +234,30 @@ describe('SquadPanelService', () => {
     await expect(denied.service.publish(denied.guild, ALICE, 'command')).rejects.toMatchObject({
       code: 'MISSING_PERMISSIONS',
     });
+  });
+
+  it('a edição lista até 3 jogatinas que ainda não começaram', async () => {
+    const h = setup();
+    const at = (offset: number, id: string): SessionSummary => ({
+      id,
+      name: `Jogatina ${id}`,
+      startsAt: NOW + offset,
+      url: `https://discord.com/events/1/${id}`,
+    });
+    h.sessions.upcoming.mockReturnValue([
+      at(-1_000, 'passou'),
+      at(1_000, 'a'),
+      at(2_000, 'b'),
+      at(3_000, 'c'),
+      at(4_000, 'd'),
+    ]);
+    await h.service.refresh(GUILD);
+    const body = h.edit.mock.calls[0] as unknown as [string, ReturnType<typeof panelMessage>];
+    const description = body[1].embeds[0]?.data.description ?? '';
+    expect(description).toContain('Jogatina a');
+    expect(description).toContain('Jogatina c');
+    expect(description).not.toContain('Jogatina d');
+    expect(description).not.toContain('Jogatina passou');
   });
 
   it('módulo desligado não publica', async () => {
