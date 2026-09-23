@@ -19,6 +19,7 @@ import { saveAutomodRuleAction } from '@/app/actions/modules';
 import {
   DiscordField,
   DurationField,
+  LinesField,
   NumberField,
   SelectField,
   SwitchField,
@@ -69,61 +70,6 @@ const RAID_ACTION_LABEL: Record<(typeof RAID_ACTIONS)[number], string> = {
   ban: 'BANIR',
   require_account_age: 'SÓ CONTAS ANTIGAS',
 };
-
-/** Uma lista de strings (domínios, palavras) editada como textarea, uma por linha. */
-function LinesField({
-  name,
-  label,
-  description,
-  required,
-}: {
-  name: string;
-  label: string;
-  description?: string;
-  required?: boolean;
-}) {
-  const { watch, setValue, formState } = useFormContext();
-  const value = (watch(name) as string[] | undefined) ?? [];
-  // Estado local para o usuário poder digitar linhas em branco sem que elas
-  // desapareçam a cada tecla.
-  const [text, setText] = React.useState(value.join('\n'));
-  // Só ressincronizamos numa troca de regra: `value` vem do form, `text` é o
-  // rascunho. Ajustar em render (e não num efeito) é o caminho recomendado pelo
-  // React para estado derivado de prop.
-  const [syncedName, setSyncedName] = React.useState(name);
-  if (syncedName !== name) {
-    setSyncedName(name);
-    setText(value.join('\n'));
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="section-label" htmlFor={name}>
-        {label}
-        {required ? <span className="text-accent-text"> *</span> : null}
-      </label>
-      {description ? <p className="text-xs opacity-60">{description}</p> : null}
-      <textarea
-        id={name}
-        rows={6}
-        className="field-textarea"
-        disabled={formState.disabled}
-        value={text}
-        onChange={(event) => {
-          setText(event.target.value);
-          setValue(
-            name,
-            event.target.value
-              .split('\n')
-              .map((line) => line.trim())
-              .filter(Boolean),
-            { shouldDirty: true, shouldValidate: true },
-          );
-        }}
-      />
-    </div>
-  );
-}
 
 /** Os campos que só existem para um `type` — a parte "dinâmica" do formulário. */
 function TypeFields({ type }: { type: AutomodRuleType }) {

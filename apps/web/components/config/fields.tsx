@@ -92,6 +92,70 @@ export function TextAreaField({
   );
 }
 
+/**
+ * Uma lista de strings (domínios, palavras, nomes de jogo) editada como
+ * textarea, uma por linha. Linha vazia some ao salvar.
+ */
+export function LinesField({
+  name,
+  label,
+  description,
+  required,
+  rows = 6,
+}: FieldProps & { rows?: number }): React.ReactElement {
+  const { watch, setValue, getFieldState, formState } = useFormContext();
+  const value = (watch(name) as string[] | undefined) ?? [];
+  // Estado local para o usuário poder digitar linhas em branco sem que elas
+  // desapareçam a cada tecla.
+  const [text, setText] = React.useState(value.join('\n'));
+  // Só ressincronizamos numa troca de nome (a regra do automod mudou): `value`
+  // vem do form, `text` é o rascunho. Ajustar em render (e não num efeito) é o
+  // caminho recomendado pelo React para estado derivado de prop.
+  const [syncedName, setSyncedName] = React.useState(name);
+  if (syncedName !== name) {
+    setSyncedName(name);
+    setText(value.join('\n'));
+  }
+  // O erro de uma linha mora em `name.N`; o da lista inteira, em `name`.
+  const { error } = getFieldState(name, formState);
+  const message =
+    error?.message ??
+    (Array.isArray(error)
+      ? (error as ({ message?: string } | undefined)[]).find((item) => item?.message)?.message
+      : undefined);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="section-label" htmlFor={name}>
+        {label}
+        {required ? <span className="text-accent-text"> *</span> : null}
+      </label>
+      {description ? <p className="text-xs opacity-60">{description}</p> : null}
+      <textarea
+        id={name}
+        rows={rows}
+        className="field-textarea"
+        disabled={formState.disabled}
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value);
+          setValue(
+            name,
+            event.target.value
+              .split('\n')
+              .map((line) => line.trim())
+              .filter(Boolean),
+            { shouldDirty: true, shouldValidate: true },
+          );
+        }}
+      />
+      {message ? (
+        <p className="text-[10px] uppercase tracking-[0.2em] text-error-text">{message}</p>
+      ) : null}
+    </div>
+  );
+}
+
 export function NumberField({
   min,
   max,
