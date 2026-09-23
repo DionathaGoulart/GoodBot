@@ -68,30 +68,30 @@ export interface Deadline {
 }
 
 /**
- * Os prazos do cargo `Buscando Squad`, por guild e pessoa. Mora em memória de
- * propósito (PRD §5.11): um restart perde tudo e a reconciliação recomeça a
- * contar do zero.
+ * Prazos por guild e por id: o do cargo `Buscando Squad` (id = pessoa) e o da
+ * sala vazia (id = canal). Mora em memória de propósito (PRD §5.11): um
+ * restart perde tudo e a reconciliação recomeça a contar do zero.
  */
-export class DeadlineBook {
-  private readonly byGuild = new Map<string, Map<string, Deadline>>();
+export class DeadlineBook<T extends { at: number } = Deadline> {
+  private readonly byGuild = new Map<string, Map<string, T>>();
 
-  set(guildId: string, userId: string, deadline: Deadline): void {
+  set(guildId: string, id: string, deadline: T): void {
     let guild = this.byGuild.get(guildId);
     if (!guild) {
       guild = new Map();
       this.byGuild.set(guildId, guild);
     }
-    guild.set(userId, deadline);
+    guild.set(id, deadline);
   }
 
-  get(guildId: string, userId: string): Deadline | undefined {
-    return this.byGuild.get(guildId)?.get(userId);
+  get(guildId: string, id: string): T | undefined {
+    return this.byGuild.get(guildId)?.get(id);
   }
 
-  clear(guildId: string, userId: string): void {
+  clear(guildId: string, id: string): void {
     const guild = this.byGuild.get(guildId);
     if (!guild) return;
-    guild.delete(userId);
+    guild.delete(id);
     if (guild.size === 0) this.byGuild.delete(guildId);
   }
 
@@ -100,13 +100,13 @@ export class DeadlineBook {
   }
 
   /** Tira do livro e devolve o que venceu até `now`. */
-  takeDue(now: number): { guildId: string; userId: string; deadline: Deadline }[] {
-    const due: { guildId: string; userId: string; deadline: Deadline }[] = [];
+  takeDue(now: number): { guildId: string; id: string; deadline: T }[] {
+    const due: { guildId: string; id: string; deadline: T }[] = [];
     for (const [guildId, guild] of this.byGuild) {
-      for (const [userId, deadline] of guild) {
+      for (const [id, deadline] of guild) {
         if (deadline.at > now) continue;
-        due.push({ guildId, userId, deadline });
-        guild.delete(userId);
+        due.push({ guildId, id, deadline });
+        guild.delete(id);
       }
       if (guild.size === 0) this.byGuild.delete(guildId);
     }
@@ -367,7 +367,7 @@ export class SquadPresenceService {
       const now = this.now();
       this.gate.prune(now);
       await this.reconcileNewlyEnabled();
-      for (const { guildId, userId, deadline } of this.deadlines.takeDue(now)) {
+      for (const { guildId, id: userId, deadline } of this.deadlines.takeDue(now)) {
         try {
           await this.expire(guildId, userId, deadline);
         } catch (error) {

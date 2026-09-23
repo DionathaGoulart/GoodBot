@@ -162,7 +162,7 @@ describe('DeadlineBook', () => {
     const book = new DeadlineBook();
     book.set('g', 'a', { at: 10, kind: 'ttl' });
     book.set('g', 'b', { at: 20, kind: 'left' });
-    expect(book.takeDue(15).map((d) => d.userId)).toEqual(['a']);
+    expect(book.takeDue(15).map((d) => d.id)).toEqual(['a']);
     expect(book.size).toBe(1);
     expect(book.takeDue(15)).toEqual([]);
   });

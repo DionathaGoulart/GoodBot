@@ -35,7 +35,9 @@ import { ReactionRoleService } from './services/reaction-roles';
 import { RegistryService } from './services/registry';
 import { Scheduler } from './services/scheduler';
 import { YouTubeProvider } from './services/social/index';
+import { SquadPanelService } from './services/squads/panel';
 import { SquadPresenceService } from './services/squads/presence';
+import { SquadRoomService } from './services/squads/rooms';
 import { StatsService } from './services/stats';
 import { TicketService } from './services/tickets';
 import { WelcomeService } from './services/welcome';
@@ -159,6 +161,8 @@ async function main(): Promise<void> {
   });
   const social = new YouTubeProvider();
   const squads = new SquadPresenceService({ client, config, registry });
+  const squadPanel = new SquadPanelService({ client, db, config, audit });
+  const squadRooms = new SquadRoomService({ client, config, registry, panel: squadPanel });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
   // Os links que os avisos de ciclo de vida citam. Saem do `AUTH_URL` pela
@@ -249,6 +253,8 @@ async function main(): Promise<void> {
     reactionRoles,
     tickets,
     squads,
+    squadRooms,
+    squadPanel,
     social,
     messageCache,
     stats,
@@ -278,6 +284,7 @@ async function main(): Promise<void> {
     retention.start();
     capacity.start();
     squads.start();
+    squadRooms.start();
     databaseProbe.start();
     void deployNotice.resolve();
     alerts.emit({
@@ -319,6 +326,8 @@ async function main(): Promise<void> {
       retention.stop();
       capacity.stop();
       squads.stop();
+      squadRooms.stop();
+      squadPanel.stop();
       databaseProbe.stop();
       autorole.stop();
       await api.stop();

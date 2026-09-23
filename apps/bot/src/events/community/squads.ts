@@ -13,10 +13,17 @@ export const squadPresenceUpdate = defineEvent(
   },
 );
 
-/** Voz: entrar cancela o prazo do cargo de busca, sair de todas abre a janela. */
+/**
+ * Voz: o cargo de busca (entrar cancela o prazo, sair de todas abre a janela)
+ * e as salas (o canal de criar abre uma, a última pessoa saindo abre a janela).
+ * Um não espera o outro: a sala nascendo não atrasa o cargo, nem o contrário.
+ */
 export const squadVoiceStateUpdate = defineEvent(
   Events.VoiceStateUpdate,
   async (ctx, oldState, newState) => {
-    await ctx.squads.onVoiceState(oldState, newState);
+    await Promise.all([
+      ctx.squads.onVoiceState(oldState, newState),
+      ctx.squadRooms.onVoiceState(oldState, newState),
+    ]);
   },
 );
