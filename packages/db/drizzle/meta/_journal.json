@@ -162,6 +162,13 @@
       "when": 1790105067371,
       "tag": "0022_guild_notice_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790190084923,
+      "tag": "0023_drop_fixed_squads",
+      "breakpoints": true
     }
   ]
 }

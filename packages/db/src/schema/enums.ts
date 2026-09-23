@@ -11,9 +11,6 @@ import {
   SCHEDULED_ACTION_KINDS,
   SOCIAL_KIND_ENUM_VALUES,
   SOCIAL_PLATFORM_ENUM_VALUES,
-  SQUAD_PROFILE_STATUSES,
-  SQUAD_REQUEST_STATUSES,
-  SQUAD_STATUSES,
   STAT_GRANULARITIES,
   STAT_KINDS,
   TICKET_STATUSES,
@@ -36,6 +33,3 @@ export const statKindEnum = pgEnum('stat_kind', STAT_KINDS);
 export const statGranularityEnum = pgEnum('stat_granularity', STAT_GRANULARITIES);
 export const socialPlatformEnum = pgEnum('social_platform', SOCIAL_PLATFORM_ENUM_VALUES);
 export const socialKindEnum = pgEnum('social_kind', SOCIAL_KIND_ENUM_VALUES);
-export const squadProfileStatusEnum = pgEnum('squad_profile_status', SQUAD_PROFILE_STATUSES);
-export const squadStatusEnum = pgEnum('squad_status', SQUAD_STATUSES);
-export const squadRequestStatusEnum = pgEnum('squad_request_status', SQUAD_REQUEST_STATUSES);

@@ -14,8 +14,6 @@ export const META_KEYS = {
    * ninguém pedir — que é justamente quando ela mais precisa continuar de pé.
    */
   maintenance: 'maintenance',
-  /** Último dia local em que o passo diário do job de squads rodou, por guild. */
-  squadsDaily: 'squads_daily',
   /**
    * O aviso de deploy ainda no ar: as mensagens que o bot velho publicou antes
    * de cair. Fica no banco porque quem as edita para "voltou" é o processo
@@ -23,11 +21,6 @@ export const META_KEYS = {
    */
   deployNotice: 'deploy_notice',
 } as const;
-
-/** `squads_daily:<guildId>`: o dia local (`AAAA-MM-DD`) da última passada diária. */
-export function squadsDailyKey(guildId: string): string {
-  return `${META_KEYS.squadsDaily}:${guildId}`;
-}
 
 export async function getMeta<T = unknown>(db: DbExecutor, key: string): Promise<T | null> {
   const [row] = await db.select().from(meta).where(eq(meta.key, key)).limit(1);
