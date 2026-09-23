@@ -18,6 +18,7 @@ import {
   type LogsPageValues,
   type Module,
   type ModuleConfigInput,
+  type SquadsConfig,
 } from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
@@ -203,7 +204,16 @@ export async function saveModuleConfig(
     };
   }
   const before = await loadPage(guildId, page);
-  const after = parsed.data as ConfigPageValues;
+  // `panelMessageId` é escrito pelo bot quando publica o painel fixo dos
+  // squads. Um formulário aberto antes da publicação traria o id velho, e a
+  // publicação seguinte mandaria uma mensagem nova em vez de editar a do ar.
+  const after: ConfigPageValues =
+    page === 'squads'
+      ? {
+          ...(parsed.data as SquadsConfig),
+          panelMessageId: (before as SquadsConfig).panelMessageId,
+        }
+      : (parsed.data as ConfigPageValues);
   await writePage(guildId, page, after, session.user.id);
   await withAudit(
     { id: session.user.id, tag: session.user.name, guildId: session.guildId },
