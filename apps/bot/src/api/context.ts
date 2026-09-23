@@ -13,6 +13,7 @@ export type ApiDeps = Pick<
   | 'reactionRoles'
   | 'tickets'
   | 'social'
+  | 'squadPanel'
   | 'commands'
   // As duas últimas só são usadas pelas rotas `/admin`: quem o bot atende e
   // se ele está em manutenção não são assunto de guild.
