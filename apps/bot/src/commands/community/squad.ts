@@ -1,7 +1,12 @@
 import { UserFacingError } from '@goodbot/shared';
 import { MessageFlags, SlashCommandBuilder } from 'discord.js';
 
-import { scheduleModal, searchToggledText, squadsConfigOrFail } from '../../interactions/squads';
+import {
+  optOutToggledText,
+  scheduleModal,
+  searchToggledText,
+  squadsConfigOrFail,
+} from '../../interactions/squads';
 import { defineCommand } from '../../lib/command';
 import { levelAtLeast } from '../../services/permissions';
 
@@ -18,6 +23,11 @@ export default defineCommand({
       sub.setName('buscar').setDescription('Liga ou desliga o cargo Buscando Squad'),
     )
     .addSubcommand((sub) =>
+      sub
+        .setName('aviso')
+        .setDescription('Liga ou desliga o aviso de squad quando você abre o jogo'),
+    )
+    .addSubcommand((sub) =>
       sub.setName('agendar').setDescription('Marca uma jogatina como evento do servidor'),
     )
     .addSubcommand((sub) =>
@@ -30,7 +40,9 @@ export default defineCommand({
   opensModal: true,
   ephemeral: true,
   cooldown: 5,
-  help: 'Liga ou desliga a sua busca por squad e marca jogatina; a administração publica o painel.',
+  help:
+    '`buscar` liga ou desliga a sua busca, `aviso` o aviso de quando você abre o jogo, ' +
+    '`agendar` marca jogatina e `painel` (admin) publica o painel de salas.',
   async execute(ctx) {
     const subcommand = ctx.interaction.options.getSubcommand();
     if (subcommand === 'agendar') {
@@ -56,7 +68,10 @@ export default defineCommand({
       return;
     }
     const config = await squadsConfigOrFail(ctx, ctx.guildId);
-    const state = await ctx.squads.toggleSearch(ctx.member, config);
-    await ctx.interaction.editReply({ content: searchToggledText(state, config) });
+    const content =
+      subcommand === 'aviso'
+        ? optOutToggledText(await ctx.squads.toggleOptOut(ctx.member, config))
+        : searchToggledText(await ctx.squads.toggleSearch(ctx.member, config), config);
+    await ctx.interaction.editReply({ content });
   },
 });

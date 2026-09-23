@@ -40,7 +40,8 @@ export function searchToggledText(state: SearchState, config: SquadsConfig): str
 export function optOutToggledText(state: SearchState): string {
   return state === 'on'
     ? 'Pronto: não te aviso mais quando você abrir o jogo. Para buscar squad, use o botão ' +
-        '**BUSCAR SQUAD** do painel ou `/squad buscar`.'
+        '**BUSCAR SQUAD** do painel ou `/squad buscar`; para voltar a receber o aviso, ' +
+        '**SEM AVISO** ou `/squad aviso`.'
     : 'Pronto: voltei a te avisar quando você abrir o jogo.';
 }
 

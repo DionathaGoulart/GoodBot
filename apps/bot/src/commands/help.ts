@@ -21,7 +21,7 @@ const MODULE_LABELS: Record<Module, string> = {
   utilities: 'Utilidades',
   stats: 'Estatísticas',
   social: 'Redes sociais',
-  squads: 'Squads',
+  squads: 'Buscar squad',
 };
 
 export default defineCommand({
