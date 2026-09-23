@@ -83,6 +83,7 @@ import {
   SocialResolveResultSchema,
   SocialTestResultSchema,
 } from './social';
+import { PublishSquadPanelInputSchema, PublishSquadPanelResultSchema } from './squads';
 import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
 import { SocialAccountInputSchema } from '../config/social';
 
@@ -156,6 +157,7 @@ import type {
   SocialResolveResult,
   SocialTestResult,
 } from './social';
+import type { PublishSquadPanelInput, PublishSquadPanelResult } from './squads';
 import type { CloseTicketInput, CloseTicketResult } from './tickets';
 import type { SocialAccountInput } from '../config/social';
 import type { z } from 'zod';
@@ -798,6 +800,16 @@ export function createInternalClient(options: InternalClientOptions) {
         `${guild(guildId)}/tickets/panels/${encodeURIComponent(panelId)}/unpublish`,
         { method: 'POST' },
       ),
+
+    /** Publica o painel fixo das salas de squad, ou reedita o do ar (PRD §5.11). */
+    publishSquadPanel: (
+      guildId: string,
+      input: PublishSquadPanelInput,
+    ): Promise<PublishSquadPanelResult> =>
+      request(PublishSquadPanelResultSchema, `${guild(guildId)}/squads/panel`, {
+        method: 'POST',
+        body: PublishSquadPanelInputSchema.parse(input),
+      }),
 
     /** Contas observadas neste servidor (PRD §5.8). */
     social: (guildId: string): Promise<SocialOverview> =>
