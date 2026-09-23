@@ -1,25 +1,21 @@
-import { DAY_MS, MINUTE_MS } from '../constants';
+import { DAY_MS } from '../constants';
 import { UserFacingError } from '../errors';
 import { fromLocalDateTime, toLocalDateTime } from './zoned';
 
 import type { LocalDateTime } from './zoned';
 
 /**
- * O "quando" de uma jogatina, como a pessoa digita no `/bora` ou no modal do
- * botão BORA: `agora`, `hoje 21h`, `amanhã 20:30`, `sex 22h`, `16/09 21h`. A
- * conta é no fuso da guild, porque "21h" é a hora de quem joga.
+ * O "quando" de uma jogatina agendada, como a pessoa digita no modal do botão
+ * MARCAR JOGATINA: `hoje 21h`, `amanhã 20:30`, `sex 22h`, `16/09 21h`. A conta
+ * é no fuso da guild, porque "21h" é a hora de quem joga.
  *
  * É o ponto de atrito do fluxo: todo erro vira `UserFacingError` com
- * exemplos, para a própria mensagem ensinar o formato.
+ * exemplos, para a própria mensagem ensinar o formato. `agora` não vale: quem
+ * quer jogar agora abre uma sala, e o evento do Discord recusa início no
+ * passado.
  */
 
-export const WHEN_EXAMPLES = 'agora, hoje 21h, amanhã 20:30, sex 22h, 16/09 21h';
-
-/**
- * Quanto um horário pode estar no passado e ainda valer. Quem digita
- * `hoje 21h` às 21h05 quer jogar agora, não uma mensagem de erro.
- */
-export const WHEN_PAST_GRACE_MS = 15 * MINUTE_MS;
+export const WHEN_EXAMPLES = 'hoje 21h, amanhã 20:30, sex 22h, 16/09 21h';
 
 /** Antecedência máxima de uma jogatina. */
 export const MAX_WHEN_AHEAD_DAYS = 60;
@@ -99,7 +95,12 @@ function dayPart(token: string): DayPart | null {
     kind: 'date',
     day: Number(date[1]),
     month: Number(date[2]),
-    year: rawYear === undefined ? null : rawYear.length === 2 ? 2000 + Number(rawYear) : Number(rawYear),
+    year:
+      rawYear === undefined
+        ? null
+        : rawYear.length === 2
+          ? 2000 + Number(rawYear)
+          : Number(rawYear),
   };
 }
 
@@ -139,7 +140,7 @@ function resolve(
 ): Date {
   const at = (year: number, month: number, date: number) =>
     fromLocalDateTime({ year, month, day: date, ...time }, timeZone);
-  const isPast = (date: Date) => date.getTime() < now - WHEN_PAST_GRACE_MS;
+  const isPast = (date: Date) => date.getTime() <= now;
 
   switch (day.kind) {
     case 'offset': {
@@ -175,11 +176,10 @@ function resolve(
 }
 
 /**
- * Lê o "quando" de uma jogatina no fuso `timeZone`. `agora` é o minuto atual
- * (dois `/bora agora` no mesmo minuto caem na mesma jogatina); sem dia, vale
- * hoje; dia da semana é o próximo, contando hoje se a hora ainda não passou.
- * Lança `UserFacingError` com exemplos para tudo o que não entender, para
- * horário que já passou e para mais de `MAX_WHEN_AHEAD_DAYS` dias adiante.
+ * Lê o "quando" de uma jogatina no fuso `timeZone`. Sem dia, vale hoje; dia da
+ * semana é o próximo, contando hoje se a hora ainda não passou. Lança
+ * `UserFacingError` com exemplos para tudo o que não entender, para `agora`,
+ * para horário que já passou e para mais de `MAX_WHEN_AHEAD_DAYS` dias adiante.
  */
 export function parseWhen(input: string, now: Date, timeZone: string): Date {
   const nowMs = now.getTime();
@@ -187,8 +187,11 @@ export function parseWhen(input: string, now: Date, timeZone: string): Date {
   const tokens = normalize(input).filter((token) => !FILLER.has(token));
   if (tokens.length === 0) throw invalid(`Diga quando. Exemplos: ${WHEN_EXAMPLES}.`);
 
-  if (tokens.length === 1 && (tokens[0] === 'agora' || tokens[0] === 'ja')) {
-    return new Date(Math.floor(nowMs / MINUTE_MS) * MINUTE_MS);
+  if (tokens.includes('agora') || tokens.includes('ja')) {
+    throw new UserFacingError(
+      'Jogatina marcada é para depois. Para jogar agora, entre no **➕ Criar Squad**.',
+      { code: 'WHEN_NOW' },
+    );
   }
 
   let day: DayPart | null = null;
@@ -223,8 +226,8 @@ const pad = (value: number) => String(value).padStart(2, '0');
 
 /**
  * Um instante como a pessoa lê no fuso da guild: "hoje às 21:00", "amanhã às
- * 20:30", "sexta 18/09 às 22:00". É o eco do autocomplete do `/bora`: quem
- * digita `sex 22h` vê a data antes de enviar.
+ * 20:30", "sexta 18/09 às 22:00". É o eco da resposta do modal: quem digitou
+ * `sex 22h` confere a data que o bot entendeu.
  */
 export function describeWhen(at: Date, now: Date, timeZone: string): string {
   const target = toLocalDateTime(at, timeZone);
@@ -239,24 +242,4 @@ export function describeWhen(at: Date, now: Date, timeZone: string): string {
   if (days === 1) return `amanhã às ${clock}`;
   const date = `${pad(target.day)}/${pad(target.month)}`;
   return `${WEEKDAY_NAMES[target.weekday] ?? ''} ${date} às ${clock}`;
-}
-
-/** Sugestões do autocomplete quando nada foi digitado: todas válidas agora. */
-export function suggestWhen(now: Date, timeZone: string): string[] {
-  const candidates = ['agora', 'hoje 20h', 'hoje 21h', 'hoje 22h', 'amanhã 21h', 'sex 21h', 'sáb 21h'];
-  const seen = new Set<number>();
-  const valid: string[] = [];
-  for (const candidate of candidates) {
-    try {
-      const at = parseWhen(candidate, now, timeZone).getTime();
-      // "hoje 21h" dentro da tolerância já não é futuro: fica o "agora".
-      if (candidate !== 'agora' && at <= now.getTime()) continue;
-      if (seen.has(at)) continue;
-      seen.add(at);
-      valid.push(candidate);
-    } catch {
-      // Horário de hoje que já passou: fora da lista.
-    }
-  }
-  return valid;
 }

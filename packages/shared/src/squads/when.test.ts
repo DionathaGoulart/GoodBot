@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { describeWhen, MAX_WHEN_AHEAD_DAYS, parseWhen, suggestWhen } from './when';
+import { describeWhen, MAX_WHEN_AHEAD_DAYS, parseWhen } from './when';
 import { UserFacingError } from '../errors';
 
 const SAO_PAULO = 'America/Sao_Paulo';
@@ -23,10 +23,12 @@ function errorOf(input: string, now = MONDAY_9AM): UserFacingError {
 }
 
 describe('parseWhen', () => {
-  it('agora é o minuto atual, sem os segundos', () => {
-    expect(parse('agora', new Date('2026-09-14T12:03:41Z'))).toBe('2026-09-14T12:03:00.000Z');
-    expect(parse('  AGORA ')).toBe('2026-09-14T12:00:00.000Z');
-    expect(parse('já')).toBe('2026-09-14T12:00:00.000Z');
+  it('agora não marca jogatina: aponta o canal de criar', () => {
+    for (const input of ['agora', '  AGORA ', 'já', 'agora 21h']) {
+      const error = errorOf(input);
+      expect(error.code).toBe('WHEN_NOW');
+      expect(error.message).toContain('Criar Squad');
+    }
   });
 
   it.each([
@@ -80,11 +82,12 @@ describe('parseWhen', () => {
     expect(errorOf('13/09 21h').code).toBe('WHEN_PAST');
   });
 
-  it('tolera alguns minutos no passado: quem digita hoje 9h às 9h05 quer jogar agora', () => {
-    expect(parse('hoje 8h50')).toBe('2026-09-14T11:50:00.000Z');
-    const past = errorOf('hoje 8h');
+  it('horário de hoje que já passou, mesmo por minutos, sugere o de amanhã', () => {
+    expect(parse('hoje 9h01')).toBe('2026-09-14T12:01:00.000Z');
+    expect(errorOf('hoje 9h').code).toBe('WHEN_PAST');
+    const past = errorOf('hoje 8h50');
     expect(past.code).toBe('WHEN_PAST');
-    expect(past.message).toContain('amanhã 8h');
+    expect(past.message).toContain('amanhã 8:50');
     expect(errorOf('hoje meia-noite').code).toBe('WHEN_PAST');
   });
 
@@ -115,27 +118,5 @@ describe('describeWhen', () => {
     expect(at('2026-09-15T00:00:00Z')).toBe('hoje às 21:00');
     expect(at('2026-09-15T23:30:00Z')).toBe('amanhã às 20:30');
     expect(at('2026-09-19T01:00:00Z')).toBe('sexta 18/09 às 22:00');
-  });
-});
-
-describe('suggestWhen', () => {
-  it('só sugere o que ainda vale, sem repetir o mesmo instante', () => {
-    expect(suggestWhen(MONDAY_9AM, SAO_PAULO)).toEqual([
-      'agora',
-      'hoje 20h',
-      'hoje 21h',
-      'hoje 22h',
-      'amanhã 21h',
-      'sex 21h',
-      'sáb 21h',
-    ]);
-    // Segunda, 21h30: hoje 20h e 21h passaram.
-    expect(suggestWhen(new Date('2026-09-15T00:30:00Z'), SAO_PAULO)).toEqual([
-      'agora',
-      'hoje 22h',
-      'amanhã 21h',
-      'sex 21h',
-      'sáb 21h',
-    ]);
   });
 });
