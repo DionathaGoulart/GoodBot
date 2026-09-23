@@ -644,7 +644,9 @@ hierarquia (§10), senão ligar e desligar falha com `BOT_ROLE_HIERARCHY`.
   mostra num bloco à parte quem quer jogar agora. É a única marca de "estou
   buscando".
 - `Sem Aviso de Squad` (`optOutRoleId`): quem tem nunca recebe o aviso
-  automático (abaixo), e continua livre para ligar a busca à mão.
+  automático (abaixo), e continua livre para ligar a busca à mão. Liga e
+  desliga pelo botão **SEM AVISO** do painel ou por `/squad aviso`, e o
+  **NÃO AVISAR MAIS** da DM também o liga.
 
 **Ligar a busca.** Dois gatilhos, um efeito: a pessoa ganha `Buscando Squad`.
 
