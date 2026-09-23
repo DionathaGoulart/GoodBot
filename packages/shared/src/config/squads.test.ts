@@ -1,383 +1,127 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_SQUAD_GAME_FIELDS, SQUAD_AVAILABILITY_MAX, SQUAD_BLOCKS } from '../constants';
-import {
-  DEFAULT_SQUAD_BLOCKS,
-  DEFAULT_SQUADS_CONFIG,
-  SquadGameInputSchema,
-  SquadProfileInputSchema,
-  SquadsConfigSchema,
-  validateAnswers,
-} from './squads';
+import { GREEK_ROOM_NAMES, LFG_MAX_GAME_NAMES } from '../constants';
+import { parseModuleConfigOrDefault } from './index';
+import { DEFAULT_SQUADS_CONFIG, normalizeGameName, SquadsConfigSchema } from './squads';
 
-const PLATFORM = {
-  key: 'platform',
-  label: 'Plataforma',
-  type: 'select',
-  options: ['PC', 'PS5'],
-  required: true,
-  match: 'hard',
-} as const;
-const MODES = {
-  key: 'modes',
-  label: 'Modos',
-  type: 'tags',
-  options: ['PvE', 'Farm', 'Speedrun'],
-  match: 'soft',
-} as const;
-const NOTE = { key: 'note', label: 'Observação', type: 'text' } as const;
-
-const blocksWith = (index: number, patch: Record<string, unknown>) =>
-  DEFAULT_SQUAD_BLOCKS.map((block, i) => (i === index ? { ...block, ...patch } : block));
+const ROLE_A = '111111111111111111';
+const ROLE_B = '222222222222222222';
 
 describe('SquadsConfigSchema', () => {
-  it('nasce desligado, com as quatro faixas e os prazos padrão', () => {
+  it('nasce desligado, sem ids e com os padrões do PRD', () => {
     expect(SquadsConfigSchema.parse({})).toEqual(DEFAULT_SQUADS_CONFIG);
-    expect(DEFAULT_SQUADS_CONFIG).toMatchObject({
+    expect(DEFAULT_SQUADS_CONFIG).toEqual({
+      version: 1,
       enabled: false,
-      searchChannelId: null,
-      voicePoolIds: [],
-      proposalTtlHours: 72,
-      reproposeCooldownDays: 14,
-      reminderMinutesBefore: 30,
-      sessionHours: 3,
-      maxUpcomingSessions: 5,
-      maxSessionGuests: 4,
-      inactiveWeeks: 4,
-      maxSquadsPerUser: 1,
-      channelNaming: 'squad-{name}',
-    });
-    expect(DEFAULT_SQUADS_CONFIG.blocks.map((block) => block.key)).toEqual([...SQUAD_BLOCKS]);
-    expect(DEFAULT_SQUADS_CONFIG.blocks[3]).toEqual({
-      key: 'night',
-      label: 'Madrugada',
-      startHour: 0,
-      endHour: 6,
+      searchRoleId: null,
+      optOutRoleId: null,
+      panelChannelId: null,
+      panelMessageId: null,
+      categoryId: null,
+      createChannelId: null,
+      roomSize: 4,
+      graceMinutes: 2,
+      searchTtlMinutes: 120,
+      gameNames: ['HELLDIVERS™ 2'],
     });
   });
 
-  it('cada parse ganha a sua cópia das faixas padrão', () => {
+  it('cada parse ganha a sua cópia da lista de jogos padrão', () => {
     const first = SquadsConfigSchema.parse({});
-    first.blocks[0]!.label = 'Alterada';
-    expect(SquadsConfigSchema.parse({}).blocks[0]!.label).toBe('Manhã');
+    first.gameNames.push('Outro');
+    expect(SquadsConfigSchema.parse({}).gameNames).toEqual(['HELLDIVERS™ 2']);
   });
 
-  it('aceita faixas editadas e apara o rótulo', () => {
-    const parsed = SquadsConfigSchema.parse({
-      blocks: blocksWith(2, { label: '  Noitão ', endHour: 23 }),
+  it('lê o jsonb do módulo antigo descartando os campos que saíram', () => {
+    const legacy = {
+      version: 1,
+      enabled: true,
+      searchChannelId: ROLE_A,
+      searchMessageId: ROLE_B,
+      voicePoolIds: [ROLE_A],
+      blocks: [],
+      proposalTtlHours: 72,
+      channelNaming: 'squad-{name}',
+    };
+    const result = parseModuleConfigOrDefault('squads', legacy);
+    expect(result.valid).toBe(true);
+    expect(result.config).toEqual({ ...DEFAULT_SQUADS_CONFIG, enabled: true });
+    expect(result.config).not.toHaveProperty('searchChannelId');
+  });
+
+  it.each([
+    ['roomSize', 1],
+    ['roomSize', 11],
+    ['roomSize', 3.5],
+    ['graceMinutes', -1],
+    ['graceMinutes', 11],
+    ['searchTtlMinutes', 14],
+    ['searchTtlMinutes', 721],
+  ])('recusa %s = %s', (field, value) => {
+    expect(SquadsConfigSchema.safeParse({ [field]: value }).success).toBe(false);
+  });
+
+  it('aceita as bordas das faixas', () => {
+    const config = SquadsConfigSchema.parse({
+      roomSize: 10,
+      graceMinutes: 0,
+      searchTtlMinutes: 15,
     });
-    expect(parsed.blocks[2]).toEqual({
-      key: 'evening',
-      label: 'Noitão',
-      startHour: 18,
-      endHour: 23,
-    });
+    expect(config).toMatchObject({ roomSize: 10, graceMinutes: 0, searchTtlMinutes: 15 });
   });
 
-  it('recusa faixa que termina antes de começar ou atravessa a meia-noite', () => {
-    const crossing = SquadsConfigSchema.safeParse({
-      blocks: blocksWith(3, { startHour: 22, endHour: 2 }),
-    });
-    expect(crossing.success).toBe(false);
-    expect(crossing.error?.issues[0]?.path).toEqual(['blocks', 3, 'endHour']);
-    expect(
-      SquadsConfigSchema.safeParse({ blocks: blocksWith(0, { startHour: 12, endHour: 12 }) })
-        .success,
-    ).toBe(false);
+  it('recusa id que não é snowflake', () => {
+    expect(SquadsConfigSchema.safeParse({ createChannelId: 'abc' }).success).toBe(false);
   });
 
-  it('recusa hora fora do relógio', () => {
-    for (const patch of [
-      { startHour: 24 },
-      { startHour: -1 },
-      { endHour: 0 },
-      { endHour: 25 },
-      { startHour: 6.5 },
-    ]) {
-      expect(SquadsConfigSchema.safeParse({ blocks: blocksWith(0, patch) }).success).toBe(false);
-    }
-  });
-
-  it('recusa grade sem as quatro faixas ou fora de ordem', () => {
-    expect(SquadsConfigSchema.safeParse({ blocks: DEFAULT_SQUAD_BLOCKS.slice(0, 3) }).success).toBe(
-      false,
-    );
-    const swapped = [
-      DEFAULT_SQUAD_BLOCKS[1],
-      DEFAULT_SQUAD_BLOCKS[0],
-      ...DEFAULT_SQUAD_BLOCKS.slice(2),
-    ];
-    const result = SquadsConfigSchema.safeParse({ blocks: swapped });
+  it('recusa o mesmo cargo para busca e sem aviso', () => {
+    const result = SquadsConfigSchema.safeParse({ searchRoleId: ROLE_A, optOutRoleId: ROLE_A });
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.path).toEqual(['blocks', 0, 'key']);
-  });
-
-  it('recusa rótulo de faixa vazio', () => {
-    expect(SquadsConfigSchema.safeParse({ blocks: blocksWith(1, { label: '   ' }) }).success).toBe(
-      false,
-    );
-  });
-
-  it('exige {name} no padrão do canal', () => {
-    expect(SquadsConfigSchema.safeParse({ channelNaming: 'squad' }).success).toBe(false);
-    expect(SquadsConfigSchema.parse({ channelNaming: ' time-{name} ' }).channelNaming).toBe(
-      'time-{name}',
-    );
-  });
-
-  it('respeita os limites dos prazos', () => {
-    expect(SquadsConfigSchema.safeParse({ proposalTtlHours: 0 }).success).toBe(false);
-    expect(SquadsConfigSchema.safeParse({ proposalTtlHours: 721 }).success).toBe(false);
-    expect(SquadsConfigSchema.safeParse({ reproposeCooldownDays: 0 }).success).toBe(true);
-    expect(SquadsConfigSchema.safeParse({ reminderMinutesBefore: 241 }).success).toBe(false);
-    expect(SquadsConfigSchema.safeParse({ sessionHours: 0 }).success).toBe(false);
-    expect(SquadsConfigSchema.safeParse({ sessionHours: 13 }).success).toBe(false);
-    expect(SquadsConfigSchema.safeParse({ maxUpcomingSessions: 0 }).success).toBe(false);
-    expect(SquadsConfigSchema.safeParse({ maxUpcomingSessions: 11 }).success).toBe(false);
-    // 0 desliga o convidado avulso; mais de 10 não.
-    expect(SquadsConfigSchema.safeParse({ maxSessionGuests: 0 }).success).toBe(true);
-    expect(SquadsConfigSchema.safeParse({ maxSessionGuests: 11 }).success).toBe(false);
-    expect(SquadsConfigSchema.safeParse({ maxSessionGuests: 1.5 }).success).toBe(false);
-    expect(SquadsConfigSchema.safeParse({ inactiveWeeks: 0 }).success).toBe(false);
-    expect(SquadsConfigSchema.safeParse({ maxSquadsPerUser: 6 }).success).toBe(false);
-  });
-
-  it('valida e deduplica o pool de voice', () => {
-    const voice = '123456789012345678';
-    expect(SquadsConfigSchema.parse({ voicePoolIds: [voice, voice] }).voicePoolIds).toEqual([
-      voice,
-    ]);
-    expect(SquadsConfigSchema.safeParse({ voicePoolIds: ['Hellpod Alfa'] }).success).toBe(false);
-  });
-});
-
-describe('SquadGameInputSchema', () => {
-  const game = {
-    name: 'Helldivers 2',
-    groupSize: 8,
-    partySize: 4,
-    fields: [PLATFORM, MODES, NOTE],
-  };
-
-  it('aceita um jogo com campos e aplica os defaults', () => {
-    const parsed = SquadGameInputSchema.parse(game);
-    expect(parsed.enabled).toBe(true);
-    expect(parsed.fields[1]).toMatchObject({ key: 'modes', required: false, match: 'soft' });
-    expect(parsed.fields[2]).toEqual({
-      key: 'note',
-      label: 'Observação',
-      type: 'text',
-      options: [],
-      required: false,
-      match: 'none',
-    });
-  });
-
-  it('recusa chave repetida, apontando o campo repetido', () => {
-    const result = SquadGameInputSchema.safeParse({
-      ...game,
-      fields: [PLATFORM, { ...MODES, key: 'platform' }],
-    });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.path).toEqual(['fields', 1, 'key']);
-  });
-
-  it('select e tags exigem pelo menos uma opção', () => {
-    for (const field of [
-      { ...PLATFORM, options: [] },
-      { ...MODES, options: undefined },
-    ]) {
-      const result = SquadGameInputSchema.safeParse({ ...game, fields: [field] });
-      expect(result.success).toBe(false);
-      expect(result.error?.issues[0]?.path).toEqual(['fields', 0, 'options']);
-    }
-  });
-
-  it('texto livre não tem opções nem entra no match', () => {
-    const hard = SquadGameInputSchema.safeParse({ ...game, fields: [{ ...NOTE, match: 'hard' }] });
-    expect(hard.success).toBe(false);
-    expect(hard.error?.issues[0]?.path).toEqual(['fields', 0, 'match']);
-    const withOptions = SquadGameInputSchema.safeParse({
-      ...game,
-      fields: [{ ...NOTE, options: ['a'] }],
-    });
-    expect(withOptions.success).toBe(false);
-  });
-
-  it('aceita no máximo cinco campos', () => {
-    const fields = (length: number) =>
-      Array.from({ length }, (_, index) => ({ ...NOTE, key: `note_${String(index)}` }));
+    expect(result.error?.issues[0]?.path).toEqual(['optOutRoleId']);
     expect(
-      SquadGameInputSchema.safeParse({ ...game, fields: fields(MAX_SQUAD_GAME_FIELDS) }).success,
+      SquadsConfigSchema.safeParse({ searchRoleId: ROLE_A, optOutRoleId: ROLE_B }).success,
     ).toBe(true);
-    const result = SquadGameInputSchema.safeParse({
-      ...game,
-      fields: fields(MAX_SQUAD_GAME_FIELDS + 1),
+  });
+
+  describe('gameNames', () => {
+    it('tira repetido pela forma normalizada e fica a primeira grafia', () => {
+      const config = SquadsConfigSchema.parse({
+        gameNames: ['  HELLDIVERS™ 2 ', 'helldivers 2', 'Deep Rock Galactic'],
+      });
+      expect(config.gameNames).toEqual(['HELLDIVERS™ 2', 'Deep Rock Galactic']);
     });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.path).toEqual(['fields']);
-  });
 
-  it('recusa chave fora do padrão ou reservada', () => {
-    for (const key of [
-      'Plataforma',
-      'modo de jogo',
-      '',
-      'a'.repeat(33),
-      'constructor',
-      '__proto__',
-    ]) {
-      expect(SquadGameInputSchema.safeParse({ ...game, fields: [{ ...NOTE, key }] }).success).toBe(
-        false,
-      );
-    }
-  });
-
-  it('recusa opção repetida e mais de 25 opções', () => {
-    const repeated = SquadGameInputSchema.safeParse({
-      ...game,
-      fields: [{ ...PLATFORM, options: ['PC', ' PC '] }],
+    it('aceita lista vazia (desliga só o aviso automático)', () => {
+      expect(SquadsConfigSchema.parse({ gameNames: [] }).gameNames).toEqual([]);
     });
-    expect(repeated.success).toBe(false);
-    expect(repeated.error?.issues[0]?.path).toEqual(['fields', 0, 'options', 1]);
-    const many = Array.from({ length: 26 }, (_, index) => `Opção ${String(index)}`);
-    expect(
-      SquadGameInputSchema.safeParse({ ...game, fields: [{ ...PLATFORM, options: many }] }).success,
-    ).toBe(false);
-  });
 
-  it('squad tem de 2 a 20 jogadores, e a party de 2 a 10', () => {
-    const size = (groupSize: number, partySize: number) =>
-      SquadGameInputSchema.safeParse({ ...game, groupSize, partySize }).success;
-    expect(size(1, 1)).toBe(false);
-    expect(size(2, 2)).toBe(true);
-    expect(size(20, 10)).toBe(true);
-    expect(size(21, 4)).toBe(false);
-    expect(size(20, 11)).toBe(false);
-    expect(size(12, 1)).toBe(false);
-  });
-
-  it('a party não passa do squad, e o erro aponta a party', () => {
-    expect(SquadGameInputSchema.safeParse({ ...game, groupSize: 4, partySize: 4 }).success).toBe(
-      true,
-    );
-    const result = SquadGameInputSchema.safeParse({ ...game, groupSize: 3, partySize: 4 });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0]).toMatchObject({
-      path: ['partySize'],
-      message: 'A party não pode ser maior que o squad.',
+    it('recusa nome em branco ou só com ™', () => {
+      expect(SquadsConfigSchema.safeParse({ gameNames: ['  '] }).success).toBe(false);
+      expect(SquadsConfigSchema.safeParse({ gameNames: ['™'] }).success).toBe(false);
     });
-  });
 
-  it('entrada malformada vira erro de validação, não exceção', () => {
-    expect(SquadGameInputSchema.safeParse({ ...game, fields: [null] }).success).toBe(false);
-    expect(
-      SquadGameInputSchema.safeParse({ ...game, fields: [{ ...PLATFORM, options: 'PC' }] }).success,
-    ).toBe(false);
+    it(`recusa mais de ${String(LFG_MAX_GAME_NAMES)} jogos`, () => {
+      const names = Array.from({ length: LFG_MAX_GAME_NAMES + 1 }, (_, i) => `Jogo ${String(i)}`);
+      expect(SquadsConfigSchema.safeParse({ gameNames: names }).success).toBe(false);
+    });
   });
 });
 
-describe('validateAnswers', () => {
-  const fields = SquadGameInputSchema.parse({
-    name: 'Helldivers 2',
-    groupSize: 4,
-    partySize: 4,
-    fields: [PLATFORM, MODES, NOTE],
-  }).fields;
-
-  it('aceita respostas válidas, apara texto e remove tags repetidas', () => {
-    const result = validateAnswers(fields, {
-      platform: 'PC',
-      modes: ['Farm', 'PvE', 'Farm'],
-      note: ' só à noite ',
-    });
-    expect(result.success).toBe(true);
-    expect(result.data).toEqual({ platform: 'PC', modes: ['Farm', 'PvE'], note: 'só à noite' });
-  });
-
-  it('recusa campo obrigatório ausente', () => {
-    const result = validateAnswers(fields, { modes: ['PvE'] });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0]).toMatchObject({
-      path: ['platform'],
-      message: 'Campo obrigatório.',
-    });
-  });
-
-  it('campo opcional pode faltar, e resposta em branco conta como ausente', () => {
-    expect(validateAnswers(fields, { platform: 'PS5' }).data).toEqual({ platform: 'PS5' });
-    expect(validateAnswers(fields, { platform: 'PS5', modes: [], note: '   ' }).data).toEqual({
-      platform: 'PS5',
-    });
-    const blankRequired = validateAnswers(fields, { platform: '' });
-    expect(blankRequired.error?.issues[0]).toMatchObject({
-      path: ['platform'],
-      message: 'Campo obrigatório.',
-    });
-  });
-
-  it('recusa chave que o jogo não tem', () => {
-    const result = validateAnswers(fields, { platform: 'PC', mic: 'Sim' });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0]).toMatchObject({ code: 'unrecognized_keys', keys: ['mic'] });
-  });
-
-  it('recusa opção fora da lista', () => {
-    expect(validateAnswers(fields, { platform: 'Xbox' }).error?.issues[0]?.path).toEqual([
-      'platform',
-    ]);
-    expect(
-      validateAnswers(fields, { platform: 'PC', modes: ['PvE', 'PvP'] }).error?.issues[0]?.path,
-    ).toEqual(['modes', 1]);
-  });
-
-  it('recusa resposta no formato errado e texto acima do teto', () => {
-    expect(validateAnswers(fields, { platform: ['PC'] }).success).toBe(false);
-    expect(validateAnswers(fields, { platform: 'PC', modes: 'PvE' }).success).toBe(false);
-    expect(validateAnswers(fields, { platform: 'PC', note: 'a'.repeat(101) }).success).toBe(false);
-    expect(validateAnswers(fields, null).success).toBe(false);
-    expect(validateAnswers(fields, ['PC']).success).toBe(false);
-  });
-
-  it('jogo sem campos só aceita respostas vazias', () => {
-    expect(validateAnswers([], {}).success).toBe(true);
-    expect(validateAnswers([], { platform: 'PC' }).success).toBe(false);
+describe('normalizeGameName', () => {
+  it('ignora ™, ®, caixa e espaço extra', () => {
+    expect(normalizeGameName('HELLDIVERS™ 2')).toBe('helldivers 2');
+    expect(normalizeGameName('  Helldivers   2 ')).toBe('helldivers 2');
+    expect(normalizeGameName('Tom Clancy’s Rainbow Six® Siege')).toBe(
+      'tom clancy’s rainbow six siege',
+    );
   });
 });
 
-describe('SquadProfileInputSchema', () => {
-  it('aplica os defaults e aceita a grade inteira marcada', () => {
-    expect(SquadProfileInputSchema.parse({ availability: SQUAD_AVAILABILITY_MAX })).toEqual({
-      availability: SQUAD_AVAILABILITY_MAX,
-      answers: {},
-      status: 'searching',
-    });
-  });
-
-  it('recusa grade fora dos 28 bits', () => {
-    for (const availability of [-1, SQUAD_AVAILABILITY_MAX + 1, 1.5]) {
-      expect(SquadProfileInputSchema.safeParse({ availability }).success).toBe(false);
-    }
-  });
-
-  it('o jogador não se põe em squad sozinho', () => {
-    expect(SquadProfileInputSchema.safeParse({ availability: 1, status: 'in_squad' }).success).toBe(
-      false,
-    );
-    expect(SquadProfileInputSchema.parse({ availability: 1, status: 'paused' }).status).toBe(
-      'paused',
-    );
-  });
-
-  it('confere só o formato das respostas', () => {
-    expect(
-      SquadProfileInputSchema.safeParse({ availability: 1, answers: { platform: 'Xbox' } }).success,
-    ).toBe(true);
-    expect(
-      SquadProfileInputSchema.safeParse({ availability: 1, answers: { Plataforma: 'PC' } }).success,
-    ).toBe(false);
-    expect(
-      SquadProfileInputSchema.safeParse({ availability: 1, answers: { platform: 3 } }).success,
-    ).toBe(false);
+describe('GREEK_ROOM_NAMES', () => {
+  it('tem os 24 nomes, sem repetição, começando em Alfa e terminando em Ômega', () => {
+    expect(GREEK_ROOM_NAMES).toHaveLength(24);
+    expect(new Set(GREEK_ROOM_NAMES).size).toBe(24);
+    expect(GREEK_ROOM_NAMES[0]).toBe('Alfa');
+    expect(GREEK_ROOM_NAMES[23]).toBe('Ômega');
   });
 });

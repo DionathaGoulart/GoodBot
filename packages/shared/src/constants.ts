@@ -175,40 +175,6 @@ export type ReactionRoleStyle = (typeof REACTION_ROLE_STYLES)[number];
 export const TICKET_STATUSES = ['open', 'closed'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
-/**
- * Perfil de um jogador no módulo `squads`, um por jogo. `in_squad` é posto e
- * tirado pelo bot (entrar ou sair de um squad); o jogador só escolhe entre
- * procurar e pausar.
- */
-export const SQUAD_PROFILE_STATUSES = ['searching', 'in_squad', 'paused'] as const;
-export type SquadProfileStatus = (typeof SQUAD_PROFILE_STATUSES)[number];
-
-/**
- * `full` fica separado de `open` porque só a vaga de um squad `open` continua
- * pesquisável pelo matcher. `archived` é o fim: canal só leitura, voice
- * liberado, e não volta.
- */
-export const SQUAD_STATUSES = ['open', 'full', 'archived'] as const;
-export type SquadStatus = (typeof SQUAD_STATUSES)[number];
-
-/**
- * Entrada num squad que já existe, em duas fases. `invited`: o candidato
- * recebeu o convite e ainda não respondeu. `pending`: ele aceitou (ou pediu
- * pelo `/squad procurar`) e o squad está votando. Os outros três são o fim.
- */
-export const SQUAD_REQUEST_STATUSES = [
-  'invited',
-  'pending',
-  'accepted',
-  'declined',
-  'expired',
-] as const;
-export type SquadRequestStatus = (typeof SQUAD_REQUEST_STATUSES)[number];
-
-/** Os status de um pedido ainda aberto: ocupa a vaga e segura o candidato. */
-export const SQUAD_OPEN_REQUEST_STATUSES = ['invited', 'pending'] as const;
-export type SquadOpenRequestStatus = (typeof SQUAD_OPEN_REQUEST_STATUSES)[number];
-
 /** As que descrevem um membro (PRD §5.5): entrada, saída e DM de boas-vindas. */
 export const MEMBER_TEMPLATE_VARIABLES = [
   'user',
@@ -401,88 +367,60 @@ export const SOCIAL_PLATFORM_LABEL: Record<SocialPlatform, string> = {
   youtube: 'YouTube',
 };
 
-// ── Squads (módulo `squads`) ────────────────────────────────────────────────
+// ── Buscar squad (módulo `squads`) ──────────────────────────────────────────
 
 /**
- * As quatro faixas do dia na grade de disponibilidade, nesta ordem. A ordem é
- * contrato: o índice da faixa entra no bit da grade (`dia * 4 + faixa`) e na
- * coluna `block` do squad, então reordenar aqui embaralha toda grade já salva.
- * Horário e rótulo de cada faixa é que são editáveis, no config do módulo.
+ * Quanto tempo o bot espera para mandar outro aviso de "buscar squad?" à mesma
+ * pessoa. O AGORA NÃO conta como aviso recebido. O relógio é memória: um
+ * restart o zera, e o custo é uma DM a mais.
  */
-export const SQUAD_BLOCKS = ['morning', 'afternoon', 'evening', 'night'] as const;
-export type SquadBlock = (typeof SQUAD_BLOCKS)[number];
-
-/** Dias da grade: 0 = domingo até 6 = sábado, igual ao `Date#getDay`. */
-export const SQUAD_DAYS = 7;
-/** Células da grade (7 dias × 4 faixas). Cada célula é um bit da máscara. */
-export const SQUAD_CELLS = SQUAD_DAYS * SQUAD_BLOCKS.length;
+export const LFG_PROMPT_COOLDOWN_HOURS = 6;
+/** Duração da jogatina agendada: o fim do evento do Discord sai do início mais isto. */
+export const LFG_EVENT_HOURS = 3;
 /**
- * Maior máscara válida: os 28 bits ligados. Não cabe em `smallint` (16 bits),
- * por isso a coluna no Postgres é `integer`.
+ * Jogatinas futuras do bot por servidor. Passando disso, o modal recusa: sem
+ * teto, o botão MARCAR JOGATINA vira spam de evento.
  */
-export const SQUAD_AVAILABILITY_MAX = 2 ** SQUAD_CELLS - 1;
+export const LFG_MAX_EVENTS = 10;
+/** Jogos que um servidor vigia ao mesmo tempo no aviso automático (`gameNames`). */
+export const LFG_MAX_GAME_NAMES = 10;
 
 /**
- * Tipos de campo que um jogo pode perguntar: `select` é uma escolha, `tags`
- * são várias da mesma lista, `text` é livre. Texto livre nunca entra no match,
- * porque comparar "PS5" com "playstation 5" seria adivinhar.
+ * Nomes das salas, na ordem em que são dados: a sala nova pega o primeiro que
+ * não está em uso. São 24, e esse é o teto de salas abertas por servidor. A
+ * sala se chama `Squad <nome>`, e é por esse nome (mais a categoria) que o bot
+ * reconhece o que é dele para apagar.
  */
-export const SQUAD_FIELD_TYPES = ['select', 'text', 'tags'] as const;
-export type SquadFieldType = (typeof SQUAD_FIELD_TYPES)[number];
+export const GREEK_ROOM_NAMES = [
+  'Alfa',
+  'Beta',
+  'Gama',
+  'Delta',
+  'Épsilon',
+  'Zeta',
+  'Eta',
+  'Teta',
+  'Iota',
+  'Kapa',
+  'Lambda',
+  'Mi',
+  'Ni',
+  'Csi',
+  'Ômicron',
+  'Pi',
+  'Rô',
+  'Sigma',
+  'Tau',
+  'Ípsilon',
+  'Fi',
+  'Qui',
+  'Psi',
+  'Ômega',
+] as const;
+export type GreekRoomName = (typeof GREEK_ROOM_NAMES)[number];
 
 /**
- * Quanto um campo pesa no match. `hard` barra a dupla quando as respostas não
- * batem (plataformas diferentes não jogam juntas); `soft` só soma pontos
- * (dificuldade parecida ajuda, mas não impede); `none` é só informativo.
- */
-export const SQUAD_FIELD_MATCH = ['hard', 'soft', 'none'] as const;
-export type SquadFieldMatch = (typeof SQUAD_FIELD_MATCH)[number];
-
-/**
- * Nota de uma dupla: `faixas em comum × cell + campos soft que batem × soft`.
- *
- * Um campo soft vale três faixas porque o squad joga numa janela só por
- * semana: a primeira faixa em comum é o requisito, as seguintes são folga de
- * agenda. Com peso 3, a afinidade desempata agendas parecidas, mas cada campo
- * soft só compensa três faixas a menos; quem divide muito mais horário ainda
- * passa na frente.
- */
-export const SQUAD_MATCH_WEIGHTS = { cell: 1, soft: 3 } as const;
-
-/**
- * Antecedência com que o voice reservado já conta como "da jogatina": estar
- * nele a partir daqui é presença. A reserva sai no lembrete, que pode vir
- * antes disso; o evento de voz (pelo banco) e a varredura do bot usam a mesma
- * janela.
- */
-export const SQUAD_PRESENCE_LEAD_MS = HOUR_MS;
-
-/**
- * Tamanhos de um jogo. O **grupo** é o squad inteiro; a **party** é quem joga
- * junto numa partida. Um jogo de quatro por partida comporta um squad de doze
- * que se divide conforme quem aparece na jogatina. O match propõe uma party;
- * as vagas além dela chegam por pedido de entrada. Os dois começam numa dupla.
- */
-export const MIN_SQUAD_SIZE = 2;
-export const MAX_SQUAD_PARTY_SIZE = 10;
-export const MAX_SQUAD_GROUP_SIZE = 20;
-/**
- * Campos por jogo. O teto vem do Discord: um modal tem no máximo cinco
- * componentes, e as perguntas do jogo cabem num modal só.
- */
-export const MAX_SQUAD_GAME_FIELDS = 5;
-/** Opções de um campo `select` ou `tags`: um select do Discord mostra até 25. */
-export const MAX_SQUAD_FIELD_OPTIONS = 25;
-/** Rótulo de um campo: o label de um componente de modal tem até 45 caracteres. */
-export const MAX_SQUAD_FIELD_LABEL_LENGTH = 45;
-/** Uma opção vira `value` de select no Discord, que tem até 100 caracteres. */
-export const MAX_SQUAD_OPTION_LENGTH = 100;
-/** Resposta em texto livre, com o mesmo teto do input do modal. */
-export const MAX_SQUAD_TEXT_ANSWER_LENGTH = 100;
-/** Rótulo de uma faixa da grade ("Manhã", "Madrugada"). */
-export const MAX_SQUAD_BLOCK_LABEL_LENGTH = 32;
-/**
- * Canais por servidor (limite do Discord). Cada squad gasta um canal de texto,
- * então o painel mostra quanto do teto já foi usado.
+ * Canais por servidor (limite do Discord). Com ele cheio, a sala de squad não
+ * nasce e ninguém é movido.
  */
 export const MAX_GUILD_CHANNELS = 500;
