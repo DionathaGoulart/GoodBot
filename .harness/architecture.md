@@ -34,7 +34,7 @@ pelo próprio bot, que é o único processo com uma sessão de gateway aberta.
                            │ Drizzle
                    ┌───────▼────────┐
                    │ Postgres       │  (Supabase em produção,
-                   │ 35 tabelas     │   Docker local em dev)
+                   │ 26 tabelas     │   Docker local em dev)
                    └────────────────┘
 ```
 
@@ -120,23 +120,21 @@ src/
   events/         handlers de evento do gateway, agrupados por assunto
     automod/      messages, members
     logs/         messages, members, server, voice
-    community/    members, reaction-roles, squads-voice
+    community/    members, reaction-roles, squads (presença e voz)
     stats/        contagem
 
   interactions/   botões, selects e modais, roteados pelo prefixo do
-                  `custom_id` (tickets, squads...)
+                  `custom_id` (tickets, squads...); o botão da DM do aviso
+                  de squad é o único tratado fora de guild
   automod/        o motor: engine.ts + rules/{spam,links,caps,words,mentions}
   services/       a lógica de verdade; ver abaixo
   jobs/           tarefas periódicas: retention, social, stats-rollup,
                   demo-expiry (avisa quem convidou, se despede e sai quando a
                   demo vence), pending-expiry (recusa o convite parado uma
-                  semana na fila, avisa, sai e marca `expired`), squads
-                  (convites e votações vencidos, lembrete, voice reservado e
-                  início das jogatinas, chamada pública das encerradas,
-                  varredura de presença, relatório das encerradas, e o passo
-                  diário de inatividade, guias e match), capacity (RAM e
-                  tamanho do banco contra as linhas de aviso, alerta no
-                  webhook)
+                  semana na fila, avisa, sai e marca `expired`), capacity
+                  (RAM e tamanho do banco contra as linhas de aviso, alerta
+                  no webhook). Os relógios do módulo de squads não são job:
+                  cada service dele tem o seu (ver 4.3)
   lib/            utilitários sem estado: embeds, template, cooldown, purge,
                   channels (onde o bot pode falar), guild-setup,
                   inviter-dm (todo o texto dos avisos a quem convidou)...
@@ -157,7 +155,10 @@ fino: valida entrada, chama um service, responde. Os principais:
 | `AutomodService`          | avalia mensagem contra as regras ligadas                   |
 | `StatsService`            | acumula buckets em memória e faz flush periódico           |
 | `TicketService`           | abertura, transcript e fechamento                          |
-| `SquadService`            | squads fixos: perfil, match, propostas, casa, guia, jogatinas, chamada pública, histórico |
+| `SquadPresenceService`    | cargo `Buscando Squad`: aviso por DM ao abrir o jogo, toggles, prazo e janela de tolerância |
+| `SquadRoomService`        | salas de voz efêmeras: *join-to-create*, nome grego, apagar a vazia                          |
+| `SquadPanelService`       | a mensagem fixa das salas e jogatinas, editada coalescida                                   |
+| `SquadSessionService`     | a jogatina agendada como evento nativo do Discord, iniciada na hora                         |
 | `ReactionRoleService`     | painéis por botão, menu ou reação                          |
 | `AuditService`            | trilha do que o bot e o painel fizeram                     |
 | `Scheduler`               | executa `scheduled_actions` (tempban, lembrete, unlock)    |
@@ -384,19 +385,20 @@ Drizzle, e só aqui.
 src/
   client.ts        createDb(url)
   migrate.ts       roda as migrations (é um passo da CI, não do boot do bot)
-  schema/          15 arquivos: guilds (+ guild_registry), configs, cases,
+  schema/          14 arquivos: guilds (+ guild_registry), configs, cases,
                    automod, community,
-                   logs, messages, misc, social, squads, stats, audit, enums,
+                   messages, misc, social, stats, audit, enums,
                    relations
-  repositories/    18 arquivos: uma função por consulta, nunca SQL solto fora
-drizzle/           21 migrations SQL versionadas
+  repositories/    17 arquivos: uma função por consulta, nunca SQL solto fora
+drizzle/           24 migrations SQL versionadas
 ```
 
 35 tabelas. As centrais: `guilds`, `guild_registry`, `guild_settings`,
 `module_configs`, `cases`,
 `audit_logs`, `automod_rules`, `automod_hits`, `scheduled_actions`,
-`stat_buckets`, `tickets`, `reaction_role_panels`, `social_accounts`, `squads`
-(as nove do módulo começam por `squad_`).
+`stat_buckets`, `tickets`, `reaction_role_panels`, `social_accounts`. O módulo
+de squads não tem tabela: o estado dele é o Discord (cargo, canal, evento) e a
+memória do bot, e a migration `0023` apagou as nove do modelo antigo.
 
 Fluxo obrigatório ao mexer no schema:
 
@@ -420,6 +422,8 @@ src/
   api/       schemas de request/response da API do bot + o CLIENTE tipado
              (client.ts, `createInternalClient`) + permissions.ts
   config/    um schema Zod por módulo (automod, logs, welcome, tickets...)
+  squads/    `parseWhen` (o "quando" da jogatina) e o relógio de parede no
+             fuso da guild, com horário de verão
   constants.ts, duration.ts, snowflake.ts, templates.ts, errors.ts
   deploy.ts  o tipo de um deploy pelos arquivos que mudaram (a CI usa pelo
              `deploy-kind.ts`) e a previsão de volta de cada tipo
@@ -586,164 +590,64 @@ Quatro coisas nesse caminho não são gosto:
   derrubada por um clique no link normal. A demo não se renova porque prazo
   novo exige `demo_ended_at` nulo: a memória é a coluna, não o status.
 
-**Um match de squad**
+**Buscar squad (cargo, sala e painel)**
 
 ```
-botão da mensagem fixa ─▶ interactions/squads.ts ─▶ modal (respostas)
-  ─▶ grade da semana (a máscara viaja no custom_id) ─▶ SquadService.saveAvailability
-  ─▶ perfil `searching` ─▶ MatcherService.runFor(guild, jogo)
-  ─▶ vaga em squad `open` que cabe (fitsSquad)? convite (fluxo abaixo), senão:
-  ─▶ proposeGroups (shared, puro, turma de até partySize) ─▶ thread privada + Aceito/Passo + INSERT squad_proposals
-  ─▶ primeiro "Aceito": uma transação cria `squads` e reivindica a proposta
-  ─▶ canal privado na categoria ─▶ GuideService.publish (guia pinado, chama os membros)
+presenceUpdate (events/community/squads.ts) ─▶ SquadPresenceService.onPresence
+  ─▶ módulo ligado, cargo configurado, jogando um dos gameNames (matchesGame)
+  ─▶ PromptGate: aviso nas últimas 6 h, ou olhado e barrado há menos de 5 min? para
+  ─▶ fetch do membro (force: os cargos) ─▶ já busca, tem opt-out ou está numa sala? para
+  ─▶ markPrompted ANTES da DM ─▶ DM com BUSCAR SQUAD / AGORA NÃO / NÃO AVISAR MAIS
+     (custom_id com o guildId: lib/interaction.ts desvia a DM antes do gate de guild,
+      e o handler confere registro, módulo e se a pessoa ainda é membro)
+
+BUSCAR SQUAD (DM ou painel) ou /squad buscar ─▶ toggleSearch ─▶ cargo + prazo `ttl`
+  (searchTtlMinutes) se não está em voz
+voiceStateUpdate ─▶ os dois services em paralelo:
+  SquadPresenceService: entrou em voz cancela o prazo; saiu de todas abre o `left`
+     (graceMinutes) ─▶ tick de 15 s tira o cargo vencido, conferindo voz e cargo de novo
+  SquadRoomService: entrou no ➕ Criar Squad ─▶ nextRoomName (grego) ─▶ canal na
+     categoria com userLimit = roomSize ─▶ move a pessoa (sem permissão, 500 canais ou
+     24 nomes: não cria, não move, log) ─▶ última pessoa saiu: prazo da sala
+     ─▶ tick de 15 s apaga a sala vencida (isSquadRoom: nome + categoria, nunca o de criar)
+  ─▶ toda mudança numa sala: SquadPanelService.schedule (uma edição por guild a cada 5 s)
+     ─▶ refresh edita a mensagem fixa; Unknown Message republica, outra falha espera a próxima
 ```
 
-**Uma entrada em squad existente**
+**Uma jogatina agendada**
 
 ```
-matcher (vaga) ou CONVIDAR / `/squad convidar` ─▶ JoinRequestService.invite
-  ─▶ INSERT squad_join_requests `invited` (o índice parcial é a trava: um aberto por pessoa e squad)
-  ─▶ thread privada no canal de busca só com o candidato ─▶ ENTRAR / PASSO
-  ─▶ ENTRAR de convite de membro: addMember, sem voto
-  ─▶ ENTRAR de convite do matcher (ou `/squad procurar`, que nasce aqui): `pending`
-     ─▶ votação no canal do squad, chamando os membros ─▶ A FAVOR / CONTRA
-     ─▶ voteSquadJoinRequest (array_append) ─▶ decideJoinVote (shared, membros de agora)
-     ─▶ aberto: reedita a contagem · decidido: `accepted` antes do addMember, ou recusa
-  ─▶ o fim aparece nas duas mensagens; a thread tranca e arquiva
-  ─▶ SquadsJob (5 min): convite vencido fecha em silêncio, votação vencida decide com os votos que tem
-```
-
-**Uma jogatina**
-
-```
-/bora hoje 21h (commands/community/bora.ts) ou BORA no guia ─▶ modal (quando)
-  ─▶ SessionService.scheduleFromText ─▶ parseWhen (shared, fuso da guild)
-  ─▶ INSERT squad_sessions (quem marcou já vai) ─▶ mensagem com VOU / NÃO VOU / REMARCAR / CANCELAR
-  ─▶ GuideService.refresh ─▶ SquadsJob (5 min): lembrete + reserva do voice (snapshot na jogatina)
-     pool cheio: grava a reserva sem canal, cria o voice temporário, grava o id
-     (criação interrompida: o job reconcilia, adotando ou apagando o órfão)
-  ─▶ entrou no squad com a reserva viva: addMember ─▶ SessionService.grantLiveVoice
-     (pool: o overwrite de antes vai para o snapshot primeiro, depois a concessão; temporário: só concede)
-  ─▶ TRAZER CONVIDADO ─▶ GuestService.bring: addSessionGuest (teto sob `for update` da jogatina)
-     ─▶ thread privada no canal de busca com o convidado e quem trouxe (falha desfaz a linha)
-     ─▶ grantSessionVoice; trazido antes da reserva, ele já entra nos alvos dela
-  ─▶ na hora, move os membros (nunca o convidado) e reedita a chamada pública, que
-     segue no ar; início, remarcação e cancelamento avisam cada convidado na thread dele
-  ─▶ voiceStateUpdate (events/community/squads-voice.ts): quem é do squad no voice reservado
-     abre presença em squad_session_attendance e marca played_at; sair de um voice do pool
-     ou temporário (lista em memória, carregada do banco uma vez por guild) fecha
-  ─▶ SessionService.sweepPresence (na reserva, no início e a cada passada do job): confere
-     guild.voiceStates contra as presenças abertas; abre a de quem já estava na sala (sem
-     evento de entrada) e fecha a de quem saiu com o bot fora do ar
-  ─▶ fim da jogatina ou voice vazio: restaura os overwrites (temporário: apaga, só vazio)
-     e só então marca liberado
-  ─▶ acabou, sem presença aberta e sem reported_at: ReportService.reportFinished trava
-     reported_at e a mensagem vira "Jogatina encerrada" (duração, quem jogou, formações,
-     faltas); é edição, que não notifica, e o REPETIR fica
-  ─▶ REPETIR marca a mesma hora na semana seguinte
-
-REMARCAR (quem está no VOU, antes do início) ─▶ SessionService.rescheduleForm confere e abre o modal
-  ─▶ reschedule: minuto livre? lembrete dado e horário novo fora da antecedência: release() primeiro
-  ─▶ rescheduleSquadSession (UPDATE condicional; zera lembrete e reserva só com a sala devolvida)
-  ─▶ chamada pública reeditada ─▶ dentro da antecedência: remind quieto ─▶ aviso à parte ─▶ agora: start()
-```
-
-**Uma chamada pública e o histórico**
-
-```
-CHAMAR GENTE na jogatina (ou no guia: a primeira que aceita, a que rola inclusive)
-  ─▶ CallService.call ─▶ callBlocker: jogatina viva (isSessionOver), sem chamada,
-     vaga no squad, lugar na party
-  ─▶ claimSessionCall (called_at) ─▶ post no canal de busca com ENTRAR ─▶ grava canal e mensagem
-     (a mensagem que não sai desfaz a trava) ─▶ a mensagem da jogatina perde o botão
-  ─▶ início: a chamada é reeditada ("está jogando agora"), não sai do ar
-  ─▶ ENTRAR ─▶ SearchService.requestFromCall: sem perfil nem grade, mesmas travas do procurar
-  ─▶ JoinRequestService.open com session_id ─▶ votação "respondeu à chamada" ─▶ entrou: "vou" na jogatina
-     (com a jogatina rolando, addMember dá o voice e o "chegou reforço" diz a sala: runningRoom)
-  ─▶ fim (release depois do início, ou o passo closeFinished do job no ends_at),
-     cancelamento ou arquivamento: closeSessionCall e apaga a mensagem
-
-guia, convite, /squad procurar, chamada e overview da API ─▶ HistoryService.load(squadIds)
-  ─▶ três leituras: jogatinas que rolaram (90 dias), totais por squad, presença dessas jogatinas
-  ─▶ summarizeHistory + formatHistory (shared, fuso e faixas da guild): jogatinas, horas e
-     presença do último mês, e os frequentes com as horas de cada um
-
-números (relatório, guia, /squad stats, painel) ─▶ listSessionAttendance (com joined_at/left_at
-  e as_guest; o histórico descarta convidado, os números o contam à parte)
-  ─▶ shared/squads/stats.ts: formationSegments (linha do tempo por jogatina) ─▶ summarizeSession,
-     summarizePlayers, summarizeFormations, summarizePairs
-
-painel, aba JOGATINAS ─▶ loadSquadSessions (lib/squads.ts): listSessionsInWindow (toda jogatina
-  da janela, cancelada e não jogada inclusive) + listSessionAttendance + os nomes em lote
-  ─▶ buildSessionsView (lib/squad-sessions.ts, puro): filtro, resumo, ranking, formações e duplas
-  ─▶ nenhuma rota no bot; o relatório do sheet é o mesmo summarizeSession do fim da jogatina
-
-/squad stats e o NÚMEROS do guia ─▶ StatsService (services/squads/stats.ts), na janela de 90 dias
-  do histórico ─▶ pessoa: listPlayedSessionsByGame (todos os squads do jogo dela) ─▶ summarizePlayers,
-     com as duplas e os grupos filtrados por ela ANTES do corte do top 5
-  ─▶ squad: listPlayedSessions do squad ─▶ ranking, formações, duplas e grupos
-  ─▶ playerStatsMessage / squadStatsMessage, sempre efêmeros
+MARCAR JOGATINA (painel) ou /squad agendar ─▶ modal (quando)
+  ─▶ SquadSessionService.schedule ─▶ parseWhen (shared, fuso da guild; `agora` recusa com WHEN_NOW)
+  ─▶ canal de criar, ManageEvents e teto LFG_MAX_EVENTS conferidos
+  ─▶ guild.scheduledEvents.create (voz, no ➕ Criar Squad, LFG_EVENT_HOURS) ─▶ auditoria
+  ─▶ poll de 5 min relê os eventos da guild: lista em memória (upcoming) que o painel lê
+  ─▶ início dentro do intervalo ganha timer próprio ─▶ o bot INICIA o evento na hora
 ```
 
 Três coisas nesses caminhos não são gosto:
 
-- **A regra mora em `shared`, o efeito no bot.** `squads/availability.ts`,
-  `squads/match.ts`, `squads/join-vote.ts`, `squads/when.ts`, `squads/history.ts`,
-  `squads/stats.ts` e `squads/zoned.ts` são puros: máscara da grade, agrupamento
-  determinístico em parties, "cabe no squad" (`fitsSquad`), a regra da votação
-  de entrada, o "quando" do `/bora`, o resumo e a frase do histórico, os
-  números das jogatinas (tempo, formações, duplas, faltas) e o relógio de
-  parede no fuso da guild (com horário de verão). O painel e os testes usam
-  as mesmas funções, sem Discord nem banco.
-- **A trava é do banco, não da memória.** Botão é clicado duas vezes e por
-  várias pessoas ao mesmo tempo, e o job passa de novo a cada 5 minutos. Todo
-  passo é uma `UPDATE` condicional (`claimProposalSquad`, `markSessionReminded`,
-  `startSquadJoinVote`, `claimSessionCall`, `closeSessionCall`, votos com
-  `array_append`) antes de qualquer chamada ao Discord. O único estado
-  em memória é a fila compartilhada por guild e jogo do `MatcherService`
-  (`withGameLock`): a passada do matcher, o match manual e apagar perfil entram
-  nela, e uma tarefa na fila nunca espera `runFor` do mesmo jogo, senão espera a
-  si mesma. Ela só vale porque o bot é uma instância só; escalar para mais de
-  uma instância pediria trava no banco.
-- **Restaurar antes de marcar.** A liberação do voice devolve os overwrites no
-  Discord e só depois grava `voice_released_at`. Na ordem inversa, uma falha
-  passageira deixaria o voice do pool fechado ao `@everyone` sem nada que o
-  reabrisse. O voice temporário segue a mesma ordem (apaga, depois marca), e
-  quem decide apagar é a coluna `voice_temporary`, nunca a ausência do canal
-  no pool.
-
-**Um match manual**
-
-```
-aba JOGADORES: o admin marca linhas ─▶ manualMatchPeople + evaluateManualMatch
-  (shared, puro, com o dado do carregamento) mostram nota e avisos na hora
-  ─▶ PROPOR AO GRUPO ─▶ action do painel ─▶ POST /squads/games/:gameId/manual/check
-  ─▶ ManualMatchService.check: uma leitura por tipo no banco + isGuildMember
-  ─▶ o diálogo mostra duplas, janela, bloqueios e avisos (cada um com `key`)
-  ─▶ confirmar ─▶ POST .../manual/propose { userIds, confirmedWarnings }
-  ─▶ matcher.withGameLock(guild, jogo): recarrega tudo e avalia de novo
-     bloqueio ─▶ 422 MANUAL_MATCH_BLOCKED
-     aviso fora de confirmedWarnings ─▶ 409 MANUAL_MATCH_UNCONFIRMED
-  ─▶ matcher.searchChannel ─▶ matcher.openProposal (o mesmo do automático)
-  ─▶ nota "turma escolhida no painel" na thread ─▶ auditoria squad.proposal.manual
-  ─▶ daqui em diante é o caminho de cima: Aceito, Passo, prazo e cooldown
-```
-
-Duas coisas nesse caminho, e na gestão de jogadores ao lado dele, não são gosto:
-
-- **A revisão roda de novo dentro da fila.** A avaliação do painel usa o dado do
-  carregamento da página; a do bot lê o banco e a presença no servidor na hora
-  (`SquadContext.isGuildMember`: `false` só com "Unknown Member", e falha
-  passageira não bloqueia). A confirmação é a lista de `key`s vistas, não um
-  booleano: a segunda chamada de um clique duplo vê a proposta que a primeira
-  abriu e cai em `IN_OPEN_PROPOSAL`.
-- **Ação de admin avisa por DM, e a DM nunca derruba a ação.** Pausar, retomar,
-  editar respostas, apagar perfil e tirar do squad (`PlayerAdminService`) seguem
-  checagens, efeito, auditoria com o motivo e só então a DM:
-  `SquadContext.sendDm`, com a copy de `adminActionDm` em `embeds.ts`. `sendDm`
-  nunca lança (a rota devolve `notified: false`) e não loga o erro, só IDs, ação
-  e código do Discord, porque o `DiscordAPIError` carrega o corpo da requisição
-  com o texto da DM e o motivo. Apagar perfil manda a DM depois de soltar a fila.
+- **O estado é o Discord, a memória é descartável.** Não há tabela: o cargo
+  diz quem busca, a categoria diz quais salas existem, o criador do evento
+  (o bot) diz quais jogatinas são do módulo. Os prazos (`DeadlineBook`) e o
+  relógio do aviso (`PromptGate`) vivem em memória, e a reconciliação, que
+  roda na primeira vez que o módulo aparece ligado numa guild (boot, módulo
+  ligado, guild passando a ser atendida), recomeça a janela do zero para quem
+  tem o cargo fora de voz e para as salas vazias. A lista de quem tem o cargo
+  vem paginada pela REST (`members.list`, sem cache): o cache de membros tem
+  teto e `role.members` só enxerga o que está nele.
+- **Quem cobra o prazo confere de novo.** Um evento de voz perdido não pode
+  tirar o cargo de quem está jogando: `expire` olha a voz e o cargo na hora, e
+  a sala só é apagada se continua vazia. Contagem de gente vem do cache de voz
+  da guild (`occupantsOf`), nunca de `channel.members`, que passa pelo cache de
+  membros.
+- **Painel coalescido e republicado só com certeza.** O Discord limita edição
+  por canal, então cada guild ganha no máximo uma edição a cada 5 s. A
+  mensagem só é publicada de novo com "Unknown Message": republicar por falha
+  passageira deixaria duas mensagens fixas. O id vai para `panelMessageId`,
+  campo do bot, e o painel web o carrega do banco ao salvar
+  (`lib/module-config.ts`), senão um formulário aberto antes da publicação
+  faria o bot mandar mensagem nova.
 
 ---
 
@@ -792,18 +696,10 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | adicionar campo de config         | `shared/config/<módulo>.ts` → form em `apps/web/components/config/`      |
 | mexer no banco                    | `packages/db/src/schema/` → `db:generate` → revisar SQL → `db:migrate`   |
 | tarefa periódica                  | `apps/bot/src/jobs/` + registrar no `Scheduler`                          |
-| mexer em squads fixos             | `apps/bot/src/services/squads/` (fachada no `index.ts`) + regra pura em `shared/src/squads/` |
-| mexer na jogatina (`/bora`)       | `apps/bot/src/services/squads/sessions.ts` + "quando" em `packages/shared/src/squads/when.ts` |
-| mexer no guia fixo do squad       | `apps/bot/src/services/squads/guide.ts` (texto em `guideMessage`, `embeds.ts`) |
-| mexer no convite ou na votação de entrada | `apps/bot/src/services/squads/requests.ts` + regra em `packages/shared/src/squads/join-vote.ts` |
-| mexer no CHAMAR GENTE (chamada pública) | `apps/bot/src/services/squads/calls.ts` (ENTRAR em `search.ts`, texto em `publicCallMessage`) |
-| mexer no convidado avulso        | `apps/bot/src/services/squads/guests.ts` (regra do botão em `guestBlocker`, texto em `embeds.ts`) |
-| mexer no histórico de jogatinas   | `apps/bot/src/services/squads/history.ts` (leitura) + `packages/shared/src/squads/history.ts` (resumo e frase) |
-| mexer nos números das jogatinas   | regra pura em `packages/shared/src/squads/stats.ts`; presença em `sessions.ts` (`confirmPresence`, `sweepPresence`); leitura e janela em `services/squads/stats.ts` (`/squad stats` e o NÚMEROS do guia) |
-| mexer na aba JOGATINAS do painel  | `apps/web/lib/squad-sessions.ts` (agregação pura) + `loadSquadSessions` em `lib/squads.ts` + os componentes `sessions-*.tsx` em `app/g/[guildId]/config/squads/` |
-| mexer no relatório de fim da jogatina | `apps/bot/src/services/squads/reports.ts` (texto em `sessionMessage`, estado `ended`) |
-| mexer no match manual             | `apps/bot/src/services/squads/manual.ts` + regra pura em `packages/shared/src/squads/manual.ts` |
-| mexer na gestão de jogadores      | `apps/bot/src/services/squads/players.ts` (texto da DM em `embeds.ts`)   |
+| mexer no cargo de busca ou no aviso | `apps/bot/src/services/squads/presence.ts` (DM em `promptMessage`, botões em `interactions/squads.ts`) |
+| mexer nas salas de voz            | `apps/bot/src/services/squads/rooms.ts` (nomes em `GREEK_ROOM_NAMES`, `shared/constants.ts`) |
+| mexer no painel fixo de squad     | `apps/bot/src/services/squads/panel.ts` (texto em `panelMessage`)        |
+| mexer na jogatina agendada        | `apps/bot/src/services/squads/sessions.ts` + "quando" em `packages/shared/src/squads/when.ts` |
 | entender um servidor              | `pnpm guild scan "<nome>"` → `infra/discord/<slug>/servidor.md`          |
 | mudar a estrutura de um servidor  | `infra/discord/<slug>/guild.yaml` → `pnpm guild plan`                    |
 
@@ -815,6 +711,10 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
   gerencia, senão a operação falha com `BOT_ROLE_HIERARCHY`.
 - **`moveRole` anda uma casa por chamada.** Não existe "definir posição".
 - **Migrations não rodam no boot do bot**: são um passo da CI.
+- **`GuildPresences` é intent privilegiada.** Ela existe só para o aviso
+  automático do squad e precisa estar ligada no Developer Portal; desligada
+  lá, o login cai com `Used disallowed intents` e o bot inteiro não sobe. O
+  cache de presença continua em zero: o handler lê o evento e não guarda nada.
 - **Nem todo push reinicia o bot.** O job `changes` do `deploy.yml` classifica
   o deploy pelo diff entre o commit da imagem no ar e o novo
   (`packages/shared/src/deploy.ts`); `none` (painel, docs, CI) pula a imagem e
@@ -840,5 +740,5 @@ Antes de dar qualquer trabalho por concluído:
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-143 arquivos de teste, ~1.860 casos (Vitest). Os testes de integração de
+112 arquivos de teste, ~1.230 casos (Vitest). Os testes de integração de
 repository precisam de um Postgres e são pulados sem ele.
