@@ -175,8 +175,14 @@ roles:
     mentionable: true
   - name: Boletins
   - name: Files
+  # Cargos do módulo Buscar squad (PRD §5.11): o bot só liga e desliga, nunca
+  # cria. Nenhum dá permissão, e os dois ficam abaixo do cargo do bot.
+  - name: Buscando Squad
+    color: "#e67e22"
+    hoist: true
+  - name: Sem Aviso de Squad
 categories:
-  - name: Quartel-General
+  - name: Início
     channels:
       - name: bem-vindos
         topic: Aviso automático de quem chega e de quem impulsiona o servidor.
@@ -201,7 +207,7 @@ categories:
             view: allow
             send: deny
       - name: recrutas
-        topic: Recém-chegado? Diga oi e tire suas dúvidas por aqui.
+        topic: Recém-chegado? Apresente-se, diga oi e tire suas dúvidas por aqui.
         slowmode: 5
         overrides:
           - role: "@everyone"
@@ -224,7 +230,7 @@ categories:
           - role: "@everyone"
             view: deny
             send: deny
-  - name: Super Terra
+  - name: Avisos do Jogo
     overrides:
       - role: "@everyone"
         view: deny
@@ -300,7 +306,7 @@ categories:
           - role: Boletins
             view: allow
   - name: Canal Goodivers
-  - name: Área Social
+  - name: Comunidade
     channels:
       - name: Zona de Combate¹
         type: voice
@@ -331,29 +337,27 @@ categories:
             view: allow
       - name: Criogenia
         type: voice
-  - name: Esquadrões
-    channels:
       - name: Hellpod Alfa
         type: voice
-      - name: procurar-esquadrão
-        topic: Aqui só o Goodbot escreve. Clique no botão do jogo na mensagem fixada pra montar seu perfil e achar esquadrão.
-        overrides:
-          - role: "@everyone"
-            view: allow
-            send: deny
       - name: Hellpod Bravo
         type: voice
       - name: Hellpod Charlie
         type: voice
       - name: Hellpod Delta
         type: voice
-  - name: Squads
-    overrides:
-      - role: Bots
-        view: allow
-        send: allow
-      - role: "@everyone"
-        view: deny
+  # A categoria é do módulo Buscar squad (PRD §5.11): as salas `Squad <nome
+  # grego>` nascem e somem pelo bot e não entram aqui. Não crie canal de voz
+  # com esse formato de nome nesta categoria, ele seria apagado ao esvaziar.
+  - name: Buscar Squad
+    channels:
+      - name: buscar-squad
+        topic: Aqui só o Goodbot escreve. Quer jogar agora? Clique em BUSCAR SQUAD na mensagem fixada ou entre no ➕ Criar Squad.
+        overrides:
+          - role: "@everyone"
+            view: allow
+            send: deny
+      - name: ➕ Criar Squad
+        type: voice
   - name: Suporte
     overrides:
       - role: "@everyone"

@@ -2,13 +2,13 @@
 
 - **Membros** 11
 - **Dono** goodivers
-- **Varrido em** 15/09/2026, 08:20:32
+- **Varrido em** 23/09/2026, 17:17:43
 
 > Retrato do servidor na hora da varredura, gerado por `pnpm guild scan`.
 > Para reformar, edite o `guild.yaml` ao lado, rode `pnpm guild plan` para
 > ver a diferença e `pnpm guild apply` para escrever.
 
-## Cargos (15)
+## Cargos (17)
 
 Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
 `guild.yaml`, e é ela que decide quem manda em quem.
@@ -30,14 +30,16 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
 | 13 | Eventos | — | não | sim | — |
 | 14 | Boletins | — | não | não | — |
 | 15 | Files | — | não | não | — |
+| 16 | Buscando Squad | `#e67e22` | sim | não | — |
+| 17 | Sem Aviso de Squad | — | não | não | — |
 
 `@everyone`: 2 básicas
 
 **Cargos de bot** (o Discord não deixa editar): Bots
 
-## Canais (7 categorias, 29 canais)
+## Canais (7 categorias, 33 canais)
 
-### Quartel-General
+### Início
 
 - **#bem-vindos** · texto
   - _Aviso automático de quem chega e de quem impulsiona o servidor._
@@ -50,23 +52,27 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
   - `Almirante` — escreve
   - `@everyone` — vê, não escreve
 - **#recrutas** · texto · slowmode 5s
-  - _Recém-chegado? Diga oi e tire suas dúvidas por aqui._
+  - _Recém-chegado? Apresente-se, diga oi e tire suas dúvidas por aqui._
   - `@everyone` — vê, escreve
-- **#files** · texto
+- **#files-old** · texto
   - _Downloads das ferramentas do Goodivers, como a Macro HD2 e o GoodVoice. Aparece pra quem tem o cargo Files._
-  - `Files` — vê
   - `Bots` — vê, escreve
   - `Youtube` — não escreve
   - `Helldiver` — não escreve
   - `Almirante` — vê, escreve
   - `@everyone` — não vê, não escreve
+- **files** · fórum
+  - _Aqui fica ferramentas úteis entre outras coisas_
+  - `Files` — vê
+  - `Almirante` — vê, escreve
+  - `@everyone` — não vê, não escreve
 
-### Super Terra
+### Avisos do Jogo
 
-- _(categoria)_ `@everyone` — não vê, não escreve
+- _(categoria)_ `Boletins` — vê
 - _(categoria)_ `Bots` — vê, escreve
 - _(categoria)_ `Almirante` — vê, escreve
-- _(categoria)_ `Boletins` — vê
+- _(categoria)_ `@everyone` — não vê, não escreve
 - **#transmissões** · anúncio
   - _Vídeos e lives novos do canal Goodivers, postados automaticamente pelo bot._
   - `Boletins` — vê
@@ -83,10 +89,10 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
   - `@everyone` — não vê, não escreve
 - **#ordens-superiores** · texto
   - _Ordens Superiores (Major Orders) da guerra galáctica, trazidas do Discord oficial do jogo._
-  - `@everyone` — não vê, não escreve
+  - `Boletins` — vê
   - `Bots` — vê, escreve
   - `Almirante` — vê, escreve
-  - `Boletins` — vê
+  - `@everyone` — não vê, não escreve
 - **#comunicados-oficiais** · texto
   - _Anúncios oficiais do Helldivers 2: novidades, roadmap, eventos e pesquisas._
   - `@everyone` — não vê, não escreve
@@ -103,7 +109,7 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
   - _Pergunte ao Goodivers sobre o jogo, o canal ou o setup. Um post por pergunta, marque a tag certa._
   - `@everyone` — vê
 
-### Área Social
+### Comunidade
 
 - **Zona de Combate¹** · voz
 - **#sala-de-comando** · texto
@@ -123,28 +129,32 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
 - **loadouts-e-tier-lists** · fórum · slowmode 60s
   - _Compartilhe loadouts e tier lists. Marque a facção e a dificuldade nas tags._
   - `@everyone` — vê
-
-### Esquadrões
-
 - **Hellpod Alfa** · voz
-- **#procurar-esquadrão** · texto
-  - _Aqui só o Goodbot escreve. Clique no botão do jogo na mensagem fixada pra montar seu perfil e achar esquadrão._
-  - `@everyone` — vê, não escreve
 - **Hellpod Bravo** · voz
 - **Hellpod Charlie** · voz
 - **Hellpod Delta** · voz
 
-### Squads
+### Buscar Squad
 
-- _(categoria)_ `Bots` — vê, escreve
+- **#buscar-squad** · texto
+  - _Aqui só o Goodbot escreve. Quer jogar agora? Clique em BUSCAR SQUAD na mensagem fixada ou entre no ➕ Criar Squad._
+  - `@everyone` — vê, não escreve
+- **➕ Criar Squad** · voz
+
+### Suporte
+
+- _(categoria)_ `Almirante` — vê, escreve
 - _(categoria)_ `@everyone` — não vê
-- _(vazia)_
+- **#abrir-ticket** · texto
+  - _Precisa falar com a staff? Clique no botão abaixo e um canal privado é aberto só pra você._
+  - `Almirante` — vê, escreve
+  - `@everyone` — vê, não escreve
 
 ### Staff
 
-- _(categoria)_ `@everyone` — não vê
-- _(categoria)_ `Almirante` — vê
 - _(categoria)_ `Bots` — vê, escreve
+- _(categoria)_ `Almirante` — vê
+- _(categoria)_ `@everyone` — não vê
 - **#alto-comando** · texto
   - _Conversa da staff. Também recebe os avisos do Discord pra moderadores._
   - `Bots` — vê
@@ -175,26 +185,14 @@ Do topo da hierarquia para a base — é nesta ordem que eles aparecem no
   - `Bots` — vê, escreve
   - `Almirante` — vê
   - `@everyone` — não vê
+- **#log-tickets** · texto
+  - _Registro automático de tickets abertos e fechados, com o transcript de cada um._
+  - `Bots` — vê, escreve
+  - `Almirante` — vê
+  - `@everyone` — não vê
 
 ## Observações
 
-- Categoria vazia: Squads.
-- Cargos sem nenhuma permissão — etiqueta ou alvo de override, sem poder próprio: General, PC, PS5, Xbox, Democracia, Vídeos, Lives, Eventos, Boletins, Files.
-- Fora do alcance do `guild.yaml` — existem no servidor e o apply não os toca: sugestões-de-vídeo (fórum), pergunte-ao-goodivers (fórum), loadouts-e-tier-lists (fórum).
+- Cargos sem nenhuma permissão — etiqueta ou alvo de override, sem poder próprio: General, PC, PS5, Xbox, Democracia, Vídeos, Lives, Eventos, Boletins, Files, Buscando Squad, Sem Aviso de Squad.
+- Fora do alcance do `guild.yaml` — existem no servidor e o apply não os toca: sugestões-de-vídeo (fórum), pergunte-ao-goodivers (fórum), loadouts-e-tier-lists (fórum), files (fórum).
 - Emojis, stickers, eventos, webhooks e threads não entram nesta varredura nem no `guild.yaml`; continuam intactos.
-
-## Configuração manual
-
-> Fica fora do `guild.yaml` e da API do bot: é feita à mão no Discord. Um
-> `pnpm guild scan --force` reescreve este arquivo, então copie esta seção de
-> volta depois.
-
-### Guia do Servidor
-
-Configurações do servidor → Onboarding → Guia do Servidor → tarefas para novos
-membros.
-
-- **Ache seu squad**, apontando para `#procurar-esquadrão` (ação de ver o
-  canal, porque só o Goodbot escreve lá). Substitui o antigo "Monte seu perfil
-  de esquadrão": o botão do jogo na mensagem fixada monta o perfil e já procura
-  squad.
