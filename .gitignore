@@ -26,3 +26,6 @@ Thumbs.db
 
 # next
 next-env.d.ts
+
+# plano de trabalho local, nunca commitado
+plan.md
