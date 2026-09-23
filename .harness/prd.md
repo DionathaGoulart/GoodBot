@@ -759,7 +759,14 @@ canal de criar, para que o "Tenho interesse" caia onde a sala nasce, com nome
 `Jogatina de <nome de quem marcou>`, a descrição dizendo quem marcou e o fim em
 `LFG_EVENT_HOURS` (3, constante em `shared`) depois do início. **O Discord
 cuida do RSVP e do lembrete**; o bot não manda mensagem a ninguém e não guarda
-nada.
+nada. A única coisa que ele faz depois de criar é **iniciar o evento na hora**:
+evento de voz não começa sozinho no Discord, é o início que avisa quem marcou
+"Tenho interesse", e evento que ninguém inicia é cancelado pelo próprio Discord
+horas depois. Iniciado, o evento acaba sozinho quando o canal de criar fica
+alguns minutos vazio, o que é o normal dele (quem entra é movido para uma
+sala); o aviso já saiu. O bot relê os eventos da guild a cada poucos minutos, e
+o início que cai antes da releitura seguinte ganha um timer próprio. Jogatina
+cancelada pela staff sai do painel nessa releitura.
 
 O painel lista até 3 jogatinas futuras, lidas na hora dos eventos da guild cujo
 criador é o próprio bot (é assim que o módulo reconhece os seus, sem tabela).
