@@ -1,5 +1,6 @@
 import { welcomeMemberAdd, welcomeMemberBoost, welcomeMemberRemove } from './members';
 import { reactionRoleAdd, reactionRoleRemove } from './reaction-roles';
+import { squadPresenceUpdate, squadVoiceStateUpdate } from './squads';
 
 import type { EventHandler } from '../../lib/event';
 
@@ -10,4 +11,6 @@ export const communityEvents: readonly EventHandler[] = [
   welcomeMemberBoost,
   reactionRoleAdd,
   reactionRoleRemove,
+  squadPresenceUpdate,
+  squadVoiceStateUpdate,
 ];

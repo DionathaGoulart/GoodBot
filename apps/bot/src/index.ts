@@ -35,6 +35,7 @@ import { ReactionRoleService } from './services/reaction-roles';
 import { RegistryService } from './services/registry';
 import { Scheduler } from './services/scheduler';
 import { YouTubeProvider } from './services/social/index';
+import { SquadPresenceService } from './services/squads/presence';
 import { StatsService } from './services/stats';
 import { TicketService } from './services/tickets';
 import { WelcomeService } from './services/welcome';
@@ -157,6 +158,7 @@ async function main(): Promise<void> {
     },
   });
   const social = new YouTubeProvider();
+  const squads = new SquadPresenceService({ client, config, registry });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
   // Os links que os avisos de ciclo de vida citam. Saem do `AUTH_URL` pela
@@ -246,6 +248,7 @@ async function main(): Promise<void> {
     autorole,
     reactionRoles,
     tickets,
+    squads,
     social,
     messageCache,
     stats,
@@ -274,6 +277,7 @@ async function main(): Promise<void> {
     pendingExpiry.start();
     retention.start();
     capacity.start();
+    squads.start();
     databaseProbe.start();
     void deployNotice.resolve();
     alerts.emit({
@@ -314,6 +318,7 @@ async function main(): Promise<void> {
       pendingExpiry.stop();
       retention.stop();
       capacity.stop();
+      squads.stop();
       databaseProbe.stop();
       autorole.stop();
       await api.stop();

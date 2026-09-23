@@ -9,7 +9,9 @@ import { CooldownStore } from './cooldown';
 import { botFooter, errorEmbed, warningEmbed } from './embeds';
 import { recordError } from './error-log';
 import { handleComponent, handleModal } from '../interactions/index';
+import { handleSquadDmButton } from '../interactions/squads';
 import { levelAtLeast, resolveLevel, toMemberLike } from '../services/permissions';
+import { parseSquadId } from '../services/squads/ids';
 
 import type { AnyCommand, AutocompleteContext, BotContext, CommandContext } from './command';
 import type { PermissionLevel } from '@goodbot/shared';
@@ -61,10 +63,7 @@ async function replyError(interaction: RepliableInteraction, message: string): P
  * sem resposta vira "falha na interação" na tela de quem tentou, que é pior do
  * que a manutenção em si.
  */
-async function replyMaintenance(
-  interaction: Interaction,
-  message: string,
-): Promise<void> {
+async function replyMaintenance(interaction: Interaction, message: string): Promise<void> {
   if (!interaction.isRepliable()) return;
   const embed = warningEmbed({
     title: 'Em manutenção',
@@ -111,6 +110,10 @@ async function runComponent(
   }
 }
 
+function isSquadDmButton(customId: string): boolean {
+  return parseSquadId(customId)?.kind === 'dm';
+}
+
 export interface HandlerOptions {
   cooldowns?: CooldownStore;
 }
@@ -127,6 +130,17 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
     ctx: BotContext,
     interaction: Interaction,
   ): Promise<void> {
+    // A única interação de DM que o bot trata: os botões do aviso de squad.
+    // A guild vem do `custom_id`, e o handler confere o registro por ela.
+    if (!interaction.inGuild() && interaction.isButton() && isSquadDmButton(interaction.customId)) {
+      if (ctx.maintenance.active()) {
+        await replyMaintenance(interaction, ctx.maintenance.message());
+        return;
+      }
+      await runComponent(interaction, () => handleSquadDmButton(ctx, interaction));
+      return;
+    }
+
     // Um único ponto ignora eventos de guild que o bot não atende. Ele pode
     // estar em servidores à espera de aprovação, bloqueados ou com a demo
     // vencida, e ali fica calado em vez de responder com config que não existe.

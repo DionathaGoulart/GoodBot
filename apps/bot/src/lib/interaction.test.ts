@@ -86,9 +86,7 @@ describe('modo manutenção', () => {
     await handler(fakeCtx({ maintenance: true }), interaction);
 
     expect(execute).not.toHaveBeenCalled();
-    expect(reply).toHaveBeenCalledWith(
-      expect.objectContaining({ flags: MessageFlags.Ephemeral }),
-    );
+    expect(reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral }));
   });
 
   it('desligada, o comando roda normalmente', async () => {
@@ -111,5 +109,53 @@ describe('modo manutenção', () => {
     // O silêncio vem antes: um servidor à espera de aprovação não deve nem
     // saber que o bot está em manutenção.
     expect(reply).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A DM não tem guild, e o portão do registro calaria o botão do aviso de
+ * squad. Ele passa por um desvio próprio, que confere a guild do `custom_id`.
+ */
+describe('botão de squad na DM', () => {
+  function dmButton(customId: string) {
+    const editReply = vi.fn(() => Promise.resolve());
+    const interaction = {
+      inGuild: () => false,
+      guildId: null,
+      customId,
+      user: { id: USER_ID },
+      replied: false,
+      deferred: false,
+      reply: vi.fn(() => Promise.resolve()),
+      editReply,
+      followUp: vi.fn(() => Promise.resolve()),
+      deferUpdate: vi.fn(function (this: { deferred: boolean }) {
+        this.deferred = true;
+        return Promise.resolve();
+      }),
+      isButton: () => true,
+      isRepliable: () => true,
+    };
+    return { interaction: interaction as unknown as Interaction, editReply };
+  }
+
+  it('guild fora do registro responde com erro em vez de falhar mudo', async () => {
+    const handler = createInteractionHandler();
+    const { interaction, editReply } = dmButton(`squad:dm:search:${GUILD_ID}`);
+    const ctx = { ...fakeCtx({ serves: false }), client: { guilds: { cache: new Map() } } };
+
+    await handler(ctx as unknown as BotContext, interaction);
+
+    expect(editReply).toHaveBeenCalledTimes(1);
+  });
+
+  it('outro botão de DM segue ignorado', async () => {
+    const handler = createInteractionHandler();
+    const { interaction, editReply } = dmButton('ticket:close');
+
+    await handler(fakeCtx({}), interaction);
+
+    expect(editReply).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
   });
 });
