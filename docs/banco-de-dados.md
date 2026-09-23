@@ -21,7 +21,8 @@ comandos, eventos e rotas chamam uma função de repository, nunca montam query.
 
 ## 2. As tabelas
 
-34 no total.
+26 no total. O módulo de squads não tem tabela: o estado dele é o Discord
+(cargo, canal, evento agendado) e a memória do bot.
 
 | Grupo         | Tabelas                                                                                                                                  |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -33,7 +34,6 @@ comandos, eventos e rotas chamam uma função de repository, nunca montam query.
 | Utilidades    | `polls`, `reminders`                                                                                                                     |
 | Estatísticas  | `stat_buckets`                                                                                                                           |
 | Redes sociais | `social_accounts`, `social_posts`                                                                                                        |
-| Squads        | `squad_games`, `squad_profiles`, `squads`, `squad_members`, `squad_proposals`, `squad_join_requests`, `squad_sessions`, `squad_session_attendance` |
 
 Duas convenções que valem em todas:
 
@@ -81,7 +81,7 @@ Regras que não se dobram:
   `DROP COLUMN`. Pular o passo 2 quebra toda query da tabela entre a migration
   e a subida do código novo. Foi o caminho de `squads.day`/`block`,
   `squad_games.squad_size` e `squad_sessions.reminder_message_id`, que saíram
-  na `0018`.
+  na `0018` (as tabelas inteiras caíram depois, na `0023`).
 - **Migration não roda no boot do bot.** É um passo da CI (`deploy.yml`), com a
   conexão direta do Supabase. Um bot que reiniciasse aplicando migration
   transformaria um restart em risco de schema.

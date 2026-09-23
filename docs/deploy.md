@@ -34,7 +34,8 @@ automatiza.
 ## 2. O que você precisa
 
 - Uma aplicação no [Discord Developer Portal](https://discord.com/developers/applications)
-  com bot, OAuth2 e os intents **Server Members** e **Message Content** ligados
+  com bot, OAuth2 e os intents **Server Members**, **Message Content** e
+  **Presence** ligados
   ([primeiros-passos.md §2](primeiros-passos.md#2-uma-aplicação-no-discord)).
 - Uma VM x86_64. A `VM.Standard.E2.1.Micro` da Oracle (Always Free) é a que o
   projeto usa e mede: bot e Caddy ficam abaixo de 450 MB.

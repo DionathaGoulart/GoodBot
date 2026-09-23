@@ -9,6 +9,46 @@ some ou muda de forma).
 
 ## [Não lançado]
 
+Buscar squad no lugar do squad fixo. Quem quer jogar agora não preenche perfil
+nem espera match: liga um cargo, entra numa sala e o painel mostra quem está
+onde. O estado passou a ser o Discord (cargo, canal, evento agendado), e as
+tabelas do módulo antigo caíram. É versão **major**: comandos somem e a
+migration apaga dados sem volta.
+
+### Adicionado
+
+- **Cargo `Buscando Squad`**: ligado pelo botão BUSCAR SQUAD, por `/squad
+  buscar` ou pela DM que o bot manda quando vê alguém abrir o jogo (só o
+  clique liga). Cai sozinho quando a pessoa sai da voz ou não entra em
+  nenhuma a tempo, com janela de tolerância para queda de conexão.
+- **Cargo `Sem Aviso de Squad`** e `/squad aviso`: quem não quer a DM nunca
+  mais a recebe.
+- **Salas de voz efêmeras**: entrar no `➕ Criar Squad` cria uma sala
+  `Squad <letra grega>` com teto de gente e move a pessoa para ela; vazia, ela
+  some depois da janela.
+- **Painel fixo** com as salas abertas em tempo real, as próximas jogatinas e
+  os botões, publicado por `/squad painel` ou pelo painel web.
+- **Jogatina como evento nativo do Discord** (`/squad agendar` ou MARCAR
+  JOGATINA): RSVP e lembrete ficam com o Discord, e o bot inicia o evento na
+  hora.
+- Tela **Buscar squad** no painel web e a rota `POST
+  /guilds/:guildId/squads/panel`.
+- A intent privilegiada **Presence** passou a ser exigida: sem ela ligada no
+  Developer Portal o bot não sobe.
+
+### Removido
+
+- O squad fixo inteiro: perfil por jogo, grade semanal, perguntas, match
+  automático e manual, proposta em thread, canal privado com guia, convite e
+  votação de entrada, `/bora`, voice reservado, REMARCAR, convidado avulso,
+  chamada pública, histórico, números, relatório de fim, `/squad stats` e os
+  outros subcomandos antigos, a aba JOGATINAS e as telas de jogos e
+  jogadores.
+- Migration `0023`: apaga as nove tabelas `squad_*` e os três enums do
+  módulo, com os dados. Tire um dump antes (ver o runbook).
+- Rotas `/squads` antigas da API interna (retrato, match, arquivar,
+  renomear, gestão de jogadores).
+
 ## [1.1.0] - 2026-09-22
 
 Jogatinas monitoradas. A presença no voice reservado deixou de servir só para

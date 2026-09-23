@@ -276,7 +276,7 @@ reconexão normal do discord.js e não exige ação.
    de fechamento.
 2. Código `4004` = token inválido → rotacione o token do bot (acima).
 3. Código `4014` = intent privilegiada desligada → Developer Portal → _Bot_ →
-   ligue _Server Members_ e _Message Content_ (PRD §7.3).
+   ligue _Server Members_, _Message Content_ e _Presence_ (PRD §7.3).
 4. Sem código e sem reconexão: `docker compose restart bot`.
 5. Se o Discord estiver fora (`discordstatus.com`), não há nada a fazer: o bot
    reconecta sozinho e manda o alerta "Gateway reconectado".
@@ -313,80 +313,46 @@ Se os IPs variam muito (botnet), rotacione o `INTERNAL_API_TOKEN`: ele é a
 
 ---
 
-## Squads: depois de subir a jogatina sob demanda (v1.6)
+## Buscar squad: subir o módulo novo (PRD v1.8)
 
-A migration `0014` tira a janela semanal dos squads (`day` e `block` ficam
-nulos) e o job para de agendar sessão. Nada precisa ser feito à mão, mas o que
-se vê nas primeiras horas é diferente do normal:
+O squad fixo (perfil, match, jogatina com voice reservado) foi trocado por
+cargo de busca, salas efêmeras e evento agendado do Discord. Antes do deploy:
 
-- **Aba SQUADS com "o bot não respondeu" por alguns minutos.** O deploy sobe o
-  painel e o bot em paralelo depois da migration; o painel antigo não entende o
-  retrato novo do bot. Some quando os dois terminam.
-- **Squads antigos sem guia.** O guia fixo de quem já existia sai no passo
-  diário do job, depois das 12 h no fuso do servidor. Para adiantar, qualquer
-  mudança no squad (alguém marcar jogatina, renomear) publica o guia na hora.
-- **Guia sem pin.** O servidor convidou o bot antes de ele pedir
-  `PinMessages`. Dê "Fixar mensagens" ao cargo do bot; o log mostra
-  `guia do squad sem pin: falta PinMessages no canal` enquanto faltar.
-- **Sessões semanais já marcadas continuam.** Viram jogatinas sem autor
-  (`created_by` nulo), com lembrete, voice e votos como antes. Depois delas,
-  nenhuma nova nasce sozinha.
+1. **Intent Presence ligada** no Developer Portal (Bot > Privileged Gateway
+   Intents). Sem ela o bot novo **não loga**: cai com `Used disallowed
+   intents` no boot.
+2. **Dump do banco agora** (`docker compose exec backup sh
+   /usr/local/bin/backup.sh`). A migration `0023` apaga as nove tabelas
+   `squad_*` com os dados, sem volta; o dump é o único jeito de consultar o
+   que havia.
 
-A migration `0015` dá ao jogo os dois tamanhos, squad e party, copiando o
-tamanho antigo para os dois. Nada muda para quem já joga até alguém mexer no
-cadastro:
+No deploy, a migration roda na CI antes do bot novo. Por alguns segundos o bot
+velho erra em query de tabela que sumiu (log de erro no `squads`): é o módulo
+sendo substituído, e some quando o novo sobe.
 
-- **Criar ou editar jogo falha durante o deploy.** Entre a migration e a
-  subida do painel novo, o painel antigo grava jogo sem `group_size`. Espere o
-  deploy terminar e salve de novo.
-- **Para ter squad maior que a party**, edite o jogo em **Squads > `JOGOS`** e
-  suba "Tamanho do squad". Os squads que estavam cheios voltam para a busca na
-  hora; o guia mostra o tamanho novo na próxima mudança do squad ou no passo
-  diário.
+Depois do deploy, em cada servidor que usava squads:
 
-A migration `0016` troca o pedido de entrada ("basta um aceite") pela entrada
-em duas fases: convite numa thread privada e votação no canal do squad. O que
-aparece nas primeiras horas:
+- **Configure pelo painel** (**Buscar squad**): os cargos `Buscando Squad` e
+  `Sem Aviso de Squad`, o canal do painel, a categoria das salas e o
+  `➕ Criar Squad`. A config antiga passa na validação, mas a categoria salva é
+  a dos canais de texto do squad velho: troque antes de ligar, senão o bot
+  trata aquela categoria como a das salas.
+- **Publique o painel** (`PUBLICAR` na mesma tela ou `/squad painel`) e
+  **apague à mão** a mensagem fixa antiga do módulo, se ela estiver no mesmo
+  canal. Os botões dela respondem que aquele fluxo acabou.
+- **Canais que os squads antigos deixaram** (texto privado, voice temporário)
+  viram canais comuns. Limpar é da staff.
 
-- **"Não consegui mandar o pedido" ou `falha ao criar pedido de entrada` no
-  log durante o deploy.** Entre a migration e a subida do bot novo, o bot
-  antigo grava pedido sem `expires_at`, que agora é obrigatório. Some quando o
-  bot novo sobe; o matcher tenta de novo na passada seguinte.
-- **Pedidos antigos viram votação.** O pedido aberto antes da migration ganhou
-  prazo de 72 h a partir de quando foi criado, e as recusas que ele já tinha
-  contam como votos contra. A mensagem ainda mostra `ACEITAR` e `RECUSAR`:
-  eles valem como `A FAVOR` e `CONTRA`, e o primeiro voto troca os botões.
-- **Convite sem thread.** Convidar exige as mesmas permissões da proposta no
-  canal de busca (`CreatePrivateThreads`, `SendMessagesInThreads` e
-  `ManageThreads`). Sem elas o matcher pula a guild com aviso no log e
-  `/squad convidar` responde que falta permissão.
+Sintomas que valem saber:
 
-A migration `0017` guarda a presença no voice reservado
-(`squad_session_attendance`) e a chamada pública (`CHAMAR GENTE`). É só tabela
-nova e coluna nula, então o bot e o painel antigos seguem funcionando até o
-deploy terminar. O que esperar:
-
-- **Todo squad começa "Ainda não jogaram." ou com pouco histórico.** A presença
-  só é gravada a partir do deploy; as jogatinas que já tinham `played_at`
-  contam com quem disse `VOU`. O guia de cada squad ganha o histórico e o botão
-  `CHAMAR GENTE` na próxima mudança ou no passo diário.
-- **Coluna HISTÓRICO com `SEM DADO DO BOT`.** O painel novo subiu antes do bot
-  novo. Some quando o bot termina de subir.
-- **`CHAMAR GENTE` responde que não consegue postar no canal de busca.** O bot
-  precisa ver, escrever e mandar embed no canal de busca, como na mensagem
-  fixa. O log mostra `chamada pública pulada: faltam permissões no canal de
-  busca` com o que falta.
-- **Chamada que ficou no canal depois do início.** Acontece se apagar a
-  mensagem falhar no Discord (o log diz `não foi possível apagar a chamada
-  pública`). O botão `ENTRAR` já não aceita ninguém e apaga a mensagem no
-  primeiro clique; apagar à mão também não tem efeito colateral.
-
-A migration `0018` apaga as colunas do modelo semanal (`squads.day`/`block`,
-`squad_games.squad_size` e `squad_sessions.reminder_message_id`). Ela só pode
-subir com o bot e o painel publicados já sem essas colunas no schema, o que o
-deploy anterior fez sem migration. Se um deploy velho for refeito por cima
-dela (`workflow_dispatch` num commit antigo), toda tela e comando de squad
-falha com `column ... does not exist`: publique de novo a `main`.
+- **Sala não nasce e a pessoa fica no `➕ Criar Squad`.** Falta `ManageChannels`
+  ou `MoveMembers` na categoria, o servidor bateu 500 canais ou os 24 nomes
+  gregos estão em uso. O motivo sai no log (`squads`).
+- **Painel desatualizado.** Edição que falha espera a próxima mudança numa
+  sala. Mensagem apagada volta sozinha na mudança seguinte; para forçar, use
+  `ATUALIZAR`.
+- **Cargo ou sala durou uns minutos a mais depois de um restart.** Esperado: os
+  prazos são memória e a reconciliação conta a janela do zero.
 
 ---
 

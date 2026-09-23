@@ -19,10 +19,11 @@ No [Developer Portal](https://discord.com/developers/applications):
 
 1. **New Application** e dê um nome.
 2. **Bot > Reset Token** e guarde o token → `DISCORD_TOKEN`.
-3. **Bot**: ligue os _Privileged Gateway Intents_ **Server Members** e
-   **Message Content**. Sem _Message Content_ o automod não vê nada. O de
-   **Presence fica desligado**: nenhum módulo usa presença, e ela é a intent
-   mais cara em memória (ver `apps/bot/src/client.ts`).
+3. **Bot**: ligue os três _Privileged Gateway Intents_: **Server Members**,
+   **Message Content** e **Presence**. Sem _Message Content_ o automod não vê
+   nada. _Presence_ serve só ao aviso automático do Buscar squad, mas o bot a
+   pede sempre: desligada, o login cai com `Used disallowed intents` (ver
+   `apps/bot/src/client.ts`).
 4. **General Information**: copie o Application ID → `DISCORD_CLIENT_ID`.
 5. **OAuth2**: copie o Client Secret → `DISCORD_CLIENT_SECRET`.
 6. **OAuth2 > Redirects**: adicione as três. A primeira é o login do painel;

@@ -10,7 +10,8 @@ três provedores.
 
 > **English:** Goodbot is a Discord moderation bot with a web dashboard:
 > moderation cases, automod, logs, tickets, role panels, welcome messages,
-> YouTube alerts and gaming squads. It is a TypeScript monorepo (discord.js
+> YouTube alerts and live squad finding
+> for games. It is a TypeScript monorepo (discord.js
 > v14, Next.js, Postgres with Drizzle) that runs entirely on free tiers
 > (Oracle Cloud, Vercel, Supabase). The bot, the dashboard and the docs are in
 > Brazilian Portuguese.
@@ -50,7 +51,7 @@ Zod próprio em `packages/shared/src/config/`:
 | **Utilidades**     | clear, purge, lock, slowmode, lembretes, enquetes e info                                |
 | **Estatísticas**   | mensagens, entradas e saídas, voz e casos agregados por hora e dia                      |
 | **Redes sociais**  | avisa quando um canal do YouTube publica vídeo, short ou live                           |
-| **Squads**         | match de jogadores por horário, squad com canal próprio e jogatina com voice reservado  |
+| **Buscar squad**   | cargo de quem quer jogar agora, salas de voz que nascem e somem e jogatina agendada     |
 
 O de redes sociais não pede credencial nenhuma: tudo sai de páginas públicas do
 YouTube. Detalhes de cada módulo, comandos e configuração em

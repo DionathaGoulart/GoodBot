@@ -106,7 +106,7 @@ validação Zod) e `retryAfter` quando o 503 veio de rate limit.
 | `config`      | invalidar o cache de config de um módulo                                                                                                                                                                                                                                                             |
 | `commands`    | listar os comandos registrados                                                                                                                                                                                                                                                                       |
 | `social`      | contas de rede social e teste de anúncio                                                                                                                                                                                                                                                             |
-| `squads`      | retrato do módulo (cada squad com as jogatinas que ainda não acabaram, em `upcomingSessions`, e o histórico das que rolaram, em `history`: `null` num bot anterior), mensagem fixa, match, arquivar e renomear; match manual (revisar e propor, §4.4); tirar do squad, status, respostas e apagar perfil (`reason` obrigatório, `notified` na resposta diz se a DM chegou) |
+| `squads`      | publicar ou reeditar o painel fixo das salas (`POST /squads/panel`, §4.4); o módulo não tem estado para ler                                                                                                                                                                                          |
 | `admin`       | painel do dono: guilds, expulsar, broadcast, manutenção, resync                                                                                                                                                                                                                                      |
 | `registry`    | o aviso por DM a quem convidou o bot (ciclo de vida do convite)                                                                                                                                                                                                                                      |
 | `metrics`     | contadores em formato Prometheus                                                                                                                                                                                                                                                                     |
@@ -172,34 +172,27 @@ navegador protege contra o clique errado, não contra a chamada solta. E é o
 enviar, `dryRun: true` devolve em que canal a mensagem cairia em cada servidor,
 sem mandar nada.
 
-### 4.4 Match manual: revisar e confirmar
+### 4.4 Painel de squads
 
-O match manual dos squads é em dois passos, e quem confere a confirmação é o
-bot, não a tela:
+O módulo de squads não guarda nada que o painel precise ler: salas, cargo e
+jogatinas são o próprio Discord. A única rota é o botão que publica o painel
+fixo, o mesmo caminho do `/squad painel`:
 
-1. `POST /guilds/:guildId/squads/games/:gameId/manual/check` com
-   `{ actorId, userIds }` (2 a 20 pessoas, sem repetição) não escreve nada.
-   Devolve as duplas com nota, a célula em comum com mais gente (`slot`), `blocks` e
-   `warnings`, cada item com uma `key` estável (`CODE`, `CODE:userId` ou
-   `CODE:idA:idB`). Tem teto próprio de 60/min por guild, porque revisar não
-   manda nada ao Discord.
-2. `POST .../manual/propose` leva o mesmo corpo mais `confirmedWarnings`: as
-   `key`s dos avisos que o admin leu. O bot refaz a revisão na fila do jogo,
-   com dados frescos, e só abre a proposta se não houver bloqueio e se
-   `confirmedWarnings` cobrir todos os avisos recalculados. Responde
-   `{ proposal, check }` e conta no balde de 10/min por guild das mensagens.
+```bash
+curl -X POST http://localhost:3001/guilds/$GUILD_ID/squads/panel \
+  -H "Authorization: Bearer $INTERNAL_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"actorId": "'"$ACTOR_ID"'"}'
+```
 
-As duas recusas são diferentes de propósito:
-
-| Status | Código                     | Quer dizer                                                                                             | O cliente faz                     |
-| ------ | -------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------- |
-| 422    | `MANUAL_MATCH_BLOCKED`     | a turma não serve: sem perfil, fora do servidor, já em squad ou proposta do jogo, sem horário em comum | muda a seleção                    |
-| 409    | `MANUAL_MATCH_UNCONFIRMED` | apareceu aviso fora de `confirmedWarnings`: a situação mudou desde a revisão                           | revisa de novo e mostra os avisos |
-
-Reenviar as `key`s de uma revisão antiga não passa por cima de aviso novo,
-porque ele traz uma `key` que não estava na lista. É isso que torna o clique
-duplo inofensivo: a segunda chamada vê a proposta que a primeira abriu e recebe
-422 (`IN_OPEN_PROPOSAL`).
+Só `admin`. O canal é o `panelChannelId` **salvo**, nunca um do corpo: publicar
+num canal que a config não conhece deixaria o bot editando uma mensagem e a
+staff olhando para outra. Responde `{ channelId, messageId, created }`, com
+`created: false` quando a mensagem do ar foi editada. Módulo desligado, canal
+não configurado ou permissão faltando no canal voltam como 400 com o código do
+`UserFacingError` (`MODULE_DISABLED`, `SQUADS_NO_PANEL_CHANNEL`,
+`MISSING_PERMISSIONS`) e a mensagem que o toast mostra. A publicação entra na
+auditoria como `squad.panel.publish`.
 
 ## 5. Rate limit
 
