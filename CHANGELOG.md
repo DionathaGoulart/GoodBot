@@ -9,6 +9,8 @@ some ou muda de forma).
 
 ## [Não lançado]
 
+## [2.0.0] - 2026-09-23
+
 Buscar squad no lugar do squad fixo. Quem quer jogar agora não preenche perfil
 nem espera match: liga um cargo, entra numa sala e o painel mostra quem está
 onde. O estado passou a ser o Discord (cargo, canal, evento agendado), e as
@@ -192,7 +194,8 @@ aqui:
 | v1.5    | módulo de squads                                              |
 | v1.6    | jogatina sob demanda, parties, convite com votação, histórico |
 
-[Não lançado]: https://github.com/DionathaGoulart/GoodBot/compare/v1.1.0...HEAD
+[Não lançado]: https://github.com/DionathaGoulart/GoodBot/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/DionathaGoulart/GoodBot/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/DionathaGoulart/GoodBot/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/DionathaGoulart/GoodBot/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/DionathaGoulart/GoodBot/releases/tag/v1.0.0

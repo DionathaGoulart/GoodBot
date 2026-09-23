@@ -1,6 +1,6 @@
 {
   "name": "goodbot",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Bot de moderação para Discord + painel web (monorepo pnpm)",
   "license": "MIT",
