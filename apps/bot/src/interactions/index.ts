@@ -1,11 +1,9 @@
 import { handlePollButton } from './poll-buttons';
 import { handleReactionRoleComponent } from './reaction-roles';
-import { handleSquadComponent, handleSquadModal } from './squads';
 import { handleTicketComponent, handleTicketModal } from './tickets';
 import { handleVerifyButton, VERIFY_BUTTON_ID } from './verify';
 import { POLL_BUTTON_PREFIX } from '../lib/poll-message';
 import { REACTION_ROLE_PREFIX } from '../services/reaction-roles';
-import { SQUAD_PREFIX } from '../services/squads/ids';
 import { TICKET_PREFIX } from '../services/tickets';
 
 import type { BotContext } from '../lib/command';
@@ -41,7 +39,6 @@ const HANDLERS: Record<string, ComponentHandler> = {
   [REACTION_ROLE_PREFIX]: handleReactionRoleComponent,
   [TICKET_PREFIX]: (ctx, interaction) =>
     interaction.isButton() ? handleTicketComponent(ctx, interaction) : Promise.resolve(false),
-  [SQUAD_PREFIX]: handleSquadComponent,
 };
 
 /** `false` quando nenhum handler reconhece o `custom_id` (mensagem antiga). */
@@ -54,7 +51,7 @@ export async function handleComponent(
   return handler(ctx, interaction);
 }
 
-/** Mesma ideia para modais: o motivo de fechamento de ticket e o perfil de squad. */
+/** Mesma ideia para modais: o motivo de fechamento de ticket. */
 export async function handleModal(
   ctx: BotContext,
   interaction: ModalSubmitInteraction,
@@ -62,8 +59,6 @@ export async function handleModal(
   switch (componentPrefix(interaction.customId)) {
     case TICKET_PREFIX:
       return handleTicketModal(ctx, interaction);
-    case SQUAD_PREFIX:
-      return handleSquadModal(ctx, interaction);
     default:
       return false;
   }
