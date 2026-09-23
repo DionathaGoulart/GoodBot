@@ -20,7 +20,7 @@ describe('classifyDeploy', () => {
       kind: 'none',
     },
     { name: 'código do bot', paths: ['apps/bot/src/index.ts'], kind: 'restart' },
-    { name: 'regra em shared', paths: ['packages/shared/src/squads/stats.ts'], kind: 'restart' },
+    { name: 'regra em shared', paths: ['packages/shared/src/squads/when.ts'], kind: 'restart' },
     { name: 'repositório do db', paths: ['packages/db/src/repositories/meta.ts'], kind: 'restart' },
     { name: 'lockfile', paths: ['pnpm-lock.yaml'], kind: 'restart' },
     {

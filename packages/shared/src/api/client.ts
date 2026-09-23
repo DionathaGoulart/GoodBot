@@ -83,28 +83,6 @@ import {
   SocialResolveResultSchema,
   SocialTestResultSchema,
 } from './social';
-import {
-  ArchiveSquadInputSchema,
-  DeleteSquadProfileInputSchema,
-  DeleteSquadProfileResultSchema,
-  EditSquadProfileAnswersInputSchema,
-  PostSquadSearchMessageInputSchema,
-  PostSquadSearchMessageResultSchema,
-  ProposeSquadManuallyInputSchema,
-  RemoveSquadMemberInputSchema,
-  RemoveSquadMemberResultSchema,
-  RenameSquadInputSchema,
-  RunSquadMatchInputSchema,
-  RunSquadMatchResultSchema,
-  SetSquadProfileStatusInputSchema,
-  SquadManualCheckInputSchema,
-  SquadManualCheckSchema,
-  SquadManualProposalResultSchema,
-  SquadOverviewSchema,
-  SquadProfileAnswersResultSchema,
-  SquadProfileStatusResultSchema,
-  SquadSummarySchema,
-} from './squads';
 import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
 import { SocialAccountInputSchema } from '../config/social';
 
@@ -178,28 +156,6 @@ import type {
   SocialResolveResult,
   SocialTestResult,
 } from './social';
-import type {
-  ArchiveSquadInput,
-  DeleteSquadProfileInput,
-  DeleteSquadProfileResult,
-  EditSquadProfileAnswersInput,
-  PostSquadSearchMessageInput,
-  PostSquadSearchMessageResult,
-  ProposeSquadManuallyInput,
-  RemoveSquadMemberInput,
-  RemoveSquadMemberResult,
-  RenameSquadInput,
-  RunSquadMatchInput,
-  RunSquadMatchResult,
-  SetSquadProfileStatusInput,
-  SquadManualCheck,
-  SquadManualCheckInput,
-  SquadManualProposalResult,
-  SquadOverview,
-  SquadProfileAnswersResult,
-  SquadProfileStatusResult,
-  SquadSummary,
-} from './squads';
 import type { CloseTicketInput, CloseTicketResult } from './tickets';
 import type { SocialAccountInput } from '../config/social';
 import type { z } from 'zod';
@@ -891,132 +847,6 @@ export function createInternalClient(options: InternalClientOptions) {
         SocialTestResultSchema,
         `${guild(guildId)}/social/${encodeURIComponent(accountId)}/test`,
         { method: 'POST' },
-      ),
-
-    /** Jogos, squads vivos, propostas abertas e contadores do módulo de squads. */
-    squadsOverview: (guildId: string): Promise<SquadOverview> =>
-      request(SquadOverviewSchema, `${guild(guildId)}/squads/overview`),
-
-    /** Publica ou reedita a mensagem fixa do canal de busca. Só admin. */
-    postSquadSearchMessage: (
-      guildId: string,
-      input: PostSquadSearchMessageInput,
-    ): Promise<PostSquadSearchMessageResult> =>
-      request(PostSquadSearchMessageResultSchema, `${guild(guildId)}/squads/search-message`, {
-        method: 'POST',
-        body: PostSquadSearchMessageInputSchema.parse(input),
-      }),
-
-    /** Arquiva pelo painel (mod ou acima): canal só leitura e voice liberado. */
-    archiveSquad: (
-      guildId: string,
-      squadId: string,
-      input: ArchiveSquadInput,
-    ): Promise<SquadSummary> =>
-      request(
-        SquadSummarySchema,
-        `${guild(guildId)}/squads/${encodeURIComponent(squadId)}/archive`,
-        { method: 'POST', body: ArchiveSquadInputSchema.parse(input) },
-      ),
-
-    /** Renomeia pelo painel (mod ou acima); o canal acompanha quando o Discord deixa. */
-    renameSquad: (
-      guildId: string,
-      squadId: string,
-      input: RenameSquadInput,
-    ): Promise<SquadSummary> =>
-      request(
-        SquadSummarySchema,
-        `${guild(guildId)}/squads/${encodeURIComponent(squadId)}/rename`,
-        { method: 'POST', body: RenameSquadInputSchema.parse(input) },
-      ),
-
-    /** Roda o matcher do jogo agora, sem esperar o passo diário do job. Só admin. */
-    runSquadMatch: (
-      guildId: string,
-      gameId: string,
-      input: RunSquadMatchInput,
-    ): Promise<RunSquadMatchResult> =>
-      request(
-        RunSquadMatchResultSchema,
-        `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/match`,
-        { method: 'POST', body: RunSquadMatchInputSchema.parse(input) },
-      ),
-
-    /** Revisa a turma escolhida no painel: duplas, bloqueios e avisos. Não escreve nada. Só admin. */
-    checkSquadManualMatch: (
-      guildId: string,
-      gameId: string,
-      input: SquadManualCheckInput,
-    ): Promise<SquadManualCheck> =>
-      request(
-        SquadManualCheckSchema,
-        `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/manual/check`,
-        { method: 'POST', body: SquadManualCheckInputSchema.parse(input) },
-      ),
-
-    /** Abre a proposta com a turma escolhida, se os avisos confirmados ainda valem. Só admin. */
-    proposeSquadManually: (
-      guildId: string,
-      gameId: string,
-      input: ProposeSquadManuallyInput,
-    ): Promise<SquadManualProposalResult> =>
-      request(
-        SquadManualProposalResultSchema,
-        `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/manual/propose`,
-        { method: 'POST', body: ProposeSquadManuallyInputSchema.parse(input) },
-      ),
-
-    /** Tira alguém do squad pelo painel e avisa a pessoa por DM com o motivo. Só admin. */
-    removeSquadMember: (
-      guildId: string,
-      squadId: string,
-      userId: string,
-      input: RemoveSquadMemberInput,
-    ): Promise<RemoveSquadMemberResult> =>
-      request(
-        RemoveSquadMemberResultSchema,
-        `${guild(guildId)}/squads/${encodeURIComponent(squadId)}/members/${encodeURIComponent(userId)}/remove`,
-        { method: 'POST', body: RemoveSquadMemberInputSchema.parse(input) },
-      ),
-
-    /** Pausa ou retoma a busca de outra pessoa, com DM do motivo. Só admin. */
-    setSquadProfileStatus: (
-      guildId: string,
-      gameId: string,
-      userId: string,
-      input: SetSquadProfileStatusInput,
-    ): Promise<SquadProfileStatusResult> =>
-      request(
-        SquadProfileStatusResultSchema,
-        `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/profiles/${encodeURIComponent(userId)}/status`,
-        { method: 'POST', body: SetSquadProfileStatusInputSchema.parse(input) },
-      ),
-
-    /** Edita as respostas de outra pessoa, com DM do motivo. Só admin. */
-    editSquadProfileAnswers: (
-      guildId: string,
-      gameId: string,
-      userId: string,
-      input: EditSquadProfileAnswersInput,
-    ): Promise<SquadProfileAnswersResult> =>
-      request(
-        SquadProfileAnswersResultSchema,
-        `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/profiles/${encodeURIComponent(userId)}/answers`,
-        { method: 'POST', body: EditSquadProfileAnswersInputSchema.parse(input) },
-      ),
-
-    /** Apaga o perfil de outra pessoa, com DM do motivo. Só admin. */
-    deleteSquadProfile: (
-      guildId: string,
-      gameId: string,
-      userId: string,
-      input: DeleteSquadProfileInput,
-    ): Promise<DeleteSquadProfileResult> =>
-      request(
-        DeleteSquadProfileResultSchema,
-        `${guild(guildId)}/squads/games/${encodeURIComponent(gameId)}/profiles/${encodeURIComponent(userId)}/delete`,
-        { method: 'POST', body: DeleteSquadProfileInputSchema.parse(input) },
       ),
   };
 }
