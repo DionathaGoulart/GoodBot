@@ -28,7 +28,7 @@ export default defineCommand({
         .setDescription('Liga ou desliga o aviso de squad quando você abre o jogo'),
     )
     .addSubcommand((sub) =>
-      sub.setName('agendar').setDescription('Marca uma jogatina como evento do servidor'),
+      sub.setName('agendar').setDescription('Marca uma jogatina na agenda do servidor'),
     )
     .addSubcommand((sub) =>
       sub.setName('painel').setDescription('Publica ou atualiza o painel de salas (admin)'),
@@ -46,8 +46,8 @@ export default defineCommand({
   async execute(ctx) {
     const subcommand = ctx.interaction.options.getSubcommand();
     if (subcommand === 'agendar') {
-      await squadsConfigOrFail(ctx, ctx.guildId);
-      await ctx.interaction.showModal(scheduleModal());
+      const config = await squadsConfigOrFail(ctx, ctx.guildId);
+      await ctx.interaction.showModal(scheduleModal(config));
       return;
     }
     await ctx.interaction.deferReply({ flags: MessageFlags.Ephemeral });

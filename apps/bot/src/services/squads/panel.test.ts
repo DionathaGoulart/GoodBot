@@ -12,7 +12,7 @@ import {
 } from './__fixtures__/rooms';
 import { OPT_OUT_TOGGLE_ID, SCHEDULE_ID, SEARCH_TOGGLE_ID } from './ids';
 
-import type { SessionSummary } from './sessions';
+import type { AgendaSummary } from './agenda';
 import type { SquadsConfig } from '@goodbot/shared';
 
 const { setModuleConfig } = vi.hoisted(() => ({ setModuleConfig: vi.fn() }));
@@ -57,22 +57,22 @@ describe('texto do painel', () => {
     expect(ids(squadsConfig())).toEqual([SEARCH_TOGGLE_ID, OPT_OUT_TOGGLE_ID, SCHEDULE_ID]);
     expect(ids(squadsConfig({ optOutRoleId: null }))).toEqual([SEARCH_TOGGLE_ID, SCHEDULE_ID]);
     expect(ids(squadsConfig({ searchRoleId: null, optOutRoleId: null }))).toEqual([SCHEDULE_ID]);
-    expect(ids(squadsConfig({ createChannelId: null }))).toEqual([
+    expect(ids(squadsConfig({ agendaChannelId: null }))).toEqual([
       SEARCH_TOGGLE_ID,
       OPT_OUT_TOGGLE_ID,
     ]);
   });
 
-  it('lista as jogatinas marcadas com a hora no fuso de quem lê', () => {
-    const session = {
-      id: '700000000000000001',
-      name: 'Jogatina de Alice',
+  it('lista as jogatinas marcadas com a hora no fuso de quem lê e o link da agenda', () => {
+    const session: AgendaSummary = {
+      id: '0b8c2f4e-1111-2222-3333-444455556666',
+      hostId: ALICE,
       startsAt: Date.parse('2026-09-15T00:00:00Z'),
-      url: 'https://discord.com/events/1/700000000000000001',
+      url: 'https://discord.com/channels/1/2/3',
     };
     expect(sessionLine(session)).toBe(
-      '📅 [Jogatina de Alice](https://discord.com/events/1/700000000000000001) · ' +
-        '<t:1789430400:F> (<t:1789430400:R>)',
+      `📅 <t:1789430400:F> (<t:1789430400:R>) · de <@${ALICE}> · ` +
+        '[ver na agenda](https://discord.com/channels/1/2/3)',
     );
     const withSession = panelMessage([], squadsConfig(), undefined, [session]);
     expect(withSession.embeds[0]?.data.description).toContain('**Jogatinas marcadas**');
@@ -126,7 +126,9 @@ function setup(config: SquadsConfig = squadsConfig({ panelMessageId: MESSAGE }))
   const current = { config };
   const invalidate = vi.fn();
   const record = vi.fn();
-  const sessions = { upcoming: vi.fn((): SessionSummary[] => []) };
+  const agenda = {
+    upcoming: vi.fn((): Promise<AgendaSummary[]> => Promise.resolve([])),
+  };
   const service = new SquadPanelService({
     client: h.client,
     db: {} as never,
@@ -136,10 +138,10 @@ function setup(config: SquadsConfig = squadsConfig({ panelMessageId: MESSAGE }))
       publishInvalidate: invalidate,
     } as never,
     audit: { record },
-    sessions,
+    agenda,
     now: () => NOW,
   });
-  return { ...h, service, edit, send, pin, invalidate, record, current, sessions };
+  return { ...h, service, edit, send, pin, invalidate, record, current, agenda };
 }
 
 describe('SquadPanelService', () => {
@@ -238,13 +240,13 @@ describe('SquadPanelService', () => {
 
   it('a edição lista até 3 jogatinas que ainda não começaram', async () => {
     const h = setup();
-    const at = (offset: number, id: string): SessionSummary => ({
+    const at = (offset: number, id: string): AgendaSummary => ({
       id,
-      name: `Jogatina ${id}`,
+      hostId: ALICE,
       startsAt: NOW + offset,
-      url: `https://discord.com/events/1/${id}`,
+      url: `https://discord.com/channels/1/2/jogatina-${id}`,
     });
-    h.sessions.upcoming.mockReturnValue([
+    h.agenda.upcoming.mockResolvedValue([
       at(-1_000, 'passou'),
       at(1_000, 'a'),
       at(2_000, 'b'),
@@ -254,10 +256,10 @@ describe('SquadPanelService', () => {
     await h.service.refresh(GUILD);
     const body = h.edit.mock.calls[0] as unknown as [string, ReturnType<typeof panelMessage>];
     const description = body[1].embeds[0]?.data.description ?? '';
-    expect(description).toContain('Jogatina a');
-    expect(description).toContain('Jogatina c');
-    expect(description).not.toContain('Jogatina d');
-    expect(description).not.toContain('Jogatina passou');
+    expect(description).toContain('jogatina-a');
+    expect(description).toContain('jogatina-c');
+    expect(description).not.toContain('jogatina-d');
+    expect(description).not.toContain('jogatina-passou');
   });
 
   it('módulo desligado não publica', async () => {

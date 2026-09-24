@@ -12,18 +12,20 @@ import {
 
 import { OPT_OUT_TOGGLE_ID, SCHEDULE_ID, SEARCH_TOGGLE_ID } from './ids';
 import { listRooms, occupantsOf } from './rooms';
-import { PANEL_SESSION_COUNT } from './sessions';
 import { infoEmbed } from '../../lib/embeds';
 import { childLogger } from '../../logger';
 
 import type { AuditService } from '../audit';
 import type { ConfigService } from '../config';
-import type { SessionSummary, SquadSessionService } from './sessions';
+import type { AgendaSummary, SquadAgendaService } from './agenda';
 import type { Db } from '@goodbot/db';
 import type { AuditSource, SquadsConfig } from '@goodbot/shared';
 import type { Client, Guild, TextChannel } from 'discord.js';
 
 const log = childLogger('squads');
+
+/** Quantas jogatinas o painel lista. */
+export const PANEL_SESSION_COUNT = 3;
 
 /**
  * Uma edição do painel por guild a cada tanto: o Discord limita edição de
@@ -58,10 +60,10 @@ export function roomLine(room: PanelRoom): string {
   );
 }
 
-/** A jogatina com a hora que o Discord mostra no fuso de quem lê. */
-export function sessionLine(session: SessionSummary): string {
+/** A jogatina com a hora que o Discord mostra no fuso de quem lê, e o link para a agenda. */
+export function sessionLine(session: AgendaSummary): string {
   const unix = String(Math.floor(session.startsAt / 1000));
-  return `📅 [${session.name}](${session.url}) · <t:${unix}:F> (<t:${unix}:R>)`;
+  return `📅 <t:${unix}:F> (<t:${unix}:R>) · de <@${session.hostId}> · [ver na agenda](${session.url})`;
 }
 
 /** A mensagem fixa: as salas abertas, as próximas jogatinas e os botões. */
@@ -69,10 +71,10 @@ export function panelMessage(
   rooms: PanelRoom[],
   config: SquadsConfig,
   embedColor?: number,
-  sessions: SessionSummary[] = [],
+  sessions: AgendaSummary[] = [],
 ) {
   const create = config.createChannelId ? `<#${config.createChannelId}>` : '**➕ Criar Squad**';
-  const canSchedule = config.createChannelId !== null;
+  const canSchedule = config.agendaChannelId !== null;
   const empty =
     `Ninguém em sala agora. Entre em ${create} para abrir uma e chamar o pessoal` +
     (canSchedule && sessions.length === 0 ? ', ou marque uma jogatina para mais tarde.' : '.');
@@ -89,8 +91,8 @@ export function panelMessage(
         `Para abrir uma sala nova, entre em ${create}: o bot cria a sala e te leva para ela. ` +
         '**BUSCAR SQUAD** mostra para o servidor que você quer jogar agora.' +
         (canSchedule
-          ? ' **MARCAR JOGATINA** cria um evento do servidor: marque "Tenho interesse" ' +
-            'para ser avisado quando começar.'
+          ? ` **MARCAR JOGATINA** põe uma jogatina em <#${String(config.agendaChannelId)}>, ` +
+            'com a lista de quem vai.'
           : ''),
     },
     embedColor,
@@ -149,7 +151,7 @@ export interface SquadPanelDeps {
   db: Db;
   config: Pick<ConfigService, 'get' | 'getSettings' | 'publishInvalidate'>;
   audit: Pick<AuditService, 'record'>;
-  sessions: Pick<SquadSessionService, 'upcoming'>;
+  agenda: Pick<SquadAgendaService, 'upcoming'>;
   now?: () => number;
   coalesceMs?: number;
 }
@@ -166,7 +168,7 @@ export class SquadPanelService {
   private readonly db: Db;
   private readonly config: SquadPanelDeps['config'];
   private readonly audit: Pick<AuditService, 'record'>;
-  private readonly sessions: SquadPanelDeps['sessions'];
+  private readonly agenda: SquadPanelDeps['agenda'];
   private readonly now: () => number;
   private readonly coalesceMs: number;
   private readonly timers = new Map<string, NodeJS.Timeout>();
@@ -178,7 +180,7 @@ export class SquadPanelService {
     this.db = deps.db;
     this.config = deps.config;
     this.audit = deps.audit;
-    this.sessions = deps.sessions;
+    this.agenda = deps.agenda;
     this.now = deps.now ?? Date.now;
     this.coalesceMs = deps.coalesceMs ?? PANEL_COALESCE_MS;
   }
@@ -302,8 +304,8 @@ export class SquadPanelService {
   private async render(guild: Guild, config: SquadsConfig) {
     const settings = await this.config.getSettings(guild.id);
     const now = this.now();
-    const sessions = this.sessions
-      .upcoming(guild.id)
+    // As que já estão rolando saem: o painel lista o que ainda vai começar.
+    const sessions = (await this.agenda.upcoming(guild.id, PANEL_SESSION_COUNT * 2))
       .filter((session) => session.startsAt > now)
       .slice(0, PANEL_SESSION_COUNT);
     return panelMessage(panelRooms(guild, config), config, settings.embedColor, sessions);

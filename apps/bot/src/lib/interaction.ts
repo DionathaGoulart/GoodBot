@@ -9,9 +9,9 @@ import { CooldownStore } from './cooldown';
 import { botFooter, errorEmbed, warningEmbed } from './embeds';
 import { recordError } from './error-log';
 import { handleComponent, handleModal } from '../interactions/index';
-import { handleSquadDmButton } from '../interactions/squads';
+import { handleSquadDmButton, handleSquadRequestButton } from '../interactions/squads';
 import { levelAtLeast, resolveLevel, toMemberLike } from '../services/permissions';
-import { parseSquadId } from '../services/squads/ids';
+import { isSquadDmId, parseSquadId } from '../services/squads/ids';
 
 import type { AnyCommand, AutocompleteContext, BotContext, CommandContext } from './command';
 import type { PermissionLevel } from '@goodbot/shared';
@@ -110,10 +110,6 @@ async function runComponent(
   }
 }
 
-function isSquadDmButton(customId: string): boolean {
-  return parseSquadId(customId)?.kind === 'dm';
-}
-
 export interface HandlerOptions {
   cooldowns?: CooldownStore;
 }
@@ -130,14 +126,19 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
     ctx: BotContext,
     interaction: Interaction,
   ): Promise<void> {
-    // A única interação de DM que o bot trata: os botões do aviso de squad.
-    // A guild vem do `custom_id`, e o handler confere o registro por ela.
-    if (!interaction.inGuild() && interaction.isButton() && isSquadDmButton(interaction.customId)) {
+    // As únicas interações de DM que o bot trata: os botões do aviso de squad
+    // e os do pedido de vaga. A guild vem do `custom_id`, e o handler confere o
+    // registro por ela.
+    if (!interaction.inGuild() && interaction.isButton() && isSquadDmId(interaction.customId)) {
       if (ctx.maintenance.active()) {
         await replyMaintenance(interaction, ctx.maintenance.message());
         return;
       }
-      await runComponent(interaction, () => handleSquadDmButton(ctx, interaction));
+      const handler =
+        parseSquadId(interaction.customId)?.kind === 'request'
+          ? handleSquadRequestButton
+          : handleSquadDmButton;
+      await runComponent(interaction, () => handler(ctx, interaction));
       return;
     }
 

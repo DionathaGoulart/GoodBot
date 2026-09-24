@@ -12,6 +12,7 @@ export const CATEGORY = '300000000000000001';
 export const CREATE = '300000000000000002';
 export const PANEL = '300000000000000003';
 export const LOBBY = '300000000000000004';
+export const AGENDA = '300000000000000005';
 export const ALICE = '400000000000000001';
 export const BOB = '400000000000000002';
 
@@ -23,6 +24,7 @@ export function squadsConfig(overrides: Partial<SquadsConfig> = {}): SquadsConfi
     categoryId: CATEGORY,
     createChannelId: CREATE,
     panelChannelId: PANEL,
+    agendaChannelId: AGENDA,
     ...overrides,
   });
 }
