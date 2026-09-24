@@ -20,6 +20,7 @@ describe('/squad', () => {
 
   it('tem um subcomando para cada botão do painel, mais o painel', () => {
     expect(options.map((option) => option.name).sort()).toEqual([
+      'agenda',
       'agendar',
       'aviso',
       'buscar',

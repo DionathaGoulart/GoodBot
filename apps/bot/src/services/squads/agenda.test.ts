@@ -80,10 +80,28 @@ vi.mock('@goodbot/db', async () => {
     listUpcomingLfgSessions: vi.fn((_db: unknown, guildId: string) =>
       Promise.resolve([...store.sessions.values()].filter((session) => open(session, guildId))),
     ),
+    listMemberLfgSessions: vi.fn((_db: unknown, guildId: string, userId: string) =>
+      Promise.resolve(
+        [...store.sessions.values()].flatMap((session) => {
+          const entry = store.rosters
+            .get(session.id)
+            ?.entries.find((candidate) => candidate.userId === userId);
+          return open(session, guildId) && entry ? [{ session, status: entry.status }] : [];
+        }),
+      ),
+    ),
     updateLfgSession: vi.fn(
-      (_db: unknown, guildId: string, id: string, patch: Partial<LfgSession>) => {
+      (
+        _db: unknown,
+        guildId: string,
+        id: string,
+        patch: Partial<LfgSession>,
+        statuses: readonly string[] = ['scheduled', 'live'],
+      ) => {
         const session = store.sessions.get(id);
-        if (!session || !open(session, guildId)) return Promise.resolve(null);
+        if (!session || !open(session, guildId) || !statuses.includes(session.status)) {
+          return Promise.resolve(null);
+        }
         Object.assign(session, patch);
         return Promise.resolve(session);
       },
@@ -150,6 +168,7 @@ function setup(config: SquadsConfig = squadsConfig({ roomSize: 2 })) {
     id: THREAD,
     isThread: () => true,
     send: threadSend,
+    setName: vi.fn(() => Promise.resolve()),
     members: { add: vi.fn(() => Promise.resolve()) },
   };
   (h.channels as Map<string, unknown>).set(THREAD, thread);
@@ -209,6 +228,7 @@ function setup(config: SquadsConfig = squadsConfig({ roomSize: 2 })) {
     send,
     edit,
     startThread,
+    thread,
     threadSend,
     dms,
     closedDms,
@@ -269,7 +289,17 @@ describe('mensagem da jogatina', () => {
     expect(embed?.description).toContain('> dificuldade 10');
     expect(embed?.fields?.map((field) => field.name)).toEqual(['Vão (2/2)', 'Lista de espera (1)']);
     expect(embed?.fields?.[0]?.value).toBe(`<@${ALICE}>\n<@${BOB}>`);
-    expect(labels(body)).toEqual(['ENTRAR NA ESPERA', 'SAIR']);
+    expect(labels(body)).toEqual(['ENTRAR NA ESPERA', 'SAIR', 'GERENCIAR']);
+  });
+
+  it('rolando, some o GERENCIAR: a jogatina é do relógio', () => {
+    const roster: Roster = {
+      hostId: ALICE,
+      slots: 2,
+      visibility: 'open',
+      entries: [{ userId: ALICE, status: 'host', joinedAt: 0 }],
+    };
+    expect(labels(agendaMessage({ ...session, status: 'live' }, roster))).toEqual(['VOU', 'SAIR']);
   });
 
   it('encerrada perde os botões', () => {
@@ -469,5 +499,144 @@ describe('painel', () => {
     const list = await h.service.upcoming(GUILD, 3);
     expect(list.map((session) => session.id)).toEqual([sessionId]);
     expect(list[0]).toMatchObject({ hostId: ALICE, url: expect.stringContaining(MESSAGE) });
+  });
+});
+
+describe('gerenciar', () => {
+  function statusOf(sessionId: string, userId: string) {
+    return store.rosters.get(sessionId)?.entries.find((e) => e.userId === userId)?.status;
+  }
+
+  it('VAGAS a mais puxa a fila e avisa; abaixo de quem tem vaga, recusa', async () => {
+    const h = setup();
+    const { sessionId } = await h.marcar('open');
+    await h.service.join(h.memberOf(BOB), sessionId);
+    await h.service.join(h.memberOf(CAROL), sessionId);
+    expect(statusOf(sessionId, CAROL)).toBe('waiting');
+
+    await h.service.setSlots(h.guild, sessionId, 3, ALICE);
+    expect(statusOf(sessionId, CAROL)).toBe('going');
+    expect(JSON.stringify(h.dms.get(CAROL))).toContain('está dentro');
+    await expect(h.service.setSlots(h.guild, sessionId, 2, ALICE)).rejects.toMatchObject({
+      code: 'LFG_SLOTS_BELOW_SEATED',
+    });
+    expect(h.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'squad.session.slots', actor: ALICE }),
+    );
+  });
+
+  it('ABRIR aceita os pedidos na ordem, com DM; FECHAR não mexe em ninguém', async () => {
+    const h = setup();
+    const { sessionId } = await h.marcar('closed');
+    await h.service.join(h.memberOf(BOB), sessionId);
+    await h.service.join(h.memberOf(CAROL), sessionId);
+
+    await expect(h.service.toggleVisibility(h.guild, sessionId, ALICE)).resolves.toEqual({
+      visibility: 'open',
+      accepted: 2,
+    });
+    expect(statusOf(sessionId, BOB)).toBe('going');
+    expect(statusOf(sessionId, CAROL)).toBe('waiting');
+    expect(JSON.stringify(h.dms.get(BOB))).toContain('foi aceito');
+    expect(JSON.stringify(h.dms.get(CAROL))).toContain('lista de espera');
+
+    await expect(h.service.toggleVisibility(h.guild, sessionId, ALICE)).resolves.toEqual({
+      visibility: 'closed',
+      accepted: 0,
+    });
+    expect(statusOf(sessionId, BOB)).toBe('going');
+  });
+
+  it('TIRAR ALGUÉM avisa quem saiu e puxa a fila; o host não sai', async () => {
+    const h = setup();
+    const { sessionId } = await h.marcar('open');
+    await h.service.join(h.memberOf(BOB), sessionId);
+    await h.service.join(h.memberOf(CAROL), sessionId);
+
+    await expect(h.service.kick(h.guild, sessionId, BOB, ALICE)).resolves.toBe('going');
+    expect(statusOf(sessionId, BOB)).toBeUndefined();
+    expect(statusOf(sessionId, CAROL)).toBe('going');
+    expect(JSON.stringify(h.dms.get(BOB))).toContain('tirou você da lista');
+    expect(JSON.stringify(h.dms.get(CAROL))).toContain('está dentro');
+    await expect(h.service.kick(h.guild, sessionId, ALICE, ALICE)).rejects.toMatchObject({
+      code: 'LFG_HOST_CANNOT_LEAVE',
+    });
+  });
+
+  it('REMARCAR troca a hora, zera lembrete e chamada, renomeia e avisa na thread', async () => {
+    const h = setup();
+    const { sessionId } = await h.marcar('open');
+    await h.service.join(h.memberOf(BOB), sessionId);
+    const session = store.sessions.get(sessionId);
+    if (session) Object.assign(session, { remindedAt: new Date(NOW), calledAt: new Date(NOW) });
+
+    const moved = await h.service.reschedule(
+      h.guild,
+      sessionId,
+      { when: 'amanhã 22h', note: 'terminids' },
+      ALICE,
+    );
+    expect(moved.startsAt.toISOString()).toBe('2026-09-16T01:00:00.000Z');
+    expect(store.sessions.get(sessionId)).toMatchObject({
+      note: 'terminids',
+      remindedAt: null,
+      calledAt: null,
+    });
+    expect(h.thread.setName).toHaveBeenCalledWith('Jogatina 15/09 22:00');
+    const notice = h.threadSend.mock.calls.at(-1)?.[0];
+    expect(notice?.content).toContain('remarcada');
+    expect(notice?.allowedMentions).toEqual({ users: [BOB] });
+    expect(h.onChange).toHaveBeenCalledWith(GUILD);
+  });
+
+  it('CANCELAR fecha a mensagem e avisa todo mundo da lista na thread', async () => {
+    const h = setup();
+    const { sessionId } = await h.marcar('closed');
+    await h.service.join(h.memberOf(BOB), sessionId);
+
+    await h.service.cancel(h.guild, sessionId, ALICE);
+    expect(store.sessions.get(sessionId)?.status).toBe('cancelled');
+    const notice = h.threadSend.mock.calls.at(-1)?.[0];
+    expect(notice?.content).toContain('foi cancelada');
+    expect(notice?.allowedMentions).toEqual({ users: [BOB] });
+    const [, body] = h.edit.mock.calls.at(-1) as unknown as [
+      string,
+      ReturnType<typeof agendaMessage>,
+    ];
+    expect(body.components).toEqual([]);
+    await expect(h.service.cancel(h.guild, sessionId, ALICE)).rejects.toMatchObject({
+      code: 'LFG_SESSION_CLOSED',
+    });
+  });
+
+  it('rolando, nada do GERENCIAR vale', async () => {
+    const h = setup();
+    const { sessionId } = await h.marcar('open');
+    await h.service.join(h.memberOf(BOB), sessionId);
+    const session = store.sessions.get(sessionId);
+    if (session) session.status = 'live';
+
+    await expect(h.service.manageable(GUILD, sessionId)).rejects.toMatchObject({
+      code: 'LFG_SESSION_STARTED',
+    });
+    await expect(h.service.setSlots(h.guild, sessionId, 4, ALICE)).rejects.toMatchObject({
+      code: 'LFG_SESSION_STARTED',
+    });
+    await expect(h.service.kick(h.guild, sessionId, BOB, ALICE)).rejects.toMatchObject({
+      code: 'LFG_SESSION_STARTED',
+    });
+    await expect(h.service.cancel(h.guild, sessionId, ALICE)).rejects.toMatchObject({
+      code: 'LFG_SESSION_STARTED',
+    });
+  });
+
+  it('/squad agenda lista onde a pessoa está', async () => {
+    const h = setup();
+    const { sessionId } = await h.marcar('closed');
+    await h.service.join(h.memberOf(BOB), sessionId);
+    await expect(h.service.mine(GUILD, BOB, 10)).resolves.toEqual([
+      expect.objectContaining({ sessionId, status: 'requested', url: expect.any(String) }),
+    ]);
+    await expect(h.service.mine(GUILD, CAROL, 10)).resolves.toEqual([]);
   });
 });

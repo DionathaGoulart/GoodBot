@@ -7,6 +7,8 @@
  * - `squad:schedule`: o botão MARCAR JOGATINA e o modal que ele abre.
  * - `squad:vis:<open|closed>`: ABERTA ou FECHADA, logo depois do modal.
  * - `squad:a:<ação>:<sessionId>`: os botões da mensagem da jogatina na agenda.
+ * - `squad:m:<op>:<sessionId>`: o GERENCIAR, efêmero de quem marcou ou da
+ *   staff. REMARCAR e VAGAS usam o mesmo id no botão e no modal que ele abre.
  * - `squad:req:<ok|no>:<guildId>:<sessionId>:<userId>`: ACEITAR e RECUSAR um
  *   pedido de vaga. Vai na DM do host e, com a DM fechada, na thread; a DM não
  *   pertence a servidor nenhum, então a guild viaja no próprio `custom_id`.
@@ -27,9 +29,25 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export type SquadDmChoice = 'search' | 'later' | 'optout';
 const DM_CHOICES: readonly string[] = ['search', 'later', 'optout'];
 
-/** Os botões da mensagem da jogatina: VOU (ou ESPERA, ou PEDIR VAGA) e SAIR. */
-export type AgendaAction = 'join' | 'leave';
-const AGENDA_ACTIONS: readonly string[] = ['join', 'leave'];
+/** Os botões da mensagem da jogatina: VOU (ou ESPERA, ou PEDIR VAGA), SAIR e GERENCIAR. */
+export type AgendaAction = 'join' | 'leave' | 'manage';
+const AGENDA_ACTIONS: readonly string[] = ['join', 'leave', 'manage'];
+
+/**
+ * O que o GERENCIAR faz: `home` volta ao painel, `when` e `slots` são os
+ * modais, `vis` abre ou fecha, `kick` é o select de TIRAR ALGUÉM, `cancel`
+ * pede confirmação e `cancelok` confirma.
+ */
+export type ManageOp = 'home' | 'when' | 'slots' | 'vis' | 'kick' | 'cancel' | 'cancelok';
+const MANAGE_OPS: readonly string[] = [
+  'home',
+  'when',
+  'slots',
+  'vis',
+  'kick',
+  'cancel',
+  'cancelok',
+];
 
 export type RequestAnswer = 'ok' | 'no';
 
@@ -39,6 +57,7 @@ export type SquadCustomId =
   | { kind: 'schedule' }
   | { kind: 'visibility'; visibility: LfgVisibility }
   | { kind: 'agenda'; action: AgendaAction; sessionId: string }
+  | { kind: 'manage'; op: ManageOp; sessionId: string }
   | { kind: 'request'; answer: RequestAnswer; guildId: string; sessionId: string; userId: string }
   | { kind: 'dm'; choice: SquadDmChoice; guildId: string };
 
@@ -64,6 +83,11 @@ export function visibilityId(visibility: LfgVisibility): string {
 export function agendaId(action: AgendaAction, sessionId: string): string {
   if (!UUID_RE.test(sessionId)) throw new RangeError(`sessionId inválido: ${sessionId}`);
   return `${SQUAD_PREFIX}:a:${action}:${sessionId}`;
+}
+
+export function manageId(op: ManageOp, sessionId: string): string {
+  if (!UUID_RE.test(sessionId)) throw new RangeError(`sessionId inválido: ${sessionId}`);
+  return `${SQUAD_PREFIX}:m:${op}:${sessionId}`;
 }
 
 export function requestId(
@@ -98,6 +122,11 @@ export function parseSquadId(customId: string): SquadCustomId | null {
     const [action, sessionId] = rest as [string, string];
     if (!AGENDA_ACTIONS.includes(action) || !UUID_RE.test(sessionId)) return null;
     return { kind: 'agenda', action: action as AgendaAction, sessionId };
+  }
+  if (kind === 'm' && rest.length === 2) {
+    const [op, sessionId] = rest as [string, string];
+    if (!MANAGE_OPS.includes(op) || !UUID_RE.test(sessionId)) return null;
+    return { kind: 'manage', op: op as ManageOp, sessionId };
   }
   if (kind === 'req' && rest.length === 4) {
     const [answer, guildId, sessionId, userId] = rest as [string, string, string, string];

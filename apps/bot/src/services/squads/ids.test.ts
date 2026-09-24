@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agendaId,
   isSquadDmId,
+  manageId,
   OPT_OUT_TOGGLE_ID,
   parseSquadId,
   requestId,
@@ -50,6 +51,19 @@ describe('custom_id do squad', () => {
       sessionId: SESSION,
       userId: USER,
     });
+  });
+
+  it('o GERENCIAR leva a operação e a jogatina', () => {
+    for (const op of ['home', 'when', 'slots', 'vis', 'kick', 'cancel', 'cancelok'] as const) {
+      expect(parseSquadId(manageId(op, SESSION))).toEqual({
+        kind: 'manage',
+        op,
+        sessionId: SESSION,
+      });
+    }
+    expect(parseSquadId(`squad:m:drop:${SESSION}`)).toBeNull();
+    expect(() => manageId('kick', 'abc')).toThrow(RangeError);
+    expect(isSquadDmId(manageId('cancelok', SESSION))).toBe(false);
   });
 
   it('o pedido de vaga e o aviso chegam por DM; o resto não', () => {

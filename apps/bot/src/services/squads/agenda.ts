@@ -2,6 +2,7 @@ import {
   countOpenLfgSessions,
   createLfgSession,
   getLfgSession,
+  listMemberLfgSessions,
   listUpcomingLfgSessions,
   mutateLfgRoster,
   updateLfgSession,
@@ -10,6 +11,7 @@ import {
   acceptRequest,
   freeSlots,
   joinRoster,
+  kickFromRoster,
   LFG_MAX_OPEN_SESSIONS,
   LFG_MAX_SESSIONS_PER_HOST,
   leaveRoster,
@@ -19,6 +21,8 @@ import {
   requestedEntries,
   SECOND_MS,
   seatedEntries,
+  setRosterSlots,
+  setRosterVisibility,
   toLocalDateTime,
   UserFacingError,
   waitingEntries,
@@ -40,13 +44,14 @@ import { childLogger } from '../../logger';
 
 import type { AuditService } from '../audit';
 import type { ConfigService } from '../config';
-import type { Db, LfgSession } from '@goodbot/db';
+import type { Db, LfgSession, LfgSessionWithRoster } from '@goodbot/db';
 import type {
   AuditSource,
   JoinOutcome,
   LfgMemberStatus,
   LfgVisibility,
   Roster,
+  RosterChange,
   SquadsConfig,
 } from '@goodbot/shared';
 import type { Client, Guild, GuildMember, TextChannel } from 'discord.js';
@@ -88,6 +93,11 @@ export function messageLink(guildId: string, channelId: string, messageId: strin
 
 function unix(at: Date): string {
   return String(Math.floor(at.getTime() / 1000));
+}
+
+/** A linha de menções acima do aviso, ou nada quando não há quem marcar. */
+function mentionLine(userIds: readonly string[]): string {
+  return userIds.length > 0 ? `${userIds.map((id) => `<@${id}>`).join(' ')}\n` : '';
 }
 
 /** `<@a>\n<@b>`, cortando em `LIST_SHOWN` para o campo não passar de 1024. */
@@ -167,6 +177,15 @@ export function agendaMessage(session: AgendaSession, roster: Roster, embedColor
       .setLabel('SAIR')
       .setStyle(ButtonStyle.Secondary),
   );
+  // Rolando, a jogatina é do relógio: remarcar, fechar ou cancelar não cabe mais.
+  if (session.status === 'scheduled') {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(agendaId('manage', session.id))
+        .setLabel('GERENCIAR')
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
   return { embeds: [embed], components: [row] };
 }
 
@@ -213,6 +232,25 @@ export const JOIN_TEXT: Record<JoinOutcome, string> = {
   requested: 'Pedido enviado. Quem marcou decide, e eu te aviso da resposta por DM.',
 };
 
+/** O aviso por DM de quem teve o pedido respondido (pelo host ou por ABRIR). */
+function answeredText(outcome: 'going' | 'waiting' | 'rejected', which: string): string {
+  switch (outcome) {
+    case 'going':
+      return `Seu pedido foi aceito: você está na lista da ${which}.`;
+    case 'waiting':
+      return `Seu pedido foi aceito, mas lotou: você está na lista de espera da ${which}.`;
+    case 'rejected':
+      return `Dessa vez não rolou: quem marcou a ${which} recusou seu pedido.`;
+  }
+}
+
+/** `16/09 21:00`, no fuso da guild: o REMARCAR já abre com a hora atual, num formato que `parseWhen` lê. */
+export function whenDefault(startsAt: Date, timeZone: string): string {
+  const local = toLocalDateTime(startsAt, timeZone);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(local.day)}/${pad(local.month)} ${pad(local.hour)}:${pad(local.minute)}`;
+}
+
 export const LEAVE_TEXT: Record<Exclude<LfgMemberStatus, 'host'>, string> = {
   going: 'Pronto: você saiu da lista.',
   waiting: 'Pronto: você saiu da lista de espera.',
@@ -254,6 +292,14 @@ export interface ScheduledSession {
   url: string;
 }
 
+/** Uma jogatina de `/squad agenda`: onde a pessoa está nela. */
+export interface MemberAgendaEntry {
+  sessionId: string;
+  startsAt: Date;
+  status: LfgMemberStatus;
+  url: string | null;
+}
+
 export interface RequestAnswerResult {
   outcome: 'going' | 'waiting' | 'rejected';
   userId: string;
@@ -268,6 +314,29 @@ export interface SquadAgendaDeps {
   onChange: (guildId: string) => void;
   now?: () => number;
   renderMs?: number;
+}
+
+function startedError(): UserFacingError {
+  return new UserFacingError(
+    'A jogatina já começou: agora ela fecha sozinha quando a sala esvaziar.',
+    { code: 'LFG_SESSION_STARTED' },
+  );
+}
+
+function closedError(): UserFacingError {
+  return new UserFacingError('Essa jogatina já acabou ou foi cancelada.', {
+    code: 'LFG_SESSION_CLOSED',
+  });
+}
+
+/** Regra de lista que só vale antes do início: o GERENCIAR. */
+function beforeStart<O>(
+  rule: (roster: Roster) => RosterChange<O>,
+): (roster: Roster, session: LfgSession) => RosterChange<O> {
+  return (roster, session) => {
+    if (session.status !== 'scheduled') throw startedError();
+    return rule(roster);
+  };
 }
 
 function isMissingAccess(error: unknown): boolean {
@@ -517,14 +586,207 @@ export class SquadAgendaService {
     if (change.outcome === 'going') await this.grantRoom(guild, session, [userId]);
     const link = this.linkOf(session);
     const which = `jogatina de <t:${unix(session.startsAt)}:F> em **${guild.name}**`;
-    const text =
-      change.outcome === 'going'
-        ? `Seu pedido foi aceito: você está na lista da ${which}.`
-        : change.outcome === 'waiting'
-          ? `Seu pedido foi aceito, mas lotou: você está na lista de espera da ${which}.`
-          : `Dessa vez não rolou: quem marcou a ${which} recusou seu pedido.`;
+    const text = answeredText(change.outcome, which);
     await this.dm(guild, userId, link ? `${text}\n${link}` : text);
     return { outcome: change.outcome, userId };
+  }
+
+  // ── GERENCIAR ──────────────────────────────────────────────────────────────
+  // Quem pode (o host ou a staff `mod`+) é conferido por quem chama, a cada
+  // clique. Tudo aqui só vale antes do início.
+
+  /** A jogatina com a lista, para o painel do GERENCIAR. Começada ou fechada é erro. */
+  async manageable(guildId: string, sessionId: string): Promise<LfgSessionWithRoster> {
+    const found = await getLfgSession(this.db, guildId, sessionId);
+    if (!found) throw closedError();
+    if (found.session.status === 'live') throw startedError();
+    if (found.session.status !== 'scheduled') throw closedError();
+    return found;
+  }
+
+  /**
+   * REMARCAR: hora e nota novas. O lembrete e a chamada voltam a valer para a
+   * hora nova, e a thread recebe o aviso marcando quem vai.
+   */
+  async reschedule(
+    guild: Guild,
+    sessionId: string,
+    input: { when: string; note: string | null },
+    actorId: string,
+  ): Promise<LfgSession> {
+    const before = await this.manageable(guild.id, sessionId);
+    const previous = { startsAt: before.session.startsAt, note: before.session.note };
+    const settings = await this.config.getSettings(guild.id);
+    const startsAt = parseWhen(input.when, new Date(this.now()), settings.timezone);
+    const session = await updateLfgSession(
+      this.db,
+      guild.id,
+      sessionId,
+      { startsAt, note: input.note, remindedAt: null, calledAt: null },
+      ['scheduled'],
+    );
+    if (!session) throw startedError();
+
+    const thread = this.threadOf(guild, session);
+    if (thread && startsAt.getTime() !== previous.startsAt.getTime()) {
+      // Renomear thread tem rate limit apertado; o nome velho não quebra nada.
+      await thread
+        .setName(threadName(startsAt, settings.timezone))
+        .catch((error: unknown) =>
+          log.debug({ err: error, guildId: guild.id, sessionId }, 'thread não renomeada'),
+        );
+    }
+    const others = seatedEntries(before.roster)
+      .map((entry) => entry.userId)
+      .filter((userId) => userId !== actorId);
+    const at = unix(startsAt);
+    await this.postInThread(
+      guild,
+      session,
+      `${mentionLine(others)}Jogatina remarcada por <@${actorId}> para <t:${at}:F> (<t:${at}:R>).`,
+      others,
+    );
+
+    this.audit.record({
+      guildId: guild.id,
+      action: 'squad.session.reschedule',
+      source: 'event',
+      actor: actorId,
+      target: { type: 'lfg_session', id: sessionId },
+      before: { startsAt: previous.startsAt.toISOString(), note: previous.note },
+      after: { startsAt: startsAt.toISOString(), note: input.note },
+    });
+    this.render(guild.id, sessionId);
+    this.onChange(guild.id);
+    return session;
+  }
+
+  /** VAGAS: subir puxa a fila, com DM; baixar abaixo de quem já tem vaga é recusado. */
+  async setSlots(guild: Guild, sessionId: string, slots: number, actorId: string): Promise<void> {
+    const { session, change } = await mutateLfgRoster(
+      this.db,
+      guild.id,
+      sessionId,
+      beforeStart((roster) => setRosterSlots(roster, slots)),
+    );
+    this.render(guild.id, sessionId);
+    this.audit.record({
+      guildId: guild.id,
+      action: 'squad.session.slots',
+      source: 'event',
+      actor: actorId,
+      target: { type: 'lfg_session', id: sessionId },
+      after: { slots, seated: change.seated },
+    });
+    await this.notifySeated(guild, session, change.seated);
+  }
+
+  /** ABRIR ou FECHAR. Abrir aceita os pedidos pendentes na ordem em que chegaram. */
+  async toggleVisibility(
+    guild: Guild,
+    sessionId: string,
+    actorId: string,
+  ): Promise<{ visibility: LfgVisibility; accepted: number }> {
+    const { session, change } = await mutateLfgRoster(
+      this.db,
+      guild.id,
+      sessionId,
+      beforeStart((roster) =>
+        setRosterVisibility(roster, roster.visibility === 'open' ? 'closed' : 'open'),
+      ),
+    );
+    this.render(guild.id, sessionId);
+    this.audit.record({
+      guildId: guild.id,
+      action: 'squad.session.visibility',
+      source: 'event',
+      actor: actorId,
+      target: { type: 'lfg_session', id: sessionId },
+      after: { visibility: change.outcome, seated: change.seated, queued: change.queued },
+    });
+    const link = this.linkOf(session);
+    const which = `jogatina de <t:${unix(session.startsAt)}:F> em **${guild.name}**`;
+    for (const [outcome, userIds] of [
+      ['going', change.seated],
+      ['waiting', change.queued],
+    ] as const) {
+      for (const userId of userIds) {
+        const text = answeredText(outcome, which);
+        await this.dm(guild, userId, link ? `${text}\n${link}` : text);
+      }
+    }
+    return { visibility: change.outcome, accepted: change.seated.length + change.queued.length };
+  }
+
+  /** TIRAR ALGUÉM: da lista, da fila ou dos pedidos. A vaga que abre puxa a fila. */
+  async kick(guild: Guild, sessionId: string, userId: string, actorId: string) {
+    const { session, change } = await mutateLfgRoster(
+      this.db,
+      guild.id,
+      sessionId,
+      beforeStart((roster) => kickFromRoster(roster, userId)),
+    );
+    this.render(guild.id, sessionId);
+    this.audit.record({
+      guildId: guild.id,
+      action: 'squad.session.kick',
+      source: 'event',
+      actor: actorId,
+      target: { type: 'lfg_session', id: sessionId },
+      after: { userId, was: change.outcome, seated: change.seated },
+    });
+    await this.dm(
+      guild,
+      userId,
+      `Quem organiza a jogatina de <t:${unix(session.startsAt)}:F> em **${guild.name}** ` +
+        'tirou você da lista.',
+    );
+    await this.notifySeated(guild, session, change.seated);
+    return change.outcome;
+  }
+
+  /** CANCELAR: a mensagem fecha sem botões e a thread avisa quem ia. */
+  async cancel(guild: Guild, sessionId: string, actorId: string): Promise<void> {
+    const before = await this.manageable(guild.id, sessionId);
+    const session = await updateLfgSession(
+      this.db,
+      guild.id,
+      sessionId,
+      { status: 'cancelled', endedAt: new Date(this.now()) },
+      ['scheduled'],
+    );
+    if (!session) throw startedError();
+    const others = before.roster.entries
+      .map((entry) => entry.userId)
+      .filter((userId) => userId !== actorId);
+    await this.postInThread(
+      guild,
+      before.session,
+      `${mentionLine(others)}A jogatina de <t:${unix(session.startsAt)}:F> foi cancelada ` +
+        `por <@${actorId}>.`,
+      others,
+    );
+    this.audit.record({
+      guildId: guild.id,
+      action: 'squad.session.cancel',
+      source: 'event',
+      actor: actorId,
+      target: { type: 'lfg_session', id: sessionId },
+      before: { startsAt: session.startsAt.toISOString(), members: before.roster.entries.length },
+    });
+    await this.refresh(guild.id, sessionId);
+    this.onChange(guild.id);
+  }
+
+  /** As jogatinas abertas em que a pessoa está, da mais próxima para a mais distante. */
+  async mine(guildId: string, userId: string, limit: number): Promise<MemberAgendaEntry[]> {
+    const rows = await listMemberLfgSessions(this.db, guildId, userId, limit);
+    return rows.map(({ session, status }) => ({
+      sessionId: session.id,
+      startsAt: session.startsAt,
+      status,
+      url: this.linkOf(session),
+    }));
   }
 
   /** Quem marcou a jogatina, ou `null` quando ela já acabou, foi cancelada ou não é desta guild. */
@@ -582,6 +844,30 @@ export class SquadAgendaService {
     }
   }
 
+  private threadOf(guild: Guild, session: LfgSession) {
+    const thread = session.threadId ? guild.channels.cache.get(session.threadId) : undefined;
+    return thread?.isThread() ? thread : null;
+  }
+
+  /** Aviso na thread da jogatina. Sem thread, ou falhando, só o log. */
+  private async postInThread(
+    guild: Guild,
+    session: LfgSession,
+    content: string,
+    users: readonly string[],
+  ): Promise<void> {
+    const thread = this.threadOf(guild, session);
+    if (!thread) {
+      log.info({ guildId: guild.id, sessionId: session.id }, 'jogatina sem thread; aviso perdido');
+      return;
+    }
+    try {
+      await thread.send({ content, allowedMentions: { users: [...users] } });
+    } catch (error) {
+      log.warn({ err: error, guildId: guild.id, sessionId: session.id }, 'aviso na thread falhou');
+    }
+  }
+
   /**
    * O pedido vai por DM ao host. DM fechada cai num ping na thread, com os
    * mesmos botões; sem thread, só o log, e o pedido espera na lista.
@@ -595,8 +881,8 @@ export class SquadAgendaService {
     } catch (error) {
       log.debug({ err: error, guildId: guild.id, sessionId: session.id }, 'DM do pedido recusada');
     }
-    const thread = session.threadId ? guild.channels.cache.get(session.threadId) : undefined;
-    if (!thread?.isThread()) {
+    const thread = this.threadOf(guild, session);
+    if (!thread) {
       log.info({ guildId: guild.id, sessionId: session.id }, 'pedido de vaga sem DM nem thread');
       return;
     }
