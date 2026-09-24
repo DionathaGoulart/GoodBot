@@ -39,3 +39,6 @@ export type SocialPost = InferSelectModel<typeof s.socialPosts>;
 export type NewSocialPost = InferInsertModel<typeof s.socialPosts>;
 export type AuditLog = InferSelectModel<typeof s.auditLogs>;
 export type NewAuditLog = InferInsertModel<typeof s.auditLogs>;
+export type LfgSession = InferSelectModel<typeof s.lfgSessions>;
+export type NewLfgSession = InferInsertModel<typeof s.lfgSessions>;
+export type LfgSessionMember = InferSelectModel<typeof s.lfgSessionMembers>;

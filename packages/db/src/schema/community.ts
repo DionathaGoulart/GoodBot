@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   bigserial,
   boolean,
@@ -5,12 +6,20 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
 import { createdAt, snowflake, snowflakeArray, text, timestamptz, updatedAt } from './_columns';
-import { reactionRoleModeEnum, reactionRoleStyleEnum, ticketStatusEnum } from './enums';
+import {
+  lfgMemberStatusEnum,
+  lfgSessionStatusEnum,
+  lfgVisibilityEnum,
+  reactionRoleModeEnum,
+  reactionRoleStyleEnum,
+  ticketStatusEnum,
+} from './enums';
 import { guilds } from './guilds';
 
 import type { MessageTemplate } from '@goodbot/shared';
@@ -173,4 +182,64 @@ export const tags = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex('tags_guild_name_uidx').on(t.guildId, t.name)],
+);
+
+// ── Agenda de jogatinas (módulo squads) ─────────────────────────────────────
+
+/**
+ * Uma jogatina marcada no canal da agenda (PRD §5.11). Salas e cargo do módulo
+ * continuam sendo estado do Discord; a agenda precisa de tabela porque lista,
+ * vagas e relógio sobrevivem a restart. Os `*_at` do relógio são o que torna
+ * cada passo idempotente: o tick só faz o que ainda está nulo.
+ */
+export const lfgSessions = pgTable(
+  'lfg_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    guildId: guildRef(),
+    hostId: snowflake('host_id').notNull(),
+    startsAt: timestamptz('starts_at').notNull(),
+    /** Contando o host, de `LFG_MIN_SLOTS` a `LFG_MAX_SLOTS`. */
+    slots: integer('slots').notNull(),
+    visibility: lfgVisibilityEnum('visibility').notNull().default('open'),
+    note: text('note'),
+    status: lfgSessionStatusEnum('status').notNull().default('scheduled'),
+    /** A mensagem na agenda e a thread dela. `null` até o bot postar. */
+    channelId: snowflake('channel_id'),
+    messageId: snowflake('message_id'),
+    threadId: snowflake('thread_id'),
+    /** A sala `Squad <grego>` criada no início. */
+    roomId: snowflake('room_id'),
+    remindedAt: timestamptz('reminded_at'),
+    calledAt: timestamptz('called_at'),
+    startedAt: timestamptz('started_at'),
+    endedAt: timestamptz('ended_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('lfg_sessions_guild_starts_idx').on(t.guildId, t.startsAt),
+    index('lfg_sessions_open_idx')
+      .on(t.startsAt)
+      .where(sql`${t.status} in ('scheduled', 'live')`),
+    uniqueIndex('lfg_sessions_message_uidx').on(t.messageId),
+  ],
+);
+
+/** Quem está em cada jogatina, e como: host, vai, fila ou pediu. */
+export const lfgSessionMembers = pgTable(
+  'lfg_session_members',
+  {
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => lfgSessions.id, { onDelete: 'cascade' }),
+    userId: snowflake('user_id').notNull(),
+    status: lfgMemberStatusEnum('status').notNull(),
+    /** Ordem de chegada: decide a fila. */
+    joinedAt: timestamptz('joined_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sessionId, t.userId] }),
+    index('lfg_session_members_user_idx').on(t.userId),
+  ],
 );
