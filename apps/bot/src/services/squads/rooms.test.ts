@@ -263,4 +263,92 @@ describe('SquadRoomService', () => {
     expect(busy.delete).not.toHaveBeenCalled();
     expect(h.panel.refresh).toHaveBeenCalledOnce();
   });
+
+  it('sala de jogatina nasce vazia com as vagas e fica de pé até o fim da reserva', async () => {
+    const h = setup();
+    const room = await h.service.openSessionRoom(h.guild, squadsConfig(), {
+      slots: 6,
+      members: null,
+      until: 1_000_000 + 15 * MINUTE_MS,
+    });
+    expect(room).not.toBeNull();
+    expect(h.guild.channels.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Squad Alfa', parent: CATEGORY, userLimit: 6 }),
+    );
+    expect(room!.permissionOverwrites.edit).not.toHaveBeenCalled();
+    await h.service.tick(); // reconciliação: respeita a reserva
+
+    h.advance(14 * MINUTE_MS);
+    await h.service.tick();
+    expect(room!.delete).not.toHaveBeenCalled();
+    h.advance(MINUTE_MS);
+    await h.service.tick();
+    expect(room!.delete).toHaveBeenCalledOnce();
+  });
+
+  it('sala de jogatina que esvazia antes do fim da reserva espera a reserva', async () => {
+    const h = setup();
+    const room = (await h.service.openSessionRoom(h.guild, squadsConfig(), {
+      slots: 4,
+      members: null,
+      until: 1_000_000 + 15 * MINUTE_MS,
+    }))!;
+    h.setVoice(ALICE, room.id);
+    await h.service.onVoiceState(
+      voiceState(h.guild, ALICE, null),
+      voiceState(h.guild, ALICE, room.id),
+    );
+    h.advance(MINUTE_MS);
+    h.setVoice(ALICE, null);
+    await h.service.onVoiceState(
+      voiceState(h.guild, ALICE, room.id),
+      voiceState(h.guild, ALICE, null),
+    );
+    h.advance(3 * MINUTE_MS); // a janela normal (2 min) já passou
+    await h.service.tick();
+    expect(room.delete).not.toHaveBeenCalled();
+    h.advance(11 * MINUTE_MS);
+    await h.service.tick();
+    expect(room.delete).toHaveBeenCalledOnce();
+  });
+
+  it('fechada: libera o bot e quem vai, depois nega o Connect ao @everyone', async () => {
+    const h = setup();
+    const room = (await h.service.openSessionRoom(h.guild, squadsConfig(), {
+      slots: 4,
+      members: [ALICE, BOB],
+      until: 1_000_000,
+    }))!;
+    const { edit } = room.permissionOverwrites as unknown as { edit: ReturnType<typeof vi.fn> };
+    const calls = edit.mock.calls.map((call) => [call[0], call[1]]);
+    expect(calls).toEqual([
+      ['bot', expect.objectContaining({ Connect: true, ManageChannels: true })],
+      [ALICE, { Connect: true }],
+      [BOB, { Connect: true }],
+      [GUILD, { Connect: false }],
+    ]);
+  });
+
+  it('fechada sem ManageRoles: a sala nasce aberta', async () => {
+    const h = setup();
+    h.denied.add(PermissionFlagsBits.ManageRoles);
+    const room = await h.service.openSessionRoom(h.guild, squadsConfig(), {
+      slots: 4,
+      members: [ALICE],
+      until: 1_000_000,
+    });
+    expect(room).not.toBeNull();
+    expect(room!.permissionOverwrites.edit).not.toHaveBeenCalled();
+  });
+
+  it('sem categoria válida a jogatina fica sem sala', async () => {
+    const h = setup();
+    const room = await h.service.openSessionRoom(h.guild, squadsConfig({ categoryId: null }), {
+      slots: 4,
+      members: null,
+      until: 1_000_000,
+    });
+    expect(room).toBeNull();
+    expect(h.guild.channels.create).not.toHaveBeenCalled();
+  });
 });

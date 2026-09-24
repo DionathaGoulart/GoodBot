@@ -37,6 +37,7 @@ export interface FakeChannel {
   userLimit: number;
   permissionsFor: () => { has: (flag: bigint) => boolean };
   delete: ReturnType<typeof vi.fn>;
+  permissionOverwrites: { edit: ReturnType<typeof vi.fn> };
   toString: () => string;
 }
 
@@ -69,6 +70,8 @@ export function fakeRoomGuild() {
       ),
     },
     voiceStates: { cache: voice },
+    roles: { cache: new Map() },
+    afkChannelId: null,
     members: { me: { id: 'bot' } },
   } as unknown as Guild;
 
@@ -83,6 +86,7 @@ export function fakeRoomGuild() {
         channels.delete(input.id);
         return Promise.resolve();
       }),
+      permissionOverwrites: { edit: vi.fn(() => Promise.resolve()) },
       toString: () => `<#${input.id}>`,
     };
     channels.set(channel.id, channel);

@@ -21,6 +21,7 @@ const log = childLogger('squads');
 
 /** Motivo que aparece no audit log do Discord. */
 export const ROOM_REASON = 'Sala de squad';
+export const SESSION_ROOM_REASON = 'Sala de jogatina da agenda';
 
 /**
  * O que o bot precisa na categoria para a sala nascer e receber quem entrou no
@@ -118,12 +119,14 @@ export class SquadRoomService {
   private readonly tickMs: number;
   /** Sala vazia → quando ela some. */
   readonly emptyRooms = new DeadlineBook<{ at: number }>();
+  /** Sala de jogatina → até quando ela fica de pé vazia. */
+  readonly reservations = new DeadlineBook<{ at: number }>();
   private readonly reconciled = new Set<string>();
   /**
    * Uma criação por vez em cada guild: o nome livre sai do cache de canais, e
    * duas pessoas entrando juntas no canal de criar pegariam o mesmo.
    */
-  private readonly queues = new Map<string, Promise<void>>();
+  private readonly queues = new Map<string, Promise<unknown>>();
   private timer: NodeJS.Timeout | null = null;
   private running = false;
 
@@ -167,7 +170,7 @@ export class SquadRoomService {
         touched = true;
         if (occupantsOf(guild, left.id) === 0) {
           this.emptyRooms.set(guild.id, left.id, {
-            at: this.now() + config.graceMinutes * MINUTE_MS,
+            at: this.emptyDeadline(guild.id, left.id, config),
           });
           emptied = true;
         }
@@ -188,7 +191,7 @@ export class SquadRoomService {
     if (emptied && config.graceMinutes === 0) await this.tick();
   }
 
-  private enqueue(guildId: string, task: () => Promise<void>): Promise<void> {
+  private enqueue<T>(guildId: string, task: () => Promise<T>): Promise<T> {
     const previous = this.queues.get(guildId) ?? Promise.resolve();
     const next = previous.then(task, task);
     const settled = next.catch(() => undefined);
@@ -200,20 +203,21 @@ export class SquadRoomService {
   }
 
   /**
-   * Cria a sala e move a pessoa. Tudo é conferido antes: uma sala que nasce sem
-   * poder receber ninguém é pior que nenhuma. Sem interação esperando, a falta
-   * só vai para o log.
+   * A categoria e o próximo nome livre, ou `null` quando a sala não pode nascer
+   * (categoria inválida, permissão faltando, teto de canais, 24 nomes em uso).
+   * Sem interação esperando, a falta só vai para o log.
    */
-  async createRoomFor(guild: Guild, member: GuildMember, config: SquadsConfig): Promise<void> {
-    // A pessoa pode ter saído enquanto esperava a vez na fila.
-    if (guild.voiceStates.cache.get(member.id)?.channelId !== config.createChannelId) return;
+  private roomSlot(
+    guild: Guild,
+    config: SquadsConfig,
+  ): { category: CategoryChannel; name: string } | null {
     const category = config.categoryId ? guild.channels.cache.get(config.categoryId) : undefined;
     if (category?.type !== ChannelType.GuildCategory) {
       log.warn(
         { guildId: guild.id, categoryId: config.categoryId },
         'categoria das salas inválida',
       );
-      return;
+      return null;
     }
     const me = guild.members.me;
     const permissions = me ? (category as CategoryChannel).permissionsFor(me) : null;
@@ -222,11 +226,11 @@ export class SquadRoomService {
     );
     if (missing.length > 0) {
       log.warn({ guildId: guild.id, missing }, 'sem permissão para abrir sala de squad');
-      return;
+      return null;
     }
     if (guild.channels.cache.size >= MAX_GUILD_CHANNELS) {
       log.warn({ guildId: guild.id }, 'servidor no teto de canais; sala de squad não criada');
-      return;
+      return null;
     }
     const inCategory = [...guild.channels.cache.values()]
       .filter((channel) => channel.parentId === category.id)
@@ -234,15 +238,27 @@ export class SquadRoomService {
     const name = nextRoomName(inCategory);
     if (name === null) {
       log.warn({ guildId: guild.id }, 'os 24 nomes de sala estão em uso');
-      return;
+      return null;
     }
+    return { category: category as CategoryChannel, name };
+  }
+
+  /**
+   * Cria a sala e move a pessoa. Tudo é conferido antes: uma sala que nasce sem
+   * poder receber ninguém é pior que nenhuma.
+   */
+  async createRoomFor(guild: Guild, member: GuildMember, config: SquadsConfig): Promise<void> {
+    // A pessoa pode ter saído enquanto esperava a vez na fila.
+    if (guild.voiceStates.cache.get(member.id)?.channelId !== config.createChannelId) return;
+    const slot = this.roomSlot(guild, config);
+    if (!slot) return;
 
     // Sem `permissionOverwrites`: o Discord cria a sala sincronizada com a
     // categoria, que é quem manda em quem vê e entra.
     const room = await guild.channels.create({
-      name: roomChannelName(name),
+      name: roomChannelName(slot.name),
       type: ChannelType.GuildVoice,
-      parent: category.id,
+      parent: slot.category.id,
       userLimit: config.roomSize,
       reason: ROOM_REASON,
     });
@@ -262,6 +278,94 @@ export class SquadRoomService {
     }
   }
 
+  /**
+   * A sala de uma jogatina da agenda: nasce vazia, com `userLimit` nas vagas, e
+   * fica reservada até `until` (não some vazia antes disso). Fechada, só quem
+   * vai conecta; sem `ManageRoles` na categoria a sala fica aberta e o motivo
+   * vai para o log, porque sala aberta ainda é melhor que nenhuma.
+   */
+  openSessionRoom(
+    guild: Guild,
+    config: SquadsConfig,
+    options: { slots: number; members: readonly string[] | null; until: number },
+  ): Promise<VoiceChannel | null> {
+    return this.enqueue(guild.id, async () => {
+      const slot = this.roomSlot(guild, config);
+      if (!slot) return null;
+      const room = await guild.channels.create({
+        name: roomChannelName(slot.name),
+        type: ChannelType.GuildVoice,
+        parent: slot.category.id,
+        userLimit: options.slots,
+        reason: SESSION_ROOM_REASON,
+      });
+      this.reserve(guild.id, room.id, options.until);
+      if (options.members) await this.restrict(guild, slot.category, room, options.members);
+      this.panel.schedule(guild.id);
+      return room;
+    });
+  }
+
+  /** Fecha a sala a quem vai: o bot primeiro, senão ele mesmo perde o acesso. */
+  private async restrict(
+    guild: Guild,
+    category: CategoryChannel,
+    room: VoiceChannel,
+    members: readonly string[],
+  ): Promise<void> {
+    const me = guild.members.me;
+    if (!me || !category.permissionsFor(me).has(PermissionFlagsBits.ManageRoles)) {
+      log.warn(
+        { guildId: guild.id, channelId: room.id },
+        'sem ManageRoles: sala da jogatina fechada nasceu aberta',
+      );
+      return;
+    }
+    try {
+      await room.permissionOverwrites.edit(
+        me.id,
+        { ViewChannel: true, Connect: true, MoveMembers: true, ManageChannels: true },
+        { reason: SESSION_ROOM_REASON },
+      );
+      for (const userId of members) {
+        await room.permissionOverwrites.edit(
+          userId,
+          { Connect: true },
+          { reason: SESSION_ROOM_REASON },
+        );
+      }
+      await room.permissionOverwrites.edit(
+        guild.id,
+        { Connect: false },
+        { reason: SESSION_ROOM_REASON },
+      );
+    } catch (error) {
+      log.warn(
+        { err: error, guildId: guild.id, channelId: room.id },
+        'sala da jogatina fechada nasceu aberta',
+      );
+    }
+  }
+
+  /**
+   * Segura a sala de pé, vazia, até `until`. Já vazia, o prazo de apagar passa
+   * a ser esse; ocupada, a reserva só estica a janela de quando esvaziar.
+   */
+  reserve(guildId: string, channelId: string, until: number): void {
+    this.reservations.set(guildId, channelId, { at: until });
+    const guild = this.client.guilds.cache.get(guildId);
+    if (guild && occupantsOf(guild, channelId) === 0) {
+      this.emptyRooms.set(guildId, channelId, { at: until });
+    }
+  }
+
+  /** Quando a sala que acabou de esvaziar some: a janela, ou a reserva se for depois. */
+  private emptyDeadline(guildId: string, channelId: string, config: SquadsConfig): number {
+    const grace = this.now() + config.graceMinutes * MINUTE_MS;
+    const reserved = this.reservations.get(guildId, channelId)?.at ?? 0;
+    return Math.max(grace, reserved);
+  }
+
   // ── Relógio ───────────────────────────────────────────────────────────────
 
   /** Apaga as salas cuja janela passou e reconcilia guild em que o módulo acabou de ligar. */
@@ -270,6 +374,7 @@ export class SquadRoomService {
     this.running = true;
     try {
       await this.reconcileNewlyEnabled();
+      this.reservations.takeDue(this.now());
       for (const { guildId, id } of this.emptyRooms.takeDue(this.now())) {
         try {
           await this.deleteIfEmpty(guildId, id);
@@ -292,6 +397,12 @@ export class SquadRoomService {
     // Confere de novo: a staff pode ter renomeado ou movido o canal na janela.
     if (!channel || !isSquadRoom(channel, config)) return;
     if (occupantsOf(guild, channelId) > 0) return;
+    // Reserva de jogatina que ainda vale: o prazo volta para o fim dela.
+    const reserved = this.reservations.get(guildId, channelId);
+    if (reserved && reserved.at > this.now()) {
+      this.emptyRooms.set(guildId, channelId, { at: reserved.at });
+      return;
+    }
     const me = guild.members.me;
     if (!me || !channel.permissionsFor(me).has(PermissionFlagsBits.ManageChannels)) {
       log.warn({ guildId, channelId }, 'sem permissão para apagar a sala de squad');
@@ -325,16 +436,16 @@ export class SquadRoomService {
   private forget(guildId: string): void {
     this.reconciled.delete(guildId);
     this.emptyRooms.clearGuild(guildId);
+    this.reservations.clearGuild(guildId);
   }
 
   /** Sala vazia na categoria ganha a janela contada do zero. */
   reconcile(guild: Guild, config: SquadsConfig): number {
-    const at = this.now() + config.graceMinutes * MINUTE_MS;
     let scheduled = 0;
     for (const room of listRooms(guild, config)) {
       if (occupantsOf(guild, room.id) > 0) continue;
       if (this.emptyRooms.get(guild.id, room.id)) continue;
-      this.emptyRooms.set(guild.id, room.id, { at });
+      this.emptyRooms.set(guild.id, room.id, { at: this.emptyDeadline(guild.id, room.id, config) });
       scheduled += 1;
     }
     if (scheduled > 0) log.info({ guildId: guild.id, scheduled }, 'salas vazias reconciliadas');
