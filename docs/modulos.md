@@ -189,10 +189,10 @@ Um não substitui o outro: deixar o de lives vazio significa live sem ping.
 
 ## Buscar squad
 
-Quem quer jogar agora acha gente agora. O módulo (`squads`) não guarda perfil,
-agenda nem grupo fixo: ele mostra **quem está buscando** e **onde já tem sala
-aberta**, e deixa o Discord ser o estado. O cargo é do Discord, a sala é do
-Discord e a agenda é o evento agendado do Discord. Não há match: quem entra
+Quem quer jogar agora acha gente agora. O módulo (`squads`) não guarda perfil
+nem grupo fixo: ele mostra **quem está buscando** e **onde já tem sala
+aberta**, e deixa o Discord ser o estado. O cargo e a sala são do Discord; só a
+agenda, para quem quer marcar para depois, fica no banco. Não há match: quem entra
 numa sala entra porque quis. Serve ao jogo que estiver em "Jogos que disparam o
 aviso" (padrão `HELLDIVERS™ 2`), mas nada nele é escrito para um jogo só.
 
@@ -222,11 +222,10 @@ dentro dela cancela. Vale para o cargo e para a sala. O relógio é memória: nu
 restart o bot reconcilia e conta a janela do zero para todo mundo, então um
 cargo ou uma sala pode durar até uma janela a mais.
 
-**Salas.** O canal de voz fixo `➕ Criar Squad` é *join-to-create*: quem entra
+**Salas.** O canal de voz fixo `➕ Criar Squad` é _join-to-create_: quem entra
 nele ganha uma sala nova na categoria das salas e é movido para ela. O nome é
 `Squad <nome>`, com o primeiro livre do alfabeto grego (Alfa, Beta, Gama...
-Ômega, 24 no máximo), o teto de gente é o "Tamanho da sala" (padrão 4, de 2 a
-10) e ela herda as permissões da categoria. A sala some quando esvazia e a
+Ômega, 24 no máximo), o teto de gente é o "Tamanho da sala" (padrão 4, de 2 a 10) e ela herda as permissões da categoria. A sala some quando esvazia e a
 janela passa. Sem permissão, com 500 canais no servidor ou com os 24 nomes em
 uso, o bot não cria nem move, e o motivo sai no log.
 
@@ -237,39 +236,62 @@ uso, o bot não cria nem move, e o motivo sai no log.
 
 **Painel.** Uma mensagem fixada no canal do painel lista as salas com gente
 (`🟢 Squad Alfa · 1/4 · clique pra entrar`, `🔴 ... lotada`), as próximas 3
-jogatinas e os botões `BUSCAR SQUAD`, `SEM AVISO` e `MARCAR JOGATINA`. O bot a
+jogatinas da agenda (com link para a mensagem de cada uma) e os botões `BUSCAR SQUAD`, `SEM AVISO` e `MARCAR JOGATINA`. O bot a
 reedita sozinho, no máximo uma vez a cada 5 s por servidor. Publicar ou
 atualizar: `/squad painel` (admin) ou o botão `PUBLICAR`/`ATUALIZAR` em
 **Buscar squad** no painel web (salve a config antes: o bot usa a salva). Se a
 mensagem for apagada, ela volta na mudança seguinte.
 
-**Jogatina agendada.** Sem ninguém buscando agora, `MARCAR JOGATINA` (ou
-`/squad agendar`) abre um campo "quando" (`hoje 21h`, `amanhã 20h`, `sex 22h`,
-`16/09 21h`, no fuso do servidor; `agora` não vale, isso é uma sala) e o bot cria
-um **evento nativo do Discord** de voz no `➕ Criar Squad`, de 3 horas. RSVP e
-lembrete são do Discord. O bot só **inicia o evento na hora**, porque evento de
-voz não começa sozinho e é o início que avisa quem marcou "Tenho interesse".
-Teto de 10 jogatinas futuras do bot por servidor. Quem marcou não edita nem
-cancela pelo Discord (o criador é o bot): isso é de quem tem `ManageEvents`, e
-a descrição do evento diz quem marcou.
+**Agenda de jogatinas.** Sem ninguém buscando agora, `MARCAR JOGATINA` (ou
+`/squad agendar`) abre um modal com **Quando** (`hoje 21h`, `amanhã 20h`,
+`sex 22h`, `16/09 21h`, no fuso do servidor; `agora` não vale, isso é uma sala),
+**Vagas** (de 2 a 10, padrão o tamanho da sala, contando quem marcou) e
+**Nota** (opcional). Depois vem a escolha:
 
-| Comando          | Faz                                                          |
-| ---------------- | ------------------------------------------------------------ |
-| `/squad buscar`  | liga ou desliga o `Buscando Squad`                           |
-| `/squad aviso`   | liga ou desliga o `Sem Aviso de Squad`                       |
-| `/squad agendar` | abre o modal da jogatina                                     |
-| `/squad painel`  | admin: publica ou reedita a mensagem fixa                    |
+- **ABERTA**: quem clica em `VOU` entra na hora.
+- **FECHADA**: `PEDIR VAGA` manda uma DM a quem marcou com `ACEITAR` e
+  `RECUSAR`. DM fechada vira um ping na thread da jogatina.
+
+A jogatina vira uma **mensagem do bot no `#agenda`**, com a lista de quem vai,
+a lista de espera e os pedidos, mais uma **thread** para conversar. Lotou, o
+botão vira `ENTRAR NA ESPERA`; vaga que abre promove o primeiro da fila, que
+recebe DM. Quem marcou (ou a staff `mod`+) tem `GERENCIAR`: remarcar, mudar
+vagas, abrir ou fechar, tirar alguém e cancelar. O teto é de 10 jogatinas
+abertas por servidor e 3 por pessoa.
+
+O bot cuida do resto sozinho:
+
+- **1 h antes**, se a jogatina é aberta e tem vaga, chama reforço no canal do
+  painel marcando `Buscando Squad`.
+- **30 min antes**, lembra na thread quem vai.
+- **Na hora**, cria a sala `Squad <letra grega>` com o teto igual às vagas,
+  posta o link na thread e move quem já está em voz. A sala espera 15 min
+  vazia antes de sumir. Na fechada, só quem vai conecta. Se ninguém confirmou
+  além de quem marcou, a jogatina fecha sem sala.
+- **No fim** (sala vazia ou 3 h depois), a mensagem vira "rolou · foram X".
+
+| Comando          | Faz                                           |
+| ---------------- | --------------------------------------------- |
+| `/squad buscar`  | liga ou desliga o `Buscando Squad`            |
+| `/squad aviso`   | liga ou desliga o `Sem Aviso de Squad`        |
+| `/squad agendar` | abre o modal da jogatina                      |
+| `/squad agenda`  | lista as jogatinas em que você está, com link |
+| `/squad painel`  | admin: publica ou reedita a mensagem fixa     |
 
 Todo comando é atalho de um botão que já está no painel ou na DM.
 
 **Pelo painel web**, em **Buscar squad**: liga o módulo, escolhe os dois
-cargos, o canal do painel, a categoria das salas e o canal de criar, e ajusta
+cargos, o canal do painel, o canal da agenda, a categoria das salas e o canal
+de criar, e ajusta
 tamanho da sala, janela de tolerância, expiração da busca e os jogos que
 disparam o aviso.
 
 > O bot precisa de `ManageRoles` (com o cargo dele acima dos dois),
 > `ManageChannels`, `Connect` e `MoveMembers` na categoria, `SendMessages`,
-> `EmbedLinks` e `PinMessages` no canal do painel e `ManageEvents`. E da intent
+> `EmbedLinks` e `PinMessages` no canal do painel, e `SendMessages`,
+> `EmbedLinks`, `CreatePublicThreads` e `SendMessagesInThreads` no `#agenda`.
+> No `#agenda` o `@everyone` não escreve (só o bot posta), mas precisa de
+> `SendMessagesInThreads` para conversar nas threads. E da intent
 > privilegiada **Presence** ligada no Developer Portal, sem a qual o bot nem
 > loga. Onde há clique, falta de permissão vira erro efêmero que diz o que
 > falta; onde não há (a sala nascendo, o cargo caindo), o motivo vai para o log.

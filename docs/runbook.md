@@ -123,8 +123,8 @@ O `OWNER_DISCORD_ID` mora nos mesmos três lugares, mas não é segredo e não s
 rotaciona: é um ID público do Discord. O que ele exige é estar nos três: o
 painel confere antes de renderizar `/admin`, e o bot confere de novo o
 `actorId` de toda escrita ali. Faltando em um lado, aquele lado fecha, e o
-sintoma é "a tela abre e o botão responde 403". No GitHub ele é *variable*, não
-*secret*, e o `deploy.yml` escreve a linha no `.env` da VM a cada deploy.
+sintoma é "a tela abre e o botão responde 403". No GitHub ele é _variable_, não
+_secret_, e o `deploy.yml` escreve a linha no `.env` da VM a cada deploy.
 
 **Como confirmar:** abra `/g/<guildId>/system` no painel. Se o card carrega, o
 painel está falando com o bot. No log do Caddy não deve sobrar 401.
@@ -217,12 +217,12 @@ Todo deploy que reinicia o bot avisa os servidores antes, sozinho. O job
 `changes` do `deploy.yml` compara o commit da imagem no ar (label da imagem)
 com o novo e dá um tipo ao deploy (`packages/shared/src/deploy.ts`):
 
-| Tipo       | Quando                                                      | Previsão | O bot |
-| ---------- | ----------------------------------------------------------- | -------- | ----- |
-| `none`     | só painel, docs, CI ou guild como código                    | nenhuma  | não é reconstruído nem reinicia; ninguém é avisado |
-| `restart`  | código do bot, `shared`, `db`, lockfile, Dockerfile         | ~1 min   | reinicia |
-| `database` | migration nova em `packages/db/drizzle/`                    | ~2 min   | reinicia com o schema novo |
-| `infra`    | `docker-compose.yml`, `Caddyfile`, fail2ban, scripts da VM  | ~3 min   | reinicia; o Caddy pode subir de novo junto |
+| Tipo       | Quando                                                     | Previsão | O bot                                              |
+| ---------- | ---------------------------------------------------------- | -------- | -------------------------------------------------- |
+| `none`     | só painel, docs, CI ou guild como código                   | nenhuma  | não é reconstruído nem reinicia; ninguém é avisado |
+| `restart`  | código do bot, `shared`, `db`, lockfile, Dockerfile        | ~1 min   | reinicia                                           |
+| `database` | migration nova em `packages/db/drizzle/`                   | ~2 min   | reinicia com o schema novo                         |
+| `infra`    | `docker-compose.yml`, `Caddyfile`, fail2ban, scripts da VM | ~3 min   | reinicia; o Caddy pode subir de novo junto         |
 
 Depois do `docker compose pull`, o `scripts/deploy-notice.sh` pede ao bot que
 ainda está no ar para publicar o aviso (no mesmo canal do broadcast) com a hora
@@ -233,7 +233,7 @@ processos diferentes.
 
 - **Rodar o workflow à mão** nunca é `none`: é pedir o deploy.
 - **Rollback com `deploy.sh`** também avisa (`restart`); `DEPLOY_KIND=none
-  ./deploy.sh sha-…` reinicia calado.
+./deploy.sh sha-…` reinicia calado.
 - **Sem `OWNER_DISCORD_ID` na VM** o aviso não sai (a rota responde 403) e o
   deploy segue normal: o script nunca falha o deploy.
 - **Aviso que ficou "em manutenção"** com o bot no ar é deploy que avisou e não
@@ -320,9 +320,9 @@ cargo de busca, salas efêmeras e evento agendado do Discord. Antes do deploy:
 
 1. **Intent Presence ligada** no Developer Portal (Bot > Privileged Gateway
    Intents). Sem ela o bot novo **não loga**: cai com `Used disallowed
-   intents` no boot.
+intents` no boot.
 2. **Dump do banco agora** (`docker compose exec backup sh
-   /usr/local/bin/backup.sh`). A migration `0023` apaga as nove tabelas
+/usr/local/bin/backup.sh`). A migration `0023` apaga as nove tabelas
    `squad_*` com os dados, sem volta; o dump é o único jeito de consultar o
    que havia.
 
@@ -353,6 +353,37 @@ Sintomas que valem saber:
   `ATUALIZAR`.
 - **Cargo ou sala durou uns minutos a mais depois de um restart.** Esperado: os
   prazos são memória e a reconciliação conta a janela do zero.
+
+---
+
+## Buscar squad: agenda de jogatinas (PRD v1.9)
+
+A jogatina marcada saiu do evento nativo do Discord e foi para o canal
+`#agenda`. A migration `0024` só cria as tabelas `lfg_sessions` e
+`lfg_session_members`: nada é apagado e o dump não é obrigatório.
+
+Depois do deploy, em cada servidor que usa squads:
+
+- **Crie o `#agenda`** (no `guild.yaml` ou à mão) com o `@everyone` sem
+  `SendMessages` e com `SendMessagesInThreads`, para só o bot postar e todo
+  mundo conversar nas threads. O bot precisa de `SendMessages`, `EmbedLinks`,
+  `CreatePublicThreads` e `SendMessagesInThreads` nele.
+- **Escolha o canal** em **Buscar squad** > "Canal da agenda" e salve. Sem ele
+  o MARCAR JOGATINA recusa dizendo que falta.
+- **Atualize o painel** (`ATUALIZAR` ou `/squad painel`) para o texto novo.
+- **Eventos nativos** que o bot criou antes continuam no Discord: encerre ou
+  apague à mão pela aba de eventos.
+
+Sintomas que valem saber:
+
+- **Lembrete ou chamada não saiu.** O relógio roda a cada minuto e cada passo
+  grava a sua coluna (`reminded_at`, `called_at`, `started_at`, `ended_at`);
+  com o bot fora do ar ele só atrasa. Jogatina marcada a menos de 30 min do
+  início não tem lembrete, e a chamada só sai na aberta com vaga.
+- **Sala da fechada nasceu aberta.** Falta `ManageRoles` na categoria das
+  salas; o motivo sai no log (`squads`).
+- **Pedido de vaga sem DM.** O host tem DM fechada: o pedido vai como ping na
+  thread da jogatina, e o host ou a staff `mod`+ responde por lá.
 
 ---
 

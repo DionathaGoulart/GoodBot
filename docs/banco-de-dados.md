@@ -21,8 +21,8 @@ comandos, eventos e rotas chamam uma função de repository, nunca montam query.
 
 ## 2. As tabelas
 
-26 no total. O módulo de squads não tem tabela: o estado dele é o Discord
-(cargo, canal, evento agendado) e a memória do bot.
+28 no total. No módulo de squads só a agenda tem tabela; cargo e sala são
+estado do Discord, e o resto é memória do bot.
 
 | Grupo         | Tabelas                                                                                                                                  |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -34,6 +34,7 @@ comandos, eventos e rotas chamam uma função de repository, nunca montam query.
 | Utilidades    | `polls`, `reminders`                                                                                                                     |
 | Estatísticas  | `stat_buckets`                                                                                                                           |
 | Redes sociais | `social_accounts`, `social_posts`                                                                                                        |
+| Squads        | `lfg_sessions`, `lfg_session_members`                                                                                                    |
 
 Duas convenções que valem em todas:
 

@@ -9,6 +9,39 @@ some ou muda de forma).
 
 ## [Não lançado]
 
+Agenda de jogatinas. A jogatina marcada deixou de ser evento nativo do
+Discord, que nunca encerrava sozinho e escondia o RSVP, e virou uma mensagem
+do bot num canal `#agenda`, com lista, vagas e aprovação de quem marcou.
+
+### Adicionado
+
+- **Canal da agenda** (`agendaChannelId`, campo novo na tela Buscar squad):
+  cada jogatina é uma mensagem com quem vai, lista de espera e pedidos, e
+  ganha uma thread para lembrete, link da sala e conversa.
+- **Jogatina aberta ou fechada**: na aberta, `VOU` entra na hora; na fechada,
+  `PEDIR VAGA` manda DM a quem marcou com `ACEITAR` e `RECUSAR` (DM fechada
+  vira ping na thread).
+- **Vagas** de 2 a 10 e **nota** no modal de marcar. Lotou, sobra a lista de
+  espera, e a vaga que abre promove o primeiro da fila, com DM.
+- **GERENCIAR**, de quem marcou ou da staff `mod`+: remarcar, mudar vagas,
+  abrir ou fechar, tirar alguém e cancelar.
+- **Relógio da agenda**: chamada de reforço no canal do painel 1 h antes
+  (aberta com vaga), lembrete na thread 30 min antes, sala criada na hora com
+  teto igual às vagas e reservada por 15 min, e fim quando a sala esvazia ou
+  3 h passam. Lido do banco, sobrevive a restart.
+- **`/squad agenda`**: as jogatinas em que você está, com link.
+- Migration `0024`: tabelas `lfg_sessions` e `lfg_session_members`.
+
+### Mudado
+
+- O painel fixo do `#buscar-squad` lista as próximas jogatinas com link para
+  a mensagem de cada uma no `#agenda`.
+
+### Removido
+
+- Jogatina como evento agendado nativo do Discord. O módulo não usa mais
+  `ManageEvents`. Eventos criados antes continuam no Discord e são da staff.
+
 ## [2.0.0] - 2026-09-23
 
 Buscar squad no lugar do squad fixo. Quem quer jogar agora não preenche perfil
@@ -20,7 +53,7 @@ migration apaga dados sem volta.
 ### Adicionado
 
 - **Cargo `Buscando Squad`**: ligado pelo botão BUSCAR SQUAD, por `/squad
-  buscar` ou pela DM que o bot manda quando vê alguém abrir o jogo (só o
+buscar` ou pela DM que o bot manda quando vê alguém abrir o jogo (só o
   clique liga). Cai sozinho quando a pessoa sai da voz ou não entra em
   nenhuma a tempo, com janela de tolerância para queda de conexão.
 - **Cargo `Sem Aviso de Squad`** e `/squad aviso`: quem não quer a DM nunca
@@ -34,7 +67,7 @@ migration apaga dados sem volta.
   JOGATINA): RSVP e lembrete ficam com o Discord, e o bot inicia o evento na
   hora.
 - Tela **Buscar squad** no painel web e a rota `POST
-  /guilds/:guildId/squads/panel`.
+/guilds/:guildId/squads/panel`.
 - A intent privilegiada **Presence** passou a ser exigida: sem ela ligada no
   Developer Portal o bot não sobe.
 
