@@ -9,9 +9,9 @@ import { SquadsConfigForm } from './form';
 export const metadata = { title: 'Buscar squad · Goodbot' };
 
 /**
- * PRD §5.11 e §6.2: o módulo não tem tabela, então a tela lê só o próprio
- * config. Salas, cargos e jogatinas são estado do Discord e aparecem lá, no
- * painel fixo que o botão do topo publica.
+ * PRD §5.11 e §6.2: a tela lê só o próprio config. Salas e cargos são estado
+ * do Discord; as jogatinas têm tabela, mas vivem no `#agenda` e no painel
+ * fixo que o botão do topo publica, não aqui.
  */
 export default async function SquadsConfigPage({
   params,

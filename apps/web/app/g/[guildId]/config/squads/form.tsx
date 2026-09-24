@@ -49,9 +49,9 @@ function PanelMessage({
       }
     >
       <p className="text-sm">
-        Mensagem fixa no canal do painel com as salas abertas e os botões BUSCAR SQUAD, SEM AVISO e
-        MARCAR JOGATINA. Depois de publicada, o bot edita sozinho a cada sala que abre, enche ou
-        some.
+        Mensagem fixa no canal do painel com as salas abertas, as próximas jogatinas da agenda e os
+        botões BUSCAR SQUAD, SEM AVISO e MARCAR JOGATINA. Depois de publicada, o bot edita sozinho a
+        cada sala que abre, enche ou some e a cada jogatina marcada.
       </p>
       <p className="screen-meta">
         {published ? (
@@ -131,6 +131,13 @@ export function SquadsConfigForm({
             kind="channel"
             label="Canal do painel"
             description="Canal de texto onde fica a mensagem fixa com as salas abertas."
+            placeholder="Nenhum canal"
+          />
+          <DiscordField
+            name="agendaChannelId"
+            kind="channel"
+            label="Canal da agenda"
+            description="Canal de texto onde cada jogatina marcada vira uma mensagem com a lista de quem vai e uma thread. Só o bot escreve; threads liberadas. Vazio, MARCAR JOGATINA recusa."
             placeholder="Nenhum canal"
           />
           <DiscordField

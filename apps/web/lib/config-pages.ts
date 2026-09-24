@@ -140,7 +140,7 @@ export const CONFIG_PAGES = {
     schema: SquadsConfigSchema,
     title: 'BUSCAR SQUAD',
     file: 'SQUADS.CFG',
-    description: 'Cargo de quem quer jogar agora, salas de voz que nascem e somem e o painel fixo.',
+    description: 'Cargo de quem quer jogar agora, salas de voz que nascem e somem, agenda de jogatinas e o painel fixo.',
   },
   /**
    * As permissões de comando moram em `utilities.commandOverrides`, então a

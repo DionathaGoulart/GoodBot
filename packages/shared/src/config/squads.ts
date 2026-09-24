@@ -41,8 +41,8 @@ const SquadGameNamesSchema = z
   .default(() => ['HELLDIVERS™ 2']);
 
 /**
- * Config do módulo (`module_configs.config`, jsonb). O módulo não tem tabela:
- * cargo, sala e jogatina são estado do Discord (PRD §5.11).
+ * Config do módulo (`module_configs.config`, jsonb). Cargo e sala são estado do
+ * Discord; só a agenda tem tabela (`lfg_sessions`, PRD §5.11).
  *
  * Sem `.strict()` de propósito: a linha de guild que usou o módulo antigo ainda
  * tem `searchChannelId`, `blocks`, `voicePoolIds`... no jsonb, e esses campos
