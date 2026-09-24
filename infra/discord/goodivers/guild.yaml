@@ -348,6 +348,15 @@ categories:
           - role: "@everyone"
             view: allow
             send: deny
+      # Agenda do Buscar squad: cada jogatina é uma mensagem do bot com uma
+      # thread. O `send: deny` só nega Enviar mensagens; responder na thread
+      # continua liberado pelo cargo.
+      - name: agenda
+        topic: Jogatinas marcadas. Clique em MARCAR JOGATINA no #buscar-squad; aqui é só VOU, SAIR ou PEDIR VAGA, e a conversa vai na thread de cada uma.
+        overrides:
+          - role: "@everyone"
+            view: allow
+            send: deny
       - name: ➕ Criar Squad
         type: voice
   - name: Suporte
