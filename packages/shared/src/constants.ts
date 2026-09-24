@@ -385,6 +385,47 @@ export const LFG_MAX_EVENTS = 10;
 /** Jogos que um servidor vigia ao mesmo tempo no aviso automático (`gameNames`). */
 export const LFG_MAX_GAME_NAMES = 10;
 
+// ── Agenda de jogatinas (módulo `squads`) ───────────────────────────────────
+
+/** Vagas de uma jogatina, contando o host. Os mesmos limites da sala. */
+export const LFG_MIN_SLOTS = 2;
+export const LFG_MAX_SLOTS = 10;
+/** Quanto antes do início o bot lembra na thread quem vai. */
+export const LFG_REMINDER_MINUTES = 30;
+/**
+ * Quanto antes do início uma jogatina aberta com vaga chama reforço no canal
+ * do painel, marcando o cargo de busca.
+ */
+export const LFG_CALL_MINUTES = 60;
+/** Quanto tempo a sala da jogatina fica de pé vazia depois do início. */
+export const LFG_ROOM_HOLD_MINUTES = 15;
+/** Teto de duração: passado isso do início, a jogatina fecha mesmo com gente. */
+export const LFG_SESSION_HOURS = 3;
+/**
+ * Jogatinas marcadas e não encerradas por servidor, e por host. Sem teto, o
+ * MARCAR JOGATINA vira spam no canal da agenda.
+ */
+export const LFG_MAX_OPEN_SESSIONS = 10;
+export const LFG_MAX_SESSIONS_PER_HOST = 3;
+/** A nota do host ("dificuldade 10, terminids"). */
+export const LFG_NOTE_MAX_LENGTH = 200;
+
+/** Aberta: VOU entra na hora. Fechada: PEDIR VAGA, e o host aprova. */
+export const LFG_VISIBILITIES = ['open', 'closed'] as const;
+export type LfgVisibility = (typeof LFG_VISIBILITIES)[number];
+
+/** `scheduled` → `live` → `done`; `cancelled` sai de qualquer um dos dois primeiros. */
+export const LFG_SESSION_STATUSES = ['scheduled', 'live', 'done', 'cancelled'] as const;
+export type LfgSessionStatus = (typeof LFG_SESSION_STATUSES)[number];
+
+/**
+ * O lugar de cada pessoa na lista: `host` (quem marcou, ocupa vaga), `going`
+ * (ocupa vaga), `waiting` (fila, sem vaga) e `requested` (pediu numa fechada,
+ * esperando o host).
+ */
+export const LFG_MEMBER_STATUSES = ['host', 'going', 'waiting', 'requested'] as const;
+export type LfgMemberStatus = (typeof LFG_MEMBER_STATUSES)[number];
+
 /**
  * Nomes das salas, na ordem em que são dados: a sala nova pega o primeiro que
  * não está em uso. São 24, e esse é o teto de salas abertas por servidor. A

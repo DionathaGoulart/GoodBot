@@ -64,6 +64,11 @@ export const SquadsConfigSchema = z
      * grego>` é apagada ao esvaziar.
      */
     categoryId: NullableSnowflakeSchema,
+    /**
+     * Canal de texto da agenda: cada jogatina marcada é uma mensagem do bot ali,
+     * com a lista de quem vai e uma thread. Sem ele, MARCAR JOGATINA recusa.
+     */
+    agendaChannelId: NullableSnowflakeSchema,
     /** Voz fixo `➕ Criar Squad` (join-to-create). Nunca é apagado. */
     createChannelId: NullableSnowflakeSchema,
     /** Teto de gente por sala, aplicado pelo `userLimit` do canal. */

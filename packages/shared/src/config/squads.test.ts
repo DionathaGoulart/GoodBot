@@ -18,6 +18,7 @@ describe('SquadsConfigSchema', () => {
       panelChannelId: null,
       panelMessageId: null,
       categoryId: null,
+      agendaChannelId: null,
       createChannelId: null,
       roomSize: 4,
       graceMinutes: 2,
