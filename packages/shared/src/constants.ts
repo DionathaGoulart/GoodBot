@@ -375,13 +375,6 @@ export const SOCIAL_PLATFORM_LABEL: Record<SocialPlatform, string> = {
  * restart o zera, e o custo é uma DM a mais.
  */
 export const LFG_PROMPT_COOLDOWN_HOURS = 6;
-/** Duração da jogatina agendada: o fim do evento do Discord sai do início mais isto. */
-export const LFG_EVENT_HOURS = 3;
-/**
- * Jogatinas futuras do bot por servidor. Passando disso, o modal recusa: sem
- * teto, o botão MARCAR JOGATINA vira spam de evento.
- */
-export const LFG_MAX_EVENTS = 10;
 /** Jogos que um servidor vigia ao mesmo tempo no aviso automático (`gameNames`). */
 export const LFG_MAX_GAME_NAMES = 10;
 
