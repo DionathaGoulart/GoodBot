@@ -485,6 +485,7 @@ export class SquadAgendaService {
       leaveRoster(roster, member.id),
     );
     this.render(guild.id, sessionId);
+    await this.grantRoom(guild, session, change.seated);
     await this.notifySeated(guild, session, change.seated);
     // `leaveRoster` recusa o host, então sobra só quem não é host.
     return change.outcome as Exclude<LfgMemberStatus, 'host'>;
@@ -513,6 +514,7 @@ export class SquadAgendaService {
       target: { type: 'lfg_session', id: sessionId },
       after: { userId, outcome: change.outcome },
     });
+    if (change.outcome === 'going') await this.grantRoom(guild, session, [userId]);
     const link = this.linkOf(session);
     const which = `jogatina de <t:${unix(session.startsAt)}:F> em **${guild.name}**`;
     const text =
@@ -606,6 +608,28 @@ export class SquadAgendaService {
       });
     } catch (error) {
       log.warn({ err: error, guildId: guild.id, sessionId: session.id }, 'pedido de vaga perdido');
+    }
+  }
+
+  /**
+   * Quem ganha vaga numa fechada que já está rolando precisa do `Connect` na
+   * sala, que nasceu liberada só para a lista do início. Aberta não tem o que
+   * liberar. Falha vai para o log: a pessoa ainda pode pedir à staff.
+   */
+  private async grantRoom(guild: Guild, session: LfgSession, userIds: string[]): Promise<void> {
+    if (session.status !== 'live' || session.visibility !== 'closed' || !session.roomId) return;
+    const room = guild.channels.cache.get(session.roomId);
+    if (room?.type !== ChannelType.GuildVoice) return;
+    for (const userId of userIds) {
+      try {
+        await room.permissionOverwrites.edit(
+          userId,
+          { Connect: true },
+          { reason: 'Vaga na jogatina' },
+        );
+      } catch (error) {
+        log.warn({ err: error, guildId: guild.id, sessionId: session.id }, 'não liberei a sala');
+      }
     }
   }
 

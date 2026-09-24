@@ -36,6 +36,7 @@ import { RegistryService } from './services/registry';
 import { Scheduler } from './services/scheduler';
 import { YouTubeProvider } from './services/social/index';
 import { SquadAgendaService } from './services/squads/agenda';
+import { SquadAgendaClock } from './services/squads/clock';
 import { SquadPanelService } from './services/squads/panel';
 import { SquadPresenceService } from './services/squads/presence';
 import { SquadRoomService } from './services/squads/rooms';
@@ -173,6 +174,18 @@ async function main(): Promise<void> {
   });
   const squadPanel = new SquadPanelService({ client, db, config, audit, agenda: squadAgenda });
   const squadRooms = new SquadRoomService({ client, config, registry, panel: squadPanel });
+  const squadClock = new SquadAgendaClock({
+    client,
+    db,
+    config,
+    registry,
+    audit,
+    agenda: squadAgenda,
+    rooms: squadRooms,
+    onChange: (guildId) => {
+      squadPanel.schedule(guildId);
+    },
+  });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
   // Os links que os avisos de ciclo de vida citam. Saem do `AUTH_URL` pela
@@ -297,6 +310,7 @@ async function main(): Promise<void> {
     capacity.start();
     squads.start();
     squadRooms.start();
+    squadClock.start();
     databaseProbe.start();
     void deployNotice.resolve();
     alerts.emit({
@@ -339,6 +353,7 @@ async function main(): Promise<void> {
       capacity.stop();
       squads.stop();
       squadRooms.stop();
+      squadClock.stop();
       squadPanel.stop();
       squadAgenda.stop();
       databaseProbe.stop();
