@@ -5,7 +5,14 @@ import { lfgSessionMembers, lfgSessions } from '../schema/community';
 
 import type { Db, DbExecutor } from '../client';
 import type { LfgSession, LfgSessionMember } from '../types';
-import type { LfgVisibility, Roster, RosterChange, RosterEntry } from '@goodbot/shared';
+import type {
+  LfgMemberStatus,
+  LfgSessionStatus,
+  LfgVisibility,
+  Roster,
+  RosterChange,
+  RosterEntry,
+} from '@goodbot/shared';
 
 /**
  * A agenda de jogatinas do módulo squads (PRD §5.11). Toda mudança na lista
@@ -118,6 +125,33 @@ export async function listUpcomingLfgSessions(
     .limit(limit);
 }
 
+export interface MemberLfgSession {
+  session: LfgSession;
+  status: LfgMemberStatus;
+}
+
+/** As jogatinas abertas da guild em que a pessoa está (marcou, vai, espera ou pediu). */
+export async function listMemberLfgSessions(
+  db: DbExecutor,
+  guildId: string,
+  userId: string,
+  limit: number,
+): Promise<MemberLfgSession[]> {
+  return db
+    .select({ session: lfgSessions, status: lfgSessionMembers.status })
+    .from(lfgSessionMembers)
+    .innerJoin(lfgSessions, eq(lfgSessions.id, lfgSessionMembers.sessionId))
+    .where(
+      and(
+        eq(lfgSessionMembers.userId, userId),
+        eq(lfgSessions.guildId, guildId),
+        inArray(lfgSessions.status, OPEN_STATUSES),
+      ),
+    )
+    .orderBy(asc(lfgSessions.startsAt))
+    .limit(limit);
+}
+
 /**
  * O que o relógio precisa olhar, de todas as guilds: abertas que começam até
  * `until`. O relógio passa `now + LFG_CALL_MINUTES`, a antecedência mais longa.
@@ -149,13 +183,15 @@ export type LfgSessionPatch = Partial<
 
 /**
  * Grava campos da jogatina. Só mexe em jogatina aberta: `null` quando ela já
- * acabou ou foi cancelada, e quem chama sabe que perdeu a corrida.
+ * acabou ou foi cancelada, e quem chama sabe que perdeu a corrida. Remarcar e
+ * cancelar passam `['scheduled']`, porque a que já começou é do relógio.
  */
 export async function updateLfgSession(
   db: DbExecutor,
   guildId: string,
   sessionId: string,
   patch: LfgSessionPatch,
+  statuses: readonly LfgSessionStatus[] = OPEN_STATUSES,
 ): Promise<LfgSession | null> {
   const [row] = await db
     .update(lfgSessions)
@@ -164,7 +200,7 @@ export async function updateLfgSession(
       and(
         eq(lfgSessions.id, sessionId),
         eq(lfgSessions.guildId, guildId),
-        inArray(lfgSessions.status, OPEN_STATUSES),
+        inArray(lfgSessions.status, [...statuses]),
       ),
     )
     .returning();

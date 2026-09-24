@@ -15,6 +15,7 @@ import {
   createLfgSession,
   getLfgSession,
   listDueLfgSessions,
+  listMemberLfgSessions,
   listUpcomingLfgSessions,
   mutateLfgRoster,
   updateLfgSession,
@@ -131,5 +132,24 @@ describe.skipIf(!url)('lfg (integração com Postgres)', () => {
     const due = await listDueLfgSessions(db, new Date(Date.now() + 120_000));
     expect(due.map((s) => s.id)).toContain(soon.session.id);
     expect(due.every((s) => s.startsAt.getTime() <= Date.now() + 120_000)).toBe(true);
+  });
+
+  it('acha as jogatinas de quem está nelas', async () => {
+    const { session } = await create(new Date(Date.now() + 18_000_000));
+    await mutateLfgRoster(db, GUILD_ID, session.id, (r) => joinRoster(r, ANA, Date.now()));
+    const mine = await listMemberLfgSessions(db, GUILD_ID, ANA, 50);
+    expect(mine.map((row) => [row.session.id, row.status])).toContainEqual([session.id, 'going']);
+    expect(await listMemberLfgSessions(db, OTHER_GUILD, ANA, 50)).toEqual([]);
+    const hosted = await listMemberLfgSessions(db, GUILD_ID, HOST, 50);
+    expect(hosted.every((row) => row.status === 'host')).toBe(true);
+  });
+
+  it('remarcar só pega a que ainda não começou', async () => {
+    const { session } = await create(new Date(Date.now() + 21_600_000));
+    await updateLfgSession(db, GUILD_ID, session.id, { status: 'live' });
+    expect(
+      await updateLfgSession(db, GUILD_ID, session.id, { note: 'x' }, ['scheduled']),
+    ).toBeNull();
+    expect(await updateLfgSession(db, GUILD_ID, session.id, { note: 'x' })).not.toBeNull();
   });
 });
