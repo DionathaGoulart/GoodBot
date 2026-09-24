@@ -158,7 +158,8 @@ fino: valida entrada, chama um service, responde. Os principais:
 | `SquadPresenceService`    | cargo `Buscando Squad`: aviso por DM ao abrir o jogo, toggles, prazo e janela de tolerância |
 | `SquadRoomService`        | salas de voz efêmeras: *join-to-create*, nome grego, apagar a vazia                          |
 | `SquadPanelService`       | a mensagem fixa das salas e jogatinas, editada coalescida                                   |
-| `SquadSessionService`     | a jogatina agendada como evento nativo do Discord, iniciada na hora                         |
+| `SquadAgendaService`      | a agenda: marcar, mensagem + thread no `#agenda`, VOU/SAIR/PEDIR VAGA, GERENCIAR            |
+| `SquadAgendaClock`        | o relógio da agenda (1 min, lido do banco): lembrete, chamada, início com sala, fim          |
 | `ReactionRoleService`     | painéis por botão, menu ou reação                          |
 | `AuditService`            | trilha do que o bot e o painel fizeram                     |
 | `Scheduler`               | executa `scheduled_actions` (tempban, lembrete, unlock)    |
@@ -389,15 +390,16 @@ src/
                    automod, community,
                    messages, misc, social, stats, audit, enums,
                    relations
-  repositories/    17 arquivos: uma função por consulta, nunca SQL solto fora
+  repositories/    18 arquivos: uma função por consulta, nunca SQL solto fora
 drizzle/           24 migrations SQL versionadas
 ```
 
-35 tabelas. As centrais: `guilds`, `guild_registry`, `guild_settings`,
+37 tabelas. As centrais: `guilds`, `guild_registry`, `guild_settings`,
 `module_configs`, `cases`,
 `audit_logs`, `automod_rules`, `automod_hits`, `scheduled_actions`,
-`stat_buckets`, `tickets`, `reaction_role_panels`, `social_accounts`. O módulo
-de squads não tem tabela: o estado dele é o Discord (cargo, canal, evento) e a
+`stat_buckets`, `tickets`, `reaction_role_panels`, `social_accounts`. No módulo
+de squads só a agenda tem tabela (`lfg_sessions` e `lfg_session_members`,
+migration `0024`); o resto do estado dele é o Discord (cargo, canal) e a
 memória do bot, e a migration `0023` apagou as nove do modelo antigo.
 
 Fluxo obrigatório ao mexer no schema:
@@ -423,7 +425,10 @@ src/
              (client.ts, `createInternalClient`) + permissions.ts
   config/    um schema Zod por módulo (automod, logs, welcome, tickets...)
   squads/    `parseWhen` (o "quando" da jogatina) e o relógio de parede no
-             fuso da guild, com horário de verão
+             fuso da guild, com horário de verão; `roster.ts`, as regras
+             puras da lista da jogatina (entrar, sair, pedir, aceitar, fila,
+             vagas), que devolvem o novo estado e quem avisar; e o schema do
+             formulário de marcar
   constants.ts, duration.ts, snowflake.ts, templates.ts, errors.ts
   deploy.ts  o tipo de um deploy pelos arquivos que mudaram (a CI usa pelo
              `deploy-kind.ts`) e a previsão de volta de cada tipo
@@ -614,22 +619,38 @@ voiceStateUpdate ─▶ os dois services em paralelo:
      ─▶ refresh edita a mensagem fixa; Unknown Message republica, outra falha espera a próxima
 ```
 
-**Uma jogatina agendada**
+**Uma jogatina da agenda**
 
 ```
-MARCAR JOGATINA (painel) ou /squad agendar ─▶ modal (quando)
-  ─▶ SquadSessionService.schedule ─▶ parseWhen (shared, fuso da guild; `agora` recusa com WHEN_NOW)
-  ─▶ canal de criar, ManageEvents e teto LFG_MAX_EVENTS conferidos
-  ─▶ guild.scheduledEvents.create (voz, no ➕ Criar Squad, LFG_EVENT_HOURS) ─▶ auditoria
-  ─▶ poll de 5 min relê os eventos da guild: lista em memória (upcoming) que o painel lê
-  ─▶ início dentro do intervalo ganha timer próprio ─▶ o bot INICIA o evento na hora
+MARCAR JOGATINA (painel) ou /squad agendar ─▶ modal (quando, vagas, nota)
+  ─▶ SquadAgendaService.prepare ─▶ parseWhen (fuso da guild) ─▶ rascunho em memória (15 min)
+  ─▶ botões efêmeros ABERTA / FECHADA ─▶ schedule: canal da agenda, permissões e tetos
+     (LFG_MAX_OPEN_SESSIONS por guild, LFG_MAX_SESSIONS_PER_HOST) conferidos
+  ─▶ linha em lfg_sessions ANTES da mensagem (os botões levam o id) ─▶ mensagem + thread
+     (mensagem que não sai cancela a linha) ─▶ auditoria ─▶ painel fixo se refaz
+
+VOU / SAIR / PEDIR VAGA (squad:a:<ação>:<id>), GERENCIAR (squad:m:<op>:<id>), ACEITAR / RECUSAR
+  ─▶ mutateLfgRoster: transação + SELECT ... FOR UPDATE na jogatina
+     ─▶ regra pura de shared/squads/roster.ts ─▶ grava a diferença
+  ─▶ DMs de quem a regra devolveu (promovido da fila, pedido respondido)
+  ─▶ rerender coalescido da mensagem (uma edição por jogatina a cada 1,5 s)
+PEDIR VAGA ─▶ DM ao host com ACEITAR / RECUSAR (squad:req:<ok|no>:<guildId>:<sessionId>:<userId>)
+  ─▶ DM fechada: ping na thread com os mesmos botões (host ou mod+)
+
+SquadAgendaClock, tick de 1 min ─▶ listDueLfgSessions (começa na próxima hora ou está live)
+  ─▶ agendaSteps (puro): remind / call / start / lonely / end, cada um com a sua coluna
+  ─▶ start: SquadRoomService.openSessionRoom (userLimit = vagas, reserva de
+     LFG_ROOM_HOLD_MINUTES, Connect só de quem vai na fechada) ─▶ link na thread
+     ─▶ move quem já está em voz
+  ─▶ end: sala vazia depois da reserva, sumiu ou LFG_SESSION_HOURS ─▶ "rolou · foram X"
 ```
 
 Três coisas nesses caminhos não são gosto:
 
-- **O estado é o Discord, a memória é descartável.** Não há tabela: o cargo
-  diz quem busca, a categoria diz quais salas existem, o criador do evento
-  (o bot) diz quais jogatinas são do módulo. Os prazos (`DeadlineBook`) e o
+- **O estado é o Discord, a memória é descartável.** Fora da agenda não há
+  tabela: o cargo diz quem busca, a categoria diz quais salas existem. A
+  agenda é a exceção porque lista, vagas e pedidos não existem no Discord, e o
+  relógio dela lê o banco, então sobrevive a restart. Os prazos (`DeadlineBook`) e o
   relógio do aviso (`PromptGate`) vivem em memória, e a reconciliação, que
   roda na primeira vez que o módulo aparece ligado numa guild (boot, módulo
   ligado, guild passando a ser atendida), recomeça a janela do zero para quem
@@ -699,7 +720,7 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | mexer no cargo de busca ou no aviso | `apps/bot/src/services/squads/presence.ts` (DM em `promptMessage`, botões em `interactions/squads.ts`) |
 | mexer nas salas de voz            | `apps/bot/src/services/squads/rooms.ts` (nomes em `GREEK_ROOM_NAMES`, `shared/constants.ts`) |
 | mexer no painel fixo de squad     | `apps/bot/src/services/squads/panel.ts` (texto em `panelMessage`)        |
-| mexer na jogatina agendada        | `apps/bot/src/services/squads/sessions.ts` + "quando" em `packages/shared/src/squads/when.ts` |
+| mexer na agenda de jogatinas      | `apps/bot/src/services/squads/agenda.ts` (mensagem em `agendaMessage`), relógio em `clock.ts`, regras da lista em `packages/shared/src/squads/roster.ts`, "quando" em `when.ts` |
 | entender um servidor              | `pnpm guild scan "<nome>"` → `infra/discord/<slug>/servidor.md`          |
 | mudar a estrutura de um servidor  | `infra/discord/<slug>/guild.yaml` → `pnpm guild plan`                    |
 
