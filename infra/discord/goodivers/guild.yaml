@@ -337,14 +337,6 @@ categories:
             view: allow
       - name: Criogenia
         type: voice
-      - name: Hellpod Alfa
-        type: voice
-      - name: Hellpod Bravo
-        type: voice
-      - name: Hellpod Charlie
-        type: voice
-      - name: Hellpod Delta
-        type: voice
   # A categoria é do módulo Buscar squad (PRD §5.11): as salas `Squad <nome
   # grego>` nascem e somem pelo bot e não entram aqui. Não crie canal de voz
   # com esse formato de nome nesta categoria, ele seria apagado ao esvaziar.
