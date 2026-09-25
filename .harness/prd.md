@@ -1,11 +1,32 @@
 # Goodbot: PRD (Product Requirements Document)
 
-Versão 1.9 · 2026-09-24 · Documento de referência para todas as sessões.
+Versão 2.0 · 2026-09-25 · Documento de referência para todas as sessões.
 Leia junto com `.harness/architecture.md` (código) e `.harness/styleguide.md` (UI).
 
-> As versões v1.0 a v1.8 citadas aqui são **revisões deste documento**, não
+> As versões v1.0 a v2.0 citadas aqui são **revisões deste documento**, não
 > versões do software. O software segue SemVer a partir da 1.0.0, e o que muda
 > entre uma versão e outra está no [`CHANGELOG.md`](../CHANGELOG.md).
+
+> **v2.0: buscar squad em três canais.** O módulo deixou de pedir que quem
+> quer jogar se marque (cargo `Buscando Squad`, aviso por DM ao abrir o jogo)
+> e espere alguém notar. Agora quem quer jogar grita uma vez e quem quer ouvir
+> escolheu ouvir: um cargo opt-in (`Bora`) é mencionado quando alguém publica
+> um **card** de "procuro gente agora" ou divulga uma jogatina. Três canais,
+> cada um com um papel: `#buscar-squad` (chat livre, o guia fixado e os cards
+> de agora, com a sala de voz já criada), `#jogatinas` (só o bot: guia e os
+> botões PROCURAR AGORA, MARCAR JOGATINA, MINHAS JOGATINAS e ME AVISA) e
+> `#agenda` (as jogatinas marcadas, com thread). A jogatina **nasce privada**
+> e o host tem CONVIDAR (DM com ACEITAR e RECUSAR), DIVULGAR (card no
+> `#buscar-squad`) e PÚBLICA/PRIVADA no GERENCIAR. Card e jogatina são a mesma
+> tabela, com `kind`. Saíram os dois cargos antigos, a DM por presença e a
+> intent `GuildPresences`, o canal de criar (join-to-create), o painel de
+> salas, a lista de espera, a chamada de reforço automática e a pergunta
+> aberta/fechada ao marcar. Comandos curtos no topo: `/procurar`, `/marcar`,
+> `/jogatinas`, `/avisos`. O que mudou no documento: §5.11 inteira, a página
+> na §6.2, as tabelas e o config na §8, os comandos na §9.1, as permissões e
+> intents na §10, a intent na §5.10 e na §7.3 e os riscos na §11. O que **não**
+> mudou: as salas gregas, a janela de tolerância, o relógio da agenda e os
+> outros módulos.
 
 > **v1.9: agenda de jogatinas.** A jogatina marcada deixou de ser evento
 > agendado nativo do Discord. O evento de voz nunca encerrava sozinho (ninguém
@@ -635,256 +656,273 @@ Sem isso um reconvite interrompido no meio deixaria o bot dentro de um servidor
 exatamente o estado que esta seção existe para acabar.
 
 **Teto a manter à vista: 100 servidores.** Acima disso, o Discord exige
-verificação da aplicação para as intents privilegiadas (`GuildMembers`,
-`MessageContent` e `GuildPresences`), das quais automod, logs e o aviso
-automático do squad dependem (§7.3, §10). O modelo com
+verificação da aplicação para as intents privilegiadas (`GuildMembers` e
+`MessageContent`), das quais automod e logs dependem (§7.3, §10). O modelo com
 aprovação é o que segura isso, e a demo que expira sozinha também.
 
 ### 5.11 Buscar squad
 
-Quem quer jogar agora precisa achar gente agora. O módulo `squads` não guarda
-perfil nem grupo fixo: ele mostra **quem está buscando** e **onde já tem sala
-aberta**, e deixa o Discord ser o estado. O cargo é do Discord e a sala é do
-Discord. A exceção é a **agenda** (abaixo), para quem quer marcar para depois:
-ela tem lista, vagas e aprovação, coisas que o Discord não guarda, e por isso
-tem tabela. O bot liga as peças e apaga o que sobra.
+Quem quer jogar precisa achar gente: agora, ou mais tarde numa hora marcada.
+O módulo `squads` faz isso em **três canais**, cada um com um papel só, e
+deixa o Discord ser o estado sempre que dá: a sala é do Discord e o cargo é do
+Discord. O que o Discord não guarda (quem vai numa jogatina, quem pediu vaga,
+quem foi convidado) mora no banco. Não há perfil, match nem pontuação: ninguém
+é proposto, e quem entra numa sala entra porque quis. O módulo serve a um
+servidor de um jogo, mas nada nele é escrito para um jogo só.
 
-Não há match. Ninguém é proposto, pontuado nem votado: quem entra numa sala
-entra porque quis, e quem sai leva a sala de volta ao nada quando ela esvazia.
-O módulo serve a um jogo por vez, o dos `gameNames` (abaixo), mas nada nele é
-escrito para um jogo só.
+**Os três canais.** Todos de texto, criados pela staff (à mão ou no
+`guild.yaml`); o bot lê os ids do config e nunca os cria.
 
-**Dois cargos.** São cargos comuns, criados pela staff (à mão ou no
-`guild.yaml`); o bot só os lê pelo id configurado e nunca os cria. Nenhum dos
-dois dá permissão alguma. O cargo do bot precisa estar **acima** deles na
-hierarquia (§10), senão ligar e desligar falha com `BOT_ROLE_HIERARCHY`.
+| Canal            | Config            | Para quê                          | Quem escreve                         |
+| ---------------- | ----------------- | --------------------------------- | ------------------------------------ |
+| `#buscar-squad`  | `chatChannelId`   | jogar **agora**, e conversar      | todo mundo, e o bot                  |
+| `#jogatinas`     | `deskChannelId`   | o balcão: guia e botões           | só o bot                             |
+| `#agenda`        | `agendaChannelId` | as jogatinas **marcadas**         | só o bot; a conversa vai na thread   |
 
-- `Buscando Squad` (`searchRoleId`), com `hoist` ligado: a lista de membros
-  mostra num bloco à parte quem quer jogar agora. É a única marca de "estou
-  buscando".
-- `Sem Aviso de Squad` (`optOutRoleId`): quem tem nunca recebe o aviso
-  automático (abaixo), e continua livre para ligar a busca à mão. Liga e
-  desliga pelo botão **SEM AVISO** do painel ou por `/squad aviso`, e o
-  **NÃO AVISAR MAIS** da DM também o liga.
+- `#buscar-squad` é um chat comum. Quem quer escreve "alguém pra D10?" e o
+  bot não interfere: ele nunca lê nem reage a mensagem de gente. A primeira
+  mensagem, fixada pelo bot, é o **guia** (abaixo), e `/procurar` publica ali
+  o **card** de quem quer jogar agora.
+- `#jogatinas` tem `send: deny` para todo mundo. Duas mensagens do bot, que
+  ficam sendo as últimas porque ninguém mais escreve: o guia e a dos
+  **botões**. É o lugar de quem não lembra o comando.
+- `#agenda` tem `send: deny` para todo mundo. Uma mensagem por jogatina
+  marcada, com uma thread pública onde saem o lembrete, o link da sala e a
+  conversa.
 
-**Ligar a busca.** Dois gatilhos, um efeito: a pessoa ganha `Buscando Squad`.
+Sem um canal configurado, a ação que precisa dele recusa dizendo o que falta;
+o resto do módulo segue.
 
-1. **Automático.** O bot escuta a presença (`GuildPresences`, intent
-   privilegiada, §10). Quando a atividade de alguém passa a ser um dos
-   `gameNames` (padrão `HELLDIVERS™ 2`, comparado sem `™` e sem diferenciar
-   caixa), manda **uma DM** com três botões: **BUSCAR SQUAD**, **AGORA NÃO** e
-   **NÃO AVISAR MAIS**, que dá o cargo `Sem Aviso de Squad`. Só o clique em
-   BUSCAR SQUAD liga o cargo: ver o jogo aberto nunca liga sozinho. É DM, e não
-   mensagem efêmera, porque a efêmera só existe como resposta a uma interação, e
-   abrir um jogo não gera nenhuma.
-2. **Manual.** O botão **BUSCAR SQUAD** do painel (abaixo) ou `/squad buscar`,
-   que alternam: quem tem o cargo o perde, quem não tem o ganha. É o único
-   caminho de quem joga em console, sem rich presence, e o de quem tem o aviso
-   desligado.
+**Um cargo.** `Bora` (`notifyRoleId`): cargo comum, criado pela staff, sem
+permissão alguma e sem `hoist`. Quem tem é **mencionado** quando alguém
+publica um card de agora ou divulga uma jogatina. É opt-in, e liga e desliga
+pelo botão **ME AVISA** ou por `/avisos`. É o inverso do `Buscando Squad` da
+v1.8: em vez de pedir que quem quer jogar se marque e espere alguém notar,
+quem quer jogar grita uma vez, e quem quer ouvir escolheu ouvir. O cargo do
+bot precisa estar **acima** dele na hierarquia (§10), senão o toggle falha com
+`BOT_ROLE_HIERARCHY`.
 
-O aviso é pulado, em silêncio, quando a pessoa já tem `Buscando Squad`, tem
-`Sem Aviso de Squad`, está numa sala de squad ou já recebeu um aviso nas
-últimas 6 horas (`LFG_PROMPT_COOLDOWN_HOURS`, constante em `shared`, e o AGORA
-NÃO conta como aviso recebido). Esse relógio é memória: um restart o zera, e o
-custo é uma DM a mais. DM fechada não quebra nada: o bot não avisa e segue. O
-`custom_id` do botão da DM leva o `guildId`, porque a DM não pertence a servidor
-nenhum, e o clique confere de novo que a guild é atendida (§5.10), que o módulo
-está ligado e que a pessoa ainda é membro dela.
+**Dois tipos de jogatina, uma tabela.** Tudo o que junta gente é uma linha em
+`lfg_sessions` (§8), com `kind`: `now` é o card do `#buscar-squad`, `scheduled`
+é a jogatina do `#agenda`. As duas têm a mesma lista de quem vai
+(`lfg_session_members`), a mesma sala e o mesmo relógio; o que muda é onde a
+mensagem mora, quando a sala nasce e o que os botões dizem. Um tipo só de
+linha é o que deixa o módulo pequeno.
 
-**Desligar a busca.** Três caminhos:
-
-- o toggle manual;
-- **sair da voz**: se a pessoa estava em algum canal de voz da guild e sai de
-  todos, o cargo cai depois da janela de tolerância;
-- **expirar**: a pessoa ligou a busca e não entrou em voz em
-  `searchTtlMinutes` (padrão 120), então o cargo cai. Entrar em voz cancela
-  esse relógio, e a partir dali vale a regra de sair da voz.
-
-Estar numa sala **não** desliga a busca: sala com vaga ainda quer gente. E
-desligar o módulo só faz o bot parar de reagir: cargo e sala que já existem
-ficam como estão, e a reconciliação de quando ele voltar a ligar cuida deles.
-
-**Janela de tolerância.** O Discord manda o mesmo `voiceStateUpdate` para quem
-sai do canal de propósito e para quem perde a conexão (queda de internet, PC
-que desliga sozinho, jogo que trava), e o bot não tem como diferenciar na hora:
-só esperar. Tirar o cargo e apagar a sala no mesmo segundo puniria a queda de
-quem volta em meio minuto. Por isso `graceMinutes` (padrão 2, de 0 a 10): sair
-da voz só vale depois desse tempo, e voltar dentro dele cancela. A janela vale
-para o cargo e para a sala.
-
-O relógio da janela mora em memória, sem tabela. Depois de um restart, e ao
-ligar o módulo, o bot reconcilia: lista quem tem `Buscando Squad` e não está em
-voz, e as salas da categoria que estão vazias, e passa a contar a janela **do
-zero** para todos. O custo é aceito e dito: um cargo ou uma sala pode durar até
-uma janela a mais do que duraria sem o restart.
-
-**Salas de voz efêmeras.** O canal de voz fixo **➕ Criar Squad**
-(`createChannelId`), criado pela staff, funciona como *join-to-create*: quem
-entra nele ganha uma sala nova na `categoryId` e é movido para ela na hora. A
-sala se chama `Squad <nome>`, com o nome do primeiro livre na ordem do
-**alfabeto grego**: Alfa, Beta, Gama, Delta, Épsilon, Zeta, Eta, Teta, Iota,
-Kapa, Lambda, Mi, Ni, Csi, Ômicron, Pi, Rô, Sigma, Tau, Ípsilon, Fi, Qui, Psi e
-Ômega (24 nomes, o teto de salas por servidor). O teto de gente é `roomSize`
-(padrão 4, de 2 a 10), aplicado pelo `userLimit` do canal, então quem decide que
-a sala lotou é o Discord. A sala herda as permissões da categoria, e o bot nunca
-a renomeia: o Discord só deixa renomear canal duas vezes a cada dez minutos.
-
-A sala **some** quando esvazia e a janela de tolerância passa sem ninguém
-voltar. O canal de criar nunca é apagado. Sem permissão, com o teto de 500
-canais do servidor (§11) ou com os 24 nomes em uso, o bot **não cria e não
-move**: a pessoa continua no canal de criar e o motivo sai no log, porque uma
-sala que nasce sem poder receber ninguém é pior que nenhuma.
-
-Sem tabela, quem diz que um canal é sala do módulo é o **nome e a categoria**:
-o bot só apaga canal de voz da `categoryId` cujo nome é `Squad <nome do pool>`
-e que não é o `createChannelId`. A consequência é uma regra para a staff: a
-categoria pertence ao módulo, e um canal de voz feito à mão ali com esse
-formato de nome seria apagado ao esvaziar.
-
-**Painel fixo.** Uma mensagem no `panelChannelId`, fixada e editada pelo bot, que
-lista as salas com gente, em tempo real:
+**Jogar agora: o card.** `/procurar` (ou **PROCURAR AGORA** no `#jogatinas`)
+abre um modal com dois campos: **O quê** (obrigatório, até
+`LFG_NOTE_MAX_LENGTH`, 200: "D10, missão de 40 min") e **Vagas** (contando
+quem procura, de `LFG_MIN_SLOTS` a `LFG_MAX_SLOTS`, 2 a 10, padrão `roomSize`).
+Enviado o modal, o bot, nesta ordem: cria a sala `Squad <grego>` na
+`categoryId`, com `userLimit` igual às vagas e **reservada** por
+`LFG_ROOM_HOLD_MINUTES` (15); grava a linha (`kind = now`, `status = live`,
+`visibility = open`, `startsAt = agora`, `roomId`); e posta o card no
+`#buscar-squad`, com a menção do `Bora` no texto, fora do embed, porque
+menção dentro de embed não notifica ninguém:
 
 ```
-🟢 Squad Alfa · 1/4 · clique pra entrar
-🔴 Squad Beta · 4/4 · lotada
+@Bora
+@Rafael procura 3 · D10, missão de 40 min · 1/4 · 🔊 Squad Alfa
+[BORA]  [FECHAR]
 ```
 
-O nome é a menção do canal de voz, que no Discord é clicável e entra na sala.
-Sala vazia, na janela de tolerância, não aparece. Sem nenhuma sala, o painel
-diz que não há ninguém e aponta o **➕ Criar Squad**. Abaixo das salas, o
-painel lista até 3 próximas jogatinas da agenda (abaixo), cada uma com o link
-para a mensagem dela no `#agenda`. Os botões da mensagem são **BUSCAR SQUAD** (o toggle), **SEM AVISO**
-(o toggle do `Sem Aviso de Squad`) e **MARCAR JOGATINA**. A regra do módulo é
-**botão antes de comando**: toda ação está num botão de uma mensagem que o bot
-já deixou na frente da pessoa, e o comando é atalho, nunca o único caminho.
+O nome da sala é a menção do canal de voz, clicável. **BORA** alterna a
+pessoa na lista, e a resposta efêmera traz o link da sala. **FECHAR** (quem
+procura, ou a staff `mod`+) encerra. Se a sala não nasce (sem permissão, teto
+de 500 canais, 24 nomes em uso), o card não sai e o modal recusa com o motivo,
+porque um card sem sala manda gente para lugar nenhum. Uma pessoa tem no
+máximo **um card aberto**; tentar outro recusa com o link do que já existe. O
+card morre sozinho quando a sala esvazia depois da reserva, quando a sala some
+ou `LFG_CALL_HOURS` (2) depois do post, e vira "fechado · foram X" sem botões.
+Não tem thread, lembrete nem convite: para isso existe a agenda.
 
-O painel é reeditado a cada `voiceStateUpdate` que mexe numa sala do módulo,
-**coalescido** (uma edição por poucos segundos), porque o Discord limita edição
-de mensagem por canal e uma noite movimentada estouraria o limite. Edição que
-falha não derruba nada: a mudança seguinte tenta de novo. Mensagem apagada é
-publicada de novo na mudança seguinte, sem republicar por falha passageira do
-Discord, porque duas mensagens fixas são piores que uma desatualizada. Fixar
-exige `PinMessages` no canal; sem ela a mensagem fica no ar sem pin e o log
-avisa. O painel também se refaz no boot, lendo a categoria: a lista de salas é
-o estado do Discord, nunca uma cópia. Quem publica ou atualiza é `/squad
-painel` (admin) ou o botão do painel web (§6.2), e o id da mensagem fica em
-`panelMessageId`, que é do bot.
-
-**Sem ninguém buscando: a agenda.** Quem quer jogar mais tarde marca uma
-jogatina, e ela vira uma **mensagem do bot** no canal da agenda
-(`agendaChannelId`, o `#agenda`, abaixo do canal do painel). Sem o canal
-configurado, MARCAR JOGATINA recusa dizendo que falta. Até a v1.8 a jogatina era
-um evento agendado nativo do Discord, e isso saiu por três motivos: evento de
-voz só encerra quando o canal fica vazio depois de ter tido gente, e no canal
-de criar ninguém fica (o bot move na hora), então o evento não acabava nunca;
-o RSVP ficava escondido na aba de eventos, sem lista nem vaga; e, com o bot
-como criador, quem marcou não editava nem cancelava.
-
-*Marcar.* **MARCAR JOGATINA** (botão do painel ou `/squad agendar`) abre um modal
-com três campos: **Quando**, lido no fuso da guild (`guild_settings.timezone`)
-por `parseWhen`, em `shared` (`hoje 21h`, `amanhã 20h`, `sex 22h`, `16/09 21h`;
-`agora` não vale, porque esse caso é uma sala; o erro sempre ensina, com
-exemplos, e horário que já passou sugere o do dia seguinte); **Vagas**, de
-`LFG_MIN_SLOTS` a `LFG_MAX_SLOTS` (2 a 10), padrão `roomSize`, contando o host;
-e **Nota**, opcional, até `LFG_NOTE_MAX_LENGTH` (200). Enviado o modal, dois
-botões efêmeros escolhem **ABERTA** ou **FECHADA**; o rascunho espera 15 min
-em memória. O bot cria a linha, posta a mensagem e abre nela uma **thread
-pública**, que é onde saem o lembrete, o link da sala e a conversa. Mensagem
-que não sai cancela a linha. O teto é de `LFG_MAX_OPEN_SESSIONS` (10) jogatinas
-abertas por servidor e `LFG_MAX_SESSIONS_PER_HOST` (3) por host; passando, o
-modal recusa com o motivo.
+**Marcar: a jogatina.** `/marcar` (ou **MARCAR JOGATINA**) abre um modal com
+três campos: **Quando**, lido no fuso da guild (`guild_settings.timezone`) por
+`parseWhen`, em `shared` (`hoje 21h`, `amanhã 20h`, `sex 22h`, `16/09 21h`;
+`agora` não vale, porque esse caso é o card; o erro sempre ensina, com
+exemplos, e horário que já passou sugere o do dia seguinte); **Vagas**, de 2 a
+10, padrão `roomSize`, contando o host; e **Nota**, opcional, até 200. Não há
+mais a pergunta "aberta ou fechada": a jogatina **nasce privada**
+(`visibility = closed`), porque é o que quem marca com os amigos espera, e
+abrir é um clique no GERENCIAR. O bot grava a linha antes da mensagem (os
+botões levam o id), posta no `#agenda` e abre a thread. Mensagem que não sai
+cancela a linha. O teto é de `LFG_MAX_OPEN_SESSIONS` (10) jogatinas abertas
+por servidor, cards inclusos, e `LFG_MAX_SESSIONS_PER_HOST` (3) por host;
+passando, o modal recusa com o motivo.
 
 *A mensagem.* Diz quando (timestamp do Discord, no fuso de quem lê), quem
-marcou, a nota, e três listas: **Vão** (`n/vagas`), **Lista de espera** e
-**Pediram vaga**. Menção dentro de embed não notifica ninguém. Os botões são
-um de entrar, **SAIR** e **GERENCIAR**. O de entrar muda de nome conforme o
-estado: **VOU** na aberta com vaga, **ENTRAR NA ESPERA** na aberta lotada e
-**PEDIR VAGA** na fechada. Cada mudança reedita a mensagem, **coalescida**
-(uma edição por jogatina a cada 1,5 s), pelo mesmo motivo do painel.
+marcou, se é privada ou pública, a nota e até três listas: **Vão**
+(`n/vagas`), **Pediram vaga** (só na privada) e **Convidados** (convites
+pendentes). Os botões são o de entrar, **SAIR** e **GERENCIAR**. O de entrar é
+**PEDIR VAGA** na privada e **VOU** na pública. Lotada, ele aparece
+**desativado**, e o clique que chega antes da edição recebe "lotou". **Não há
+lista de espera**: quem quer entrar tenta de novo quando alguém sair. A fila
+da v1.9 saiu porque ninguém entende uma fila numa jogatina de quatro pessoas.
+Cada mudança reedita a mensagem, **coalescida** (uma edição por jogatina a
+cada 1,5 s), porque o Discord limita edição por canal.
 
-*Aberta ou fechada.* Na aberta, VOU entra na hora. Na fechada, PEDIR VAGA põe
-a pessoa em "pediram vaga" e manda **DM ao host** com **ACEITAR** e
-**RECUSAR**; com a DM do host fechada, o pedido vira um ping na thread com os
-mesmos botões, que o host ou a staff `mod`+ respondem. Quem pediu recebe a
-resposta por DM. O `custom_id` do botão da DM leva o `guildId`, e o clique
-confere de novo guild atendida, módulo ligado e quem clicou.
+*Pedir vaga.* Na privada, PEDIR VAGA põe a pessoa em "pediram vaga" e manda
+**DM ao host** com **ACEITAR** e **RECUSAR**; com a DM do host fechada, o
+pedido vira um ping na thread com os mesmos botões, que o host ou a staff
+`mod`+ respondem. Quem pediu recebe a resposta por DM. Aceitar com a jogatina
+lotada recusa e diz ao host para subir as vagas antes. O `custom_id` do botão
+da DM leva o `guildId`, porque a DM não pertence a servidor nenhum, e o clique
+confere de novo que a guild é atendida (§5.10), que o módulo está ligado e que
+quem clicou é quem devia.
 
-*Vagas e fila.* O host ocupa uma vaga e nunca sai da lista (ele cancela).
-Lotou, quem chega entra na lista de espera, em ordem de chegada. Vaga que
-abre (alguém saiu, foi tirado ou o host subiu as vagas) promove o primeiro da
-fila, que recebe DM. Numa fechada, aceitar com a jogatina lotada põe na fila.
-As regras da lista são puras, em `shared/squads/roster.ts`, e devolvem o novo
-estado e quem avisar; o banco as aplica numa transação com `SELECT ... FOR
-UPDATE` na jogatina, para dois cliques no mesmo segundo não darem a mesma
-vaga a duas pessoas.
+*Convidar.* GERENCIAR → **CONVIDAR** abre um select de membros (até 10 por
+vez). Cada um vira `invited` na lista, com `invitedBy`, e recebe DM: "@host te
+convidou para a jogatina de sexta 21h", com **ACEITAR** e **RECUSAR**. Aceitar
+entra direto em "vão" (lotou: recusa e avisa); recusar tira da lista. DM
+fechada vira uma menção na thread com os mesmos botões. O convite pendente
+aparece em "Convidados" e some quando o host tira a pessoa ou cancela. Só
+membro do servidor pode ser convidado.
 
-*GERENCIAR.* Do host ou da staff `mod`+, conferido de novo a cada clique:
-um painel efêmero com **REMARCAR** (modal com quando e nota; avisa na thread e
-refaz lembrete e chamada), **VAGAS** (modal; baixar abaixo de quem já tem vaga
-é recusado), **ABRIR**/**FECHAR** (abrir aceita todos os pedidos pendentes, na
-ordem em que chegaram: com vaga sentam, sem vaga vão para a fila), **TIRAR ALGUÉM** (select) e **CANCELAR** (com confirmação; avisa na
-thread e a mensagem vira "cancelada", sem botões). Tudo isso só vale antes do
-início: depois a sala já existe e o relógio cuida do resto, e o botão some.
-`/squad agenda` lista, em efêmero, as jogatinas em que a pessoa está, com link.
+*Divulgar.* GERENCIAR → **DIVULGAR** posta no `#buscar-squad` um card com a
+menção do `Bora`, o quando, a nota, `n/vagas`, o link da mensagem no
+`#agenda` e o botão de entrar, o mesmo da mensagem (PEDIR VAGA ou VOU). O card
+é estático: não é reeditado a cada mudança, porque a fonte é a mensagem do
+`#agenda`. Uma vez a cada `LFG_PROMOTE_COOLDOWN_MINUTES` (60) por jogatina
+(`promotedAt`). Substitui a chamada de reforço automática da v1.9: chamar
+gente é decisão de quem marcou, não do relógio.
 
-*O relógio.* A cada minuto o bot lê do banco as jogatinas que começam na
+*Pública ou privada.* GERENCIAR → **PÚBLICA** / **PRIVADA** alterna. Virar
+pública aceita os pedidos pendentes na ordem em que chegaram: com vaga sentam,
+sem vaga são recusados com DM. Convites pendentes seguem valendo nos dois
+sentidos. A sala do início nasce conforme o estado da hora.
+
+*GERENCIAR.* Do host ou da staff `mod`+, conferido de novo a cada clique: um
+painel efêmero com **REMARCAR** (modal com quando e nota; avisa na thread e
+refaz o lembrete), **VAGAS** (modal; baixar abaixo de quem já tem vaga é
+recusado), **CONVIDAR**, **DIVULGAR**, **PÚBLICA**/**PRIVADA**, **TIRAR
+ALGUÉM** (select) e **CANCELAR** (com confirmação; avisa na thread, e a
+mensagem vira "cancelada", sem botões). Tudo isso só vale antes do início:
+depois a sala já existe e o relógio cuida do resto, e o botão some.
+`/jogatinas` (ou **MINHAS JOGATINAS**) lista, em efêmero, as jogatinas e os
+cards em que a pessoa está, com link.
+
+**Salas de voz.** Toda sala se chama `Squad <nome>`, com o primeiro nome livre
+na ordem do **alfabeto grego**: Alfa, Beta, Gama, Delta, Épsilon, Zeta, Eta,
+Teta, Iota, Kapa, Lambda, Mi, Ni, Csi, Ômicron, Pi, Rô, Sigma, Tau, Ípsilon,
+Fi, Qui, Psi e Ômega (24 nomes, o teto de salas por servidor). Nasce na
+`categoryId`, herda as permissões dela, e o bot nunca a renomeia (o Discord só
+deixa renomear canal duas vezes a cada dez minutos). Uma sala nasce de duas
+coisas: do card, na hora do post, ou da jogatina, no início. **Nunca de um
+canal de criar**: o `➕ Criar Squad` da v1.8 saiu, porque com o card a sala já
+nasce apontada e ninguém precisa entrar num canal para ganhar outro. O teto de
+gente é o `userLimit`, então quem decide que lotou é o Discord. Na jogatina
+privada, o `Connect` é negado ao `@everyone` e liberado a quem vai; sem
+`ManageRoles` na categoria a sala nasce aberta e o motivo vai para o log.
+
+A sala **some** quando esvazia e a janela de tolerância passa sem ninguém
+voltar, fora da reserva. `graceMinutes` (padrão 2, de 0 a 10) existe porque o
+Discord manda o mesmo `voiceStateUpdate` para quem sai de propósito e para
+quem perde a conexão, e apagar a sala no mesmo segundo puniria a queda de quem
+volta em meio minuto. A janela mora em memória; depois de um restart, e ao
+ligar o módulo, o bot reconcilia: lista as salas vazias da categoria e conta a
+janela **do zero**. O custo é aceito: uma sala pode durar uma janela a mais.
+Sem tabela, quem diz que um canal é sala do módulo é o **nome e a categoria**:
+o bot só apaga canal de voz da `categoryId` cujo nome é `Squad <nome do pool>`.
+A regra para a staff é a mesma de sempre: a categoria pertence ao módulo, e
+um canal de voz feito à mão ali com esse formato de nome seria apagado ao
+esvaziar.
+
+**Guia e botões.** Três mensagens do bot, com os ids gravados no config pelo
+bot (`chatGuideMessageId`, `deskGuideMessageId`, `deskButtonsMessageId`):
+
+1. O **guia do `#buscar-squad`**, fixado: o que é o canal, `/procurar` com um
+   exemplo, `/avisos`, e um aponte para o `#jogatinas`.
+2. O **guia do `#jogatinas`**: o que é cada canal, os quatro comandos com
+   exemplo, como funciona pedir vaga, convite, divulgar e a sala privada.
+3. Os **botões** do `#jogatinas`: **PROCURAR AGORA** (o modal do
+   `/procurar`; o card vai para o `#buscar-squad`), **MARCAR JOGATINA** (o
+   modal do `/marcar`; a jogatina vai para o `#agenda`), **MINHAS JOGATINAS**
+   (efêmero, com links) e **ME AVISA** (o toggle do `Bora`). Cada botão
+   responde em efêmero com o link do que criou.
+
+A regra continua **botão antes de comando**: toda ação está num botão de uma
+mensagem que o bot já deixou na frente da pessoa, e o comando é atalho. Quem
+publica ou reedita as três é `/squad painel` (admin), o botão do painel web
+(§6.2) e o boot: mensagem que sumiu é publicada de novo, e a que existe é
+reeditada, porque o texto do guia muda com o software e não pode ficar velho.
+Fixar exige `PinMessages`; sem ela a mensagem fica no ar sem pin e o log
+avisa.
+
+**Comandos.** Curtos e no topo, sem prefixo, porque o guia os mostra e "digito
+o comando" tem que ser uma palavra. O único que sobrou no `/squad` é o de
+admin.
+
+| Comando         | Faz                                                    |
+| --------------- | ------------------------------------------------------ |
+| `/procurar`     | modal do card; o card vai para o `#buscar-squad`       |
+| `/marcar`       | modal da jogatina; ela vai para o `#agenda`            |
+| `/jogatinas`    | as jogatinas e cards em que você está, efêmero, com link |
+| `/avisos`       | liga ou desliga o cargo `Bora`                         |
+| `/squad painel` | admin: publica ou reedita os guias e os botões         |
+
+**O relógio.** A cada minuto o bot lê do banco as jogatinas que começam na
 próxima hora ou estão rolando e faz o passo vencido de cada uma. Cada passo
-tem uma coluna (`remindedAt`, `calledAt`, `startedAt`, `endedAt`), então rodar
-de novo não repete nada e um restart só atrasa.
+tem uma coluna (`remindedAt`, `startedAt`, `endedAt`), então rodar de novo não
+repete nada e um restart só atrasa.
 
-- **Lembrete**, `LFG_REMINDER_MINUTES` (30) antes: na thread, mencionando quem
-  vai. Jogatina marcada já dentro dessa janela não recebe.
-- **Chamada de reforço**, `LFG_CALL_MINUTES` (60) antes, só na aberta com
-  vaga: uma mensagem no canal do painel marcando `Buscando Squad`, com o link
-  da jogatina.
-- **Início**, na hora: o bot cria uma sala `Squad <grego>` na `categoryId` com
-  `userLimit` igual às vagas, posta o link na thread mencionando quem vai e
-  move para ela quem já está em voz na guild. A sala fica **reservada** por
-  `LFG_ROOM_HOLD_MINUTES` (15): não some vazia antes disso, para dar tempo de
-  chegar. Na fechada, o `Connect` é negado ao `@everyone` e liberado a quem
-  vai; sem `ManageRoles` na categoria, a sala nasce aberta e o motivo vai para
-  o log. Jogatina em que ninguém confirmou além do host fecha no início sem
-  abrir sala, com aviso na thread.
-- **Fim**: a sala esvaziou depois da reserva, sumiu, ou `LFG_SESSION_HOURS` (3)
-  passaram do início. A mensagem vira "rolou · foram X", sem botões, e a sala
-  volta à regra comum (some quando esvazia). Jogatina que o bot perdeu inteira
-  por estar fora do ar fecha sem abrir sala.
+- **Lembrete** (só `scheduled`), `LFG_REMINDER_MINUTES` (30) antes: na
+  thread, mencionando quem vai. Jogatina marcada já dentro dessa janela não
+  recebe.
+- **Início** (só `scheduled`), na hora: o bot cria a sala com `userLimit`
+  igual às vagas, reservada por 15 min, posta o link na thread mencionando
+  quem vai e move para ela quem já está em voz na guild. Jogatina em que
+  ninguém confirmou além do host fecha no início sem abrir sala, com aviso na
+  thread. O card já nasce começado, então esse passo não existe para ele.
+- **Fim** (os dois): a sala esvaziou depois da reserva, sumiu, ou passou o
+  prazo (`LFG_SESSION_HOURS`, 3, para a jogatina; `LFG_CALL_HOURS`, 2, para o
+  card). A mensagem vira "rolou · foram X" (ou "fechado · foram X"), sem
+  botões, e a sala volta à regra comum. Jogatina que o bot perdeu inteira por
+  estar fora do ar fecha sem abrir sala.
 
-Fora da agenda ficam lembrete por DM, recorrência e estatística de presença.
+A chamada de reforço automática da v1.9 saiu: **DIVULGAR** é o caminho, e é
+do host.
+
+**Desligar o módulo** só faz o bot parar de reagir: sala, cargo e mensagens
+que já existem ficam como estão, e a reconciliação de quando ele voltar a
+ligar cuida das salas. Jogatina em andamento com o módulo desligado é fechada
+pelo relógio quando ele voltar.
 
 **Falhas e permissões.** Tudo é conferido antes. Onde há interação (botão,
 comando), a falta de permissão vira um erro efêmero que diz o que falta
-(`UserFacingError`); onde não há (a sala nascendo, o cargo caindo por tempo), o
-motivo sai só no log. O módulo usa `ManageRoles` (os cargos, com o do bot acima
-deles), `ManageChannels` (criar e apagar sala), `Connect` e `MoveMembers`
-(mover para a sala nova), `SendMessages`, `EmbedLinks` e `PinMessages` no canal
-do painel, `SendMessages`, `EmbedLinks`, `CreatePublicThreads` e
-`SendMessagesInThreads` no canal da agenda, `ManageRoles` na categoria para a
-sala da jogatina fechada e a intent `GuildPresences` (§10).
+(`UserFacingError`); onde não há (a sala nascendo no início, o card morrendo),
+o motivo sai só no log. O módulo usa `ManageRoles` (o `Bora`, com o cargo do
+bot acima dele), `ManageChannels` (criar e apagar sala), `Connect` e
+`MoveMembers` (mover para a sala do início), `SendMessages`, `EmbedLinks` e
+`PinMessages` no `#buscar-squad`, `SendMessages` e `EmbedLinks` no
+`#jogatinas`, `SendMessages`, `EmbedLinks`, `CreatePublicThreads` e
+`SendMessagesInThreads` no `#agenda`, e `ManageRoles` na categoria para a sala
+da jogatina privada. Nenhuma intent privilegiada: `GuildPresences` saiu com o
+aviso automático (§10).
 
 **Estado e escopo por servidor.** O módulo é configurado por guild
-(`module_configs`, §8) e tudo o que ele lê ou escreve leva o `guildId`: o
-cargo, a categoria e o canal de criar de um servidor nunca alcançam os de outro.
-O estado da busca vive no Discord (cargo, canal) e em memória (as janelas e o
-relógio do aviso), e é reconstruído por leitura no boot. O da agenda vive no
-banco (`lfg_sessions`, §8), filtrado por `guildId` em toda leitura.
+(`module_configs`, §8) e tudo o que ele lê ou escreve leva o `guildId`: os
+canais, a categoria e o cargo de um servidor nunca alcançam os de outro. O
+estado das salas vive no Discord e em memória (a janela e a reserva), e é
+reconstruído por leitura no boot. O das jogatinas e dos cards vive no banco
+(`lfg_sessions`, §8), filtrado por `guildId` em toda leitura.
 
-**O que saiu.** Das v1.5 a v1.7 saíram o perfil por jogo, a grade semanal, as
-perguntas, o match, a proposta em thread privada, o squad fixo com canal
-privado e voice emprestado de um pool, a votação de entrada, a jogatina
-(`/bora`, REMARCAR, convidado avulso, chamada pública), o histórico, os números
-de tempo de jogo e o relatório de fim, com as nove tabelas do módulo. **Não há
-migração**: os canais que squads antigos deixaram no Discord viram canais
-comuns, e limpá-los é da staff. Botão de mensagem antiga do módulo, que o bot
-não trata mais, responde em efêmero que aquele fluxo acabou, em vez de falhar
-mudo. Tempo de jogo e histórico de squad não existem mais: nenhuma presença é
-gravada.
+**O que saiu (v2.0).** Os cargos `Buscando Squad` e `Sem Aviso de Squad`, o
+aviso por DM ao abrir o jogo, a intent `GuildPresences`, a expiração da busca,
+o canal de criar, o painel com a lista de salas, a lista de espera, a chamada
+de reforço e a pergunta aberta/fechada ao marcar. Das v1.5 a v1.7 já tinham
+saído o perfil, a grade, o match, o squad fixo, a votação de entrada, o
+histórico e os números. **A migração é só de colunas**: as jogatinas marcadas
+seguem valendo, quem estava na lista de espera sai dela (não existe mais) e
+`calledAt` some. Cargos e canal de criar que sobraram no Discord viram cargos
+e canais comuns; limpá-los é da staff (o `guild.yaml` do servidor os tira).
+Botão de mensagem antiga do módulo, que o bot não trata mais, responde em
+efêmero que aquele fluxo acabou, em vez de falhar mudo.
 
 Fora do escopo: perfil, agenda semanal e match de qualquer tipo; histórico e
-estatística de jogo; sala privada, com senha ou com dono, e comandos de sala
-(renomear, trancar, expulsar); convidar quem é de fora; jogatina recorrente,
-lembrete por DM e presença nas jogatinas; e mais de um canal de criar por
-servidor.
+estatística de jogo; comandos de sala (renomear, trancar, expulsar); convidar
+quem é de fora do servidor; jogatina recorrente, lembrete por DM e presença nas
+jogatinas; ler ou reagir a mensagens de gente no `#buscar-squad`; e mais de um
+conjunto de canais por servidor.
 
 ## 6. Requisitos funcionais: Painel
 
@@ -938,18 +976,19 @@ grava, escreve auditoria (§6.5), chama `invalidate` no bot, toast.
   de log; lista de tickets abertos/fechados com link de transcript.
 - **Tags**: tabela CRUD com editor (texto/embed), permissão de criação.
 - **Squads** (§5.11), uma página só, sem abas. Toggle "módulo ativo" e, no
-  topo, o painel da mensagem fixa (publicar ou atualizar), que passa pela API do
-  bot. Depois, os campos do config: cargo de busca, cargo de sem aviso, canal do
-  painel, canal da agenda, categoria das salas, canal de criar (voz), tamanho da sala (de 2 a 10,
-  padrão 4), janela de tolerância em minutos (de 0 a 10, padrão 2), expiração da
-  busca em minutos (padrão 120) e os nomes de jogo que disparam o aviso
-  automático (lista, padrão `HELLDIVERS™ 2`). Cada seletor de cargo e de canal
-  lê do bot, e o de canal filtra o tipo (texto para o painel e a agenda,
-  categoria, voz para o de criar). Sem jogos nem lista de jogadores: a tela não
-  lê nada do banco além do próprio config, e as jogatinas vivem no `#agenda`. Salvar o config **preserva o
-  `panelMessageId`**, que é do bot: um formulário aberto antes de uma
-  publicação levaria o id velho, e a publicação seguinte mandaria uma segunda
-  mensagem em vez de editar a primeira.
+  topo, o painel dos guias (publicar ou reeditar as três mensagens: o guia do
+  `#buscar-squad`, o guia e os botões do `#jogatinas`), que passa pela API do
+  bot. Depois, os campos do config: canal de buscar squad, canal de jogatinas,
+  canal da agenda, categoria das salas, cargo `Bora`, tamanho da sala (de 2 a
+  10, padrão 4) e janela de tolerância em minutos (de 0 a 10, padrão 2). Cada
+  seletor de cargo e de canal lê do bot, e o de canal filtra o tipo (texto
+  para os três canais, categoria para as salas). Os três canais precisam ser
+  diferentes entre si. Sem lista de jogadores: a tela não lê nada do banco
+  além do próprio config, e jogatinas e cards vivem no Discord. Salvar o
+  config **preserva os ids de mensagem** (`chatGuideMessageId`,
+  `deskGuideMessageId`, `deskButtonsMessageId`), que são do bot: um formulário
+  aberto antes de uma publicação levaria os ids velhos, e a publicação
+  seguinte mandaria mensagens novas em vez de editar as que existem.
 - **Comandos**: por comando: ativo, cargos permitidos, canais permitidos/
   negados (override de permissão do Discord via API de permissões de
   comando quando possível; senão checagem no handler).
@@ -1146,10 +1185,9 @@ level)`. A guild conferida é sempre a que vai ser lida ou escrita, e ela
   e cookie `SameSite`; headers de segurança configurados no `next.config.ts`
   (não mais no Caddy, que só atende a API do bot).
 - **Discord**: bot com o mínimo de permissões (ver §10); intents privilegiadas
-  `GuildMembers` e `MessageContent` (necessárias para automod/logs) e, desde a
-  v1.8, `GuildPresences` (só para o aviso automático do squad, §5.11). O bot
-  não guarda presença: o cache de presença fica desligado e o evento é lido e
-  descartado.
+  só `GuildMembers` e `MessageContent` (necessárias para automod/logs). A
+  `GuildPresences` entrou na v1.8 para o aviso automático do squad e saiu na
+  v2.0 com ele: o bot não lê presença de ninguém.
 - **Postgres gerenciado**: conexão só por TLS (`sslmode=require`); usuário da
   aplicação sem privilégio de superusuário; senha só em segredo; painel usa a
   string do **pooler** (pgBouncer, porta 6543) e o bot usa a conexão direta
@@ -1288,28 +1326,33 @@ audit_logs        (id, guild_id, actor_id, actor_tag, action, target_type, targe
                    -- append-only
 dashboard_sessions? -- não: Auth.js JWT stateless; se migrar para DB sessions, adapter Drizzle
 meta              (key PK, value jsonb)  -- hash do manifesto de comandos, versão de schema de config, etc.
-lfg_sessions      (id PK uuid, guild_id FK, host_id, starts_at, slots, visibility enum(open|closed),
-                   note, status enum(scheduled|live|done|cancelled), channel_id, message_id unique,
-                   thread_id, room_id, reminded_at, called_at, started_at, ended_at,
-                   created_at, updated_at)
+lfg_sessions      (id PK uuid, guild_id FK, host_id, kind enum(now|scheduled), starts_at, slots,
+                   visibility enum(open|closed), note, status enum(scheduled|live|done|cancelled),
+                   channel_id, message_id unique, thread_id, room_id,
+                   reminded_at, promoted_at, started_at, ended_at, created_at, updated_at)
                    idx (guild_id, starts_at), (starts_at) where status in (scheduled, live)
-                   -- a agenda do módulo squads (§5.11); cada passo do relógio tem a sua coluna
-lfg_session_members (session_id FK cascade, user_id, status enum(host|going|waiting|requested),
-                   joined_at, PK(session_id, user_id))
-                   idx (user_id)  -- `joined_at` é a ordem da fila
+                   -- card (`now`) e jogatina (`scheduled`) do módulo squads (§5.11); cada passo
+                   -- do relógio tem a sua coluna; `promoted_at` é o último DIVULGAR
+lfg_session_members (session_id FK cascade, user_id, status enum(host|going|requested|invited),
+                   invited_by, joined_at, PK(session_id, user_id))
+                   idx (user_id)
 ```
 
-No módulo `squads` (§5.11), só a agenda tem tabela (`lfg_sessions` e
-`lfg_session_members`, desde a v1.9). Cargo e sala são estado do Discord, e o
-que sobra (as janelas de tolerância e o relógio do aviso) é memória do bot,
+No módulo `squads` (§5.11), o card de agora e a jogatina marcada são a mesma
+tabela, `lfg_sessions`, com `kind`, e a lista de quem vai, pediu vaga ou foi
+convidado é `lfg_session_members`. Cargo e sala são estado do Discord, e o que
+sobra (a janela de tolerância e a reserva da sala) é memória do bot,
 reconstruída por leitura no boot. O config do módulo mora em
-`module_configs.config` como os dos outros: `searchRoleId`, `optOutRoleId`,
-`panelChannelId`, `panelMessageId` (do bot), `agendaChannelId`, `categoryId`,
-`createChannelId`, `roomSize`, `graceMinutes`, `searchTtlMinutes` e `gameNames`.
-Até a v1.7 ele tinha nove tabelas (`squad_games`, `squad_profiles`, `squads`,
-`squad_members`, `squad_proposals`, `squad_join_requests`, `squad_sessions`,
-`squad_session_attendance` e `squad_session_guests`); a migration da v1.8 as
-apaga, e não há dado a migrar, porque nada do modelo novo se parece com elas.
+`module_configs.config` como os dos outros: `chatChannelId`, `deskChannelId`,
+`agendaChannelId`, `categoryId`, `notifyRoleId`, `roomSize`, `graceMinutes` e,
+gravados pelo bot, `chatGuideMessageId`, `deskGuideMessageId` e
+`deskButtonsMessageId`. A migration da v2.0 acrescenta `kind`, `promoted_at`
+e `invited_by`, tira `called_at`, troca `waiting` por `invited` no status do
+membro e apaga as linhas `waiting` que existiam, porque a lista de espera não
+existe mais. Até a v1.7 ele tinha nove tabelas (`squad_games`,
+`squad_profiles`, `squads`, `squad_members`, `squad_proposals`,
+`squad_join_requests`, `squad_sessions`, `squad_session_attendance` e
+`squad_session_guests`); a migration da v1.8 as apagou, sem dado a migrar.
 
 Relações principais: `guilds 1—N cases`, `cases 1—0..1 scheduled_actions`,
 `automod_rules 1—N automod_hits`, `automod_rules 1—N cases`,
@@ -1335,17 +1378,17 @@ Três níveis, resolvidos por `guild_settings` + permissões nativas:
 `default_member_permissions` no registro do comando espelha o nível; o handler
 re-verifica (o registro é dica de UI, não segurança).
 
-No módulo `squads` (§5.11), `/squad` é de `member`, com uma exceção:
-`/squad painel` (publicar ou atualizar a mensagem fixa) é de `admin`. Os botões
-do painel (BUSCAR SQUAD, SEM AVISO, MARCAR JOGATINA), os da DM do aviso
-(BUSCAR SQUAD, AGORA NÃO, NÃO AVISAR MAIS) e os de entrar e sair de uma
-jogatina valem para qualquer membro da guild, porque cada um só mexe na própria
-pessoa, e o único que cria algo no servidor, a jogatina, tem teto. GERENCIAR e
-responder a um pedido de vaga são do host da jogatina ou de `mod`+. Cada clique
-confere de novo que a guild é atendida, que o módulo está ligado e que quem
-clicou é membro dela: na DM isso importa, porque o botão viaja com o `guildId`.
-Pela API do bot, publicar ou atualizar o painel é de `admin`. O módulo desligado
-não responde a botão nem a comando de busca.
+No módulo `squads` (§5.11), `/procurar`, `/marcar`, `/jogatinas` e `/avisos`
+são de `member`; `/squad painel` (publicar ou reeditar os guias e os botões) é
+de `admin`. Os botões do `#jogatinas` (PROCURAR AGORA, MARCAR JOGATINA, MINHAS
+JOGATINAS, ME AVISA), o BORA do card, os de entrar e sair de uma jogatina e os
+ACEITAR/RECUSAR de um convite valem para qualquer membro da guild, porque cada
+um só mexe na própria pessoa, e o que cria algo no servidor (o card, a
+jogatina) tem teto. FECHAR o card, GERENCIAR e responder a um pedido de vaga
+são do host ou de `mod`+. Cada clique confere de novo que a guild é atendida,
+que o módulo está ligado e que quem clicou é membro dela: na DM isso importa,
+porque o botão viaja com o `guildId`. Pela API do bot, publicar os guias é de
+`admin`. O módulo desligado não responde a botão nem a comando.
 
 ### 9.2 No painel
 
@@ -1384,24 +1427,26 @@ CreatePrivateThreads, AddReactions, UseExternalEmojis, Connect, Speak,
 MuteMembers, DeafenMembers, MoveMembers, CreateInstantInvite, ManageEvents,
 ManageGuildExpressions`.
 
-O módulo `squads` (§5.11) usa `ManageRoles` (liga e desliga os dois cargos, com
-o cargo do bot acima deles), `ManageChannels` (criar e apagar a sala),
-`Connect` e `MoveMembers` (mover a pessoa do canal de criar para a sala nova),
-`SendMessages`, `EmbedLinks` e `PinMessages` no canal do painel, e
-`SendMessages`, `EmbedLinks`, `CreatePublicThreads` e `SendMessagesInThreads`
-no canal da agenda. Até a v1.8 ele usava `ManageEvents` para a jogatina; a
-permissão segue na lista pelos eventos do painel (§6). O bot não dá nem nega num overwrite o que
-ele mesmo não tem. Sem elas o módulo não quebra: quem usa um botão ou comando
-recebe a explicação do que falta, e o que acontece sem interação (a sala
-nascendo, o cargo caindo por tempo) sai só no log. O link de convite sai da
-lista `BOT_INVITE_PERMISSION_NAMES` de `packages/shared`; servidor que convidou
-o bot antes de uma permissão entrar na lista precisa dá-la à mão ao cargo do
-bot. `CreatePrivateThreads` e `Speak` entraram na v1.5 para o antigo módulo de
-squads e seguem na lista; o módulo novo não usa nenhuma das duas.
+O módulo `squads` (§5.11) usa `ManageRoles` (liga e desliga o `Bora`, com o
+cargo do bot acima dele, e o overwrite de `Connect` da sala privada),
+`ManageChannels` (criar e apagar a sala), `Connect` e `MoveMembers` (mover
+quem já está em voz para a sala da jogatina), `SendMessages`, `EmbedLinks` e
+`PinMessages` no `#buscar-squad`, `SendMessages` e `EmbedLinks` no
+`#jogatinas`, e `SendMessages`, `EmbedLinks`, `CreatePublicThreads` e
+`SendMessagesInThreads` no `#agenda`. Até a v1.8 ele usava `ManageEvents`
+para a jogatina; a permissão segue na lista pelos eventos do painel (§6). O
+bot não dá nem nega num overwrite o que ele mesmo não tem. Sem elas o módulo
+não quebra: quem usa um botão ou comando recebe a explicação do que falta, e
+o que acontece sem interação (a sala do início nascendo, o card morrendo) sai
+só no log. O link de convite sai da lista `BOT_INVITE_PERMISSION_NAMES` de
+`packages/shared`; servidor que convidou o bot antes de uma permissão entrar
+na lista precisa dá-la à mão ao cargo do bot. `CreatePrivateThreads` e
+`Speak` entraram na v1.5 para o antigo módulo de squads e seguem na lista; o
+módulo atual não usa nenhuma das duas.
 
 `PinMessages` é uma permissão própria no Discord ("Fixar mensagens"), que
-`ManageMessages` não cobre. Sem ela o painel do squad fica no ar sem pin, com
-aviso no log.
+`ManageMessages` não cobre. Sem ela o guia do `#buscar-squad` fica no ar sem
+pin, com aviso no log.
 
 `ManageGuild` cobre editar nome, ícone, banner e nível de verificação pelo
 painel. Sem ela o bot continua funcionando: a tela
@@ -1414,14 +1459,13 @@ leitura e explicam qual permissão falta. `ManageGuild` também é o que o Disco
 exige para *listar* convites.
 Sem `Administrator`. Intents: `Guilds, GuildMembers, GuildModeration,
 GuildMessages, MessageContent, GuildMessageReactions, GuildVoiceStates,
-GuildPresences, DirectMessages, GuildEmojisAndStickers`.
+DirectMessages, GuildEmojisAndStickers`.
 
-`GuildPresences` entrou na v1.8 e é a terceira intent privilegiada, com
-`GuildMembers` e `MessageContent`. Só o aviso automático do squad (§5.11) a
-usa. Ela precisa estar habilitada no Developer Portal **antes** de o bot subir
-pedindo-a: com o Portal desligado o login falha com `Used disallowed intents` e
-o bot inteiro fica fora do ar, não só o módulo. Por isso é ação do dono do bot,
-e vem antes do deploy que a passa a pedir.
+`GuildPresences` entrou na v1.8 para o aviso automático do squad e saiu na
+v2.0 com ele. As privilegiadas voltaram a ser duas, `GuildMembers` e
+`MessageContent`. Deixar a `GuildPresences` ligada no Developer Portal não
+atrapalha; pedi-la no código sem o Portal ligado derruba o login inteiro com
+`Used disallowed intents`, por isso o bot não a pede mais.
 
 ## 11. Riscos
 
@@ -1453,8 +1497,9 @@ provedor, documentada em `docs/runbook.md`;
 | **Queda de conexão punida como saída** (v1.8)                     | o Discord manda o mesmo evento para sair e para cair; o cargo e a sala esperam `graceMinutes` (2) e voltar dentro da janela cancela         | planejado |
 | **Cargo ou sala órfã depois de restart** (v1.8)                   | reconciliação no boot e ao ligar o módulo: lista quem tem o cargo e não está em voz e as salas vazias da categoria, e conta a janela do zero; a busca também expira sozinha em `searchTtlMinutes` | parcial por desenho: o relógio é memória, então um restart pode estender cargo e sala por uma janela |
 | **Teto de 500 canais por servidor** (v1.5)                        | a sala é efêmera e há no máximo 24 (os nomes do alfabeto grego); no teto ou sem permissão o bot não cria nem move, e a pessoa fica no canal de criar com o motivo no log | planejado |
-| **Painel fixo editado em rajada** (v1.8)                          | edição coalescida (uma a cada poucos segundos), falha não derruba e a mudança seguinte tenta de novo; mensagem apagada é republicada sem duplicar | planejado |
-| **Aviso automático virar spam** (v1.8)                            | só a DM depois de o jogo aparecer na presença, no máximo uma a cada 6 h, nunca para quem tem `Sem Aviso de Squad` ou já busca, e o NÃO AVISAR MAIS vira o cargo de opt-out; DM fechada é ignorada | planejado: o relógio das 6 h é memória, e um restart custa no máximo uma DM a mais |
+| **Mensagem da jogatina editada em rajada** (v1.8)                 | edição coalescida (uma por jogatina a cada 1,5 s), falha não derruba e a mudança seguinte tenta de novo; guia apagado é republicado sem duplicar | feito: `agenda.ts`|
+| **Menção do `Bora` virar spam** (v2.0)                            | só quem ligou o aviso é mencionado; um card aberto por pessoa, DIVULGAR uma vez por hora por jogatina (`LFG_PROMOTE_COOLDOWN_MINUTES`) e o teto de jogatinas abertas por servidor | planejado |
+| **Card sem sala** (v2.0)                                          | a sala nasce antes da linha e da mensagem; sem sala (permissão, 500 canais, 24 nomes) o modal recusa com o motivo e nada é gravado             | planejado |
 | **Jogatina marcada em série** (v1.9)                              | teto de 10 jogatinas abertas por servidor (`LFG_MAX_OPEN_SESSIONS`) e 3 por host; o modal recusa e diz o motivo                              | feito: `SquadAgendaService.schedule`|
 | **Duas pessoas na última vaga** (v1.9)                            | `mutateLfgRoster` trava a jogatina (`SELECT ... FOR UPDATE`) e aplica a regra pura de `roster.ts` dentro da transação                        | feito, com teste de integração|
 | **Jogatina que não encerra** (v1.9)                               | o bot encerra: sala vazia depois da reserva, sala sumida ou 3 h (`LFG_SESSION_HOURS`), pelo relógio que lê o banco                           | feito: `clock.ts`, com testes|
