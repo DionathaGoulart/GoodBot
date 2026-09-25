@@ -420,10 +420,10 @@ export type LfgSessionStatus = (typeof LFG_SESSION_STATUSES)[number];
 
 /**
  * O lugar de cada pessoa na lista: `host` (quem marcou, ocupa vaga), `going`
- * (ocupa vaga), `waiting` (fila, sem vaga) e `requested` (pediu numa fechada,
- * esperando o host).
+ * (ocupa vaga), `requested` (pediu numa privada, esperando o host) e `invited`
+ * (o host convidou, esperando a pessoa). Não há fila: lotou, lotou.
  */
-export const LFG_MEMBER_STATUSES = ['host', 'going', 'waiting', 'requested'] as const;
+export const LFG_MEMBER_STATUSES = ['host', 'going', 'requested', 'invited'] as const;
 export type LfgMemberStatus = (typeof LFG_MEMBER_STATUSES)[number];
 
 /**

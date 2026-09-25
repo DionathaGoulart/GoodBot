@@ -1,23 +1,25 @@
-import { LFG_MAX_SLOTS, LFG_MIN_SLOTS } from '../constants';
+import { LFG_INVITE_MAX_PER_BATCH, LFG_MAX_SLOTS, LFG_MIN_SLOTS } from '../constants';
 import { UserFacingError } from '../errors';
 
 import type { LfgMemberStatus, LfgVisibility } from '../constants';
 
 /**
- * A lista de uma jogatina da agenda (PRD §5.11) como dado puro: quem marcou,
- * quem vai, quem espera e quem pediu. As regras daqui não sabem de banco nem
- * de Discord. O bot lê a lista com a jogatina travada, aplica uma regra e grava
- * a diferença; o que a regra devolve em `seated` e `queued` é quem avisar.
+ * A lista de uma jogatina ou de um card (PRD §5.11) como dado puro: quem
+ * marcou, quem vai, quem pediu vaga e quem foi convidado. As regras daqui não
+ * sabem de banco nem de Discord. O bot lê a lista com a linha travada, aplica
+ * uma regra e grava a diferença; o que a regra devolve em `seated` e `refused`
+ * é quem avisar.
  *
- * `slots` conta o host. Vaga ocupada é `host` ou `going`; `waiting` é a fila,
- * na ordem de `joinedAt`; `requested` é quem pediu numa fechada e ainda não
- * ouviu o host.
+ * `slots` conta o host. Vaga ocupada é `host` ou `going`. Não há fila: com a
+ * lista cheia, entrar recusa, e quem quer tenta de novo quando alguém sair.
  */
 export interface RosterEntry {
   userId: string;
   status: LfgMemberStatus;
-  /** Epoch em ms. Decide a ordem da fila. */
+  /** Epoch em ms. Decide a ordem dos pedidos. */
   joinedAt: number;
+  /** Quem convidou, só em `invited` (e em quem entrou por convite). */
+  invitedBy?: string | null;
 }
 
 export interface Roster {
@@ -33,8 +35,8 @@ export interface RosterChange<O> {
   outcome: O;
   /** Quem ganhou vaga por causa da mudança, fora quem agiu: avisar por DM. */
   seated: string[];
-  /** Quem foi para a fila por causa da mudança, fora quem agiu: avisar por DM. */
-  queued: string[];
+  /** Quem perdeu o pedido por falta de vaga, fora quem agiu: avisar por DM. */
+  refused: string[];
 }
 
 function isSeated(entry: RosterEntry): boolean {
@@ -56,16 +58,20 @@ export function seatedEntries(roster: Roster): RosterEntry[] {
     .sort((a, b) => Number(b.status === 'host') - Number(a.status === 'host') || byArrival(a, b));
 }
 
-export function waitingEntries(roster: Roster): RosterEntry[] {
-  return roster.entries.filter((entry) => entry.status === 'waiting').sort(byArrival);
-}
-
 export function requestedEntries(roster: Roster): RosterEntry[] {
   return roster.entries.filter((entry) => entry.status === 'requested').sort(byArrival);
 }
 
+export function invitedEntries(roster: Roster): RosterEntry[] {
+  return roster.entries.filter((entry) => entry.status === 'invited').sort(byArrival);
+}
+
 export function freeSlots(roster: Roster): number {
   return Math.max(0, roster.slots - roster.entries.filter(isSeated).length);
+}
+
+export function isRosterFull(roster: Roster): boolean {
+  return freeSlots(roster) === 0;
 }
 
 function withStatus(roster: Roster, userId: string, status: LfgMemberStatus): Roster {
@@ -81,59 +87,51 @@ function without(roster: Roster, userId: string): Roster {
   return { ...roster, entries: roster.entries.filter((entry) => entry.userId !== userId) };
 }
 
-/** Vaga livre puxa a fila, na ordem de chegada. Devolve quem sentou. */
-function fill(roster: Roster): { roster: Roster; seated: string[] } {
-  let next = roster;
-  const seated: string[] = [];
-  for (const entry of waitingEntries(roster)) {
-    if (freeSlots(next) === 0) break;
-    next = withStatus(next, entry.userId, 'going');
-    seated.push(entry.userId);
-  }
-  return { roster: next, seated };
+function change<O>(roster: Roster, outcome: O): RosterChange<O> {
+  return { roster, outcome, seated: [], refused: [] };
 }
 
 function notIn(): UserFacingError {
   return new UserFacingError('Você não está nessa jogatina.', { code: 'LFG_NOT_IN' });
 }
 
-const ALREADY_IN: Record<LfgMemberStatus, string> = {
+function full(message = 'Lotou. Tente de novo quando alguém sair.'): UserFacingError {
+  return new UserFacingError(message, { code: 'LFG_FULL' });
+}
+
+const ALREADY_IN: Record<Exclude<LfgMemberStatus, 'invited'>, string> = {
   host: 'Você marcou essa jogatina: já está dentro.',
   going: 'Você já está na lista dessa jogatina.',
-  waiting: 'Você já está na fila de espera dessa jogatina.',
   requested: 'Seu pedido já está com quem marcou. Espere a resposta.',
 };
 
-export type JoinOutcome = 'going' | 'waiting' | 'requested';
+export type JoinOutcome = 'going' | 'requested';
 
 /**
- * VOU (aberta) ou PEDIR VAGA (fechada). Aberta com vaga senta; aberta lotada
- * vai para a fila; fechada sempre vira pedido, lotada ou não.
+ * VOU (pública) ou PEDIR VAGA (privada). Pública com vaga senta; privada vira
+ * pedido, com vaga ou sem, porque quem decide é o host. Lotada recusa nos dois
+ * casos: pedir vaga numa lista cheia só daria ao host um pedido que ele não
+ * pode aceitar. Quem tinha convite pendente e clica para entrar está aceitando
+ * o convite, e senta sem passar pelo host.
  */
-export function joinRoster(
-  roster: Roster,
-  userId: string,
-  now: number,
-): RosterChange<JoinOutcome> {
+export function joinRoster(roster: Roster, userId: string, now: number): RosterChange<JoinOutcome> {
   const existing = entryOf(roster, userId);
+  if (existing?.status === 'invited') {
+    return acceptInvite(roster, userId);
+  }
   if (existing) {
     throw new UserFacingError(ALREADY_IN[existing.status], { code: 'LFG_ALREADY_IN' });
   }
-  const outcome: JoinOutcome =
-    roster.visibility === 'closed' ? 'requested' : freeSlots(roster) > 0 ? 'going' : 'waiting';
-  return {
-    roster: {
-      ...roster,
-      entries: [...roster.entries, { userId, status: outcome, joinedAt: now }],
-    },
+  if (isRosterFull(roster)) throw full();
+  const outcome: JoinOutcome = roster.visibility === 'closed' ? 'requested' : 'going';
+  return change(
+    { ...roster, entries: [...roster.entries, { userId, status: outcome, joinedAt: now }] },
     outcome,
-    seated: [],
-    queued: [],
-  };
+  );
 }
 
 /**
- * SAIR: da lista, da fila ou do pedido. Quem marcou não sai, cancela: sem
+ * SAIR: da lista, do pedido ou do convite. Quem marcou não sai, cancela: sem
  * host a jogatina não tem quem aprove nem quem gerencie.
  */
 export function leaveRoster(roster: Roster, userId: string): RosterChange<LfgMemberStatus> {
@@ -145,8 +143,7 @@ export function leaveRoster(roster: Roster, userId: string): RosterChange<LfgMem
       { code: 'LFG_HOST_CANNOT_LEAVE' },
     );
   }
-  const filled = fill(without(roster, userId));
-  return { roster: filled.roster, outcome: existing.status, seated: filled.seated, queued: [] };
+  return change(without(roster, userId), existing.status);
 }
 
 function requestOf(roster: Roster, userId: string): RosterEntry {
@@ -159,28 +156,92 @@ function requestOf(roster: Roster, userId: string): RosterEntry {
   return existing;
 }
 
-/** ACEITAR: com vaga senta, lotada vai para a fila na ordem em que pediu. */
-export function acceptRequest(
-  roster: Roster,
-  userId: string,
-): RosterChange<'going' | 'waiting'> {
+/** ACEITAR um pedido: com vaga senta; lotada recusa, e o host sobe as vagas antes. */
+export function acceptRequest(roster: Roster, userId: string): RosterChange<'going'> {
   requestOf(roster, userId);
-  const outcome = freeSlots(roster) > 0 ? 'going' : 'waiting';
-  return {
-    roster: withStatus(roster, userId, outcome),
-    outcome,
-    seated: [],
-    queued: [],
-  };
+  if (isRosterFull(roster)) {
+    throw full('Lotou. Suba as vagas em GERENCIAR antes de aceitar.');
+  }
+  return change(withStatus(roster, userId, 'going'), 'going');
 }
 
-/** RECUSAR: o pedido some, e a pessoa pode pedir de novo. */
+/** RECUSAR um pedido: ele some, e a pessoa pode pedir de novo. */
 export function rejectRequest(roster: Roster, userId: string): RosterChange<'rejected'> {
   requestOf(roster, userId);
-  return { roster: without(roster, userId), outcome: 'rejected', seated: [], queued: [] };
+  return change(without(roster, userId), 'rejected');
 }
 
-/** TIRAR ALGUÉM: o host ou a staff. O host nunca é tirado. */
+export interface InviteOutcome {
+  /** Quem virou `invited` agora: mandar DM. */
+  invited: string[];
+  /** Quem já estava na lista (em qualquer papel): nada a fazer. */
+  skipped: string[];
+}
+
+/**
+ * CONVIDAR: cada um vira `invited`, com `invitedBy`. Quem já está na lista
+ * (vai, pediu ou já foi convidado) é pulado. Convidar numa lista cheia vale:
+ * o convite fica pendente, e quem aceitar só entra se houver vaga.
+ */
+export function inviteToRoster(
+  roster: Roster,
+  userIds: readonly string[],
+  invitedBy: string,
+  now: number,
+): RosterChange<InviteOutcome> {
+  const unique = [...new Set(userIds)];
+  if (unique.length === 0) {
+    throw new UserFacingError('Escolha pelo menos uma pessoa para convidar.', {
+      code: 'LFG_INVITE_EMPTY',
+    });
+  }
+  if (unique.length > LFG_INVITE_MAX_PER_BATCH) {
+    throw new UserFacingError(
+      `Dá para convidar até ${String(LFG_INVITE_MAX_PER_BATCH)} pessoas de uma vez.`,
+      { code: 'LFG_INVITE_TOO_MANY' },
+    );
+  }
+  const invited: string[] = [];
+  const skipped: string[] = [];
+  const added: RosterEntry[] = [];
+  for (const userId of unique) {
+    if (entryOf(roster, userId)) {
+      skipped.push(userId);
+      continue;
+    }
+    invited.push(userId);
+    added.push({ userId, status: 'invited', joinedAt: now, invitedBy });
+  }
+  return change({ ...roster, entries: [...roster.entries, ...added] }, { invited, skipped });
+}
+
+function inviteOf(roster: Roster, userId: string): RosterEntry {
+  const existing = entryOf(roster, userId);
+  if (existing?.status !== 'invited') {
+    throw new UserFacingError('Esse convite já foi respondido ou retirado.', {
+      code: 'LFG_INVITE_GONE',
+    });
+  }
+  return existing;
+}
+
+/** ACEITAR um convite: entra direto em "vão"; lotada recusa. */
+export function acceptInvite(roster: Roster, userId: string): RosterChange<'going'> {
+  inviteOf(roster, userId);
+  if (isRosterFull(roster)) throw full('Lotou antes de você aceitar. Fale com quem te convidou.');
+  return change(withStatus(roster, userId, 'going'), 'going');
+}
+
+/** RECUSAR um convite: a pessoa sai da lista. */
+export function declineInvite(roster: Roster, userId: string): RosterChange<'declined'> {
+  inviteOf(roster, userId);
+  return change(without(roster, userId), 'declined');
+}
+
+/**
+ * TIRAR ALGUÉM: o host ou a staff. Tira de qualquer papel, convite pendente
+ * inclusive. O host nunca é tirado.
+ */
 export function kickFromRoster(roster: Roster, userId: string): RosterChange<LfgMemberStatus> {
   const existing = entryOf(roster, userId);
   if (!existing) {
@@ -191,13 +252,13 @@ export function kickFromRoster(roster: Roster, userId: string): RosterChange<Lfg
       code: 'LFG_HOST_CANNOT_LEAVE',
     });
   }
-  const filled = fill(without(roster, userId));
-  return { roster: filled.roster, outcome: existing.status, seated: filled.seated, queued: [] };
+  return change(without(roster, userId), existing.status);
 }
 
 /**
- * VAGAS: subir puxa a fila; baixar só até quem já tem vaga, porque tirar a
- * vaga de alguém que confirmou é decisão do host, não efeito colateral.
+ * VAGAS: baixar só até quem já tem vaga, porque tirar a vaga de alguém que
+ * confirmou é decisão do host, não efeito colateral. Subir não senta ninguém:
+ * pedido pendente continua esperando o host.
  */
 export function setRosterSlots(roster: Roster, slots: number): RosterChange<number> {
   if (!Number.isInteger(slots) || slots < LFG_MIN_SLOTS || slots > LFG_MAX_SLOTS) {
@@ -213,33 +274,32 @@ export function setRosterSlots(roster: Roster, slots: number): RosterChange<numb
       { code: 'LFG_SLOTS_BELOW_SEATED' },
     );
   }
-  const filled = fill({ ...roster, slots });
-  return { roster: filled.roster, outcome: slots, seated: filled.seated, queued: [] };
+  return change({ ...roster, slots }, slots);
 }
 
 /**
- * ABRIR / FECHAR. Fechar não mexe em quem já está. Abrir aceita todos os
- * pedidos pendentes, na ordem em que chegaram: com vaga sentam, sem vaga vão
- * para a fila.
+ * PÚBLICA / PRIVADA. Virar privada não mexe em ninguém. Virar pública aceita
+ * os pedidos pendentes na ordem em que chegaram: com vaga sentam, sem vaga são
+ * recusados (e avisados). Convites pendentes seguem valendo nos dois sentidos.
  */
 export function setRosterVisibility(
   roster: Roster,
   visibility: LfgVisibility,
 ): RosterChange<LfgVisibility> {
   if (roster.visibility === visibility || visibility === 'closed') {
-    return { roster: { ...roster, visibility }, outcome: visibility, seated: [], queued: [] };
+    return change({ ...roster, visibility }, visibility);
   }
   let next: Roster = { ...roster, visibility };
   const seated: string[] = [];
-  const queued: string[] = [];
+  const refused: string[] = [];
   for (const entry of requestedEntries(roster)) {
-    if (freeSlots(next) > 0) {
+    if (isRosterFull(next)) {
+      next = without(next, entry.userId);
+      refused.push(entry.userId);
+    } else {
       next = withStatus(next, entry.userId, 'going');
       seated.push(entry.userId);
-    } else {
-      next = withStatus(next, entry.userId, 'waiting');
-      queued.push(entry.userId);
     }
   }
-  return { roster: next, outcome: visibility, seated, queued };
+  return { roster: next, outcome: visibility, seated, refused };
 }

@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
+import { LFG_INVITE_MAX_PER_BATCH } from '../constants';
 import { UserFacingError } from '../errors';
 import {
+  acceptInvite,
   acceptRequest,
+  declineInvite,
   entryOf,
   freeSlots,
+  invitedEntries,
+  inviteToRoster,
+  isRosterFull,
   joinRoster,
   kickFromRoster,
   leaveRoster,
@@ -13,7 +19,6 @@ import {
   seatedEntries,
   setRosterSlots,
   setRosterVisibility,
-  waitingEntries,
 } from './roster';
 
 import type { Roster } from './roster';
@@ -48,52 +53,66 @@ function code(fn: () => unknown): string {
   throw new Error('não lançou');
 }
 
+/** Pública com HOST, ANA e BIA: três de três, lotada. */
+function fullOpen(): Roster {
+  let r = roster();
+  r = joinRoster(r, ANA, 1).roster;
+  return joinRoster(r, BIA, 2).roster;
+}
+
 describe('joinRoster', () => {
-  it('aberta com vaga senta, lotada vai para a fila', () => {
-    let r = roster();
-    r = joinRoster(r, ANA, 1).roster;
-    const full = joinRoster(r, BIA, 2);
-    expect(full.outcome).toBe('going');
-    expect(freeSlots(full.roster)).toBe(0);
-    const late = joinRoster(full.roster, CAIO, 3);
-    expect(late.outcome).toBe('waiting');
-    expect(ids(waitingEntries(late.roster))).toEqual([CAIO]);
+  it.each([
+    ['open', 'going'],
+    ['closed', 'requested'],
+  ] as const)('%s com vaga: %s', (visibility, outcome) => {
+    const change = joinRoster(roster({ visibility }), ANA, 1);
+    expect(change.outcome).toBe(outcome);
+    expect(entryOf(change.roster, ANA)?.status).toBe(outcome);
   });
 
-  it('fechada sempre vira pedido, com vaga ou sem', () => {
+  it('pedido numa privada não ocupa vaga', () => {
     const change = joinRoster(roster({ visibility: 'closed' }), ANA, 1);
-    expect(change.outcome).toBe('requested');
-    expect(ids(requestedEntries(change.roster))).toEqual([ANA]);
     expect(freeSlots(change.roster)).toBe(2);
+    expect(ids(requestedEntries(change.roster))).toEqual([ANA]);
   });
 
-  it('não entra duas vezes, nem o host', () => {
+  it.each(['open', 'closed'] as const)('%s lotada recusa com "lotou", sem fila', (visibility) => {
+    const r = { ...fullOpen(), visibility };
+    expect(isRosterFull(r)).toBe(true);
+    expect(code(() => joinRoster(r, CAIO, 3))).toBe('LFG_FULL');
+  });
+
+  it('não entra duas vezes, nem o host, nem quem já pediu', () => {
     const r = joinRoster(roster(), ANA, 1).roster;
     expect(code(() => joinRoster(r, ANA, 2))).toBe('LFG_ALREADY_IN');
     expect(code(() => joinRoster(r, HOST, 2))).toBe('LFG_ALREADY_IN');
+    const closed = joinRoster(roster({ visibility: 'closed' }), BIA, 1).roster;
+    expect(code(() => joinRoster(closed, BIA, 2))).toBe('LFG_ALREADY_IN');
+  });
+
+  it('quem tinha convite e clica para entrar aceita o convite, até numa privada', () => {
+    const r = inviteToRoster(roster({ visibility: 'closed' }), [ANA], HOST, 1).roster;
+    const change = joinRoster(r, ANA, 2);
+    expect(change.outcome).toBe('going');
+    expect(entryOf(change.roster, ANA)).toMatchObject({ status: 'going', invitedBy: HOST });
   });
 });
 
 describe('leaveRoster', () => {
-  it('quem sai da vaga puxa o primeiro da fila', () => {
-    let r = roster({ slots: 2 });
-    r = joinRoster(r, ANA, 1).roster;
-    r = joinRoster(r, BIA, 2).roster;
-    r = joinRoster(r, CAIO, 3).roster;
+  it.each([
+    ['going', roster()],
+    ['requested', roster({ visibility: 'closed' })],
+  ] as const)('sai de %s e libera o lugar sem puxar ninguém', (status, base) => {
+    const r = joinRoster(base, ANA, 1).roster;
     const change = leaveRoster(r, ANA);
-    expect(change.outcome).toBe('going');
-    expect(change.seated).toEqual([BIA]);
-    expect(ids(seatedEntries(change.roster))).toEqual([HOST, BIA]);
-    expect(ids(waitingEntries(change.roster))).toEqual([CAIO]);
+    expect(change.outcome).toBe(status);
+    expect(change.seated).toEqual([]);
+    expect(entryOf(change.roster, ANA)).toBeUndefined();
   });
 
-  it('quem sai da fila não puxa ninguém', () => {
-    let r = roster({ slots: 2 });
-    r = joinRoster(r, ANA, 1).roster;
-    r = joinRoster(r, BIA, 2).roster;
-    const change = leaveRoster(r, BIA);
-    expect(change.outcome).toBe('waiting');
-    expect(change.seated).toEqual([]);
+  it('sai de um convite pendente', () => {
+    const r = inviteToRoster(roster(), [ANA], HOST, 1).roster;
+    expect(leaveRoster(r, ANA).outcome).toBe('invited');
   });
 
   it('o host não sai e quem não está recebe erro', () => {
@@ -102,16 +121,15 @@ describe('leaveRoster', () => {
   });
 });
 
-describe('pedido numa fechada', () => {
-  it('aceito com vaga senta; aceito lotado vai para a fila', () => {
+describe('pedido numa privada', () => {
+  it('aceito com vaga senta; lotada recusa e pede para subir as vagas', () => {
     let r = roster({ visibility: 'closed', slots: 2 });
     r = joinRoster(r, ANA, 1).roster;
     r = joinRoster(r, BIA, 2).roster;
     const first = acceptRequest(r, ANA);
     expect(first.outcome).toBe('going');
-    const second = acceptRequest(first.roster, BIA);
-    expect(second.outcome).toBe('waiting');
-    expect(entryOf(second.roster, BIA)?.status).toBe('waiting');
+    expect(code(() => acceptRequest(first.roster, BIA))).toBe('LFG_FULL');
+    expect(entryOf(first.roster, BIA)?.status).toBe('requested');
   });
 
   it('recusado some e pode pedir de novo', () => {
@@ -129,35 +147,100 @@ describe('pedido numa fechada', () => {
     expect(code(() => acceptRequest(r, BIA))).toBe('LFG_REQUEST_GONE');
   });
 
-  it('quem pediu pode desistir sem mexer nas vagas', () => {
-    const r = joinRoster(roster({ visibility: 'closed' }), ANA, 1).roster;
-    const change = leaveRoster(r, ANA);
-    expect(change.outcome).toBe('requested');
-    expect(change.roster.entries).toHaveLength(1);
+  it('convite não se responde como pedido', () => {
+    const r = inviteToRoster(roster(), [ANA], HOST, 1).roster;
+    expect(code(() => acceptRequest(r, ANA))).toBe('LFG_REQUEST_GONE');
+  });
+});
+
+describe('inviteToRoster', () => {
+  it('convida com invitedBy e pula quem já está, em qualquer papel', () => {
+    let r = roster({ visibility: 'closed' });
+    r = joinRoster(r, ANA, 1).roster;
+    r = inviteToRoster(r, [BIA], HOST, 2).roster;
+    const change = inviteToRoster(r, [ANA, BIA, CAIO, HOST, CAIO], HOST, 3);
+    expect(change.outcome).toEqual({ invited: [CAIO], skipped: [ANA, BIA, HOST] });
+    expect(ids(invitedEntries(change.roster))).toEqual([BIA, CAIO]);
+    expect(entryOf(change.roster, CAIO)).toMatchObject({ status: 'invited', invitedBy: HOST });
+  });
+
+  it('convite pendente não ocupa vaga, e convidar numa lotada vale', () => {
+    const change = inviteToRoster(fullOpen(), [CAIO], HOST, 3);
+    expect(change.outcome.invited).toEqual([CAIO]);
+    expect(isRosterFull(change.roster)).toBe(true);
+  });
+
+  it(`recusa lista vazia e mais de ${String(LFG_INVITE_MAX_PER_BATCH)} de uma vez`, () => {
+    expect(code(() => inviteToRoster(roster(), [], HOST, 1))).toBe('LFG_INVITE_EMPTY');
+    const many = Array.from({ length: LFG_INVITE_MAX_PER_BATCH + 1 }, (_, i) =>
+      String(200000000000000000n + BigInt(i)),
+    );
+    expect(code(() => inviteToRoster(roster(), many, HOST, 1))).toBe('LFG_INVITE_TOO_MANY');
+    expect(
+      inviteToRoster(roster(), many.slice(0, LFG_INVITE_MAX_PER_BATCH), HOST, 1).outcome.invited,
+    ).toHaveLength(LFG_INVITE_MAX_PER_BATCH);
+  });
+});
+
+describe('acceptInvite e declineInvite', () => {
+  it('aceitar entra direto em "vão", até numa privada', () => {
+    const r = inviteToRoster(roster({ visibility: 'closed' }), [ANA], HOST, 1).roster;
+    const change = acceptInvite(r, ANA);
+    expect(change.outcome).toBe('going');
+    expect(ids(seatedEntries(change.roster))).toEqual([HOST, ANA]);
+  });
+
+  it('aceitar com a lista cheia recusa e o convite continua', () => {
+    const r = inviteToRoster(fullOpen(), [CAIO], HOST, 3).roster;
+    expect(code(() => acceptInvite(r, CAIO))).toBe('LFG_FULL');
+    expect(entryOf(r, CAIO)?.status).toBe('invited');
+  });
+
+  it('recusar tira da lista', () => {
+    const r = inviteToRoster(roster(), [ANA], HOST, 1).roster;
+    const change = declineInvite(r, ANA);
+    expect(change.outcome).toBe('declined');
+    expect(entryOf(change.roster, ANA)).toBeUndefined();
+  });
+
+  it('convite respondido, ou que nunca existiu, não se responde', () => {
+    const r = acceptInvite(inviteToRoster(roster(), [ANA], HOST, 1).roster, ANA).roster;
+    expect(code(() => acceptInvite(r, ANA))).toBe('LFG_INVITE_GONE');
+    expect(code(() => declineInvite(r, ANA))).toBe('LFG_INVITE_GONE');
+    expect(code(() => declineInvite(r, BIA))).toBe('LFG_INVITE_GONE');
+    const requested = joinRoster(roster({ visibility: 'closed' }), BIA, 1).roster;
+    expect(code(() => acceptInvite(requested, BIA))).toBe('LFG_INVITE_GONE');
   });
 });
 
 describe('kickFromRoster', () => {
-  it('tira e puxa a fila; o host não sai', () => {
-    let r = roster({ slots: 2 });
-    r = joinRoster(r, ANA, 1).roster;
+  it('tira de vaga sem puxar ninguém; o host não sai', () => {
+    const change = kickFromRoster(fullOpen(), ANA);
+    expect(change.outcome).toBe('going');
+    expect(change.seated).toEqual([]);
+    expect(freeSlots(change.roster)).toBe(1);
+    expect(code(() => kickFromRoster(fullOpen(), HOST))).toBe('LFG_HOST_CANNOT_LEAVE');
+    expect(code(() => kickFromRoster(fullOpen(), DUDA))).toBe('LFG_NOT_IN');
+  });
+
+  it('também apaga convite pendente e pedido', () => {
+    let r = roster({ visibility: 'closed' });
+    r = inviteToRoster(r, [ANA], HOST, 1).roster;
     r = joinRoster(r, BIA, 2).roster;
-    const change = kickFromRoster(r, ANA);
-    expect(change.seated).toEqual([BIA]);
-    expect(code(() => kickFromRoster(r, HOST))).toBe('LFG_HOST_CANNOT_LEAVE');
-    expect(code(() => kickFromRoster(r, DUDA))).toBe('LFG_NOT_IN');
+    expect(kickFromRoster(r, ANA).outcome).toBe('invited');
+    expect(kickFromRoster(r, BIA).outcome).toBe('requested');
+    expect(invitedEntries(kickFromRoster(r, ANA).roster)).toEqual([]);
   });
 });
 
 describe('setRosterSlots', () => {
-  it('subir puxa a fila na ordem de chegada', () => {
-    let r = roster({ slots: 2 });
+  it('subir não senta pedido pendente', () => {
+    let r = roster({ visibility: 'closed', slots: 2 });
     r = joinRoster(r, ANA, 1).roster;
-    r = joinRoster(r, CAIO, 3).roster;
-    r = joinRoster(r, BIA, 2).roster;
     const change = setRosterSlots(r, 4);
-    expect(change.seated).toEqual([BIA, CAIO]);
-    expect(freeSlots(change.roster)).toBe(0);
+    expect(change.roster.slots).toBe(4);
+    expect(change.seated).toEqual([]);
+    expect(entryOf(change.roster, ANA)?.status).toBe('requested');
   });
 
   it('não baixa abaixo de quem tem vaga nem sai da faixa', () => {
@@ -173,23 +256,32 @@ describe('setRosterSlots', () => {
 });
 
 describe('setRosterVisibility', () => {
-  it('abrir aceita os pedidos: com vaga senta, sem vaga vai para a fila', () => {
+  it('pública aceita os pedidos na ordem: com vaga senta, sem vaga é recusado', () => {
     let r = roster({ visibility: 'closed', slots: 2 });
     r = joinRoster(r, BIA, 2).roster;
     r = joinRoster(r, ANA, 1).roster;
     const change = setRosterVisibility(r, 'open');
     expect(change.seated).toEqual([ANA]);
-    expect(change.queued).toEqual([BIA]);
+    expect(change.refused).toEqual([BIA]);
     expect(change.roster.visibility).toBe('open');
     expect(requestedEntries(change.roster)).toEqual([]);
+    expect(entryOf(change.roster, BIA)).toBeUndefined();
   });
 
-  it('fechar não mexe em quem já está', () => {
-    let r = roster();
-    r = joinRoster(r, ANA, 1).roster;
+  it('convites pendentes seguem valendo nos dois sentidos', () => {
+    let r = inviteToRoster(roster({ visibility: 'closed' }), [ANA], HOST, 1).roster;
+    r = setRosterVisibility(r, 'open').roster;
+    expect(entryOf(r, ANA)?.status).toBe('invited');
+    r = setRosterVisibility(r, 'closed').roster;
+    expect(entryOf(r, ANA)?.status).toBe('invited');
+  });
+
+  it('privada não mexe em quem já está', () => {
+    const r = joinRoster(roster(), ANA, 1).roster;
     const change = setRosterVisibility(r, 'closed');
     expect(change.roster.visibility).toBe('closed');
     expect(entryOf(change.roster, ANA)?.status).toBe('going');
     expect(change.seated).toEqual([]);
+    expect(change.refused).toEqual([]);
   });
 });
