@@ -13,6 +13,7 @@ import {
 
 import { createdAt, snowflake, snowflakeArray, text, timestamptz, updatedAt } from './_columns';
 import {
+  lfgKindEnum,
   lfgMemberStatusEnum,
   lfgSessionStatusEnum,
   lfgVisibilityEnum,
@@ -184,13 +185,15 @@ export const tags = pgTable(
   (t) => [uniqueIndex('tags_guild_name_uidx').on(t.guildId, t.name)],
 );
 
-// ── Agenda de jogatinas (módulo squads) ─────────────────────────────────────
+// ── Buscar squad: cards e jogatinas (módulo squads) ────────────────────────
 
 /**
- * Uma jogatina marcada no canal da agenda (PRD §5.11). Salas e cargo do módulo
- * continuam sendo estado do Discord; a agenda precisa de tabela porque lista,
- * vagas e relógio sobrevivem a restart. Os `*_at` do relógio são o que torna
- * cada passo idempotente: o tick só faz o que ainda está nulo.
+ * Tudo o que junta gente no módulo squads (PRD §5.11): o card de "procuro
+ * agora" do `#buscar-squad` (`kind = now`) e a jogatina marcada do `#agenda`
+ * (`kind = scheduled`). Mesma lista, mesma sala e mesmo relógio; um tipo só de
+ * linha é o que deixa o módulo pequeno. Salas e cargo continuam sendo estado do
+ * Discord. Os `*_at` do relógio são o que torna cada passo idempotente: o tick
+ * só faz o que ainda está nulo.
  */
 export const lfgSessions = pgTable(
   'lfg_sessions',
@@ -198,20 +201,26 @@ export const lfgSessions = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     guildId: guildRef(),
     hostId: snowflake('host_id').notNull(),
+    kind: lfgKindEnum('kind').notNull().default('scheduled'),
+    /** No card, a hora do post: ele nasce começado. */
     startsAt: timestamptz('starts_at').notNull(),
     /** Contando o host, de `LFG_MIN_SLOTS` a `LFG_MAX_SLOTS`. */
     slots: integer('slots').notNull(),
     visibility: lfgVisibilityEnum('visibility').notNull().default('open'),
     note: text('note'),
     status: lfgSessionStatusEnum('status').notNull().default('scheduled'),
-    /** A mensagem na agenda e a thread dela. `null` até o bot postar. */
+    /**
+     * A mensagem (no `#agenda` ou, no card, no `#buscar-squad`) e a thread da
+     * jogatina. `null` até o bot postar; o card não tem thread.
+     */
     channelId: snowflake('channel_id'),
     messageId: snowflake('message_id'),
     threadId: snowflake('thread_id'),
-    /** A sala `Squad <grego>` criada no início. */
+    /** A sala `Squad <grego>`: criada no início, ou junto com o card. */
     roomId: snowflake('room_id'),
     remindedAt: timestamptz('reminded_at'),
-    calledAt: timestamptz('called_at'),
+    /** O último DIVULGAR: segura o próximo por `LFG_PROMOTE_COOLDOWN_MINUTES`. */
+    promotedAt: timestamptz('promoted_at'),
     startedAt: timestamptz('started_at'),
     endedAt: timestamptz('ended_at'),
     createdAt: createdAt(),
@@ -223,10 +232,15 @@ export const lfgSessions = pgTable(
       .on(t.startsAt)
       .where(sql`${t.status} in ('scheduled', 'live')`),
     uniqueIndex('lfg_sessions_message_uidx').on(t.messageId),
+    // Um card aberto por pessoa. O bot confere antes; o índice fecha a corrida
+    // de dois modais enviados juntos.
+    uniqueIndex('lfg_sessions_open_call_uidx')
+      .on(t.guildId, t.hostId)
+      .where(sql`${t.kind} = 'now' and ${t.status} in ('scheduled', 'live')`),
   ],
 );
 
-/** Quem está em cada jogatina, e como: host, vai, fila ou pediu. */
+/** Quem está em cada jogatina ou card, e como: host, vai, pediu ou convidado. */
 export const lfgSessionMembers = pgTable(
   'lfg_session_members',
   {
@@ -235,8 +249,10 @@ export const lfgSessionMembers = pgTable(
       .references(() => lfgSessions.id, { onDelete: 'cascade' }),
     userId: snowflake('user_id').notNull(),
     status: lfgMemberStatusEnum('status').notNull(),
-    /** Ordem de chegada: decide a fila. */
+    /** Ordem de chegada: decide a ordem dos pedidos ao virar pública. */
     joinedAt: timestamptz('joined_at').notNull().defaultNow(),
+    /** Quem mandou o convite, em `invited` e em quem entrou por ele. */
+    invitedBy: snowflake('invited_by'),
   },
   (t) => [
     primaryKey({ columns: [t.sessionId, t.userId] }),

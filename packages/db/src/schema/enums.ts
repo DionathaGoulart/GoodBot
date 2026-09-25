@@ -4,6 +4,7 @@ import {
   CASE_SOURCES,
   CASE_TYPES,
   GUILD_STATUSES,
+  LFG_KINDS,
   LFG_MEMBER_STATUSES,
   LFG_SESSION_STATUSES,
   LFG_VISIBILITIES,
@@ -36,6 +37,7 @@ export const statKindEnum = pgEnum('stat_kind', STAT_KINDS);
 export const statGranularityEnum = pgEnum('stat_granularity', STAT_GRANULARITIES);
 export const socialPlatformEnum = pgEnum('social_platform', SOCIAL_PLATFORM_ENUM_VALUES);
 export const socialKindEnum = pgEnum('social_kind', SOCIAL_KIND_ENUM_VALUES);
+export const lfgKindEnum = pgEnum('lfg_kind', LFG_KINDS);
 export const lfgSessionStatusEnum = pgEnum('lfg_session_status', LFG_SESSION_STATUSES);
 export const lfgVisibilityEnum = pgEnum('lfg_visibility', LFG_VISIBILITIES);
 export const lfgMemberStatusEnum = pgEnum('lfg_member_status', LFG_MEMBER_STATUSES);

@@ -176,6 +176,13 @@
       "when": 1790264671501,
       "tag": "0024_lfg_agenda",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790334200436,
+      "tag": "0025_lfg_three_channels",
+      "breakpoints": true
     }
   ]
 }
