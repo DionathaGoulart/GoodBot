@@ -113,12 +113,14 @@ describe('modo manutenção', () => {
 });
 
 /**
- * A DM não tem guild, e o portão do registro calaria o botão do aviso de
- * squad. Ele passa por um desvio próprio, que confere a guild do `custom_id`.
+ * A DM não tem guild, e o portão do registro calaria o botão de squad. Ele
+ * passa por um desvio próprio: o pedido de vaga confere a guild do
+ * `custom_id`, e botão que saiu ouve que o fluxo acabou.
  */
 describe('botão de squad na DM', () => {
   function dmButton(customId: string) {
     const editReply = vi.fn(() => Promise.resolve());
+    const reply = vi.fn(() => Promise.resolve());
     const interaction = {
       inGuild: () => false,
       guildId: null,
@@ -126,7 +128,7 @@ describe('botão de squad na DM', () => {
       user: { id: USER_ID },
       replied: false,
       deferred: false,
-      reply: vi.fn(() => Promise.resolve()),
+      reply,
       editReply,
       followUp: vi.fn(() => Promise.resolve()),
       deferUpdate: vi.fn(function (this: { deferred: boolean }) {
@@ -136,17 +138,30 @@ describe('botão de squad na DM', () => {
       isButton: () => true,
       isRepliable: () => true,
     };
-    return { interaction: interaction as unknown as Interaction, editReply };
+    return { interaction: interaction as unknown as Interaction, editReply, reply };
   }
 
-  it('guild fora do registro responde com erro em vez de falhar mudo', async () => {
+  it('pedido de vaga de guild fora do registro responde com erro em vez de falhar mudo', async () => {
     const handler = createInteractionHandler();
-    const { interaction, editReply } = dmButton(`squad:dm:search:${GUILD_ID}`);
+    const { interaction, reply, editReply } = dmButton(
+      `squad:req:ok:${GUILD_ID}:00000000-0000-4000-8000-000000000001:${USER_ID}`,
+    );
     const ctx = { ...fakeCtx({ serves: false }), client: { guilds: { cache: new Map() } } };
 
     await handler(ctx as unknown as BotContext, interaction);
 
-    expect(editReply).toHaveBeenCalledTimes(1);
+    expect(reply.mock.calls.length + editReply.mock.calls.length).toBe(1);
+  });
+
+  it('botão do aviso por presença, que saiu, ouve que o fluxo acabou', async () => {
+    const handler = createInteractionHandler();
+    const { interaction, reply } = dmButton(`squad:dm:search:${GUILD_ID}`);
+
+    await handler(fakeCtx({}), interaction);
+
+    expect(reply).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining('acabou') as string }),
+    );
   });
 
   it('outro botão de DM segue ignorado', async () => {

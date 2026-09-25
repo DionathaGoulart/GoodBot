@@ -9,7 +9,7 @@ import { CooldownStore } from './cooldown';
 import { botFooter, errorEmbed, warningEmbed } from './embeds';
 import { recordError } from './error-log';
 import { handleComponent, handleModal } from '../interactions/index';
-import { handleSquadDmButton, handleSquadRequestButton } from '../interactions/squads';
+import { handleSquadRequestButton, handleSquadStaleDmButton } from '../interactions/squads';
 import { levelAtLeast, resolveLevel, toMemberLike } from '../services/permissions';
 import { isSquadDmId, parseSquadId } from '../services/squads/ids';
 
@@ -126,19 +126,19 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
     ctx: BotContext,
     interaction: Interaction,
   ): Promise<void> {
-    // As únicas interações de DM que o bot trata: os botões do aviso de squad
-    // e os do pedido de vaga. A guild vem do `custom_id`, e o handler confere o
-    // registro por ela.
+    // As únicas interações de DM que o bot trata: os botões de squad. O pedido
+    // de vaga leva a guild no `custom_id`, e o handler confere o registro por
+    // ela; o resto (o aviso por presença, que saiu) só ouve que acabou.
     if (!interaction.inGuild() && interaction.isButton() && isSquadDmId(interaction.customId)) {
       if (ctx.maintenance.active()) {
         await replyMaintenance(interaction, ctx.maintenance.message());
         return;
       }
-      const handler =
+      await runComponent(interaction, () =>
         parseSquadId(interaction.customId)?.kind === 'request'
-          ? handleSquadRequestButton
-          : handleSquadDmButton;
-      await runComponent(interaction, () => handler(ctx, interaction));
+          ? handleSquadRequestButton(ctx, interaction)
+          : handleSquadStaleDmButton(interaction),
+      );
       return;
     }
 

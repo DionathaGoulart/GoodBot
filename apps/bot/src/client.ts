@@ -8,11 +8,9 @@ import {
 } from 'discord.js';
 
 /**
- * Intents do PRD §10. `GuildPresences` é privilegiada e existe só para o aviso
- * automático do squad (§5.11): precisa estar ligada no Developer Portal antes
- * do deploy, senão o login cai com `Used disallowed intents`. O cache de
- * presença continua desligado (`PresenceManager: 0` abaixo): o handler lê a
- * presença nova do evento e não guarda nada.
+ * Intents do PRD §10. Nenhuma de presença: o aviso automático do squad, o
+ * único que lia presença, saiu na v2.0 (§5.11), e com ele a `GuildPresences`
+ * privilegiada. O cache de presença fica desligado (`PresenceManager: 0`).
  */
 export const INTENTS = [
   GatewayIntentBits.Guilds,
@@ -22,7 +20,6 @@ export const INTENTS = [
   GatewayIntentBits.MessageContent,
   GatewayIntentBits.GuildMessageReactions,
   GatewayIntentBits.GuildVoiceStates,
-  GatewayIntentBits.GuildPresences,
   GatewayIntentBits.DirectMessages,
   GatewayIntentBits.GuildExpressions,
 ] as const;

@@ -18,14 +18,8 @@ describe('/squad', () => {
     expect(squad.defer).toBeFalsy();
   });
 
-  it('tem um subcomando para cada botão do painel, mais o painel', () => {
-    expect(options.map((option) => option.name).sort()).toEqual([
-      'agenda',
-      'agendar',
-      'aviso',
-      'buscar',
-      'painel',
-    ]);
+  it('não tem mais os toggles de cargo da v1.8', () => {
+    expect(options.map((option) => option.name).sort()).toEqual(['agenda', 'agendar', 'painel']);
   });
 
   it('o help cita todos os subcomandos', () => {

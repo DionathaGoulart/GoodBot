@@ -3,7 +3,6 @@
  * (ver `interactions/index.ts`) e o resto é lido aqui, num lugar só, para o
  * builder e o parser nunca divergirem.
  *
- * - `squad:search` e `squad:optout`: os toggles, em mensagem de servidor.
  * - `squad:schedule`: o botão MARCAR JOGATINA e o modal que ele abre.
  * - `squad:vis:<open|closed>`: ABERTA ou FECHADA, logo depois do modal.
  * - `squad:a:<ação>:<sessionId>`: os botões da mensagem da jogatina na agenda.
@@ -12,8 +11,10 @@
  * - `squad:req:<ok|no>:<guildId>:<sessionId>:<userId>`: ACEITAR e RECUSAR um
  *   pedido de vaga. Vai na DM do host e, com a DM fechada, na thread; a DM não
  *   pertence a servidor nenhum, então a guild viaja no próprio `custom_id`.
- * - `squad:dm:<escolha>:<guildId>`: os botões do aviso automático, pelo mesmo
- *   motivo.
+ *
+ * Os ids que saíram (`squad:search`, `squad:optout`, `squad:dm:*` do aviso por
+ * presença, os do squad fixo) não são lidos: o handler responde que aquele
+ * fluxo acabou.
  */
 
 import { LFG_VISIBILITIES } from '@goodbot/shared';
@@ -24,10 +25,6 @@ export const SQUAD_PREFIX = 'squad';
 
 const SNOWFLAKE_RE = /^\d{17,20}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
-/** O que a pessoa responde ao aviso "buscar squad?" na DM. */
-export type SquadDmChoice = 'search' | 'later' | 'optout';
-const DM_CHOICES: readonly string[] = ['search', 'later', 'optout'];
 
 /** Os botões da mensagem da jogatina: VOU (ou ESPERA, ou PEDIR VAGA), SAIR e GERENCIAR. */
 export type AgendaAction = 'join' | 'leave' | 'manage';
@@ -52,28 +49,18 @@ const MANAGE_OPS: readonly string[] = [
 export type RequestAnswer = 'ok' | 'no';
 
 export type SquadCustomId =
-  | { kind: 'search' }
-  | { kind: 'optout' }
   | { kind: 'schedule' }
   | { kind: 'visibility'; visibility: LfgVisibility }
   | { kind: 'agenda'; action: AgendaAction; sessionId: string }
   | { kind: 'manage'; op: ManageOp; sessionId: string }
-  | { kind: 'request'; answer: RequestAnswer; guildId: string; sessionId: string; userId: string }
-  | { kind: 'dm'; choice: SquadDmChoice; guildId: string };
+  | { kind: 'request'; answer: RequestAnswer; guildId: string; sessionId: string; userId: string };
 
-export const SEARCH_TOGGLE_ID = `${SQUAD_PREFIX}:search`;
-export const OPT_OUT_TOGGLE_ID = `${SQUAD_PREFIX}:optout`;
 export const SCHEDULE_ID = `${SQUAD_PREFIX}:schedule`;
 /** Os campos do modal da jogatina. */
 export const SCHEDULE_FIELDS = { when: 'when', slots: 'slots', note: 'note' } as const;
 
 function assertSnowflake(value: string, what: string): void {
   if (!SNOWFLAKE_RE.test(value)) throw new RangeError(`${what} inválido: ${value}`);
-}
-
-export function squadDmId(choice: SquadDmChoice, guildId: string): string {
-  assertSnowflake(guildId, 'guildId');
-  return `${SQUAD_PREFIX}:dm:${choice}:${guildId}`;
 }
 
 export function visibilityId(visibility: LfgVisibility): string {
@@ -110,8 +97,6 @@ export function requestId(
 export function parseSquadId(customId: string): SquadCustomId | null {
   const [prefix, kind, ...rest] = customId.split(':');
   if (prefix !== SQUAD_PREFIX) return null;
-  if (kind === 'search' && rest.length === 0) return { kind: 'search' };
-  if (kind === 'optout' && rest.length === 0) return { kind: 'optout' };
   if (kind === 'schedule' && rest.length === 0) return { kind: 'schedule' };
   if (kind === 'vis' && rest.length === 1) {
     const [visibility] = rest as [string];
@@ -135,16 +120,14 @@ export function parseSquadId(customId: string): SquadCustomId | null {
     if (!UUID_RE.test(sessionId)) return null;
     return { kind: 'request', answer, guildId, sessionId, userId };
   }
-  if (kind === 'dm' && rest.length === 2) {
-    const [choice, guildId] = rest as [string, string];
-    if (!DM_CHOICES.includes(choice) || !SNOWFLAKE_RE.test(guildId)) return null;
-    return { kind: 'dm', choice: choice as SquadDmChoice, guildId };
-  }
   return null;
 }
 
-/** Os botões que chegam por DM: o aviso automático e a resposta a um pedido. */
+/**
+ * Botão do módulo que chegou por DM. Hoje só a resposta a um pedido de vaga é
+ * tratada; os do aviso por presença, que ainda estão em DMs antigas, também
+ * passam aqui, para ouvir que o fluxo acabou em vez de falhar mudo.
+ */
 export function isSquadDmId(customId: string): boolean {
-  const kind = parseSquadId(customId)?.kind;
-  return kind === 'dm' || kind === 'request';
+  return customId.split(':')[0] === SQUAD_PREFIX;
 }

@@ -3,7 +3,6 @@ import {
   LFG_MAX_SLOTS,
   LFG_MIN_SLOTS,
   LFG_NOTE_MAX_LENGTH,
-  LFG_PROMPT_COOLDOWN_HOURS,
   LFG_WHEN_MAX_LENGTH,
   ScheduleSessionInputSchema,
   seatedEntries,
@@ -39,8 +38,7 @@ import type {
   RequestAnswerResult,
   ScheduleDraft,
 } from '../services/squads/agenda';
-import type { ManageOp, SquadCustomId, SquadDmChoice } from '../services/squads/ids';
-import type { SearchState } from '../services/squads/presence';
+import type { ManageOp, SquadCustomId } from '../services/squads/ids';
 import type { LfgSession, LfgSessionWithRoster } from '@goodbot/db';
 import type { LfgMemberStatus, SquadsConfig } from '@goodbot/shared';
 import type {
@@ -52,23 +50,8 @@ import type {
 } from 'discord.js';
 
 export const STALE_FLOW_TEXT =
-  'Aquele fluxo de squad acabou. Agora é só entrar no **➕ Criar Squad** ou usar o botão ' +
-  '**BUSCAR SQUAD** do painel de squads.';
-
-export function searchToggledText(state: SearchState, config: SquadsConfig): string {
-  return state === 'on'
-    ? 'Pronto: você está **buscando squad**. O cargo cai sozinho quando você sai da voz, ' +
-        `ou em ${String(config.searchTtlMinutes)} minutos se não entrar em nenhuma.`
-    : 'Pronto: você **parou de buscar** squad.';
-}
-
-export function optOutToggledText(state: SearchState): string {
-  return state === 'on'
-    ? 'Pronto: não te aviso mais quando você abrir o jogo. Para buscar squad, use o botão ' +
-        '**BUSCAR SQUAD** do painel ou `/squad buscar`; para voltar a receber o aviso, ' +
-        '**SEM AVISO** ou `/squad aviso`.'
-    : 'Pronto: voltei a te avisar quando você abrir o jogo.';
-}
+  'Aquele fluxo de squad acabou. Para jogar agora, use `/procurar`; para marcar uma ' +
+  'jogatina, `/marcar`. Os dois também estão nos botões do canal de jogatinas.';
 
 export async function squadsConfigOrFail(ctx: BotContext, guildId: string): Promise<SquadsConfig> {
   const config = await ctx.config.get(guildId, 'squads');
@@ -498,7 +481,7 @@ export async function handleSquadComponent(
   interaction: MessageComponentInteraction,
 ): Promise<boolean> {
   const parsed = parseSquadId(interaction.customId);
-  if (!parsed || parsed.kind === 'dm') {
+  if (!parsed) {
     await interaction.reply({ content: STALE_FLOW_TEXT, flags: MessageFlags.Ephemeral });
     return true;
   }
@@ -534,8 +517,8 @@ export async function handleSquadComponent(
     return true;
   }
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const config = await squadsConfigOrFail(ctx, guildId);
-  const content = await componentText(ctx, member, parsed, config);
+  await squadsConfigOrFail(ctx, guildId);
+  const content = await componentText(ctx, member, parsed);
   await interaction.editReply({ content });
   return true;
 }
@@ -543,19 +526,11 @@ export async function handleSquadComponent(
 async function componentText(
   ctx: BotContext,
   member: GuildMember,
-  parsed: Extract<SquadCustomId, { kind: 'search' | 'optout' | 'agenda' }>,
-  config: SquadsConfig,
+  parsed: Extract<SquadCustomId, { kind: 'agenda' }>,
 ): Promise<string> {
-  switch (parsed.kind) {
-    case 'search':
-      return searchToggledText(await ctx.squads.toggleSearch(member, config), config);
-    case 'optout':
-      return optOutToggledText(await ctx.squads.toggleOptOut(member, config));
-    case 'agenda':
-      return parsed.action === 'join'
-        ? JOIN_TEXT[await ctx.squadAgenda.join(member, parsed.sessionId)]
-        : LEAVE_TEXT[await ctx.squadAgenda.leave(member, parsed.sessionId)];
-  }
+  return parsed.action === 'join'
+    ? JOIN_TEXT[await ctx.squadAgenda.join(member, parsed.sessionId)]
+    : LEAVE_TEXT[await ctx.squadAgenda.leave(member, parsed.sessionId)];
 }
 
 /**
@@ -666,63 +641,11 @@ export async function handleSquadRequestButton(
   return true;
 }
 
-function dmResultText(choice: SquadDmChoice, guildName: string, config: SquadsConfig): string {
-  switch (choice) {
-    case 'search':
-      return `Em **${guildName}**: ${searchToggledText('on', config)}`;
-    case 'later':
-      return `Beleza. Não te aviso de novo nas próximas ${String(LFG_PROMPT_COOLDOWN_HOURS)} horas.`;
-    case 'optout':
-      return `Em **${guildName}**: ${optOutToggledText('on')}`;
-  }
-}
-
 /**
- * Os botões da DM do aviso automático. A DM não é de servidor nenhum, então
- * tudo o que o gate de `interaction.ts` confere para interação de guild é
- * conferido aqui de novo, pela guild do `custom_id`: atendida, módulo ligado e
- * a pessoa ainda membro. A resposta troca a própria DM, sem botões, para o
- * clique não poder se repetir.
+ * Botão do módulo que chegou por DM e não é resposta a pedido: os do aviso por
+ * presença, que saiu na v2.0, ainda estão em DMs antigas.
  */
-export async function handleSquadDmButton(
-  ctx: BotContext,
-  interaction: ButtonInteraction,
-): Promise<boolean> {
-  const parsed = parseSquadId(interaction.customId);
-  if (parsed?.kind !== 'dm') return false;
-  const { guildId, choice } = parsed;
-  // Erro depois daqui troca o embed e deixa os botões, para tentar de novo.
-  await interaction.deferUpdate();
-  const guild = ctx.registry.serves(guildId) ? ctx.client.guilds.cache.get(guildId) : undefined;
-  if (!guild) {
-    throw new UserFacingError('Esse servidor não usa mais o bot.', { code: 'GUILD_NOT_SERVED' });
-  }
-  const config = await squadsConfigOrFail(ctx, guildId);
-
-  if (choice !== 'later') {
-    const member = await guild.members
-      .fetch({ user: interaction.user.id, force: true })
-      .catch(() => null);
-    if (!member) {
-      throw new UserFacingError(`Você não está mais em **${guild.name}**.`, {
-        code: 'NOT_A_MEMBER',
-      });
-    }
-    if (choice === 'search') await ctx.squads.startSearch(member, config);
-    else if (config.optOutRoleId === null || !member.roles.cache.has(config.optOutRoleId)) {
-      await ctx.squads.toggleOptOut(member, config);
-    }
-  }
-
-  await interaction.editReply({
-    embeds: [
-      infoEmbed({
-        title: 'Buscar squad?',
-        description: dmResultText(choice, guild.name, config),
-        footer: botFooter(),
-      }),
-    ],
-    components: [],
-  });
+export async function handleSquadStaleDmButton(interaction: ButtonInteraction): Promise<boolean> {
+  await interaction.reply({ content: STALE_FLOW_TEXT, flags: MessageFlags.Ephemeral });
   return true;
 }

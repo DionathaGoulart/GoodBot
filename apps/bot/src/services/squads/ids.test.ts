@@ -4,12 +4,9 @@ import {
   agendaId,
   isSquadDmId,
   manageId,
-  OPT_OUT_TOGGLE_ID,
   parseSquadId,
   requestId,
   SCHEDULE_ID,
-  SEARCH_TOGGLE_ID,
-  squadDmId,
   visibilityId,
 } from './ids';
 
@@ -18,20 +15,8 @@ const USER = '876543210987654321';
 const SESSION = '0b8c2f4e-1111-2222-3333-444455556666';
 
 describe('custom_id do squad', () => {
-  it('os toggles vão e voltam', () => {
-    expect(parseSquadId(SEARCH_TOGGLE_ID)).toEqual({ kind: 'search' });
-    expect(parseSquadId(OPT_OUT_TOGGLE_ID)).toEqual({ kind: 'optout' });
+  it('o MARCAR JOGATINA vai e volta', () => {
     expect(parseSquadId(SCHEDULE_ID)).toEqual({ kind: 'schedule' });
-  });
-
-  it('o botão da DM leva a guild', () => {
-    for (const choice of ['search', 'later', 'optout'] as const) {
-      expect(parseSquadId(squadDmId(choice, GUILD))).toEqual({
-        kind: 'dm',
-        choice,
-        guildId: GUILD,
-      });
-    }
   });
 
   it('os botões da agenda levam a jogatina', () => {
@@ -63,19 +48,18 @@ describe('custom_id do squad', () => {
     }
     expect(parseSquadId(`squad:m:drop:${SESSION}`)).toBeNull();
     expect(() => manageId('kick', 'abc')).toThrow(RangeError);
-    expect(isSquadDmId(manageId('cancelok', SESSION))).toBe(false);
   });
 
-  it('o pedido de vaga e o aviso chegam por DM; o resto não', () => {
+  it('todo botão do módulo que chega por DM passa pelo desvio; o resto não', () => {
     expect(isSquadDmId(requestId('no', GUILD, SESSION, USER))).toBe(true);
-    expect(isSquadDmId(squadDmId('later', GUILD))).toBe(true);
-    expect(isSquadDmId(agendaId('join', SESSION))).toBe(false);
-    expect(isSquadDmId(SEARCH_TOGGLE_ID)).toBe(false);
+    // O aviso por presença saiu, mas ainda está em DMs antigas: ouve que acabou.
+    expect(isSquadDmId(`squad:dm:later:${GUILD}`)).toBe(true);
+    expect(isSquadDmId('ticket:close')).toBe(false);
+    expect(isSquadDmId('squadx:close')).toBe(false);
   });
 
   it('cabe no teto de 100 caracteres do Discord', () => {
     const snowflake = '12345678901234567890';
-    expect(squadDmId('optout', snowflake).length).toBeLessThanOrEqual(100);
     expect(requestId('ok', snowflake, SESSION, snowflake).length).toBeLessThanOrEqual(100);
   });
 
@@ -88,15 +72,17 @@ describe('custom_id do squad', () => {
   });
 
   it('recusa guild que não é snowflake', () => {
-    expect(() => squadDmId('search', 'abc')).toThrow(RangeError);
-    expect(parseSquadId('squad:dm:search:abc')).toBeNull();
+    expect(() => requestId('ok', 'abc', SESSION, USER)).toThrow(RangeError);
+    expect(parseSquadId(`squad:req:ok:abc:${SESSION}:${USER}`)).toBeNull();
   });
 
-  it('botão do squad fixo e escolha desconhecida viram null', () => {
+  it('botões que saíram viram null', () => {
     expect(parseSquadId('squad:proposal:accept:0b8c2f4e-1111-2222-3333-444455556666')).toBeNull();
     expect(parseSquadId('squad:status:searching:abc')).toBeNull();
-    expect(parseSquadId(`squad:dm:talvez:${GUILD}`)).toBeNull();
-    expect(parseSquadId('squad:search:extra')).toBeNull();
+    // v1.8: os toggles de cargo e o aviso por presença.
+    expect(parseSquadId('squad:search')).toBeNull();
+    expect(parseSquadId('squad:optout')).toBeNull();
+    expect(parseSquadId(`squad:dm:search:${GUILD}`)).toBeNull();
     expect(parseSquadId('squad:schedule:extra')).toBeNull();
   });
 

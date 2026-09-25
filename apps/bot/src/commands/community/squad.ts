@@ -1,13 +1,7 @@
 import { UserFacingError } from '@goodbot/shared';
 import { MessageFlags, SlashCommandBuilder } from 'discord.js';
 
-import {
-  mineText,
-  optOutToggledText,
-  scheduleModal,
-  searchToggledText,
-  squadsConfigOrFail,
-} from '../../interactions/squads';
+import { mineText, scheduleModal, squadsConfigOrFail } from '../../interactions/squads';
 import { defineCommand } from '../../lib/command';
 import { levelAtLeast } from '../../services/permissions';
 
@@ -15,7 +9,7 @@ import { levelAtLeast } from '../../services/permissions';
 const MINE_LIMIT = 10;
 
 /**
- * `/squad`: atalho dos botões do painel de squads (PRD §5.11). Botão antes de
+ * `/squad`: atalho dos botões do buscar squad (PRD §5.11). Botão antes de
  * comando: toda ação daqui também existe num botão. É de `member`, menos o
  * `painel`, que é de `admin` (PRD §9.1).
  */
@@ -23,14 +17,6 @@ export default defineCommand({
   data: new SlashCommandBuilder()
     .setName('squad')
     .setDescription('Buscar squad')
-    .addSubcommand((sub) =>
-      sub.setName('buscar').setDescription('Liga ou desliga o cargo Buscando Squad'),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName('aviso')
-        .setDescription('Liga ou desliga o aviso de squad quando você abre o jogo'),
-    )
     .addSubcommand((sub) =>
       sub.setName('agendar').setDescription('Marca uma jogatina na agenda do servidor'),
     )
@@ -48,7 +34,6 @@ export default defineCommand({
   ephemeral: true,
   cooldown: 5,
   help:
-    '`buscar` liga ou desliga a sua busca, `aviso` o aviso de quando você abre o jogo, ' +
     '`agendar` marca jogatina, `agenda` lista as suas e `painel` (admin) publica o painel ' +
     'de salas. Para remarcar, mudar vagas ou cancelar, use GERENCIAR na mensagem da jogatina.',
   async execute(ctx) {
@@ -75,16 +60,8 @@ export default defineCommand({
       });
       return;
     }
-    const config = await squadsConfigOrFail(ctx, ctx.guildId);
-    if (subcommand === 'agenda') {
-      const entries = await ctx.squadAgenda.mine(ctx.guildId, ctx.member.id, MINE_LIMIT);
-      await ctx.interaction.editReply({ content: mineText(entries) });
-      return;
-    }
-    const content =
-      subcommand === 'aviso'
-        ? optOutToggledText(await ctx.squads.toggleOptOut(ctx.member, config))
-        : searchToggledText(await ctx.squads.toggleSearch(ctx.member, config), config);
-    await ctx.interaction.editReply({ content });
+    await squadsConfigOrFail(ctx, ctx.guildId);
+    const entries = await ctx.squadAgenda.mine(ctx.guildId, ctx.member.id, MINE_LIMIT);
+    await ctx.interaction.editReply({ content: mineText(entries) });
   },
 });
