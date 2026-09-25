@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { cancelPrompt, managePanel, mineText, rescheduleModal, slotsModal } from './squads';
+import {
+  cancelPrompt,
+  managePanel,
+  mineText,
+  rescheduleModal,
+  slotsModal,
+  visibilityText,
+} from './squads';
 
 import type { LfgSession, LfgSessionWithRoster } from '@goodbot/db';
 
@@ -26,12 +33,12 @@ describe('painel do GERENCIAR', () => {
       found([
         { userId: ALICE, status: 'host', joinedAt: 0 },
         { userId: BOB, status: 'going', joinedAt: 1 },
-        { userId: CAROL, status: 'waiting', joinedAt: 2 },
+        { userId: CAROL, status: 'invited', joinedAt: 2 },
       ]),
       (id) => (id === BOB ? 'Bob' : id),
       'Agora são 2 vagas.',
     );
-    expect(panel.content).toContain('2/2 vagas · aberta · 1 na espera');
+    expect(panel.content).toContain('2/2 vagas · aberta · 1 convite');
     expect(panel.content).toContain('Agora são 2 vagas.');
     expect(panel.allowedMentions).toEqual({ parse: [] });
     const [buttons, select] = panel.components as unknown as Row[];
@@ -44,7 +51,7 @@ describe('painel do GERENCIAR', () => {
     expect(select?.components[0]?.data.custom_id).toBe(`squad:m:kick:${SESSION}`);
     expect(select?.components[0]?.options?.map((o) => o.data)).toEqual([
       { label: 'Bob', value: BOB, description: 'vai' },
-      { label: CAROL, value: CAROL, description: 'na lista de espera' },
+      { label: CAROL, value: CAROL, description: 'convidado' },
     ]);
   });
 
@@ -69,6 +76,16 @@ describe('painel do GERENCIAR', () => {
     expect(when).toContain('"value":"14/09 21:00"');
     expect(when).toContain('"value":"terminids"');
     expect(JSON.stringify(slotsModal({ id: SESSION, slots: 4 }))).toContain('"value":"4"');
+  });
+});
+
+describe('ABRIR e FECHAR', () => {
+  it('diz quantos pedidos entraram e quantos ficaram sem vaga', () => {
+    expect(visibilityText({ visibility: 'closed', accepted: 0, refused: 0 })).toContain('Fechada');
+    const opened = visibilityText({ visibility: 'open', accepted: 2, refused: 1 });
+    expect(opened).toContain('Os 2 pedidos pendentes foram aceitos.');
+    expect(opened).toContain('Um pedido ficou sem vaga e foi recusado.');
+    expect(opened).not.toContain('espera');
   });
 });
 

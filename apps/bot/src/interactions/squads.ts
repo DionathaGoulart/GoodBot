@@ -1,5 +1,4 @@
 import {
-  describeWhen,
   LFG_MAX_SLOTS,
   LFG_MIN_SLOTS,
   LFG_NOTE_MAX_LENGTH,
@@ -24,23 +23,13 @@ import {
 import { botFooter, infoEmbed } from '../lib/embeds';
 import { levelAtLeast, resolveLevel, toMemberLike } from '../services/permissions';
 import { JOIN_TEXT, LEAVE_TEXT, whenDefault } from '../services/squads/agenda';
-import {
-  manageId,
-  parseSquadId,
-  SCHEDULE_FIELDS,
-  SCHEDULE_ID,
-  visibilityId,
-} from '../services/squads/ids';
+import { manageId, parseSquadId, SCHEDULE_FIELDS, SCHEDULE_ID } from '../services/squads/ids';
 
 import type { BotContext } from '../lib/command';
-import type {
-  MemberAgendaEntry,
-  RequestAnswerResult,
-  ScheduleDraft,
-} from '../services/squads/agenda';
+import type { MemberAgendaEntry, RequestAnswerResult } from '../services/squads/agenda';
 import type { ManageOp, SquadCustomId } from '../services/squads/ids';
 import type { LfgSession, LfgSessionWithRoster } from '@goodbot/db';
-import type { LfgMemberStatus, SquadsConfig } from '@goodbot/shared';
+import type { LfgMemberStatus, LfgVisibility, SquadsConfig } from '@goodbot/shared';
 import type {
   ButtonInteraction,
   Guild,
@@ -63,7 +52,7 @@ export async function squadsConfigOrFail(ctx: BotContext, guildId: string): Prom
   return config;
 }
 
-/** O modal do MARCAR JOGATINA: quando, vagas e nota. Aberta ou fechada vem depois, em botão. */
+/** O modal do MARCAR JOGATINA: quando, vagas e nota. A jogatina nasce fechada. */
 export function scheduleModal(config: Pick<SquadsConfig, 'roomSize'>): ModalBuilder {
   return new ModalBuilder()
     .setCustomId(SCHEDULE_ID)
@@ -108,37 +97,13 @@ export function scheduleModal(config: Pick<SquadsConfig, 'roomSize'>): ModalBuil
     );
 }
 
-/** O resumo do modal com a última escolha: ABERTA ou FECHADA. */
-export function visibilityPrompt(draft: ScheduleDraft, now: Date, timeZone: string) {
-  const unix = String(Math.floor(draft.startsAt.getTime() / 1000));
-  const note = draft.note ? `\n> ${draft.note.replace(/\n/g, '\n> ')}` : '';
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(visibilityId('open'))
-      .setLabel('ABERTA')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(visibilityId('closed'))
-      .setLabel('FECHADA')
-      .setStyle(ButtonStyle.Secondary),
-  );
-  return {
-    content:
-      `Jogatina **${describeWhen(draft.startsAt, now, timeZone)}** (<t:${unix}:F>), ` +
-      `${String(draft.slots)} vagas contando você.${note}\n\n` +
-      '**ABERTA**: quem clicar em VOU entra na hora. ' +
-      '**FECHADA**: cada pedido de vaga chega na sua DM para você aceitar ou recusar.',
-    components: [row],
-  };
-}
-
 // ── GERENCIAR ───────────────────────────────────────────────────────────────
 
 const ROSTER_STATUS: Record<LfgMemberStatus, string> = {
   host: 'marcou',
   going: 'vai',
-  waiting: 'na lista de espera',
   requested: 'pediu vaga',
+  invited: 'convidado',
 };
 
 /** Quantas pessoas o select de TIRAR ALGUÉM mostra: o teto do Discord. */
@@ -160,10 +125,10 @@ export function managePanel(
     `${String(seated)}/${String(roster.slots)} vagas`,
     roster.visibility === 'open' ? 'aberta' : 'fechada',
   ];
-  const waiting = roster.entries.filter((entry) => entry.status === 'waiting').length;
   const requested = roster.entries.filter((entry) => entry.status === 'requested').length;
-  if (waiting > 0) counts.push(`${String(waiting)} na espera`);
+  const invited = roster.entries.filter((entry) => entry.status === 'invited').length;
   if (requested > 0) counts.push(`${String(requested)} ${requested === 1 ? 'pedido' : 'pedidos'}`);
+  if (invited > 0) counts.push(`${String(invited)} ${invited === 1 ? 'convite' : 'convites'}`);
 
   const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -361,17 +326,8 @@ async function handleManage(
       return true;
     case 'vis': {
       await interaction.deferUpdate();
-      const { visibility, accepted } = await ctx.squadAgenda.toggleVisibility(
-        guild,
-        sessionId,
-        member.id,
-      );
-      const status =
-        visibility === 'closed'
-          ? 'Fechada: os próximos pedidos de vaga chegam na DM de quem marcou.'
-          : accepted > 0
-            ? `Aberta: quem clicar em VOU entra na hora, e ${accepted === 1 ? 'o pedido pendente foi aceito' : `os ${String(accepted)} pedidos pendentes foram aceitos`}.`
-            : 'Aberta: quem clicar em VOU entra na hora.';
+      const toggled = await ctx.squadAgenda.toggleVisibility(guild, sessionId, member.id);
+      const status = visibilityText(toggled);
       await interaction.editReply(await panelAfter(ctx, guild, sessionId, status));
       return true;
     }
@@ -386,6 +342,33 @@ async function handleManage(
       return true;
     }
   }
+}
+
+/** A linha do painel depois de ABRIR ou FECHAR. */
+export function visibilityText(result: {
+  visibility: LfgVisibility;
+  accepted: number;
+  refused: number;
+}): string {
+  if (result.visibility === 'closed') {
+    return 'Fechada: os próximos pedidos de vaga chegam na DM de quem marcou.';
+  }
+  const parts = ['Aberta: quem clicar em VOU entra na hora, enquanto houver vaga.'];
+  if (result.accepted > 0) {
+    parts.push(
+      result.accepted === 1
+        ? 'O pedido pendente foi aceito.'
+        : `Os ${String(result.accepted)} pedidos pendentes foram aceitos.`,
+    );
+  }
+  if (result.refused > 0) {
+    parts.push(
+      result.refused === 1
+        ? 'Um pedido ficou sem vaga e foi recusado.'
+        : `${String(result.refused)} pedidos ficaram sem vaga e foram recusados.`,
+    );
+  }
+  return parts.join(' ');
 }
 
 /** Os modais do GERENCIAR: REMARCAR e VAGAS. A resposta refaz o painel de onde vieram. */
@@ -437,8 +420,8 @@ async function handleManageModal(
 const MINE_STATUS: Record<LfgMemberStatus, string> = {
   host: 'você marcou',
   going: 'você vai',
-  waiting: 'você está na lista de espera',
   requested: 'seu pedido está com quem marcou',
+  invited: 'você foi convidado',
 };
 
 /** O `/squad agenda`: as jogatinas em que a pessoa está, com o link de cada uma. */
@@ -505,17 +488,6 @@ export async function handleSquadComponent(
     await interaction.showModal(scheduleModal(config));
     return true;
   }
-  // ABERTA ou FECHADA troca a própria resposta efêmera do modal.
-  if (parsed.kind === 'visibility') {
-    await interaction.deferUpdate();
-    const config = await squadsConfigOrFail(ctx, guildId);
-    const scheduled = await ctx.squadAgenda.schedule(member, parsed.visibility, config, 'command');
-    await interaction.editReply({
-      content: `Jogatina marcada: [ver na agenda](${scheduled.url}). A conversa fica na thread dela.`,
-      components: [],
-    });
-    return true;
-  }
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   await squadsConfigOrFail(ctx, guildId);
   const content = await componentText(ctx, member, parsed);
@@ -534,9 +506,9 @@ async function componentText(
 }
 
 /**
- * O modal da jogatina, venha ele do botão do painel ou do `/squad agendar`.
- * Confere o formato e o "quando" e responde com ABERTA e FECHADA; o erro de
- * leitura volta em efêmero, com exemplos.
+ * O modal da jogatina, venha ele do botão ou do `/squad agendar`. Confere o
+ * formato e marca; o erro de leitura do "quando" volta em efêmero, com
+ * exemplos.
  */
 export async function handleSquadModal(
   ctx: BotContext,
@@ -550,7 +522,7 @@ export async function handleSquadModal(
   const member = memberOf(interaction);
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const config = await squadsConfigOrFail(ctx, member.guild.id);
-  const input = ScheduleSessionInputSchema.omit({ visibility: true }).safeParse({
+  const input = ScheduleSessionInputSchema.safeParse({
     when: interaction.fields.getTextInputValue(SCHEDULE_FIELDS.when),
     slots: interaction.fields.getTextInputValue(SCHEDULE_FIELDS.slots),
     note: interaction.fields.getTextInputValue(SCHEDULE_FIELDS.note),
@@ -560,9 +532,12 @@ export async function handleSquadModal(
       code: 'VALIDATION',
     });
   }
-  const draft = await ctx.squadAgenda.prepare(member, input.data, config);
-  const { timezone } = await ctx.config.getSettings(member.guild.id);
-  await interaction.editReply(visibilityPrompt(draft, new Date(), timezone));
+  const scheduled = await ctx.squadAgenda.schedule(member, input.data, config, 'command');
+  await interaction.editReply({
+    content:
+      `Jogatina marcada: [ver na agenda](${scheduled.url}). Ela nasce **fechada**: cada ` +
+      'pedido de vaga chega na sua DM. Para abrir, use GERENCIAR. A conversa fica na thread.',
+  });
   return true;
 }
 
@@ -570,8 +545,6 @@ export function requestAnsweredText(result: RequestAnswerResult): string {
   switch (result.outcome) {
     case 'going':
       return `Aceito: <@${result.userId}> está na lista.`;
-    case 'waiting':
-      return `Aceito, mas lotou: <@${result.userId}> foi para a lista de espera.`;
     case 'rejected':
       return `Recusado. <@${result.userId}> foi avisado e pode pedir de novo.`;
   }

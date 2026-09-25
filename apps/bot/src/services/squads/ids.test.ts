@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  agendaId,
-  isSquadDmId,
-  manageId,
-  parseSquadId,
-  requestId,
-  SCHEDULE_ID,
-  visibilityId,
-} from './ids';
+import { agendaId, isSquadDmId, manageId, parseSquadId, requestId, SCHEDULE_ID } from './ids';
 
 const GUILD = '123456789012345678';
 const USER = '876543210987654321';
@@ -20,10 +12,6 @@ describe('custom_id do squad', () => {
   });
 
   it('os botões da agenda levam a jogatina', () => {
-    expect(parseSquadId(visibilityId('closed'))).toEqual({
-      kind: 'visibility',
-      visibility: 'closed',
-    });
     expect(parseSquadId(agendaId('join', SESSION))).toEqual({
       kind: 'agenda',
       action: 'join',
@@ -68,7 +56,6 @@ describe('custom_id do squad', () => {
     expect(parseSquadId('squad:a:join:abc')).toBeNull();
     expect(parseSquadId(`squad:a:dance:${SESSION}`)).toBeNull();
     expect(parseSquadId(`squad:req:talvez:${GUILD}:${SESSION}:${USER}`)).toBeNull();
-    expect(parseSquadId('squad:vis:secreta')).toBeNull();
   });
 
   it('recusa guild que não é snowflake', () => {
@@ -83,6 +70,8 @@ describe('custom_id do squad', () => {
     expect(parseSquadId('squad:search')).toBeNull();
     expect(parseSquadId('squad:optout')).toBeNull();
     expect(parseSquadId(`squad:dm:search:${GUILD}`)).toBeNull();
+    // v1.9: a escolha ABERTA ou FECHADA depois do modal.
+    expect(parseSquadId('squad:vis:open')).toBeNull();
     expect(parseSquadId('squad:schedule:extra')).toBeNull();
   });
 

@@ -10,8 +10,6 @@ import {
   fakeRoomGuild,
   GUILD,
   LOBBY,
-  PANEL,
-  SEARCH,
   squadsConfig,
 } from './__fixtures__/rooms';
 
@@ -77,6 +75,7 @@ function session(overrides: Partial<LfgSession> = {}): LfgSession {
     id: SESSION,
     guildId: GUILD,
     hostId: ALICE,
+    kind: 'scheduled',
     startsAt: new Date(NOW + 2 * HOUR_MS),
     slots: 4,
     visibility: 'open',
@@ -87,7 +86,7 @@ function session(overrides: Partial<LfgSession> = {}): LfgSession {
     threadId: THREAD,
     roomId: null,
     remindedAt: null,
-    calledAt: null,
+    promotedAt: null,
     startedAt: null,
     endedAt: null,
     createdAt: new Date(NOW - 24 * HOUR_MS),
@@ -99,17 +98,16 @@ function session(overrides: Partial<LfgSession> = {}): LfgSession {
 describe('agendaSteps', () => {
   const at = (minutesToStart: number) => NOW + 2 * HOUR_MS - minutesToStart * MINUTE_MS;
 
-  it('nada antes da hora de chamar; chamada 1 h antes; lembrete 30 min antes', () => {
-    expect(agendaSteps(session(), roster(), at(61), 'none')).toEqual([]);
-    expect(agendaSteps(session(), roster(), at(60), 'none')).toEqual(['call']);
-    expect(agendaSteps(session(), roster(), at(30), 'none')).toEqual(['call', 'remind']);
-    const done = session({ calledAt: new Date(0), remindedAt: new Date(0) });
+  it('nada antes do lembrete; lembrete 30 min antes, uma vez só', () => {
+    expect(agendaSteps(session(), roster(), at(60), 'none')).toEqual([]);
+    expect(agendaSteps(session(), roster(), at(31), 'none')).toEqual([]);
+    expect(agendaSteps(session(), roster(), at(30), 'none')).toEqual(['remind']);
+    const done = session({ remindedAt: new Date(0) });
     expect(agendaSteps(done, roster(), at(10), 'none')).toEqual([]);
   });
 
-  it('não chama reforço em fechada nem em lotada', () => {
-    expect(agendaSteps(session(), roster({ visibility: 'closed' }), at(40), 'none')).toEqual([]);
-    expect(agendaSteps(session(), roster({ slots: 2 }), at(40), 'none')).toEqual([]);
+  it('não chama reforço: aberta com vaga, uma hora antes, fica quieta', () => {
+    expect(agendaSteps(session(), roster(), at(50), 'none')).toEqual([]);
   });
 
   it('não lembra jogatina marcada já dentro da janela do lembrete', () => {
@@ -148,18 +146,6 @@ function setup(config: SquadsConfig = squadsConfig()) {
     id: THREAD,
     isThread: () => true,
     send: threadSend,
-  });
-  const panel = h.addChannel({
-    id: PANEL,
-    type: ChannelType.GuildText,
-    name: 'buscar-squad',
-    parentId: CATEGORY,
-  });
-  const panelSend = vi.fn((_body: Sent) => Promise.resolve({}));
-  Object.assign(panel, { send: panelSend });
-  (h.guild.roles.cache as Map<string, unknown>).set(SEARCH, {
-    id: SEARCH,
-    toString: () => `<@&${SEARCH}>`,
   });
 
   /** Quem está em voz ganha `setChannel`, como o `VoiceState` do discord.js. */
@@ -204,7 +190,6 @@ function setup(config: SquadsConfig = squadsConfig()) {
     ...h,
     clock,
     threadSend,
-    panelSend,
     openSessionRoom,
     refresh,
     record,
@@ -228,25 +213,18 @@ beforeEach(() => {
 });
 
 describe('SquadAgendaClock', () => {
-  it('chama reforço uma vez só, marcando o cargo de busca com o link', async () => {
+  it('uma hora antes não posta nada em canal nenhum', async () => {
     const h = setup();
     const s = put(session(), roster());
     h.at(s.startsAt.getTime() - 50 * MINUTE_MS);
     await h.clock.tick();
-    await h.clock.tick();
-
-    expect(h.panelSend).toHaveBeenCalledOnce();
-    const body = h.panelSend.mock.calls[0]![0];
-    expect(body.content).toContain(`<@&${SEARCH}>`);
-    expect(body.content).toContain('2 vagas');
-    expect(body.content).toContain(`/channels/${GUILD}/${AGENDA}/${MESSAGE}`);
-    expect(body.allowedMentions).toEqual({ roles: [SEARCH] });
-    expect(s.calledAt).not.toBeNull();
+    expect(h.threadSend).not.toHaveBeenCalled();
+    expect(s.remindedAt).toBeNull();
   });
 
   it('lembra na thread quem vai, uma vez só', async () => {
     const h = setup();
-    const s = put(session({ calledAt: new Date(0) }), roster());
+    const s = put(session(), roster());
     h.at(s.startsAt.getTime() - 25 * MINUTE_MS);
     await h.clock.tick();
     await h.clock.tick();

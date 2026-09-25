@@ -1,17 +1,13 @@
 import { getLfgSession, listDueLfgSessions, updateLfgSession } from '@goodbot/db';
 import {
-  freeSlots,
   HOUR_MS,
-  LFG_CALL_MINUTES,
   LFG_REMINDER_MINUTES,
   LFG_ROOM_HOLD_MINUTES,
   LFG_SESSION_HOURS,
   MINUTE_MS,
   seatedEntries,
 } from '@goodbot/shared';
-import { ChannelType } from 'discord.js';
 
-import { messageLink } from './agenda';
 import { occupantsOf } from './rooms';
 import { childLogger } from '../../logger';
 
@@ -30,7 +26,6 @@ const log = childLogger('squads');
 export const AGENDA_TICK_MS = MINUTE_MS;
 
 const REMINDER_MS = LFG_REMINDER_MINUTES * MINUTE_MS;
-const CALL_MS = LFG_CALL_MINUTES * MINUTE_MS;
 const HOLD_MS = LFG_ROOM_HOLD_MINUTES * MINUTE_MS;
 const SESSION_MS = LFG_SESSION_HOURS * HOUR_MS;
 
@@ -43,21 +38,22 @@ const SESSION_MS = LFG_SESSION_HOURS * HOUR_MS;
 export type RoomState = 'none' | 'gone' | 'empty' | 'occupied';
 
 /**
- * O que o relógio faz com uma jogatina: `remind` na thread, `call` no canal do
- * painel, `start` abre a sala, `lonely` fecha quem ninguém confirmou além do
- * host e `end` fecha a que rolou (ou a que o bot perdeu por estar fora do ar).
+ * O que o relógio faz com uma jogatina: `remind` na thread, `start` abre a
+ * sala, `lonely` fecha quem ninguém confirmou além do host e `end` fecha a que
+ * rolou (ou a que o bot perdeu por estar fora do ar). A chamada de reforço da
+ * v1.9 saiu: chamar gente é o DIVULGAR, decisão do host.
  */
-export type AgendaStep = 'remind' | 'call' | 'start' | 'lonely' | 'end';
+export type AgendaStep = 'remind' | 'start' | 'lonely' | 'end';
 
 export type ClockSession = Pick<
   LfgSession,
-  'status' | 'startsAt' | 'createdAt' | 'remindedAt' | 'calledAt' | 'startedAt'
+  'status' | 'startsAt' | 'createdAt' | 'remindedAt' | 'startedAt'
 >;
 
 /**
  * Os passos vencidos de uma jogatina em `now`. Cada um tem a sua coluna
- * (`remindedAt`, `calledAt`, `startedAt`, `endedAt`), então rodar de novo
- * depois de gravar não repete nada.
+ * (`remindedAt`, `startedAt`, `endedAt`), então rodar de novo depois de
+ * gravar não repete nada.
  */
 export function agendaSteps(
   session: ClockSession,
@@ -77,24 +73,15 @@ export function agendaSteps(
   if (now >= startsAt + SESSION_MS) return ['end'];
   if (now >= startsAt) return seatedEntries(roster).length > 1 ? ['start'] : ['lonely'];
 
-  const steps: AgendaStep[] = [];
-  if (
-    session.calledAt === null &&
-    roster.visibility === 'open' &&
-    freeSlots(roster) > 0 &&
-    now >= startsAt - CALL_MS
-  ) {
-    steps.push('call');
-  }
   // Marcada já dentro da janela do lembrete: quem entrou acabou de ver a hora.
   if (
     session.remindedAt === null &&
     now >= startsAt - REMINDER_MS &&
     session.createdAt.getTime() < startsAt - REMINDER_MS
   ) {
-    steps.push('remind');
+    return ['remind'];
   }
-  return steps;
+  return [];
 }
 
 function unix(at: Date): string {
@@ -168,7 +155,7 @@ export class SquadAgendaClock {
     try {
       const now = this.now();
       const served = new Set(this.registry.servedGuildIds());
-      const due = await listDueLfgSessions(this.db, new Date(now + CALL_MS));
+      const due = await listDueLfgSessions(this.db, new Date(now + REMINDER_MS));
       for (const session of due) {
         if (!served.has(session.guildId)) continue;
         try {
@@ -199,7 +186,6 @@ export class SquadAgendaClock {
 
     for (const step of agendaSteps(session, roster, now, this.roomState(guild, session))) {
       if (step === 'remind') await this.remind(guild, session, roster, now);
-      else if (step === 'call') await this.call(guild, config, session, roster, now);
       else if (step === 'start') await this.begin(guild, config, session, roster, now);
       else await this.finish(guild, session, now, step === 'lonely');
     }
@@ -244,49 +230,6 @@ export class SquadAgendaClock {
       `${mentions(seated)} a jogatina começa <t:${at}:R>, às <t:${at}:t>.`,
       seated,
     );
-  }
-
-  /**
-   * 1 h antes, aberta e com vaga: chama reforço no canal do painel, marcando o
-   * cargo de busca. Sem canal ou sem link o passo conta como feito, para não
-   * tentar de novo a cada minuto.
-   */
-  private async call(
-    guild: Guild,
-    config: SquadsConfig,
-    session: LfgSession,
-    roster: Roster,
-    now: number,
-  ): Promise<void> {
-    const claimed = await updateLfgSession(this.db, guild.id, session.id, {
-      calledAt: new Date(now),
-    });
-    if (!claimed) return;
-    const channel = config.panelChannelId
-      ? guild.channels.cache.get(config.panelChannelId)
-      : undefined;
-    if (channel?.type !== ChannelType.GuildText || !session.channelId || !session.messageId) {
-      log.info({ guildId: guild.id, sessionId: session.id }, 'chamada de reforço sem canal');
-      return;
-    }
-    const role = config.searchRoleId ? guild.roles.cache.get(config.searchRoleId) : undefined;
-    const free = freeSlots(roster);
-    const at = unix(session.startsAt);
-    const link = messageLink(guild.id, session.channelId, session.messageId);
-    const vagas = free === 1 ? '1 vaga' : `${String(free)} vagas`;
-    try {
-      await channel.send({
-        content:
-          `${role ? `${role.toString()} ` : ''}jogatina <t:${at}:R>, às <t:${at}:t>, ` +
-          `com **${vagas}**. Clique em VOU na mensagem: ${link}`,
-        allowedMentions: { roles: role ? [role.id] : [] },
-      });
-    } catch (error) {
-      log.warn(
-        { err: error, guildId: guild.id, sessionId: session.id },
-        'chamada de reforço falhou',
-      );
-    }
   }
 
   /**

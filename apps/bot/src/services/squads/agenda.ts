@@ -8,13 +8,11 @@ import {
 } from '@goodbot/db';
 import {
   acceptRequest,
-  freeSlots,
   joinRoster,
   kickFromRoster,
   LFG_MAX_OPEN_SESSIONS,
   LFG_MAX_SESSIONS_PER_HOST,
   leaveRoster,
-  MINUTE_MS,
   parseWhen,
   rejectRequest,
   requestedEntries,
@@ -24,7 +22,6 @@ import {
   setRosterVisibility,
   toLocalDateTime,
   UserFacingError,
-  waitingEntries,
 } from '@goodbot/shared';
 import {
   ActionRowBuilder,
@@ -59,8 +56,6 @@ const log = childLogger('squads');
 
 /** Uma edição por jogatina a cada tanto: uma rajada de VOU vira uma edição só. */
 export const AGENDA_RENDER_MS = 1.5 * SECOND_MS;
-/** Quanto tempo o modal preenchido espera o clique em ABERTA ou FECHADA. */
-export const DRAFT_TTL_MS = 15 * MINUTE_MS;
 /** Quantos nomes cada lista mostra antes do "e mais N". */
 const LIST_SHOWN = 15;
 /** Teto do nome de thread no Discord. */
@@ -75,13 +70,6 @@ const AGENDA_PERMISSIONS = [
 ] as const;
 
 // ── Regras puras ────────────────────────────────────────────────────────────
-
-/** O modal preenchido, à espera de ABERTA ou FECHADA. */
-export interface ScheduleDraft {
-  startsAt: Date;
-  slots: number;
-  note: string | null;
-}
 
 /** O pedaço da jogatina que a mensagem mostra. */
 export type AgendaSession = Pick<LfgSession, 'id' | 'hostId' | 'startsAt' | 'note' | 'status'>;
@@ -106,10 +94,9 @@ export function mentionList(userIds: readonly string[]): string {
   return rest > 0 ? `${shown.join('\n')}\ne mais ${String(rest)}` : shown.join('\n');
 }
 
-/** O texto e o estilo do botão de entrar, conforme a jogatina está. */
+/** O texto do botão de entrar, conforme a jogatina está. Lotada, o clique ouve "lotou". */
 export function joinLabel(roster: Roster): string {
-  if (roster.visibility === 'closed') return 'PEDIR VAGA';
-  return freeSlots(roster) > 0 ? 'VOU' : 'ENTRAR NA ESPERA';
+  return roster.visibility === 'closed' ? 'PEDIR VAGA' : 'VOU';
 }
 
 const VISIBILITY_LABEL: Record<LfgVisibility, string> = { open: 'aberta', closed: 'fechada' };
@@ -140,13 +127,6 @@ export function agendaMessage(session: AgendaSession, roster: Roster, embedColor
   const note = session.note ? `\n\n> ${session.note.replace(/\n/g, '\n> ')}` : '';
   const live = session.status === 'live' ? '\n**Rolando agora.**' : '';
   const fields = [{ name: `Vão (${count}/${String(roster.slots)})`, value: mentionList(seated) }];
-  const waiting = waitingEntries(roster).map((entry) => entry.userId);
-  if (waiting.length > 0) {
-    fields.push({
-      name: `Lista de espera (${String(waiting.length)})`,
-      value: mentionList(waiting),
-    });
-  }
   const requested = requestedEntries(roster).map((entry) => entry.userId);
   if (requested.length > 0) {
     fields.push({
@@ -161,7 +141,7 @@ export function agendaMessage(session: AgendaSession, roster: Roster, embedColor
       fields,
       footer:
         roster.visibility === 'open'
-          ? 'Aberta: quem clica em VOU entra na hora. Lotou, entra na espera.'
+          ? 'Aberta: quem clica em VOU entra na hora, enquanto houver vaga.'
           : 'Fechada: quem marcou aprova cada pedido de vaga.',
     },
     embedColor,
@@ -226,20 +206,21 @@ export function requestMessage(
 
 export const JOIN_TEXT: Record<JoinOutcome, string> = {
   going: 'Pronto: você está na lista.',
-  waiting:
-    'Lotou, então você entrou na **lista de espera**. Abrindo vaga, você sobe e eu te aviso.',
   requested: 'Pedido enviado. Quem marcou decide, e eu te aviso da resposta por DM.',
 };
 
-/** O aviso por DM de quem teve o pedido respondido (pelo host ou por ABRIR). */
-function answeredText(outcome: 'going' | 'waiting' | 'rejected', which: string): string {
+/**
+ * O aviso por DM de quem teve o pedido respondido: pelo host, ou por ABRIR
+ * (`refused` é o pedido que ficou sem vaga quando a jogatina abriu).
+ */
+function answeredText(outcome: 'going' | 'rejected' | 'refused', which: string): string {
   switch (outcome) {
     case 'going':
       return `Seu pedido foi aceito: você está na lista da ${which}.`;
-    case 'waiting':
-      return `Seu pedido foi aceito, mas lotou: você está na lista de espera da ${which}.`;
     case 'rejected':
       return `Dessa vez não rolou: quem marcou a ${which} recusou seu pedido.`;
+    case 'refused':
+      return `A ${which} abriu, mas lotou antes de chegar no seu pedido. Tente de novo se abrir vaga.`;
   }
 }
 
@@ -252,28 +233,9 @@ export function whenDefault(startsAt: Date, timeZone: string): string {
 
 export const LEAVE_TEXT: Record<Exclude<LfgMemberStatus, 'host'>, string> = {
   going: 'Pronto: você saiu da lista.',
-  waiting: 'Pronto: você saiu da lista de espera.',
   requested: 'Pronto: seu pedido foi retirado.',
+  invited: 'Pronto: você recusou o convite.',
 };
-
-/** Rascunhos do modal, por pessoa em cada guild. Memória: um restart pede o modal de novo. */
-export class DraftBook {
-  private readonly drafts = new Map<string, { draft: ScheduleDraft; expiresAt: number }>();
-
-  constructor(private readonly ttlMs = DRAFT_TTL_MS) {}
-
-  put(guildId: string, userId: string, draft: ScheduleDraft, now: number): void {
-    for (const [key, entry] of this.drafts) if (entry.expiresAt <= now) this.drafts.delete(key);
-    this.drafts.set(`${guildId}:${userId}`, { draft, expiresAt: now + this.ttlMs });
-  }
-
-  take(guildId: string, userId: string, now: number): ScheduleDraft | null {
-    const key = `${guildId}:${userId}`;
-    const entry = this.drafts.get(key);
-    this.drafts.delete(key);
-    return entry && entry.expiresAt > now ? entry.draft : null;
-  }
-}
 
 // ── O service ───────────────────────────────────────────────────────────────
 
@@ -292,7 +254,7 @@ export interface MemberAgendaEntry {
 }
 
 export interface RequestAnswerResult {
-  outcome: 'going' | 'waiting' | 'rejected';
+  outcome: 'going' | 'rejected';
   userId: string;
 }
 
@@ -349,7 +311,6 @@ export class SquadAgendaService {
   private readonly audit: Pick<AuditService, 'record'>;
   private readonly now: () => number;
   private readonly renderMs: number;
-  private readonly drafts = new DraftBook();
   private readonly renders = new Map<string, NodeJS.Timeout>();
 
   constructor(deps: SquadAgendaDeps) {
@@ -410,63 +371,36 @@ export class SquadAgendaService {
   }
 
   /**
-   * O modal preenchido: confere tudo o que dá para conferir antes do clique em
-   * ABERTA ou FECHADA e guarda o rascunho. Quem chama já validou o formato com
-   * o schema de `shared`; o "quando" é lido aqui, no fuso da guild.
-   */
-  async prepare(
-    member: GuildMember,
-    input: { when: string; slots: number | undefined; note: string | null },
-    config: SquadsConfig,
-  ): Promise<ScheduleDraft> {
-    const guild = member.guild;
-    this.agendaChannel(guild, config);
-    await this.assertRoom(guild.id, member.id);
-    const { timezone } = await this.config.getSettings(guild.id);
-    const draft: ScheduleDraft = {
-      startsAt: parseWhen(input.when, new Date(this.now()), timezone),
-      slots: input.slots ?? config.roomSize,
-      note: input.note,
-    };
-    this.drafts.put(guild.id, member.id, draft, this.now());
-    return draft;
-  }
-
-  /**
-   * ABERTA ou FECHADA: cria a linha, posta a mensagem e abre a thread. A linha
-   * nasce antes da mensagem porque os botões levam o id dela; mensagem que não
-   * sai cancela a linha, para a agenda não guardar jogatina que ninguém vê.
+   * O modal do MARCAR JOGATINA: lê o "quando" no fuso da guild, cria a linha,
+   * posta a mensagem e abre a thread. A jogatina nasce privada (PRD §5.11):
+   * abrir é um clique no GERENCIAR. A linha nasce antes da mensagem porque os
+   * botões levam o id dela; mensagem que não sai cancela a linha, para a
+   * agenda não guardar jogatina que ninguém vê. Quem chama já validou o
+   * formato com o schema de `shared`.
    */
   async schedule(
     member: GuildMember,
-    visibility: LfgVisibility,
+    input: { when: string; slots: number | undefined; note: string | null },
     config: SquadsConfig,
     source: AuditSource,
   ): Promise<ScheduledSession> {
     const guild = member.guild;
-    const draft = this.drafts.take(guild.id, member.id, this.now());
-    if (!draft) {
-      throw new UserFacingError('Esse formulário expirou. Clique em MARCAR JOGATINA de novo.', {
-        code: 'LFG_DRAFT_GONE',
-      });
-    }
-    if (draft.startsAt.getTime() <= this.now()) {
-      throw new UserFacingError('Essa hora já passou. Clique em MARCAR JOGATINA de novo.', {
-        code: 'LFG_WHEN_PAST',
-      });
-    }
     const channel = this.agendaChannel(guild, config);
     await this.assertRoom(guild.id, member.id);
+    const settings = await this.config.getSettings(guild.id);
+    const startsAt = parseWhen(input.when, new Date(this.now()), settings.timezone);
+    const slots = input.slots ?? config.roomSize;
+    const visibility: LfgVisibility = 'closed';
 
     const { session, roster } = await createLfgSession(this.db, {
       guildId: guild.id,
       hostId: member.id,
-      startsAt: draft.startsAt,
-      slots: draft.slots,
+      kind: 'scheduled',
+      startsAt,
+      slots,
       visibility,
-      note: draft.note,
+      note: input.note,
     });
-    const settings = await this.config.getSettings(guild.id);
 
     let message;
     try {
@@ -485,7 +419,7 @@ export class SquadAgendaService {
     let threadId: string | null = null;
     try {
       const thread = await message.startThread({
-        name: threadName(draft.startsAt, settings.timezone),
+        name: threadName(startsAt, settings.timezone),
         autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
         reason: `Jogatina marcada por ${member.user.username}`,
       });
@@ -508,21 +442,16 @@ export class SquadAgendaService {
       source,
       actor: member.id,
       target: { type: 'lfg_session', id: session.id },
-      after: {
-        startsAt: draft.startsAt.toISOString(),
-        slots: draft.slots,
-        visibility,
-        messageId: message.id,
-      },
+      after: { startsAt: startsAt.toISOString(), slots, visibility, messageId: message.id },
     });
     return {
       sessionId: session.id,
-      startsAt: draft.startsAt,
+      startsAt,
       url: messageLink(guild.id, channel.id, message.id),
     };
   }
 
-  /** VOU, ENTRAR NA ESPERA ou PEDIR VAGA: o botão é um só, a lista decide. */
+  /** VOU ou PEDIR VAGA: o botão é um só, a lista decide. Lotada, recusa com "lotou". */
   async join(member: GuildMember, sessionId: string): Promise<JoinOutcome> {
     const guild = member.guild;
     const { session, change } = await mutateLfgRoster(this.db, guild.id, sessionId, (roster) =>
@@ -533,15 +462,13 @@ export class SquadAgendaService {
     return change.outcome;
   }
 
-  /** SAIR: da lista, da fila ou do pedido. Vaga que abre puxa a fila, com DM. */
+  /** SAIR: da lista, do pedido ou do convite. A vaga fica livre para quem clicar. */
   async leave(member: GuildMember, sessionId: string): Promise<Exclude<LfgMemberStatus, 'host'>> {
     const guild = member.guild;
-    const { session, change } = await mutateLfgRoster(this.db, guild.id, sessionId, (roster) =>
+    const { change } = await mutateLfgRoster(this.db, guild.id, sessionId, (roster) =>
       leaveRoster(roster, member.id),
     );
     this.render(guild.id, sessionId);
-    await this.grantRoom(guild, session, change.seated);
-    await this.notifySeated(guild, session, change.seated);
     // `leaveRoster` recusa o host, então sobra só quem não é host.
     return change.outcome as Exclude<LfgMemberStatus, 'host'>;
   }
@@ -591,8 +518,8 @@ export class SquadAgendaService {
   }
 
   /**
-   * REMARCAR: hora e nota novas. O lembrete e a chamada voltam a valer para a
-   * hora nova, e a thread recebe o aviso marcando quem vai.
+   * REMARCAR: hora e nota novas. O lembrete volta a valer para a hora nova, e
+   * a thread recebe o aviso marcando quem vai.
    */
   async reschedule(
     guild: Guild,
@@ -608,7 +535,7 @@ export class SquadAgendaService {
       this.db,
       guild.id,
       sessionId,
-      { startsAt, note: input.note, remindedAt: null, calledAt: null },
+      { startsAt, note: input.note, remindedAt: null },
       ['scheduled'],
     );
     if (!session) throw startedError();
@@ -646,9 +573,9 @@ export class SquadAgendaService {
     return session;
   }
 
-  /** VAGAS: subir puxa a fila, com DM; baixar abaixo de quem já tem vaga é recusado. */
+  /** VAGAS: baixar abaixo de quem já tem vaga é recusado. */
   async setSlots(guild: Guild, sessionId: string, slots: number, actorId: string): Promise<void> {
-    const { session, change } = await mutateLfgRoster(
+    await mutateLfgRoster(
       this.db,
       guild.id,
       sessionId,
@@ -661,17 +588,19 @@ export class SquadAgendaService {
       source: 'event',
       actor: actorId,
       target: { type: 'lfg_session', id: sessionId },
-      after: { slots, seated: change.seated },
+      after: { slots },
     });
-    await this.notifySeated(guild, session, change.seated);
   }
 
-  /** ABRIR ou FECHAR. Abrir aceita os pedidos pendentes na ordem em que chegaram. */
+  /**
+   * ABRIR ou FECHAR. Abrir aceita os pedidos pendentes na ordem em que
+   * chegaram: com vaga sentam, sem vaga são recusados. Todos ouvem por DM.
+   */
   async toggleVisibility(
     guild: Guild,
     sessionId: string,
     actorId: string,
-  ): Promise<{ visibility: LfgVisibility; accepted: number }> {
+  ): Promise<{ visibility: LfgVisibility; accepted: number; refused: number }> {
     const { session, change } = await mutateLfgRoster(
       this.db,
       guild.id,
@@ -687,23 +616,27 @@ export class SquadAgendaService {
       source: 'event',
       actor: actorId,
       target: { type: 'lfg_session', id: sessionId },
-      after: { visibility: change.outcome, seated: change.seated, queued: change.queued },
+      after: { visibility: change.outcome, seated: change.seated, refused: change.refused },
     });
     const link = this.linkOf(session);
     const which = `jogatina de <t:${unix(session.startsAt)}:F> em **${guild.name}**`;
     for (const [outcome, userIds] of [
       ['going', change.seated],
-      ['waiting', change.queued],
+      ['refused', change.refused],
     ] as const) {
       for (const userId of userIds) {
         const text = answeredText(outcome, which);
         await this.dm(guild, userId, link ? `${text}\n${link}` : text);
       }
     }
-    return { visibility: change.outcome, accepted: change.seated.length + change.queued.length };
+    return {
+      visibility: change.outcome,
+      accepted: change.seated.length,
+      refused: change.refused.length,
+    };
   }
 
-  /** TIRAR ALGUÉM: da lista, da fila ou dos pedidos. A vaga que abre puxa a fila. */
+  /** TIRAR ALGUÉM: da lista, dos pedidos ou dos convites. */
   async kick(guild: Guild, sessionId: string, userId: string, actorId: string) {
     const { session, change } = await mutateLfgRoster(
       this.db,
@@ -718,7 +651,7 @@ export class SquadAgendaService {
       source: 'event',
       actor: actorId,
       target: { type: 'lfg_session', id: sessionId },
-      after: { userId, was: change.outcome, seated: change.seated },
+      after: { userId, was: change.outcome },
     });
     await this.dm(
       guild,
@@ -726,7 +659,6 @@ export class SquadAgendaService {
       `Quem organiza a jogatina de <t:${unix(session.startsAt)}:F> em **${guild.name}** ` +
         'tirou você da lista.',
     );
-    await this.notifySeated(guild, session, change.seated);
     return change.outcome;
   }
 
@@ -889,16 +821,6 @@ export class SquadAgendaService {
       } catch (error) {
         log.warn({ err: error, guildId: guild.id, sessionId: session.id }, 'não liberei a sala');
       }
-    }
-  }
-
-  private async notifySeated(guild: Guild, session: LfgSession, userIds: string[]): Promise<void> {
-    const link = this.linkOf(session);
-    for (const userId of userIds) {
-      const text =
-        `Abriu vaga na jogatina de <t:${unix(session.startsAt)}:F> em **${guild.name}**, ` +
-        'e você saiu da lista de espera: está dentro.';
-      await this.dm(guild, userId, link ? `${text}\n${link}` : text);
     }
   }
 
