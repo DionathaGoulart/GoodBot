@@ -115,8 +115,6 @@ export interface SquadAgendaClockDeps {
   audit: Pick<AuditService, 'record'>;
   agenda: Pick<SquadAgendaService, 'refresh'>;
   rooms: Pick<SquadRoomService, 'openSessionRoom'>;
-  /** A agenda mudou (jogatina começou ou acabou): o painel se refaz. */
-  onChange: (guildId: string) => void;
   now?: () => number;
   tickMs?: number;
 }
@@ -134,7 +132,6 @@ export class SquadAgendaClock {
   private readonly audit: Pick<AuditService, 'record'>;
   private readonly agenda: Pick<SquadAgendaService, 'refresh'>;
   private readonly rooms: Pick<SquadRoomService, 'openSessionRoom'>;
-  private readonly onChange: (guildId: string) => void;
   private readonly now: () => number;
   private readonly tickMs: number;
   private timer: NodeJS.Timeout | null = null;
@@ -148,7 +145,6 @@ export class SquadAgendaClock {
     this.audit = deps.audit;
     this.agenda = deps.agenda;
     this.rooms = deps.rooms;
-    this.onChange = deps.onChange;
     this.now = deps.now ?? Date.now;
     this.tickMs = deps.tickMs ?? AGENDA_TICK_MS;
   }
@@ -341,7 +337,6 @@ export class SquadAgendaClock {
       after: { roomId: room?.id ?? null, seated: seated.length },
     });
     await this.agenda.refresh(guild.id, session.id);
-    this.onChange(guild.id);
   }
 
   /** Quem vai e já está em voz (fora o AFK) é movido para a sala. */
@@ -381,6 +376,5 @@ export class SquadAgendaClock {
       after: { lonely },
     });
     await this.agenda.refresh(guild.id, session.id);
-    this.onChange(guild.id);
   }
 }

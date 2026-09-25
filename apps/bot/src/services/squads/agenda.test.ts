@@ -202,7 +202,6 @@ function setup(config: SquadsConfig = squadsConfig({ roomSize: 2 })) {
   });
 
   const record = vi.fn();
-  const onChange = vi.fn();
   const service = new SquadAgendaService({
     client: h.client,
     db: {} as never,
@@ -211,7 +210,6 @@ function setup(config: SquadsConfig = squadsConfig({ roomSize: 2 })) {
       getSettings: () => Promise.resolve({ embedColor: 0xdc143c, timezone: 'America/Sao_Paulo' }),
     } as never,
     audit: { record },
-    onChange,
     now: () => NOW,
     renderMs: 10,
   });
@@ -234,7 +232,6 @@ function setup(config: SquadsConfig = squadsConfig({ roomSize: 2 })) {
     closedDms,
     memberOf,
     record,
-    onChange,
     marcar,
   };
 }
@@ -349,7 +346,6 @@ describe('marcar', () => {
     expect(h.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'squad.session.create', actor: ALICE }),
     );
-    expect(h.onChange).toHaveBeenCalledWith(GUILD);
   });
 
   it('sem canal da agenda, sem permissão ou no teto, recusa antes de gravar', async () => {
@@ -586,7 +582,6 @@ describe('gerenciar', () => {
     const notice = h.threadSend.mock.calls.at(-1)?.[0];
     expect(notice?.content).toContain('remarcada');
     expect(notice?.allowedMentions).toEqual({ users: [BOB] });
-    expect(h.onChange).toHaveBeenCalledWith(GUILD);
   });
 
   it('CANCELAR fecha a mensagem e avisa todo mundo da lista na thread', async () => {

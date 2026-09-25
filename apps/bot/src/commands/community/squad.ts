@@ -24,7 +24,7 @@ export default defineCommand({
       sub.setName('agenda').setDescription('Lista as jogatinas em que você está'),
     )
     .addSubcommand((sub) =>
-      sub.setName('painel').setDescription('Publica ou atualiza o painel de salas (admin)'),
+      sub.setName('painel').setDescription('Publica ou atualiza os guias do buscar squad (admin)'),
     ),
   module: 'squads',
   level: 'member',
@@ -34,8 +34,8 @@ export default defineCommand({
   ephemeral: true,
   cooldown: 5,
   help:
-    '`agendar` marca jogatina, `agenda` lista as suas e `painel` (admin) publica o painel ' +
-    'de salas. Para remarcar, mudar vagas ou cancelar, use GERENCIAR na mensagem da jogatina.',
+    '`agendar` marca jogatina, `agenda` lista as suas e `painel` (admin) publica os guias. ' +
+    'Para remarcar, mudar vagas ou cancelar, use GERENCIAR na mensagem da jogatina.',
   async execute(ctx) {
     const subcommand = ctx.interaction.options.getSubcommand();
     if (subcommand === 'agendar') {
@@ -46,19 +46,14 @@ export default defineCommand({
     await ctx.interaction.deferReply({ flags: MessageFlags.Ephemeral });
     if (subcommand === 'painel') {
       if (!levelAtLeast(ctx.level, 'admin')) {
-        throw new UserFacingError('Só a administração publica o painel de squads.', {
+        throw new UserFacingError('Só a administração publica os guias do buscar squad.', {
           code: 'FORBIDDEN',
         });
       }
-      const guild = ctx.interaction.guild;
-      if (!guild) throw new UserFacingError('Use este comando no servidor.', { code: 'NO_GUILD' });
-      const published = await ctx.squadPanel.publish(guild, ctx.member.id, 'command');
-      await ctx.interaction.editReply({
-        content: published.created
-          ? `Painel publicado em <#${published.channelId}>.`
-          : `Painel atualizado em <#${published.channelId}>.`,
+      // TODO(etapa 3): publica os guias e os botões dos três canais.
+      throw new UserFacingError('Em construção: os guias do buscar squad voltam em breve.', {
+        code: 'SQUADS_GUIDES_PENDING',
       });
-      return;
     }
     await squadsConfigOrFail(ctx, ctx.guildId);
     const entries = await ctx.squadAgenda.mine(ctx.guildId, ctx.member.id, MINE_LIMIT);

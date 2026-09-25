@@ -1,12 +1,11 @@
 import { GREEK_ROOM_NAMES, MAX_GUILD_CHANNELS, MINUTE_MS } from '@goodbot/shared';
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, type vi } from 'vitest';
 
 import {
   ALICE,
   BOB,
   CATEGORY,
-  CREATE,
   fakeRoomGuild,
   GUILD,
   LOBBY,
@@ -35,14 +34,15 @@ describe('nomes de sala', () => {
     expect(nextRoomName(GREEK_ROOM_NAMES.map(roomChannelName))).toBeNull();
   });
 
-  it('só é sala voz da categoria, com nome do pool e fora o canal de criar', () => {
+  it('só é sala voz da categoria com nome do pool', () => {
     const config = squadsConfig();
     const base = { id: '1', type: ChannelType.GuildVoice, parentId: CATEGORY, name: 'Squad Beta' };
     expect(isSquadRoom(base, config)).toBe(true);
     expect(isSquadRoom({ ...base, parentId: null }, config)).toBe(false);
     expect(isSquadRoom({ ...base, name: 'Squad do Zé' }, config)).toBe(false);
     expect(isSquadRoom({ ...base, type: ChannelType.GuildText }, config)).toBe(false);
-    expect(isSquadRoom({ ...base, id: CREATE }, config)).toBe(false);
+    // O `➕ Criar Squad` da v1.8 que sobrou na categoria nunca é apagado.
+    expect(isSquadRoom({ ...base, name: '➕ Criar Squad' }, config)).toBe(false);
     expect(isSquadRoom(base, squadsConfig({ categoryId: null }))).toBe(false);
   });
 });
@@ -50,40 +50,43 @@ describe('nomes de sala', () => {
 function setup(config: SquadsConfig = squadsConfig()) {
   const fake = fakeRoomGuild();
   let now = 1_000_000;
-  const panel = { schedule: vi.fn(), refresh: vi.fn(() => Promise.resolve()) };
   const service = new SquadRoomService({
     client: fake.client,
     config: { get: () => Promise.resolve(config) } as never,
     registry: { servedGuildIds: () => [GUILD] },
-    panel,
     now: () => now,
   });
   return {
     ...fake,
     service,
-    panel,
+    config,
+    now: () => now,
     advance: (ms: number) => {
       now += ms;
     },
   };
 }
 
-/** Alguém entra no canal de criar: o gateway já pôs a pessoa lá. */
-async function joinCreate(h: ReturnType<typeof setup>, userId: string, options = {}) {
-  const member = h.member(userId, options);
-  h.setVoice(userId, CREATE);
+/** Uma sala sem reserva, com a pessoa já dentro, como o gateway a veria. */
+async function openRoom(h: ReturnType<typeof setup>, userId: string) {
+  const room = await h.service.openSessionRoom(h.guild, h.config, {
+    slots: h.config.roomSize,
+    members: null,
+    until: h.now(),
+  });
+  if (!room) throw new Error('a sala não nasceu');
+  h.setVoice(userId, room.id);
   await h.service.onVoiceState(
     voiceState(h.guild, userId, null),
-    voiceState(h.guild, userId, CREATE, member),
+    voiceState(h.guild, userId, room.id),
   );
-  return member;
+  return h.channels.get(room.id)!;
 }
 
 describe('SquadRoomService', () => {
-  it('cria a sala na categoria com o teto e move quem entrou no canal de criar', async () => {
-    const h = setup(squadsConfig({ roomSize: 3 }));
-    const member = await joinCreate(h, ALICE);
-
+  it('cria a sala na categoria com o teto das vagas', async () => {
+    const h = setup();
+    await h.service.openSessionRoom(h.guild, h.config, { slots: 3, members: null, until: 0 });
     expect(h.guild.channels.create).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Squad Alfa',
@@ -92,41 +95,33 @@ describe('SquadRoomService', () => {
         userLimit: 3,
       }),
     );
-    const room = [...h.channels.values()].find((c) => c.name === 'Squad Alfa');
-    expect(member.voice.setChannel).toHaveBeenCalledWith(room, expect.any(String));
-    expect(h.voice.get(ALICE)?.channelId).toBe(room?.id);
   });
 
-  it('duas pessoas ao mesmo tempo ganham nomes diferentes', async () => {
+  it('duas salas ao mesmo tempo ganham nomes diferentes', async () => {
     const h = setup();
-    await Promise.all([joinCreate(h, ALICE), joinCreate(h, BOB)]);
+    const options = { slots: 4, members: null, until: 0 };
+    await Promise.all([
+      h.service.openSessionRoom(h.guild, h.config, options),
+      h.service.openSessionRoom(h.guild, h.config, options),
+    ]);
     const names = [...h.channels.values()].map((c) => c.name).filter((n) => n.startsWith('Squad'));
     expect(names.sort()).toEqual(['Squad Alfa', 'Squad Beta']);
   });
 
-  it('pula nome em uso e ignora bot', async () => {
+  it('pula nome em uso', async () => {
     const h = setup();
     h.addChannel({ id: '9', type: ChannelType.GuildVoice, name: 'Squad Alfa', parentId: CATEGORY });
-    await joinCreate(h, BOB, { bot: true });
-    expect(h.guild.channels.create).not.toHaveBeenCalled();
-    await joinCreate(h, ALICE);
+    await h.service.openSessionRoom(h.guild, h.config, { slots: 4, members: null, until: 0 });
     expect(h.guild.channels.create).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Squad Beta' }),
     );
   });
 
-  it('apaga a sala recém-criada quando não consegue mover', async () => {
-    const h = setup();
-    await joinCreate(h, ALICE, { moveFails: true });
-    const room = [...h.channels.values()].find((c) => c.name === 'Squad Alfa');
-    expect(room).toBeUndefined();
-    expect(h.guild.channels.create).toHaveBeenCalledOnce();
-  });
-
   it('sem permissão, no teto de canais ou com os 24 nomes em uso: não cria', async () => {
+    const options = { slots: 4, members: null, until: 0 };
     const noMove = setup();
     noMove.denied.add(PermissionFlagsBits.MoveMembers);
-    await joinCreate(noMove, ALICE);
+    expect(await noMove.service.openSessionRoom(noMove.guild, noMove.config, options)).toBeNull();
     expect(noMove.guild.channels.create).not.toHaveBeenCalled();
 
     const full = setup();
@@ -138,7 +133,7 @@ describe('SquadRoomService', () => {
         parentId: null,
       });
     }
-    await joinCreate(full, ALICE);
+    expect(await full.service.openSessionRoom(full.guild, full.config, options)).toBeNull();
     expect(full.guild.channels.create).not.toHaveBeenCalled();
 
     const names = setup();
@@ -150,20 +145,23 @@ describe('SquadRoomService', () => {
         parentId: CATEGORY,
       });
     });
-    await joinCreate(names, ALICE);
+    expect(await names.service.openSessionRoom(names.guild, names.config, options)).toBeNull();
     expect(names.guild.channels.create).not.toHaveBeenCalled();
   });
 
-  it('módulo desligado não cria nada', async () => {
-    const h = setup(squadsConfig({ enabled: false }));
-    await joinCreate(h, ALICE);
+  it('entrar num canal de voz qualquer não cria sala', async () => {
+    const h = setup();
+    h.setVoice(ALICE, LOBBY);
+    await h.service.onVoiceState(
+      voiceState(h.guild, ALICE, null),
+      voiceState(h.guild, ALICE, LOBBY, h.member(ALICE)),
+    );
     expect(h.guild.channels.create).not.toHaveBeenCalled();
   });
 
   it('sala que esvazia some depois da janela, e voltar dentro dela cancela', async () => {
     const h = setup();
-    await joinCreate(h, ALICE);
-    const room = [...h.channels.values()].find((c) => c.name === 'Squad Alfa')!;
+    const room = await openRoom(h, ALICE);
     await h.service.tick(); // reconciliação da primeira vez, com a sala ocupada
 
     h.setVoice(ALICE, null);
@@ -171,7 +169,6 @@ describe('SquadRoomService', () => {
       voiceState(h.guild, ALICE, room.id),
       voiceState(h.guild, ALICE, null),
     );
-    expect(h.panel.schedule).toHaveBeenCalledWith(GUILD);
 
     h.advance(MINUTE_MS);
     h.setVoice(ALICE, room.id);
@@ -198,8 +195,7 @@ describe('SquadRoomService', () => {
 
   it('com janela 0 a sala some na hora', async () => {
     const h = setup(squadsConfig({ graceMinutes: 0 }));
-    await joinCreate(h, ALICE);
-    const room = [...h.channels.values()].find((c) => c.name === 'Squad Alfa')!;
+    const room = await openRoom(h, ALICE);
     h.setVoice(ALICE, null);
     await h.service.onVoiceState(
       voiceState(h.guild, ALICE, room.id),
@@ -210,8 +206,7 @@ describe('SquadRoomService', () => {
 
   it('sala com gente ainda não abre janela', async () => {
     const h = setup();
-    await joinCreate(h, ALICE);
-    const room = [...h.channels.values()].find((c) => c.name === 'Squad Alfa')!;
+    const room = await openRoom(h, ALICE);
     h.setVoice(BOB, room.id);
     h.setVoice(ALICE, null);
     await h.service.onVoiceState(
@@ -223,8 +218,7 @@ describe('SquadRoomService', () => {
 
   it('não apaga canal que a staff renomeou durante a janela', async () => {
     const h = setup();
-    await joinCreate(h, ALICE);
-    const room = [...h.channels.values()].find((c) => c.name === 'Squad Alfa')!;
+    const room = await openRoom(h, ALICE);
     h.setVoice(ALICE, null);
     await h.service.onVoiceState(
       voiceState(h.guild, ALICE, room.id),
@@ -236,7 +230,7 @@ describe('SquadRoomService', () => {
     expect(room.delete).not.toHaveBeenCalled();
   });
 
-  it('no boot, sala vazia ganha a janela do zero e o painel se refaz', async () => {
+  it('no boot, sala vazia ganha a janela do zero', async () => {
     const h = setup();
     const empty = h.addChannel({
       id: '7',
@@ -253,15 +247,12 @@ describe('SquadRoomService', () => {
     h.setVoice(BOB, busy.id);
 
     await h.service.tick();
-    expect(h.panel.refresh).toHaveBeenCalledWith(GUILD);
     expect(h.service.emptyRooms.size).toBe(1);
-    expect(h.guild.channels.cache.get(CREATE)).toBeDefined();
 
     h.advance(2 * MINUTE_MS);
     await h.service.tick();
     expect(empty.delete).toHaveBeenCalledOnce();
     expect(busy.delete).not.toHaveBeenCalled();
-    expect(h.panel.refresh).toHaveBeenCalledOnce();
   });
 
   it('sala de jogatina nasce vazia com as vagas e fica de pé até o fim da reserva', async () => {

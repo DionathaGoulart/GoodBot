@@ -37,8 +37,6 @@ import { Scheduler } from './services/scheduler';
 import { YouTubeProvider } from './services/social/index';
 import { SquadAgendaService } from './services/squads/agenda';
 import { SquadAgendaClock } from './services/squads/clock';
-import { SquadPanelService } from './services/squads/panel';
-import { SquadPresenceService } from './services/squads/presence';
 import { SquadRoomService } from './services/squads/rooms';
 import { StatsService } from './services/stats';
 import { TicketService } from './services/tickets';
@@ -162,18 +160,8 @@ async function main(): Promise<void> {
     },
   });
   const social = new YouTubeProvider();
-  const squads = new SquadPresenceService({ client, config, registry });
-  const squadAgenda = new SquadAgendaService({
-    client,
-    db,
-    config,
-    audit,
-    onChange: (guildId) => {
-      squadPanel.schedule(guildId);
-    },
-  });
-  const squadPanel = new SquadPanelService({ client, db, config, audit, agenda: squadAgenda });
-  const squadRooms = new SquadRoomService({ client, config, registry, panel: squadPanel });
+  const squadAgenda = new SquadAgendaService({ client, db, config, audit });
+  const squadRooms = new SquadRoomService({ client, config, registry });
   const squadClock = new SquadAgendaClock({
     client,
     db,
@@ -182,9 +170,6 @@ async function main(): Promise<void> {
     audit,
     agenda: squadAgenda,
     rooms: squadRooms,
-    onChange: (guildId) => {
-      squadPanel.schedule(guildId);
-    },
   });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
@@ -230,7 +215,6 @@ async function main(): Promise<void> {
       reactionRoles,
       tickets,
       social,
-      squadPanel,
       commands,
       registry,
       maintenance,
@@ -276,9 +260,7 @@ async function main(): Promise<void> {
     autorole,
     reactionRoles,
     tickets,
-    squads,
     squadRooms,
-    squadPanel,
     squadAgenda,
     social,
     messageCache,
@@ -308,7 +290,6 @@ async function main(): Promise<void> {
     pendingExpiry.start();
     retention.start();
     capacity.start();
-    squads.start();
     squadRooms.start();
     squadClock.start();
     databaseProbe.start();
@@ -351,10 +332,8 @@ async function main(): Promise<void> {
       pendingExpiry.stop();
       retention.stop();
       capacity.stop();
-      squads.stop();
       squadRooms.stop();
       squadClock.stop();
-      squadPanel.stop();
       squadAgenda.stop();
       databaseProbe.stop();
       autorole.stop();

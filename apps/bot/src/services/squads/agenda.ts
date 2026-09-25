@@ -3,7 +3,6 @@ import {
   createLfgSession,
   getLfgSession,
   listMemberLfgSessions,
-  listUpcomingLfgSessions,
   mutateLfgRoster,
   updateLfgSession,
 } from '@goodbot/db';
@@ -278,14 +277,6 @@ export class DraftBook {
 
 // ── O service ───────────────────────────────────────────────────────────────
 
-/** O que o painel lista de uma jogatina. */
-export interface AgendaSummary {
-  id: string;
-  hostId: string;
-  startsAt: number;
-  url: string;
-}
-
 export interface ScheduledSession {
   sessionId: string;
   startsAt: Date;
@@ -310,8 +301,6 @@ export interface SquadAgendaDeps {
   db: Db;
   config: Pick<ConfigService, 'get' | 'getSettings'>;
   audit: Pick<AuditService, 'record'>;
-  /** A agenda mudou (jogatina nova, remarcada, encerrada): o painel se refaz. */
-  onChange: (guildId: string) => void;
   now?: () => number;
   renderMs?: number;
 }
@@ -358,7 +347,6 @@ export class SquadAgendaService {
   private readonly db: Db;
   private readonly config: SquadAgendaDeps['config'];
   private readonly audit: Pick<AuditService, 'record'>;
-  private readonly onChange: (guildId: string) => void;
   private readonly now: () => number;
   private readonly renderMs: number;
   private readonly drafts = new DraftBook();
@@ -369,7 +357,6 @@ export class SquadAgendaService {
     this.db = deps.db;
     this.config = deps.config;
     this.audit = deps.audit;
-    this.onChange = deps.onChange;
     this.now = deps.now ?? Date.now;
     this.renderMs = deps.renderMs ?? AGENDA_RENDER_MS;
   }
@@ -528,7 +515,6 @@ export class SquadAgendaService {
         messageId: message.id,
       },
     });
-    this.onChange(guild.id);
     return {
       sessionId: session.id,
       startsAt: draft.startsAt,
@@ -657,7 +643,6 @@ export class SquadAgendaService {
       after: { startsAt: startsAt.toISOString(), note: input.note },
     });
     this.render(guild.id, sessionId);
-    this.onChange(guild.id);
     return session;
   }
 
@@ -775,7 +760,6 @@ export class SquadAgendaService {
       before: { startsAt: session.startsAt.toISOString(), members: before.roster.entries.length },
     });
     await this.refresh(guild.id, sessionId);
-    this.onChange(guild.id);
   }
 
   /** As jogatinas abertas em que a pessoa está, da mais próxima para a mais distante. */
@@ -796,17 +780,6 @@ export class SquadAgendaService {
       return null;
     }
     return found.session.hostId;
-  }
-
-  /** As próximas jogatinas com mensagem no ar, para o painel do buscar squad. */
-  async upcoming(guildId: string, limit: number): Promise<AgendaSummary[]> {
-    const sessions = await listUpcomingLfgSessions(this.db, guildId, limit);
-    return sessions.flatMap((session) => {
-      const url = this.linkOf(session);
-      return url
-        ? [{ id: session.id, hostId: session.hostId, startsAt: session.startsAt.getTime(), url }]
-        : [];
-    });
   }
 
   private linkOf(session: LfgSession): string | null {

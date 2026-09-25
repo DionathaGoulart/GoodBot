@@ -6,11 +6,7 @@ import type { SquadsConfig } from '@goodbot/shared';
 import type { Client, Guild, GuildMember, VoiceState } from 'discord.js';
 
 export const GUILD = '100000000000000001';
-export const SEARCH = '200000000000000001';
-export const OPT_OUT = '200000000000000002';
 export const CATEGORY = '300000000000000001';
-export const CREATE = '300000000000000002';
-export const PANEL = '300000000000000003';
 export const LOBBY = '300000000000000004';
 export const AGENDA = '300000000000000005';
 export const ALICE = '400000000000000001';
@@ -19,11 +15,7 @@ export const BOB = '400000000000000002';
 export function squadsConfig(overrides: Partial<SquadsConfig> = {}): SquadsConfig {
   return SquadsConfigSchema.parse({
     enabled: true,
-    searchRoleId: SEARCH,
-    optOutRoleId: OPT_OUT,
     categoryId: CATEGORY,
-    createChannelId: CREATE,
-    panelChannelId: PANEL,
     agendaChannelId: AGENDA,
     ...overrides,
   });
@@ -98,12 +90,6 @@ export function fakeRoomGuild() {
     type: ChannelType.GuildCategory,
     name: 'Buscar Squad',
     parentId: null,
-  });
-  addChannel({
-    id: CREATE,
-    type: ChannelType.GuildVoice,
-    name: '➕ Criar Squad',
-    parentId: CATEGORY,
   });
   addChannel({ id: LOBBY, type: ChannelType.GuildVoice, name: 'Geral', parentId: null });
 

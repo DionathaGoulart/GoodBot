@@ -15,8 +15,6 @@ import type { ReactionRoleService } from '../services/reaction-roles';
 import type { RegistryService } from '../services/registry';
 import type { YouTubeProvider } from '../services/social/index';
 import type { SquadAgendaService } from '../services/squads/agenda';
-import type { SquadPanelService } from '../services/squads/panel';
-import type { SquadPresenceService } from '../services/squads/presence';
 import type { SquadRoomService } from '../services/squads/rooms';
 import type { StatsService } from '../services/stats';
 import type { TicketService } from '../services/tickets';
@@ -66,12 +64,8 @@ export interface BotContext {
   reactionRoles: ReactionRoleService;
   /** Abertura, gestão e fechamento de tickets (§5.5). */
   tickets: TicketService;
-  /** Cargo `Buscando Squad`: aviso, toggles e prazos (§5.11). */
-  squads: SquadPresenceService;
-  /** Salas de voz efêmeras do `➕ Criar Squad` (§5.11). */
+  /** Salas de voz efêmeras das jogatinas e dos cards (§5.11). */
   squadRooms: SquadRoomService;
-  /** Mensagem fixa com as salas abertas (§5.11). */
-  squadPanel: SquadPanelService;
   /** Agenda de jogatinas: a mensagem, a lista e os pedidos de vaga (§5.11). */
   squadAgenda: SquadAgendaService;
   /** Provider das notificações de rede social (§5.8). */

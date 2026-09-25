@@ -189,7 +189,6 @@ function setup(config: SquadsConfig = squadsConfig()) {
       ) as never,
   );
   const refresh = vi.fn(() => Promise.resolve());
-  const onChange = vi.fn();
   const record = vi.fn();
   const clock = new SquadAgendaClock({
     client: h.client,
@@ -199,7 +198,6 @@ function setup(config: SquadsConfig = squadsConfig()) {
     audit: { record },
     agenda: { refresh },
     rooms: { openSessionRoom },
-    onChange,
     now: () => now,
   });
   return {
@@ -209,7 +207,6 @@ function setup(config: SquadsConfig = squadsConfig()) {
     panelSend,
     openSessionRoom,
     refresh,
-    onChange,
     record,
     moves,
     inVoice,
@@ -281,7 +278,6 @@ describe('SquadAgendaClock', () => {
     expect(h.threadSend.mock.calls[0]![0].content).toContain('<#700000000000000001>');
     expect(h.moves).toEqual([[BOB, '700000000000000001']]);
     expect(h.refresh).toHaveBeenCalledWith(GUILD, SESSION);
-    expect(h.onChange).toHaveBeenCalledWith(GUILD);
 
     await h.clock.tick();
     expect(h.openSessionRoom).toHaveBeenCalledOnce();
