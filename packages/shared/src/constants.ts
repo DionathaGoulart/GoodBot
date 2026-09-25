@@ -370,44 +370,51 @@ export const SOCIAL_PLATFORM_LABEL: Record<SocialPlatform, string> = {
 // ── Buscar squad (módulo `squads`) ──────────────────────────────────────────
 
 /**
- * Quanto tempo o bot espera para mandar outro aviso de "buscar squad?" à mesma
- * pessoa. O AGORA NÃO conta como aviso recebido. O relógio é memória: um
- * restart o zera, e o custo é uma DM a mais.
+ * Os dois tipos de linha em `lfg_sessions` (PRD §5.11): `now` é o card de
+ * "procuro agora" do `#buscar-squad`, `scheduled` é a jogatina marcada do
+ * `#agenda`. Mesma tabela, mesma lista, mesma sala e mesmo relógio.
  */
-export const LFG_PROMPT_COOLDOWN_HOURS = 6;
-/** Jogos que um servidor vigia ao mesmo tempo no aviso automático (`gameNames`). */
-export const LFG_MAX_GAME_NAMES = 10;
+export const LFG_KINDS = ['now', 'scheduled'] as const;
+export type LfgKind = (typeof LFG_KINDS)[number];
 
-// ── Agenda de jogatinas (módulo `squads`) ───────────────────────────────────
-
-/** Vagas de uma jogatina, contando o host. Os mesmos limites da sala. */
+/** Vagas de uma jogatina ou card, contando o host. Os mesmos limites da sala. */
 export const LFG_MIN_SLOTS = 2;
 export const LFG_MAX_SLOTS = 10;
-/** Quanto antes do início o bot lembra na thread quem vai. */
+/** Quanto antes do início o bot lembra na thread quem vai (só `scheduled`). */
 export const LFG_REMINDER_MINUTES = 30;
-/**
- * Quanto antes do início uma jogatina aberta com vaga chama reforço no canal
- * do painel, marcando o cargo de busca.
- */
-export const LFG_CALL_MINUTES = 60;
-/** Quanto tempo a sala da jogatina fica de pé vazia depois do início. */
+/** Quanto tempo a sala fica de pé vazia depois de nascer. */
 export const LFG_ROOM_HOLD_MINUTES = 15;
-/** Teto de duração: passado isso do início, a jogatina fecha mesmo com gente. */
+/** Teto de duração da jogatina: passado isso do início, fecha mesmo com gente. */
 export const LFG_SESSION_HOURS = 3;
+/** Teto de duração do card de agora, contado do post. */
+export const LFG_CALL_HOURS = 2;
 /**
- * Jogatinas marcadas e não encerradas por servidor, e por host. Sem teto, o
- * MARCAR JOGATINA vira spam no canal da agenda.
+ * Intervalo mínimo entre dois DIVULGAR da mesma jogatina (`promotedAt`). Sem
+ * ele, o host vira um alarme do cargo `Bora`.
+ */
+export const LFG_PROMOTE_COOLDOWN_MINUTES = 60;
+/** Quantos membros o select do CONVIDAR aceita de uma vez. */
+export const LFG_INVITE_MAX_PER_BATCH = 10;
+/**
+ * Jogatinas e cards não encerrados por servidor, e por host. Sem teto, o
+ * `#agenda` e o `#buscar-squad` viram spam.
  */
 export const LFG_MAX_OPEN_SESSIONS = 10;
 export const LFG_MAX_SESSIONS_PER_HOST = 3;
-/** A nota do host ("dificuldade 10, terminids"). */
+/** O "o quê" do card ou a nota da jogatina ("D10, missão de 40 min"). */
 export const LFG_NOTE_MAX_LENGTH = 200;
 
-/** Aberta: VOU entra na hora. Fechada: PEDIR VAGA, e o host aprova. */
+/**
+ * Pública (`open`): VOU entra na hora. Privada (`closed`): PEDIR VAGA, e o
+ * host aprova. A jogatina nasce `closed`; o card é sempre `open`.
+ */
 export const LFG_VISIBILITIES = ['open', 'closed'] as const;
 export type LfgVisibility = (typeof LFG_VISIBILITIES)[number];
 
-/** `scheduled` → `live` → `done`; `cancelled` sai de qualquer um dos dois primeiros. */
+/**
+ * `scheduled` → `live` → `done`; `cancelled` sai de qualquer um dos dois
+ * primeiros. O card nasce `live`.
+ */
 export const LFG_SESSION_STATUSES = ['scheduled', 'live', 'done', 'cancelled'] as const;
 export type LfgSessionStatus = (typeof LFG_SESSION_STATUSES)[number];
 

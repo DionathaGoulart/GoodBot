@@ -83,7 +83,7 @@ import {
   SocialResolveResultSchema,
   SocialTestResultSchema,
 } from './social';
-import { PublishSquadPanelInputSchema, PublishSquadPanelResultSchema } from './squads';
+import { PublishSquadGuidesInputSchema, PublishSquadGuidesResultSchema } from './squads';
 import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
 import { SocialAccountInputSchema } from '../config/social';
 
@@ -157,7 +157,7 @@ import type {
   SocialResolveResult,
   SocialTestResult,
 } from './social';
-import type { PublishSquadPanelInput, PublishSquadPanelResult } from './squads';
+import type { PublishSquadGuidesInput, PublishSquadGuidesResult } from './squads';
 import type { CloseTicketInput, CloseTicketResult } from './tickets';
 import type { SocialAccountInput } from '../config/social';
 import type { z } from 'zod';
@@ -801,14 +801,14 @@ export function createInternalClient(options: InternalClientOptions) {
         { method: 'POST' },
       ),
 
-    /** Publica o painel fixo das salas de squad, ou reedita o do ar (PRD §5.11). */
-    publishSquadPanel: (
+    /** Publica ou reedita os guias e os botões do buscar squad (PRD §5.11). */
+    publishSquadGuides: (
       guildId: string,
-      input: PublishSquadPanelInput,
-    ): Promise<PublishSquadPanelResult> =>
-      request(PublishSquadPanelResultSchema, `${guild(guildId)}/squads/panel`, {
+      input: PublishSquadGuidesInput,
+    ): Promise<PublishSquadGuidesResult> =>
+      request(PublishSquadGuidesResultSchema, `${guild(guildId)}/squads/guides`, {
         method: 'POST',
-        body: PublishSquadPanelInputSchema.parse(input),
+        body: PublishSquadGuidesInputSchema.parse(input),
       }),
 
     /** Contas observadas neste servidor (PRD §5.8). */

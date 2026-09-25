@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { GREEK_ROOM_NAMES, LFG_MAX_GAME_NAMES } from '../constants';
+import { GREEK_ROOM_NAMES } from '../constants';
 import { parseModuleConfigOrDefault } from './index';
-import { DEFAULT_SQUADS_CONFIG, normalizeGameName, SquadsConfigSchema } from './squads';
+import { DEFAULT_SQUADS_CONFIG, SquadsConfigSchema } from './squads';
 
-const ROLE_A = '111111111111111111';
-const ROLE_B = '222222222222222222';
+const ID_A = '111111111111111111';
+const ID_B = '222222222222222222';
+const ID_C = '333333333333333333';
 
 describe('SquadsConfigSchema', () => {
   it('nasce desligado, sem ids e com os padrões do PRD', () => {
@@ -13,41 +14,66 @@ describe('SquadsConfigSchema', () => {
     expect(DEFAULT_SQUADS_CONFIG).toEqual({
       version: 1,
       enabled: false,
-      searchRoleId: null,
-      optOutRoleId: null,
-      panelChannelId: null,
-      panelMessageId: null,
-      categoryId: null,
+      chatChannelId: null,
+      deskChannelId: null,
       agendaChannelId: null,
-      createChannelId: null,
+      categoryId: null,
+      notifyRoleId: null,
       roomSize: 4,
       graceMinutes: 2,
-      searchTtlMinutes: 120,
-      gameNames: ['HELLDIVERS™ 2'],
+      chatGuideMessageId: null,
+      deskGuideMessageId: null,
+      deskButtonsMessageId: null,
     });
   });
 
-  it('cada parse ganha a sua cópia da lista de jogos padrão', () => {
-    const first = SquadsConfigSchema.parse({});
-    first.gameNames.push('Outro');
-    expect(SquadsConfigSchema.parse({}).gameNames).toEqual(['HELLDIVERS™ 2']);
-  });
-
-  it('lê o jsonb do módulo antigo descartando os campos que saíram', () => {
+  it('lê o jsonb da v1.9 descartando os campos que saíram', () => {
     const legacy = {
       version: 1,
       enabled: true,
-      searchChannelId: ROLE_A,
-      searchMessageId: ROLE_B,
-      voicePoolIds: [ROLE_A],
-      blocks: [],
-      proposalTtlHours: 72,
-      channelNaming: 'squad-{name}',
+      searchRoleId: ID_A,
+      optOutRoleId: ID_B,
+      panelChannelId: ID_C,
+      panelMessageId: ID_A,
+      createChannelId: ID_B,
+      searchTtlMinutes: 120,
+      gameNames: ['HELLDIVERS™ 2'],
+      categoryId: ID_C,
+      agendaChannelId: ID_A,
+      roomSize: 6,
     };
     const result = parseModuleConfigOrDefault('squads', legacy);
     expect(result.valid).toBe(true);
+    expect(result.config).toEqual({
+      ...DEFAULT_SQUADS_CONFIG,
+      enabled: true,
+      categoryId: ID_C,
+      agendaChannelId: ID_A,
+      roomSize: 6,
+    });
+    for (const gone of ['searchRoleId', 'optOutRoleId', 'panelChannelId', 'gameNames']) {
+      expect(result.config).not.toHaveProperty(gone);
+    }
+  });
+
+  it('lê o jsonb do módulo de antes da v1.8 também', () => {
+    const legacy = { version: 1, enabled: true, searchChannelId: ID_A, voicePoolIds: [ID_A] };
+    const result = parseModuleConfigOrDefault('squads', legacy);
+    expect(result.valid).toBe(true);
     expect(result.config).toEqual({ ...DEFAULT_SQUADS_CONFIG, enabled: true });
-    expect(result.config).not.toHaveProperty('searchChannelId');
+  });
+
+  it('preserva os ids das mensagens do bot', () => {
+    const config = SquadsConfigSchema.parse({
+      chatGuideMessageId: ID_A,
+      deskGuideMessageId: ID_B,
+      deskButtonsMessageId: ID_C,
+    });
+    expect(config).toMatchObject({
+      chatGuideMessageId: ID_A,
+      deskGuideMessageId: ID_B,
+      deskButtonsMessageId: ID_C,
+    });
   });
 
   it.each([
@@ -56,65 +82,39 @@ describe('SquadsConfigSchema', () => {
     ['roomSize', 3.5],
     ['graceMinutes', -1],
     ['graceMinutes', 11],
-    ['searchTtlMinutes', 14],
-    ['searchTtlMinutes', 721],
   ])('recusa %s = %s', (field, value) => {
     expect(SquadsConfigSchema.safeParse({ [field]: value }).success).toBe(false);
   });
 
   it('aceita as bordas das faixas', () => {
-    const config = SquadsConfigSchema.parse({
-      roomSize: 10,
-      graceMinutes: 0,
-      searchTtlMinutes: 15,
-    });
-    expect(config).toMatchObject({ roomSize: 10, graceMinutes: 0, searchTtlMinutes: 15 });
+    const config = SquadsConfigSchema.parse({ roomSize: 10, graceMinutes: 0 });
+    expect(config).toMatchObject({ roomSize: 10, graceMinutes: 0 });
+    expect(SquadsConfigSchema.parse({ roomSize: 2 }).roomSize).toBe(2);
   });
 
   it('recusa id que não é snowflake', () => {
-    expect(SquadsConfigSchema.safeParse({ createChannelId: 'abc' }).success).toBe(false);
+    expect(SquadsConfigSchema.safeParse({ notifyRoleId: 'abc' }).success).toBe(false);
   });
 
-  it('recusa o mesmo cargo para busca e sem aviso', () => {
-    const result = SquadsConfigSchema.safeParse({ searchRoleId: ROLE_A, optOutRoleId: ROLE_A });
+  it.each([
+    ['chatChannelId', 'deskChannelId', 'deskChannelId'],
+    ['chatChannelId', 'agendaChannelId', 'agendaChannelId'],
+    ['deskChannelId', 'agendaChannelId', 'agendaChannelId'],
+  ])('recusa %s igual a %s', (a, b, path) => {
+    const result = SquadsConfigSchema.safeParse({ [a]: ID_A, [b]: ID_A });
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.path).toEqual(['optOutRoleId']);
+    expect(result.error?.issues[0]?.path).toEqual([path]);
+  });
+
+  it('aceita os três canais diferentes, e canal vazio não conta como repetido', () => {
     expect(
-      SquadsConfigSchema.safeParse({ searchRoleId: ROLE_A, optOutRoleId: ROLE_B }).success,
+      SquadsConfigSchema.safeParse({
+        chatChannelId: ID_A,
+        deskChannelId: ID_B,
+        agendaChannelId: ID_C,
+      }).success,
     ).toBe(true);
-  });
-
-  describe('gameNames', () => {
-    it('tira repetido pela forma normalizada e fica a primeira grafia', () => {
-      const config = SquadsConfigSchema.parse({
-        gameNames: ['  HELLDIVERS™ 2 ', 'helldivers 2', 'Deep Rock Galactic'],
-      });
-      expect(config.gameNames).toEqual(['HELLDIVERS™ 2', 'Deep Rock Galactic']);
-    });
-
-    it('aceita lista vazia (desliga só o aviso automático)', () => {
-      expect(SquadsConfigSchema.parse({ gameNames: [] }).gameNames).toEqual([]);
-    });
-
-    it('recusa nome em branco ou só com ™', () => {
-      expect(SquadsConfigSchema.safeParse({ gameNames: ['  '] }).success).toBe(false);
-      expect(SquadsConfigSchema.safeParse({ gameNames: ['™'] }).success).toBe(false);
-    });
-
-    it(`recusa mais de ${String(LFG_MAX_GAME_NAMES)} jogos`, () => {
-      const names = Array.from({ length: LFG_MAX_GAME_NAMES + 1 }, (_, i) => `Jogo ${String(i)}`);
-      expect(SquadsConfigSchema.safeParse({ gameNames: names }).success).toBe(false);
-    });
-  });
-});
-
-describe('normalizeGameName', () => {
-  it('ignora ™, ®, caixa e espaço extra', () => {
-    expect(normalizeGameName('HELLDIVERS™ 2')).toBe('helldivers 2');
-    expect(normalizeGameName('  Helldivers   2 ')).toBe('helldivers 2');
-    expect(normalizeGameName('Tom Clancy’s Rainbow Six® Siege')).toBe(
-      'tom clancy’s rainbow six siege',
-    );
+    expect(SquadsConfigSchema.safeParse({ chatChannelId: ID_A }).success).toBe(true);
   });
 });
 
