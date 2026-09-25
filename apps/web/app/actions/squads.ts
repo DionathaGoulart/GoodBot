@@ -1,6 +1,6 @@
 'use server';
 
-import { publishSquadPanel } from '@/lib/squads';
+import { publishSquadGuides } from '@/lib/squads';
 
 import type { ActionResult } from '@/lib/module-config';
 
@@ -9,6 +9,6 @@ import type { ActionResult } from '@/lib/module-config';
  * demais: a permissão mora lá, junto da chamada ao bot.
  */
 
-export async function publishSquadPanelAction(guildId: string): Promise<ActionResult> {
-  return publishSquadPanel(guildId);
+export async function publishSquadGuidesAction(guildId: string): Promise<ActionResult> {
+  return publishSquadGuides(guildId);
 }

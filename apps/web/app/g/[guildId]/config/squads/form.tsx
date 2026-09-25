@@ -2,71 +2,90 @@
 
 import { useFormContext } from 'react-hook-form';
 
-import { publishSquadPanelAction } from '@/app/actions/squads';
+import { publishSquadGuidesAction } from '@/app/actions/squads';
 import { ActionButton } from '@/components/config/confirm-button';
 import { ConfigForm } from '@/components/config/config-form';
 import { CHANNEL_TYPES } from '@/components/config/discord-options';
-import { DiscordField, LinesField, NumberField } from '@/components/config/fields';
+import { DiscordField, NumberField } from '@/components/config/fields';
 import { ModuleToggle } from '@/components/config/module-toggle';
 import { Panel } from '@/components/retro/panel';
 import { useGuildId } from '@/lib/use-guild-id';
 
 import type { SquadsConfig } from '@goodbot/shared';
 
-interface PublishedPanel {
+interface PublishedMessage {
   channelId: string;
   messageId: string;
 }
 
+/** As três mensagens do bot, como a página as leu do config salvo. */
+export interface PublishedGuides {
+  chatGuide: PublishedMessage | null;
+  deskGuide: PublishedMessage | null;
+  deskButtons: PublishedMessage | null;
+}
+
+const GUIDE_LABELS: Record<keyof PublishedGuides, string> = {
+  chatGuide: 'GUIA DO BUSCAR SQUAD',
+  deskGuide: 'GUIA DO JOGATINAS',
+  deskButtons: 'BOTÕES DO JOGATINAS',
+};
+
+/** Só os canais de texto comuns: a agenda abre thread e o bot fixa o guia. */
+const TEXT_ONLY = [CHANNEL_TYPES.text];
+
 /**
- * O painel fixo das salas. Quem publica é o bot, com o config **salvo**: com o
+ * Os guias e os botões. Quem publica é o bot, com o config **salvo**: com o
  * formulário sujo o botão espera, senão a staff trocaria o canal, clicaria e
- * veria o painel sair no canal antigo.
+ * veria a mensagem sair no canal antigo.
  */
-function PanelMessage({
-  published,
-  readOnly,
-}: {
-  published: PublishedPanel | null;
-  readOnly: boolean;
-}) {
+function GuideMessages({ published, readOnly }: { published: PublishedGuides; readOnly: boolean }) {
   const guildId = useGuildId();
   const dirty = useFormContext<SquadsConfig>().formState.isDirty;
+  const any = Object.values(published).some((message) => message !== null);
 
   return (
     <Panel
-      title="PAINEL.MSG"
+      title="GUIAS.MSG"
       actions={
         readOnly ? null : (
           <ActionButton
-            label={published ? 'ATUALIZAR' : 'PUBLICAR'}
+            label={any ? 'ATUALIZAR GUIAS' : 'PUBLICAR GUIAS'}
             busyLabel="PUBLICANDO_"
-            successTitle={published ? 'ATUALIZADO' : 'PUBLICADO'}
+            successTitle={any ? 'ATUALIZADO' : 'PUBLICADO'}
             disabled={dirty}
-            action={() => publishSquadPanelAction(guildId)}
+            action={() => publishSquadGuidesAction(guildId)}
           />
         )
       }
     >
       <p className="text-sm">
-        Mensagem fixa no canal do painel com as salas abertas, as próximas jogatinas da agenda e os
-        botões BUSCAR SQUAD, SEM AVISO e MARCAR JOGATINA. Depois de publicada, o bot edita sozinho a
-        cada sala que abre, enche ou some e a cada jogatina marcada.
+        Três mensagens do bot: o guia fixado no canal de buscar squad, e o guia e os botões PROCURAR
+        AGORA, MARCAR JOGATINA, MINHAS JOGATINAS e ME AVISA no canal de jogatinas. O bot também
+        republica sozinho a que for apagada e reedita as do ar quando o texto muda.
       </p>
-      <p className="screen-meta">
-        {published ? (
-          <a
-            href={`https://discord.com/channels/${guildId}/${published.channelId}/${published.messageId}`}
-            target="_blank"
-            rel="noreferrer"
-            className="underline"
-          >
-            NO AR · ABRIR NO DISCORD
-          </a>
-        ) : (
-          'NÃO PUBLICADO'
-        )}
-      </p>
+      <ul className="screen-meta">
+        {(Object.keys(GUIDE_LABELS) as (keyof PublishedGuides)[]).map((key) => {
+          const message = published[key];
+          return (
+            <li key={key}>
+              {GUIDE_LABELS[key]} ·{' '}
+              {message ? (
+                <a
+                  href={`https://discord.com/channels/${guildId}/${message.channelId}/${message.messageId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  NO AR
+                </a>
+              ) : (
+                'NÃO PUBLICADO'
+              )}
+            </li>
+          );
+        })}
+      </ul>
       {dirty && !readOnly ? (
         <p className="screen-meta">SALVE ANTES DE PUBLICAR: O BOT USA O CONFIG SALVO</p>
       ) : null}
@@ -80,66 +99,48 @@ export function SquadsConfigForm({
   readOnly,
 }: {
   values: SquadsConfig;
-  published: PublishedPanel | null;
+  published: PublishedGuides;
   readOnly: boolean;
 }) {
   return (
     <ConfigForm page="squads" defaultValues={values} readOnly={readOnly}>
-      <ModuleToggle description="Quem quer jogar agora ganha um cargo, entra no ➕ Criar Squad e cai numa sala de voz que some quando esvazia. Desligado, o bot para de reagir; cargos e salas que já existem ficam como estão." />
+      <ModuleToggle description="Quem quer jogar agora publica um card com sala de voz na hora; quem quer marcar para depois põe a jogatina na agenda. Desligado, o bot para de reagir; salas, cargo e mensagens que já existem ficam como estão." />
 
-      <PanelMessage published={published} readOnly={readOnly} />
+      <GuideMessages published={published} readOnly={readOnly} />
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title="CARGOS.CFG">
+        <Panel title="CANAIS.CFG">
           <p className="text-sm">
-            Cargos comuns, criados pela staff. O bot só liga e desliga, então o cargo dele precisa
-            estar acima dos dois.
+            Três canais de texto diferentes, criados pela staff. Sem um deles, só a ação que precisa
+            dele recusa.
           </p>
           <DiscordField
-            name="searchRoleId"
-            kind="role"
-            label="Cargo de busca"
-            description="Quem está buscando squad agora. Deixe o cargo separado na lista de membros (hoist)."
-            placeholder="Nenhum cargo"
-          />
-          <DiscordField
-            name="optOutRoleId"
-            kind="role"
-            label="Cargo de sem aviso"
-            description="Quem tem nunca recebe a DM automática ao abrir o jogo. Ainda busca à mão."
-            placeholder="Nenhum cargo"
-          />
-          <NumberField
-            name="searchTtlMinutes"
-            label="Expiração da busca"
-            description="Quem liga a busca e não entra em voz nesse prazo perde o cargo."
-            min={15}
-            max={720}
-            suffix="MIN"
-          />
-          <LinesField
-            name="gameNames"
-            label="Jogos que disparam o aviso"
-            description="Um por linha, como aparece no Discord. Sem ™ e sem diferenciar caixa. Vazio desliga o aviso automático."
-            rows={3}
-          />
-        </Panel>
-
-        <Panel title="SALAS.CFG">
-          <DiscordField
-            name="panelChannelId"
+            name="chatChannelId"
             kind="channel"
-            label="Canal do painel"
-            description="Canal de texto onde fica a mensagem fixa com as salas abertas."
+            channelTypes={TEXT_ONLY}
+            label="Canal de buscar squad"
+            description="Chat livre de todo mundo. O bot fixa o guia e posta ali os cards de quem quer jogar agora."
+            placeholder="Nenhum canal"
+          />
+          <DiscordField
+            name="deskChannelId"
+            kind="channel"
+            channelTypes={TEXT_ONLY}
+            label="Canal de jogatinas"
+            description="Só o bot escreve: o guia e a mensagem dos botões. É o lugar de quem não lembra o comando."
             placeholder="Nenhum canal"
           />
           <DiscordField
             name="agendaChannelId"
             kind="channel"
+            channelTypes={TEXT_ONLY}
             label="Canal da agenda"
-            description="Canal de texto onde cada jogatina marcada vira uma mensagem com a lista de quem vai e uma thread. Só o bot escreve; threads liberadas. Vazio, MARCAR JOGATINA recusa."
+            description="Só o bot escreve: cada jogatina marcada vira uma mensagem com a lista de quem vai e uma thread. Threads liberadas."
             placeholder="Nenhum canal"
           />
+        </Panel>
+
+        <Panel title="SALAS.CFG">
           <DiscordField
             name="categoryId"
             kind="channel"
@@ -148,18 +149,10 @@ export function SquadsConfigForm({
             description="É do módulo: voz aqui com nome Squad Alfa, Squad Beta... é apagado quando esvazia."
             placeholder="Nenhuma categoria"
           />
-          <DiscordField
-            name="createChannelId"
-            kind="channel"
-            channelTypes={[CHANNEL_TYPES.voice]}
-            label="Canal de criar"
-            description="O voz ➕ Criar Squad: quem entra ganha uma sala nova e é movido para ela."
-            placeholder="Nenhum canal"
-          />
           <NumberField
             name="roomSize"
-            label="Tamanho da sala"
-            description="Limite de gente em cada sala, aplicado pelo próprio Discord."
+            label="Vagas padrão"
+            description="Quantas vagas o card e a jogatina têm quando ninguém diz, e o limite de gente na sala."
             min={2}
             max={10}
             suffix="PESSOAS"
@@ -167,10 +160,25 @@ export function SquadsConfigForm({
           <NumberField
             name="graceMinutes"
             label="Janela de tolerância"
-            description="Quem sai da voz só perde o cargo, e a sala vazia só some, depois disso. Cobre queda de conexão. 0 é na hora."
+            description="A sala vazia só some depois disso. Cobre queda de conexão. 0 é na hora."
             min={0}
             max={10}
             suffix="MIN"
+          />
+        </Panel>
+
+        <Panel title="AVISO.CFG">
+          <p className="text-sm">
+            Cargo comum, sem permissão e sem destaque na lista de membros. Quem tem é mencionado nos
+            cards de agora e quando alguém divulga uma jogatina. Cada um liga e desliga no ME AVISA
+            ou em /avisos, então o cargo do bot precisa estar acima dele.
+          </p>
+          <DiscordField
+            name="notifyRoleId"
+            kind="role"
+            label="Cargo de aviso"
+            description="O cargo Bora. Vazio, os cards saem sem menção."
+            placeholder="Nenhum cargo"
           />
         </Panel>
       </div>

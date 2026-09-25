@@ -204,14 +204,16 @@ export async function saveModuleConfig(
     };
   }
   const before = await loadPage(guildId, page);
-  // `panelMessageId` é escrito pelo bot quando publica o painel fixo dos
-  // squads. Um formulário aberto antes da publicação traria o id velho, e a
-  // publicação seguinte mandaria uma mensagem nova em vez de editar a do ar.
+  // Os ids das três mensagens do squad são escritos pelo bot quando ele publica
+  // os guias. Um formulário aberto antes da publicação traria os ids velhos, e
+  // a publicação seguinte mandaria mensagens novas em vez de editar as do ar.
   const after: ConfigPageValues =
     page === 'squads'
       ? {
           ...(parsed.data as SquadsConfig),
-          panelMessageId: (before as SquadsConfig).panelMessageId,
+          chatGuideMessageId: (before as SquadsConfig).chatGuideMessageId,
+          deskGuideMessageId: (before as SquadsConfig).deskGuideMessageId,
+          deskButtonsMessageId: (before as SquadsConfig).deskButtonsMessageId,
         }
       : (parsed.data as ConfigPageValues);
   await writePage(guildId, page, after, session.user.id);

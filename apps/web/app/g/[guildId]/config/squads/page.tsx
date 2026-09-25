@@ -6,12 +6,17 @@ import { loadModuleConfig } from '@/lib/module-config';
 
 import { SquadsConfigForm } from './form';
 
+import type { PublishedGuides } from './form';
+
 export const metadata = { title: 'Buscar squad · Goodbot' };
 
+function published(channelId: string | null, messageId: string | null) {
+  return channelId && messageId ? { channelId, messageId } : null;
+}
+
 /**
- * PRD §5.11 e §6.2: a tela lê só o próprio config. Salas e cargos são estado
- * do Discord; as jogatinas têm tabela, mas vivem no `#agenda` e no painel
- * fixo que o botão do topo publica, não aqui.
+ * PRD §5.11 e §6.2: a tela lê só o próprio config. Salas e cargo são estado do
+ * Discord; cards e jogatinas têm tabela, mas vivem nos canais, não aqui.
  */
 export default async function SquadsConfigPage({
   params,
@@ -19,6 +24,11 @@ export default async function SquadsConfigPage({
   const { guildId } = await params;
   const session = await requireGuildAccess(guildId);
   const { config } = await loadModuleConfig(guildId, 'squads');
+  const guides: PublishedGuides = {
+    chatGuide: published(config.chatChannelId, config.chatGuideMessageId),
+    deskGuide: published(config.deskChannelId, config.deskGuideMessageId),
+    deskButtons: published(config.deskChannelId, config.deskButtonsMessageId),
+  };
 
   return (
     <>
@@ -29,11 +39,7 @@ export default async function SquadsConfigPage({
       />
       <SquadsConfigForm
         values={config}
-        published={
-          config.panelChannelId && config.panelMessageId
-            ? { channelId: config.panelChannelId, messageId: config.panelMessageId }
-            : null
-        }
+        published={guides}
         readOnly={!hasAccess(session.level, 'admin')}
       />
     </>
