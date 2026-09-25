@@ -37,6 +37,7 @@ import { Scheduler } from './services/scheduler';
 import { YouTubeProvider } from './services/social/index';
 import { SquadAgendaService } from './services/squads/agenda';
 import { SquadAgendaClock } from './services/squads/clock';
+import { SquadGuideService } from './services/squads/guides';
 import { SquadRoomService } from './services/squads/rooms';
 import { StatsService } from './services/stats';
 import { TicketService } from './services/tickets';
@@ -162,6 +163,7 @@ async function main(): Promise<void> {
   const social = new YouTubeProvider();
   const squadAgenda = new SquadAgendaService({ client, db, config, audit });
   const squadRooms = new SquadRoomService({ client, config, registry });
+  const squadGuides = new SquadGuideService({ client, db, config, audit, registry });
   const squadClock = new SquadAgendaClock({
     client,
     db,
@@ -262,6 +264,7 @@ async function main(): Promise<void> {
     tickets,
     squadRooms,
     squadAgenda,
+    squadGuides,
     social,
     messageCache,
     stats,
@@ -292,6 +295,7 @@ async function main(): Promise<void> {
     capacity.start();
     squadRooms.start();
     squadClock.start();
+    squadGuides.start();
     databaseProbe.start();
     void deployNotice.resolve();
     alerts.emit({
@@ -334,6 +338,7 @@ async function main(): Promise<void> {
       capacity.stop();
       squadRooms.stop();
       squadClock.stop();
+      squadGuides.stop();
       squadAgenda.stop();
       databaseProbe.stop();
       autorole.stop();

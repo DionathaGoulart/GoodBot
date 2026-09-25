@@ -1,14 +1,28 @@
 import { describe, expect, it } from 'vitest';
 
-import { agendaId, isSquadDmId, manageId, parseSquadId, requestId, SCHEDULE_ID } from './ids';
+import {
+  agendaId,
+  CALL_ID,
+  isSquadDmId,
+  manageId,
+  MINE_ID,
+  NOTIFY_TOGGLE_ID,
+  parseSquadId,
+  requestId,
+  SCHEDULE_ID,
+} from './ids';
 
 const GUILD = '123456789012345678';
 const USER = '876543210987654321';
 const SESSION = '0b8c2f4e-1111-2222-3333-444455556666';
 
 describe('custom_id do squad', () => {
-  it('o MARCAR JOGATINA vai e volta', () => {
+  it('os quatro botões do canal de jogatinas vão e voltam', () => {
+    expect(parseSquadId(CALL_ID)).toEqual({ kind: 'call' });
     expect(parseSquadId(SCHEDULE_ID)).toEqual({ kind: 'schedule' });
+    expect(parseSquadId(MINE_ID)).toEqual({ kind: 'mine' });
+    expect(parseSquadId(NOTIFY_TOGGLE_ID)).toEqual({ kind: 'notify' });
+    expect(parseSquadId(`${CALL_ID}:extra`)).toBeNull();
   });
 
   it('os botões da agenda levam a jogatina', () => {

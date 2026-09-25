@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  callModal,
   cancelPrompt,
   managePanel,
   mineText,
+  requireSquadChannel,
   rescheduleModal,
   slotsModal,
   visibilityText,
 } from './squads';
+import { squadsConfig } from '../services/squads/__fixtures__/rooms';
 
 import type { LfgSession, LfgSessionWithRoster } from '@goodbot/db';
 
@@ -89,17 +92,55 @@ describe('ABRIR e FECHAR', () => {
   });
 });
 
-describe('/squad agenda', () => {
+describe('/jogatinas', () => {
   it('lista cada jogatina com o papel da pessoa e o link', () => {
     const text = mineText([
-      { sessionId: SESSION, startsAt: STARTS, status: 'host', url: 'https://x/1' },
-      { sessionId: SESSION, startsAt: STARTS, status: 'requested', url: null },
+      {
+        sessionId: SESSION,
+        kind: 'scheduled',
+        startsAt: STARTS,
+        status: 'host',
+        url: 'https://x/1',
+      },
+      { sessionId: SESSION, kind: 'scheduled', startsAt: STARTS, status: 'requested', url: null },
     ]);
     expect(text).toContain('você marcou · [ver](https://x/1)');
     expect(text).toContain('seu pedido está com quem marcou');
   });
 
-  it('sem nenhuma, ensina a marcar', () => {
-    expect(mineText([])).toContain('/squad agendar');
+  it('o card aparece como agora, sem hora', () => {
+    const text = mineText([
+      { sessionId: SESSION, kind: 'now', startsAt: STARTS, status: 'host', url: 'https://x/2' },
+      { sessionId: SESSION, kind: 'now', startsAt: STARTS, status: 'going', url: null },
+    ]);
+    expect(text).toContain('- agora: você procura · [ver](https://x/2)');
+    expect(text).toContain('- agora: você vai');
+    expect(text).not.toContain('<t:');
+  });
+
+  it('sem nenhuma, ensina os dois comandos', () => {
+    expect(mineText([])).toContain('`/procurar`');
+    expect(mineText([])).toContain('`/marcar`');
+  });
+});
+
+describe('PROCURAR AGORA', () => {
+  it('o modal pede o quê e vagas, com o tamanho da sala de padrão', () => {
+    const modal = JSON.stringify(callModal({ roomSize: 5 }));
+    expect(modal).toContain('"custom_id":"squad:call"');
+    expect(modal).toContain('"custom_id":"what"');
+    expect(modal).toContain('"placeholder":"5"');
+  });
+
+  it('sem o canal, recusa antes do modal dizendo o que falta', () => {
+    expect(() => {
+      requireSquadChannel(squadsConfig({ chatChannelId: null }), 'chatChannelId');
+    }).toThrow(expect.objectContaining({ code: 'SQUADS_NO_CHAT_CHANNEL' }));
+    expect(() => {
+      requireSquadChannel(squadsConfig({ agendaChannelId: null }), 'agendaChannelId');
+    }).toThrow(expect.objectContaining({ code: 'SQUADS_NO_AGENDA_CHANNEL' }));
+    expect(() => {
+      requireSquadChannel(squadsConfig(), 'agendaChannelId');
+    }).not.toThrow();
   });
 });

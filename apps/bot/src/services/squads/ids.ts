@@ -3,7 +3,9 @@
  * (ver `interactions/index.ts`) e o resto é lido aqui, num lugar só, para o
  * builder e o parser nunca divergirem.
  *
+ * - `squad:call`: o botão PROCURAR AGORA e o modal do card que ele abre.
  * - `squad:schedule`: o botão MARCAR JOGATINA e o modal que ele abre.
+ * - `squad:mine`: MINHAS JOGATINAS. `squad:notify`: ME AVISA, o toggle do `Bora`.
  * - `squad:a:<ação>:<sessionId>`: os botões da mensagem da jogatina na agenda.
  * - `squad:m:<op>:<sessionId>`: o GERENCIAR, efêmero de quem marcou ou da
  *   staff. REMARCAR e VAGAS usam o mesmo id no botão e no modal que ele abre.
@@ -45,14 +47,25 @@ const MANAGE_OPS: readonly string[] = [
 export type RequestAnswer = 'ok' | 'no';
 
 export type SquadCustomId =
+  | { kind: 'call' }
   | { kind: 'schedule' }
+  | { kind: 'mine' }
+  | { kind: 'notify' }
   | { kind: 'agenda'; action: AgendaAction; sessionId: string }
   | { kind: 'manage'; op: ManageOp; sessionId: string }
   | { kind: 'request'; answer: RequestAnswer; guildId: string; sessionId: string; userId: string };
 
+export const CALL_ID = `${SQUAD_PREFIX}:call`;
 export const SCHEDULE_ID = `${SQUAD_PREFIX}:schedule`;
+export const MINE_ID = `${SQUAD_PREFIX}:mine`;
+export const NOTIFY_TOGGLE_ID = `${SQUAD_PREFIX}:notify`;
+/** Os campos do modal do card. */
+export const CALL_FIELDS = { what: 'what', slots: 'slots' } as const;
 /** Os campos do modal da jogatina. */
 export const SCHEDULE_FIELDS = { when: 'when', slots: 'slots', note: 'note' } as const;
+
+/** Os botões do `#jogatinas` que não levam nada além do próprio nome. */
+const SIMPLE_KINDS: readonly string[] = ['call', 'schedule', 'mine', 'notify'];
 
 function assertSnowflake(value: string, what: string): void {
   if (!SNOWFLAKE_RE.test(value)) throw new RangeError(`${what} inválido: ${value}`);
@@ -88,7 +101,9 @@ export function requestId(
 export function parseSquadId(customId: string): SquadCustomId | null {
   const [prefix, kind, ...rest] = customId.split(':');
   if (prefix !== SQUAD_PREFIX) return null;
-  if (kind === 'schedule' && rest.length === 0) return { kind: 'schedule' };
+  if (kind !== undefined && SIMPLE_KINDS.includes(kind) && rest.length === 0) {
+    return { kind: kind as 'call' | 'schedule' | 'mine' | 'notify' };
+  }
   if (kind === 'a' && rest.length === 2) {
     const [action, sessionId] = rest as [string, string];
     if (!AGENDA_ACTIONS.includes(action) || !UUID_RE.test(sessionId)) return null;

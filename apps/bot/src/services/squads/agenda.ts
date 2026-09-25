@@ -44,6 +44,7 @@ import type { Db, LfgSession, LfgSessionWithRoster } from '@goodbot/db';
 import type {
   AuditSource,
   JoinOutcome,
+  LfgKind,
   LfgMemberStatus,
   LfgVisibility,
   Roster,
@@ -245,9 +246,10 @@ export interface ScheduledSession {
   url: string;
 }
 
-/** Uma jogatina de `/squad agenda`: onde a pessoa está nela. */
+/** Uma linha do `/jogatinas`: a jogatina ou o card, e onde a pessoa está nele. */
 export interface MemberAgendaEntry {
   sessionId: string;
+  kind: LfgKind;
   startsAt: Date;
   status: LfgMemberStatus;
   url: string | null;
@@ -694,11 +696,12 @@ export class SquadAgendaService {
     await this.refresh(guild.id, sessionId);
   }
 
-  /** As jogatinas abertas em que a pessoa está, da mais próxima para a mais distante. */
+  /** As jogatinas e os cards abertos em que a pessoa está, do mais próximo ao mais distante. */
   async mine(guildId: string, userId: string, limit: number): Promise<MemberAgendaEntry[]> {
     const rows = await listMemberLfgSessions(this.db, guildId, userId, limit);
     return rows.map(({ session, status }) => ({
       sessionId: session.id,
+      kind: session.kind,
       startsAt: session.startsAt,
       status,
       url: this.linkOf(session),

@@ -3,6 +3,7 @@ import {
   LFG_MIN_SLOTS,
   LFG_NOTE_MAX_LENGTH,
   LFG_WHEN_MAX_LENGTH,
+  OpenCallInputSchema,
   ScheduleSessionInputSchema,
   seatedEntries,
   UserFacingError,
@@ -23,7 +24,15 @@ import {
 import { botFooter, infoEmbed } from '../lib/embeds';
 import { levelAtLeast, resolveLevel, toMemberLike } from '../services/permissions';
 import { JOIN_TEXT, LEAVE_TEXT, whenDefault } from '../services/squads/agenda';
-import { manageId, parseSquadId, SCHEDULE_FIELDS, SCHEDULE_ID } from '../services/squads/ids';
+import {
+  CALL_FIELDS,
+  CALL_ID,
+  manageId,
+  parseSquadId,
+  SCHEDULE_FIELDS,
+  SCHEDULE_ID,
+} from '../services/squads/ids';
+import { notifyText, toggleNotify } from '../services/squads/notify';
 
 import type { BotContext } from '../lib/command';
 import type { MemberAgendaEntry, RequestAnswerResult } from '../services/squads/agenda';
@@ -50,6 +59,60 @@ export async function squadsConfigOrFail(ctx: BotContext, guildId: string): Prom
     });
   }
   return config;
+}
+
+/** Quantas jogatinas e cards o MINHAS JOGATINAS lista: o teto por host mais folga. */
+export const MINE_LIMIT = 10;
+
+/**
+ * O canal onde a ação publica, conferido antes do modal: sem ele, a pessoa
+ * preencheria o formulário para ouvir no fim que não há onde postar.
+ */
+export function requireSquadChannel(
+  config: SquadsConfig,
+  field: 'chatChannelId' | 'agendaChannelId',
+): void {
+  if (config[field] !== null) return;
+  throw new UserFacingError(
+    field === 'chatChannelId'
+      ? 'O canal de buscar squad não está configurado. Peça à staff para escolher um no painel.'
+      : 'A agenda de jogatinas não tem canal configurado. Peça à staff para escolher um no painel.',
+    { code: field === 'chatChannelId' ? 'SQUADS_NO_CHAT_CHANNEL' : 'SQUADS_NO_AGENDA_CHANNEL' },
+  );
+}
+
+/** O modal do PROCURAR AGORA: o quê e vagas. O card vai para o `#buscar-squad`. */
+export function callModal(config: Pick<SquadsConfig, 'roomSize'>): ModalBuilder {
+  return new ModalBuilder()
+    .setCustomId(CALL_ID)
+    .setTitle('Procurar squad agora')
+    .setLabelComponents(
+      new LabelBuilder()
+        .setLabel('O quê')
+        .setDescription('O que você quer jogar. Aparece no card.')
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId(CALL_FIELDS.what)
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('D10, missão de 40 min')
+            .setMaxLength(LFG_NOTE_MAX_LENGTH)
+            .setRequired(true),
+        ),
+      new LabelBuilder()
+        .setLabel('Vagas')
+        .setDescription(
+          `De ${String(LFG_MIN_SLOTS)} a ${String(LFG_MAX_SLOTS)}, contando você. ` +
+            `Vazio: ${String(config.roomSize)}.`,
+        )
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId(CALL_FIELDS.slots)
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder(String(config.roomSize))
+            .setMaxLength(2)
+            .setRequired(false),
+        ),
+    );
 }
 
 /** O modal do MARCAR JOGATINA: quando, vagas e nota. A jogatina nasce fechada. */
@@ -424,14 +487,28 @@ const MINE_STATUS: Record<LfgMemberStatus, string> = {
   invited: 'você foi convidado',
 };
 
-/** O `/squad agenda`: as jogatinas em que a pessoa está, com o link de cada uma. */
+const MINE_CALL_STATUS: Partial<Record<LfgMemberStatus, string>> = {
+  host: 'você procura',
+  going: 'você vai',
+};
+
+/**
+ * `/jogatinas` e MINHAS JOGATINAS: as jogatinas e os cards em que a pessoa
+ * está, com o link de cada um. O card não tem hora marcada: é "agora".
+ */
 export function mineText(entries: readonly MemberAgendaEntry[]): string {
   if (entries.length === 0) {
-    return 'Você não está em nenhuma jogatina marcada. Para marcar uma, use `/squad agendar`.';
+    return (
+      'Você não está em nenhuma jogatina nem card. Para jogar agora, use `/procurar`; ' +
+      'para marcar para mais tarde, `/marcar`.'
+    );
   }
   const lines = entries.map((entry) => {
-    const at = String(Math.floor(entry.startsAt.getTime() / 1000));
     const link = entry.url ? ` · [ver](${entry.url})` : '';
+    if (entry.kind === 'now') {
+      return `- agora: ${MINE_CALL_STATUS[entry.status] ?? MINE_STATUS[entry.status]}${link}`;
+    }
+    const at = String(Math.floor(entry.startsAt.getTime() / 1000));
     return `- <t:${at}:F> (<t:${at}:R>): ${MINE_STATUS[entry.status]}${link}`;
   });
   return `**Suas jogatinas**\n${lines.join('\n')}`;
@@ -483,14 +560,20 @@ export async function handleSquadComponent(
     return handleManage(ctx, interaction, member, parsed.sessionId, 'open');
   }
   // O modal precisa da interação intacta: nada de `deferReply` antes dele.
-  if (parsed.kind === 'schedule') {
+  if (parsed.kind === 'call' || parsed.kind === 'schedule') {
     const config = await squadsConfigOrFail(ctx, guildId);
-    await interaction.showModal(scheduleModal(config));
+    if (parsed.kind === 'call') {
+      requireSquadChannel(config, 'chatChannelId');
+      await interaction.showModal(callModal(config));
+    } else {
+      requireSquadChannel(config, 'agendaChannelId');
+      await interaction.showModal(scheduleModal(config));
+    }
     return true;
   }
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  await squadsConfigOrFail(ctx, guildId);
-  const content = await componentText(ctx, member, parsed);
+  const config = await squadsConfigOrFail(ctx, guildId);
+  const content = await componentText(ctx, member, config, parsed);
   await interaction.editReply({ content });
   return true;
 }
@@ -498,11 +581,19 @@ export async function handleSquadComponent(
 async function componentText(
   ctx: BotContext,
   member: GuildMember,
-  parsed: Extract<SquadCustomId, { kind: 'agenda' }>,
+  config: SquadsConfig,
+  parsed: Extract<SquadCustomId, { kind: 'agenda' | 'mine' | 'notify' }>,
 ): Promise<string> {
-  return parsed.action === 'join'
-    ? JOIN_TEXT[await ctx.squadAgenda.join(member, parsed.sessionId)]
-    : LEAVE_TEXT[await ctx.squadAgenda.leave(member, parsed.sessionId)];
+  switch (parsed.kind) {
+    case 'mine':
+      return mineText(await ctx.squadAgenda.mine(member.guild.id, member.id, MINE_LIMIT));
+    case 'notify':
+      return notifyText(await toggleNotify(member, config));
+    case 'agenda':
+      return parsed.action === 'join'
+        ? JOIN_TEXT[await ctx.squadAgenda.join(member, parsed.sessionId)]
+        : LEAVE_TEXT[await ctx.squadAgenda.leave(member, parsed.sessionId)];
+  }
 }
 
 /**
@@ -518,6 +609,7 @@ export async function handleSquadModal(
   if (parsed?.kind === 'manage') {
     return handleManageModal(ctx, interaction, parsed.sessionId, parsed.op);
   }
+  if (parsed?.kind === 'call') return handleCallModal(ctx, interaction);
   if (parsed?.kind !== 'schedule') return false;
   const member = memberOf(interaction);
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -539,6 +631,33 @@ export async function handleSquadModal(
       'pedido de vaga chega na sua DM. Para abrir, use GERENCIAR. A conversa fica na thread.',
   });
   return true;
+}
+
+/**
+ * O modal do card, venha ele do botão ou do `/procurar`. Confere o formato;
+ * a sala e o card entram na etapa seguinte.
+ */
+async function handleCallModal(
+  ctx: BotContext,
+  interaction: ModalSubmitInteraction,
+): Promise<boolean> {
+  const member = memberOf(interaction);
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const config = await squadsConfigOrFail(ctx, member.guild.id);
+  requireSquadChannel(config, 'chatChannelId');
+  const input = OpenCallInputSchema.safeParse({
+    what: interaction.fields.getTextInputValue(CALL_FIELDS.what),
+    slots: interaction.fields.getTextInputValue(CALL_FIELDS.slots),
+  });
+  if (!input.success) {
+    throw new UserFacingError(input.error.issues[0]?.message ?? 'Não entendi o formulário.', {
+      code: 'VALIDATION',
+    });
+  }
+  // TODO(etapa 4): abre a sala e posta o card no `#buscar-squad`.
+  throw new UserFacingError('Em construção: o card de procurar squad chega em breve.', {
+    code: 'SQUADS_CALL_PENDING',
+  });
 }
 
 export function requestAnsweredText(result: RequestAnswerResult): string {
