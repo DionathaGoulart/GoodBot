@@ -17,8 +17,8 @@
     "@hono/node-server": "^2.1.1",
     "@hono/zod-validator": "^0.9.1",
     "discord.js": "^14.27.0",
-    "drizzle-orm": "^0.45.2",
-    "hono": "^4.13.8",
+    "drizzle-orm": "^0.45.3",
+    "hono": "^4.13.9",
     "pino": "^10.3.1",
     "safe-regex2": "^5.1.1",
     "zod": "^4.6.5"
