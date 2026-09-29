@@ -86,7 +86,7 @@ export async function searchMembers(
 
 /**
  * Membros por lista de IDs, para as tabelas que mostram nome e avatar de quem
- * aparece nelas (os jogadores dos squads). Listar a primeira página de membros
+ * aparece nelas. Listar a primeira página de membros
  * não serve num servidor maior, e um `/members/:userId` por pessoa gastaria o
  * teto da rota.
  *

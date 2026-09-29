@@ -106,7 +106,6 @@ validação Zod) e `retryAfter` quando o 503 veio de rate limit.
 | `config`      | invalidar o cache de config de um módulo                                                                                                                                                                                                                                                             |
 | `commands`    | listar os comandos registrados                                                                                                                                                                                                                                                                       |
 | `social`      | contas de rede social e teste de anúncio                                                                                                                                                                                                                                                             |
-| `squads`      | publicar ou reeditar o painel fixo das salas (`POST /squads/panel`, §4.4); o módulo não tem estado para ler                                                                                                                                                                                          |
 | `admin`       | painel do dono: guilds, expulsar, broadcast, manutenção, resync                                                                                                                                                                                                                                      |
 | `registry`    | o aviso por DM a quem convidou o bot (ciclo de vida do convite)                                                                                                                                                                                                                                      |
 | `metrics`     | contadores em formato Prometheus                                                                                                                                                                                                                                                                     |
@@ -171,83 +170,3 @@ navegador protege contra o clique errado, não contra a chamada solta. E é o
 único endpoint do projeto que escreve em servidores de terceiros. Antes de
 enviar, `dryRun: true` devolve em que canal a mensagem cairia em cada servidor,
 sem mandar nada.
-
-### 4.4 Painel de squads
-
-O módulo de squads não guarda nada que o painel precise ler: salas, cargo e
-jogatinas são o próprio Discord. A única rota é o botão que publica o painel
-fixo, o mesmo caminho do `/squad painel`:
-
-```bash
-curl -X POST http://localhost:3001/guilds/$GUILD_ID/squads/panel \
-  -H "Authorization: Bearer $INTERNAL_API_TOKEN" \
-  -H 'content-type: application/json' \
-  -d '{"actorId": "'"$ACTOR_ID"'"}'
-```
-
-Só `admin`. O canal é o `panelChannelId` **salvo**, nunca um do corpo: publicar
-num canal que a config não conhece deixaria o bot editando uma mensagem e a
-staff olhando para outra. Responde `{ channelId, messageId, created }`, com
-`created: false` quando a mensagem do ar foi editada. Módulo desligado, canal
-não configurado ou permissão faltando no canal voltam como 400 com o código do
-`UserFacingError` (`MODULE_DISABLED`, `SQUADS_NO_PANEL_CHANNEL`,
-`MISSING_PERMISSIONS`) e a mensagem que o toast mostra. A publicação entra na
-auditoria como `squad.panel.publish`.
-
-## 5. Rate limit
-
-| Quem                     | Por IP  | Por rota |
-| ------------------------ | ------- | -------- |
-| com `INTERNAL_API_TOKEN` | 600/min | 600/min  |
-| sem token                | 60/min  | 100/min  |
-
-Mandar mensagem tem teto próprio: **10/min por guild**. É o endpoint mais fácil
-de abusar, e ninguém escreve dez mensagens à mão por minuto.
-
-Estourar devolve 503 com `retryAfter` em segundos.
-
-O teto alto para quem tem o token é deliberado: quem tem o token já pode fazer
-tudo que a API oferece, e racioná-lo não protege de nada: a defesa contra
-vazamento é rotacionar, não racionar. O balde apertado existe contra scanner
-anônimo.
-
-## 6. Limites de corpo
-
-256 KB por padrão. As rotas que carregam imagem (ícone e banner da guild, foto
-e capa do bot na guild, capa de evento, emoji, sticker) aceitam 12 MB, porque
-uma imagem de 8 MB, o limite do Discord, vira ~11 MB depois da base64.
-
-## 7. Adicionar uma rota
-
-Três coisas são obrigatórias, sem exceção:
-
-1. **Schema Zod em `packages/shared/src/api/`** para o corpo e para a resposta,
-   exportado pelo barrel `api/index.ts`.
-2. **A rota em `apps/bot/src/api/routes/`**, montada no `server.ts`, usando
-   `validate('json', SeuSchema)` e `requireActor(...)` se escreve.
-3. **O método no cliente** (`packages/shared/src/api/client.ts`), para o painel
-   e o CLI não montarem `fetch` na mão.
-
-Checklist antes de considerar pronta:
-
-- [ ] passa por `bearerAuth` (só `/health` não passa)
-- [ ] valida o corpo com Zod
-- [ ] se escreve, exige `actorId` e checa nível + hierarquia
-- [ ] entra no rate limit
-- [ ] tem método no cliente tipado
-- [ ] tem teste
-
-## 8. Health
-
-```bash
-curl -s http://localhost:3001/health
-```
-
-É a única rota sem autenticação, e é o que o Caddy, o Docker e o monitor
-externo usam. Sem token ela responde só `{"ok":true}`, para não vazar nada a
-quem apenas achou o subdomínio. Com o Bearer, traz o estado do gateway, do
-Postgres e a data do último backup:
-
-```bash
-curl -s -H "Authorization: Bearer $INTERNAL_API_TOKEN" http://localhost:3001/health
-```

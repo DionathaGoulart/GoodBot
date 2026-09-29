@@ -19,5 +19,4 @@ export * from './permissions';
 export * from './registry';
 export * from './roles';
 export * from './social';
-export * from './squads';
 export * from './tickets';

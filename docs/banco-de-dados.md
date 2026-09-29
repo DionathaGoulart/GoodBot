@@ -21,8 +21,7 @@ comandos, eventos e rotas chamam uma função de repository, nunca montam query.
 
 ## 2. As tabelas
 
-28 no total. No módulo de squads só a agenda tem tabela; cargo e sala são
-estado do Discord, e o resto é memória do bot.
+28 tabelas, incluindo duas tabelas históricas de squads, preservadas após a remoção do módulo.
 
 | Grupo         | Tabelas                                                                                                                                  |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |

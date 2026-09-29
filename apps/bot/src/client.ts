@@ -7,11 +7,7 @@ import {
   type ClientOptions,
 } from 'discord.js';
 
-/**
- * Intents do PRD §10. Nenhuma de presença: o aviso automático do squad, o
- * único que lia presença, saiu na v2.0 (§5.11), e com ele a `GuildPresences`
- * privilegiada. O cache de presença fica desligado (`PresenceManager: 0`).
- */
+/** Intents requeridas pelo bot conforme o PRD §10. */
 export const INTENTS = [
   GatewayIntentBits.Guilds,
   GatewayIntentBits.GuildMembers,

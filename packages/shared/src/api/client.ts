@@ -83,7 +83,6 @@ import {
   SocialResolveResultSchema,
   SocialTestResultSchema,
 } from './social';
-import { PublishSquadGuidesInputSchema, PublishSquadGuidesResultSchema } from './squads';
 import { CloseTicketInputSchema, CloseTicketResultSchema } from './tickets';
 import { SocialAccountInputSchema } from '../config/social';
 
@@ -157,7 +156,6 @@ import type {
   SocialResolveResult,
   SocialTestResult,
 } from './social';
-import type { PublishSquadGuidesInput, PublishSquadGuidesResult } from './squads';
 import type { CloseTicketInput, CloseTicketResult } from './tickets';
 import type { SocialAccountInput } from '../config/social';
 import type { z } from 'zod';
@@ -800,16 +798,6 @@ export function createInternalClient(options: InternalClientOptions) {
         `${guild(guildId)}/tickets/panels/${encodeURIComponent(panelId)}/unpublish`,
         { method: 'POST' },
       ),
-
-    /** Publica ou reedita os guias e os botões do buscar squad (PRD §5.11). */
-    publishSquadGuides: (
-      guildId: string,
-      input: PublishSquadGuidesInput,
-    ): Promise<PublishSquadGuidesResult> =>
-      request(PublishSquadGuidesResultSchema, `${guild(guildId)}/squads/guides`, {
-        method: 'POST',
-        body: PublishSquadGuidesInputSchema.parse(input),
-      }),
 
     /** Contas observadas neste servidor (PRD §5.8). */
     social: (guildId: string): Promise<SocialOverview> =>

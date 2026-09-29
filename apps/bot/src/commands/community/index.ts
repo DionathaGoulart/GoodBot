@@ -1,10 +1,5 @@
-import avisos from './avisos';
-import jogatinas from './jogatinas';
-import marcar from './marcar';
-import procurar from './procurar';
 import reactionrole from './reactionrole';
 import social from './social';
-import squad from './squad';
 import { tag, tags } from './tag';
 import ticket from './ticket';
 import verify from './verify';
@@ -21,9 +16,4 @@ export const communityCommands: readonly AnyCommand[] = [
   ticket,
   tag,
   tags,
-  squad,
-  procurar,
-  marcar,
-  jogatinas,
-  avisos,
 ];

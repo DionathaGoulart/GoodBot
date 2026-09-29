@@ -36,7 +36,6 @@ import { createModerationRoutes } from './routes/moderation';
 import { createRegistryRoutes } from './routes/registry';
 import { createRoleRoutes } from './routes/roles';
 import { createSocialRoutes } from './routes/social';
-import { createSquadRoutes } from './routes/squads';
 
 import type { ApiDeps, ApiEnv } from './context';
 import type { AlertService } from '../services/alerts';
@@ -207,7 +206,6 @@ export function createApiApp(options: ApiServerOptions): Hono<ApiEnv> {
   guilds.route('/:guildId/channels', createChannelRoutes(deps));
   guilds.route('/:guildId/members', createMemberRoutes(deps));
   guilds.route('/:guildId/social', createSocialRoutes(deps));
-  guilds.route('/:guildId/squads', createSquadRoutes(deps));
   guilds.route('/:guildId/invites', createInviteRoutes(deps));
   guilds.route('/:guildId/events', createEventRoutes(deps));
   guilds.route('/:guildId/expressions', createExpressionRoutes(deps));

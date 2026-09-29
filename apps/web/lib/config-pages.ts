@@ -6,7 +6,6 @@ import {
   ModerationConfigSchema,
   ReactionRolesConfigSchema,
   SocialConfigSchema,
-  SquadsConfigSchema,
   TagsConfigSchema,
   TicketsConfigSchema,
   UtilitiesConfigSchema,
@@ -133,15 +132,6 @@ export const CONFIG_PAGES = {
     title: 'TICKETS',
     file: 'TICKETS.CFG',
     description: 'Tipos, painel de abertura, transcript e tickets abertos.',
-  },
-  squads: {
-    group: 'comunidade',
-    module: 'squads',
-    schema: SquadsConfigSchema,
-    title: 'BUSCAR SQUAD',
-    file: 'SQUADS.CFG',
-    description:
-      'Três canais para achar gente: o card de quem quer jogar agora, a agenda de jogatinas e o balcão de botões, com o cargo opt-in de aviso.',
   },
   /**
    * As permissões de comando moram em `utilities.commandOverrides`, então a

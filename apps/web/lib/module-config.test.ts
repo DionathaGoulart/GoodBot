@@ -1,7 +1,6 @@
 import {
   DEFAULT_LOGS_CONFIG,
   DEFAULT_MODERATION_CONFIG,
-  DEFAULT_SQUADS_CONFIG,
 } from '@goodbot/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -103,38 +102,6 @@ describe('saveModuleConfig', () => {
     );
     expect(invalidateConfig).toHaveBeenCalledWith(GUILD_ID, { module: 'moderation' });
     expect(revalidatePath).toHaveBeenCalledWith(`/g/${GUILD_ID}/config/moderation`);
-  });
-
-  it('squads: os ids das mensagens do bot vêm do banco, não do formulário', async () => {
-    const PUBLISHED = {
-      chatGuideMessageId: '300000000000000001',
-      deskGuideMessageId: '300000000000000002',
-      deskButtonsMessageId: '300000000000000003',
-    };
-    getModuleConfig.mockResolvedValue({
-      module: 'squads',
-      enabled: true,
-      config: { ...DEFAULT_SQUADS_CONFIG, ...PUBLISHED },
-      stored: true,
-      updatedAt: null,
-      updatedBy: null,
-    });
-
-    // Aberto antes de o bot publicar: o formulário ainda acha que não há guia.
-    const result = await saveModuleConfig(
-      GUILD_ID,
-      'squads',
-      body({ ...DEFAULT_SQUADS_CONFIG, deskGuideMessageId: '399999999999999999', roomSize: 5 }),
-    );
-
-    expect(result.ok).toBe(true);
-    expect(setModuleConfig).toHaveBeenCalledWith(
-      {},
-      GUILD_ID,
-      'squads',
-      expect.objectContaining({ roomSize: 5, ...PUBLISHED }),
-      '200000000000000000',
-    );
   });
 
   it('bot fora do ar não desfaz o salvamento, só avisa', async () => {

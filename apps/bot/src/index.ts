@@ -35,10 +35,6 @@ import { ReactionRoleService } from './services/reaction-roles';
 import { RegistryService } from './services/registry';
 import { Scheduler } from './services/scheduler';
 import { YouTubeProvider } from './services/social/index';
-import { SquadAgendaService } from './services/squads/agenda';
-import { SquadAgendaClock } from './services/squads/clock';
-import { SquadGuideService } from './services/squads/guides';
-import { SquadRoomService } from './services/squads/rooms';
 import { StatsService } from './services/stats';
 import { TicketService } from './services/tickets';
 import { WelcomeService } from './services/welcome';
@@ -161,18 +157,6 @@ async function main(): Promise<void> {
     },
   });
   const social = new YouTubeProvider();
-  const squadAgenda = new SquadAgendaService({ client, db, config, audit });
-  const squadRooms = new SquadRoomService({ client, config, registry });
-  const squadGuides = new SquadGuideService({ client, db, config, audit, registry });
-  const squadClock = new SquadAgendaClock({
-    client,
-    db,
-    config,
-    registry,
-    audit,
-    agenda: squadAgenda,
-    rooms: squadRooms,
-  });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
   // Os links que os avisos de ciclo de vida citam. Saem do `AUTH_URL` pela
@@ -217,7 +201,6 @@ async function main(): Promise<void> {
       reactionRoles,
       tickets,
       social,
-      squadGuides,
       commands,
       registry,
       maintenance,
@@ -263,9 +246,6 @@ async function main(): Promise<void> {
     autorole,
     reactionRoles,
     tickets,
-    squadRooms,
-    squadAgenda,
-    squadGuides,
     social,
     messageCache,
     stats,
@@ -294,9 +274,6 @@ async function main(): Promise<void> {
     pendingExpiry.start();
     retention.start();
     capacity.start();
-    squadRooms.start();
-    squadClock.start();
-    squadGuides.start();
     databaseProbe.start();
     void deployNotice.resolve();
     alerts.emit({
@@ -337,10 +314,6 @@ async function main(): Promise<void> {
       pendingExpiry.stop();
       retention.stop();
       capacity.stop();
-      squadRooms.stop();
-      squadClock.stop();
-      squadGuides.stop();
-      squadAgenda.stop();
       databaseProbe.stop();
       autorole.stop();
       await api.stop();

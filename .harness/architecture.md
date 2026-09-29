@@ -114,27 +114,21 @@ src/
   commands/       um arquivo por slash command, agrupados por módulo
     moderation/   ban, kick, timeout, warn, note, case, history, purge...
     automod/      automod, raid
-    community/    tag, ticket, reactionrole, welcome, verify, social, squad
+    community/    tag, ticket, reactionrole, welcome, verify, social
     utilities/    clear, lock, slowmode, poll, remind, info, stats, say
 
   events/         handlers de evento do gateway, agrupados por assunto
     automod/      messages, members
     logs/         messages, members, server, voice
-    community/    members, reaction-roles, squads (presença e voz)
+    community/    members, reaction-roles
     stats/        contagem
 
   interactions/   botões, selects e modais, roteados pelo prefixo do
-                  `custom_id` (tickets, squads...); o botão da DM do aviso
-                  de squad é o único tratado fora de guild
+                  `custom_id` (tickets, reaction roles...)
   automod/        o motor: engine.ts + rules/{spam,links,caps,words,mentions}
   services/       a lógica de verdade; ver abaixo
   jobs/           tarefas periódicas: retention, social, stats-rollup,
-                  demo-expiry (avisa quem convidou, se despede e sai quando a
-                  demo vence), pending-expiry (recusa o convite parado uma
-                  semana na fila, avisa, sai e marca `expired`), capacity
-                  (RAM e tamanho do banco contra as linhas de aviso, alerta
-                  no webhook). Os relógios do módulo de squads não são job:
-                  cada service dele tem o seu (ver 4.3)
+                  demo-expiry, pending-expiry e capacity
   lib/            utilitários sem estado: embeds, template, cooldown, purge,
                   channels (onde o bot pode falar), guild-setup,
                   inviter-dm (todo o texto dos avisos a quem convidou)...
@@ -155,11 +149,6 @@ fino: valida entrada, chama um service, responde. Os principais:
 | `AutomodService`          | avalia mensagem contra as regras ligadas                   |
 | `StatsService`            | acumula buckets em memória e faz flush periódico           |
 | `TicketService`           | abertura, transcript e fechamento                          |
-| `SquadPresenceService`    | cargo `Buscando Squad`: aviso por DM ao abrir o jogo, toggles, prazo e janela de tolerância |
-| `SquadRoomService`        | salas de voz efêmeras: *join-to-create*, nome grego, apagar a vazia                          |
-| `SquadPanelService`       | a mensagem fixa das salas e jogatinas, editada coalescida                                   |
-| `SquadAgendaService`      | a agenda: marcar, mensagem + thread no `#agenda`, VOU/SAIR/PEDIR VAGA, GERENCIAR            |
-| `SquadAgendaClock`        | o relógio da agenda (1 min, lido do banco): lembrete, chamada, início com sala, fim          |
 | `ReactionRoleService`     | painéis por botão, menu ou reação                          |
 | `AuditService`            | trilha do que o bot e o painel fizeram                     |
 | `Scheduler`               | executa `scheduled_actions` (tempban, lembrete, unlock)    |
@@ -197,7 +186,7 @@ api/
 
 Rotas: `guild`, `bot-profile`, `channels`, `roles`, `members`, `messages`,
 `moderation`, `cases`, `invites`, `events`, `expressions`, `automod`, `config`,
-`commands`, `social`, `squads`, `metrics`, `health`, `admin`, `registry`.
+`commands`, `social`, `metrics, `health`, `admin`, `registry`.
 
 Três invariantes que valem para **toda** rota nova:
 
@@ -246,10 +235,10 @@ app/
     servidor, perfil-do-bot, canais, cargos, membros, casos, banidos,
     convites, eventos, emojis, mensagens, auditoria, system
     config/     general, moderation, automod, logs, welcome, autorole,
-                reaction-roles, tickets, tags, social, squads, commands
+                reaction-roles, tickets, tags, social, commands
   convite/      as telas dos links de convite (`invite.` e `demo.`)
   actions/      Server Actions: admin, auth, cases, config, guild, messages,
-                modules, social, squads — toda escrita de guild recebe o `guildId`
+                modules, social — toda escrita de guild recebe o `guildId`
                 como primeiro argumento (ver 5.2)
   api/          auth (Auth.js), invite/{start,callback}, health,
                 cases/export, discord/*
@@ -398,9 +387,8 @@ drizzle/           24 migrations SQL versionadas
 `module_configs`, `cases`,
 `audit_logs`, `automod_rules`, `automod_hits`, `scheduled_actions`,
 `stat_buckets`, `tickets`, `reaction_role_panels`, `social_accounts`. No módulo
-de squads só a agenda tem tabela (`lfg_sessions` e `lfg_session_members`,
-migration `0024`); o resto do estado dele é o Discord (cargo, canal) e a
-memória do bot, e a migration `0023` apagou as nove do modelo antigo.
+`lfg_sessions` e `lfg_session_members` (migration `0024`) são dados históricos
+preservados após a remoção do módulo. O bot não os acessa.
 
 Fluxo obrigatório ao mexer no schema:
 
@@ -424,11 +412,6 @@ src/
   api/       schemas de request/response da API do bot + o CLIENTE tipado
              (client.ts, `createInternalClient`) + permissions.ts
   config/    um schema Zod por módulo (automod, logs, welcome, tickets...)
-  squads/    `parseWhen` (o "quando" da jogatina) e o relógio de parede no
-             fuso da guild, com horário de verão; `roster.ts`, as regras
-             puras da lista da jogatina (entrar, sair, pedir, aceitar, fila,
-             vagas), que devolvem o novo estado e quem avisar; e o schema do
-             formulário de marcar
   constants.ts, duration.ts, snowflake.ts, templates.ts, errors.ts
   deploy.ts  o tipo de um deploy pelos arquivos que mudaram (a CI usa pelo
              `deploy-kind.ts`) e a previsão de volta de cada tipo
@@ -595,82 +578,9 @@ Quatro coisas nesse caminho não são gosto:
   derrubada por um clique no link normal. A demo não se renova porque prazo
   novo exige `demo_ended_at` nulo: a memória é a coluna, não o status.
 
-**Buscar squad (cargo, sala e painel)**
+**Buscar squad**
 
-```
-presenceUpdate (events/community/squads.ts) ─▶ SquadPresenceService.onPresence
-  ─▶ módulo ligado, cargo configurado, jogando um dos gameNames (matchesGame)
-  ─▶ PromptGate: aviso nas últimas 6 h, ou olhado e barrado há menos de 5 min? para
-  ─▶ fetch do membro (force: os cargos) ─▶ já busca, tem opt-out ou está numa sala? para
-  ─▶ markPrompted ANTES da DM ─▶ DM com BUSCAR SQUAD / AGORA NÃO / NÃO AVISAR MAIS
-     (custom_id com o guildId: lib/interaction.ts desvia a DM antes do gate de guild,
-      e o handler confere registro, módulo e se a pessoa ainda é membro)
-
-BUSCAR SQUAD (DM ou painel) ou /squad buscar ─▶ toggleSearch ─▶ cargo + prazo `ttl`
-  (searchTtlMinutes) se não está em voz
-voiceStateUpdate ─▶ os dois services em paralelo:
-  SquadPresenceService: entrou em voz cancela o prazo; saiu de todas abre o `left`
-     (graceMinutes) ─▶ tick de 15 s tira o cargo vencido, conferindo voz e cargo de novo
-  SquadRoomService: entrou no ➕ Criar Squad ─▶ nextRoomName (grego) ─▶ canal na
-     categoria com userLimit = roomSize ─▶ move a pessoa (sem permissão, 500 canais ou
-     24 nomes: não cria, não move, log) ─▶ última pessoa saiu: prazo da sala
-     ─▶ tick de 15 s apaga a sala vencida (isSquadRoom: nome + categoria, nunca o de criar)
-  ─▶ toda mudança numa sala: SquadPanelService.schedule (uma edição por guild a cada 5 s)
-     ─▶ refresh edita a mensagem fixa; Unknown Message republica, outra falha espera a próxima
-```
-
-**Uma jogatina da agenda**
-
-```
-MARCAR JOGATINA (painel) ou /squad agendar ─▶ modal (quando, vagas, nota)
-  ─▶ SquadAgendaService.prepare ─▶ parseWhen (fuso da guild) ─▶ rascunho em memória (15 min)
-  ─▶ botões efêmeros ABERTA / FECHADA ─▶ schedule: canal da agenda, permissões e tetos
-     (LFG_MAX_OPEN_SESSIONS por guild, LFG_MAX_SESSIONS_PER_HOST) conferidos
-  ─▶ linha em lfg_sessions ANTES da mensagem (os botões levam o id) ─▶ mensagem + thread
-     (mensagem que não sai cancela a linha) ─▶ auditoria ─▶ painel fixo se refaz
-
-VOU / SAIR / PEDIR VAGA (squad:a:<ação>:<id>), GERENCIAR (squad:m:<op>:<id>), ACEITAR / RECUSAR
-  ─▶ mutateLfgRoster: transação + SELECT ... FOR UPDATE na jogatina
-     ─▶ regra pura de shared/squads/roster.ts ─▶ grava a diferença
-  ─▶ DMs de quem a regra devolveu (promovido da fila, pedido respondido)
-  ─▶ rerender coalescido da mensagem (uma edição por jogatina a cada 1,5 s)
-PEDIR VAGA ─▶ DM ao host com ACEITAR / RECUSAR (squad:req:<ok|no>:<guildId>:<sessionId>:<userId>)
-  ─▶ DM fechada: ping na thread com os mesmos botões (host ou mod+)
-
-SquadAgendaClock, tick de 1 min ─▶ listDueLfgSessions (começa na próxima hora ou está live)
-  ─▶ agendaSteps (puro): remind / call / start / lonely / end, cada um com a sua coluna
-  ─▶ start: SquadRoomService.openSessionRoom (userLimit = vagas, reserva de
-     LFG_ROOM_HOLD_MINUTES, Connect só de quem vai na fechada) ─▶ link na thread
-     ─▶ move quem já está em voz
-  ─▶ end: sala vazia depois da reserva, sumiu ou LFG_SESSION_HOURS ─▶ "rolou · foram X"
-```
-
-Três coisas nesses caminhos não são gosto:
-
-- **O estado é o Discord, a memória é descartável.** Fora da agenda não há
-  tabela: o cargo diz quem busca, a categoria diz quais salas existem. A
-  agenda é a exceção porque lista, vagas e pedidos não existem no Discord, e o
-  relógio dela lê o banco, então sobrevive a restart. Os prazos (`DeadlineBook`) e o
-  relógio do aviso (`PromptGate`) vivem em memória, e a reconciliação, que
-  roda na primeira vez que o módulo aparece ligado numa guild (boot, módulo
-  ligado, guild passando a ser atendida), recomeça a janela do zero para quem
-  tem o cargo fora de voz e para as salas vazias. A lista de quem tem o cargo
-  vem paginada pela REST (`members.list`, sem cache): o cache de membros tem
-  teto e `role.members` só enxerga o que está nele.
-- **Quem cobra o prazo confere de novo.** Um evento de voz perdido não pode
-  tirar o cargo de quem está jogando: `expire` olha a voz e o cargo na hora, e
-  a sala só é apagada se continua vazia. Contagem de gente vem do cache de voz
-  da guild (`occupantsOf`), nunca de `channel.members`, que passa pelo cache de
-  membros.
-- **Painel coalescido e republicado só com certeza.** O Discord limita edição
-  por canal, então cada guild ganha no máximo uma edição a cada 5 s. A
-  mensagem só é publicada de novo com "Unknown Message": republicar por falha
-  passageira deixaria duas mensagens fixas. O id vai para `panelMessageId`,
-  campo do bot, e o painel web o carrega do banco ao salvar
-  (`lib/module-config.ts`), senão um formulário aberto antes da publicação
-  faria o bot mandar mensagem nova.
-
----
+Removido na v2.1. As tabelas `lfg_*` permanecem preservadas, sem consumidores no bot.
 
 ## 10. Invariantes do projeto
 
@@ -717,10 +627,6 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
 | adicionar campo de config         | `shared/config/<módulo>.ts` → form em `apps/web/components/config/`      |
 | mexer no banco                    | `packages/db/src/schema/` → `db:generate` → revisar SQL → `db:migrate`   |
 | tarefa periódica                  | `apps/bot/src/jobs/` + registrar no `Scheduler`                          |
-| mexer no cargo de busca ou no aviso | `apps/bot/src/services/squads/presence.ts` (DM em `promptMessage`, botões em `interactions/squads.ts`) |
-| mexer nas salas de voz            | `apps/bot/src/services/squads/rooms.ts` (nomes em `GREEK_ROOM_NAMES`, `shared/constants.ts`) |
-| mexer no painel fixo de squad     | `apps/bot/src/services/squads/panel.ts` (texto em `panelMessage`)        |
-| mexer na agenda de jogatinas      | `apps/bot/src/services/squads/agenda.ts` (mensagem em `agendaMessage`), relógio em `clock.ts`, regras da lista em `packages/shared/src/squads/roster.ts`, "quando" em `when.ts` |
 | entender um servidor              | `pnpm guild scan "<nome>"` → `infra/discord/<slug>/servidor.md`          |
 | mudar a estrutura de um servidor  | `infra/discord/<slug>/guild.yaml` → `pnpm guild plan`                    |
 
@@ -732,10 +638,6 @@ Regras que valem em todo lugar; quebrar uma delas é bug, não estilo.
   gerencia, senão a operação falha com `BOT_ROLE_HIERARCHY`.
 - **`moveRole` anda uma casa por chamada.** Não existe "definir posição".
 - **Migrations não rodam no boot do bot**: são um passo da CI.
-- **`GuildPresences` é intent privilegiada.** Ela existe só para o aviso
-  automático do squad e precisa estar ligada no Developer Portal; desligada
-  lá, o login cai com `Used disallowed intents` e o bot inteiro não sobe. O
-  cache de presença continua em zero: o handler lê o evento e não guarda nada.
 - **Nem todo push reinicia o bot.** O job `changes` do `deploy.yml` classifica
   o deploy pelo diff entre o commit da imagem no ar e o novo
   (`packages/shared/src/deploy.ts`); `none` (painel, docs, CI) pula a imagem e

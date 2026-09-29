@@ -9,9 +9,7 @@ import { CooldownStore } from './cooldown';
 import { botFooter, errorEmbed, warningEmbed } from './embeds';
 import { recordError } from './error-log';
 import { handleComponent, handleModal } from '../interactions/index';
-import { handleSquadRequestButton, handleSquadStaleDmButton } from '../interactions/squads';
 import { levelAtLeast, resolveLevel, toMemberLike } from '../services/permissions';
-import { isSquadDmId, parseSquadId } from '../services/squads/ids';
 
 import type { AnyCommand, AutocompleteContext, BotContext, CommandContext } from './command';
 import type { PermissionLevel } from '@goodbot/shared';
@@ -126,22 +124,6 @@ export function createInteractionHandler(options: HandlerOptions = {}) {
     ctx: BotContext,
     interaction: Interaction,
   ): Promise<void> {
-    // As únicas interações de DM que o bot trata: os botões de squad. O pedido
-    // de vaga leva a guild no `custom_id`, e o handler confere o registro por
-    // ela; o resto (o aviso por presença, que saiu) só ouve que acabou.
-    if (!interaction.inGuild() && interaction.isButton() && isSquadDmId(interaction.customId)) {
-      if (ctx.maintenance.active()) {
-        await replyMaintenance(interaction, ctx.maintenance.message());
-        return;
-      }
-      await runComponent(interaction, () =>
-        parseSquadId(interaction.customId)?.kind === 'request'
-          ? handleSquadRequestButton(ctx, interaction)
-          : handleSquadStaleDmButton(interaction),
-      );
-      return;
-    }
-
     // Um único ponto ignora eventos de guild que o bot não atende. Ele pode
     // estar em servidores à espera de aprovação, bloqueados ou com a demo
     // vencida, e ali fica calado em vez de responder com config que não existe.
