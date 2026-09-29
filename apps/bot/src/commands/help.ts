@@ -8,7 +8,7 @@ import { levelAtLeast } from '../services/permissions';
 import type { Module } from '@goodbot/shared';
 
 /** Nome amigável de cada módulo no `/help`. */
-const MODULE_LABELS: Record<Module, string> = {
+const MODULE_LABELS: Partial<Record<Module, string>> = {
   general: 'Geral',
   moderation: 'Moderação',
   automod: 'Automod',
