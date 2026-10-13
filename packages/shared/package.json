@@ -22,7 +22,7 @@
     "vitest": "^5.0.2"
   },
   "dependencies": {
-    "safe-regex2": "^5.1.1",
+    "safe-regex2": "^5.1.2",
     "zod": "^4.6.5"
   }
 }
