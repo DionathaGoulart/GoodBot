@@ -19,6 +19,20 @@
     "node": ">=22 <25",
     "pnpm": ">=9"
   },
+  "pnpm": {
+    "auditConfig": {
+      "ignoreCves": [
+        "CVE-2026-93687"
+      ]
+    },
+    "overrides": {
+      "@modelcontextprotocol/sdk@1.30.0": "1.31.0",
+      "proxy-addr@2.0.7": "2.0.8",
+      "shell-quote@1.9.0": "1.11.0",
+      "brace-expansion@1.1.18": "1.1.20",
+      "source-map-js@1.2.1": "1.2.2"
+    }
+  },
   "scripts": {
     "dev": "concurrently -n bot,web -c cyan,magenta \"pnpm --filter @goodbot/bot dev\" \"pnpm --filter @goodbot/web dev\"",
     "build": "pnpm -r build",
