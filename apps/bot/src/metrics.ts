@@ -187,6 +187,10 @@ export const metrics = {
     'Respostas 401 da API interna (alguém sondando o token).',
   ),
   automodHits: new Counter('goodbot_automod_hits_total', 'Acionamentos de regra de automod.'),
+  logDropped: new Counter(
+    'goodbot_log_dropped_total',
+    'Entradas de log descartadas após falha ou limite da fila.',
+  ),
   apiLatency: new Summary('goodbot_api_duration_ms', 'Latência da API interna, em ms.'),
   dbLatency: new Summary('goodbot_db_duration_ms', 'Latência do Postgres gerenciado, em ms.'),
   queue: new Gauge('goodbot_queue_size', 'Itens represados em cada fila do bot.'),
@@ -205,6 +209,7 @@ export function renderMetrics(registry: Metrics = metrics): string {
     registry.apiRequests,
     registry.apiUnauthorized,
     registry.automodHits,
+    registry.logDropped,
     registry.apiLatency,
     registry.dbLatency,
     registry.queue,

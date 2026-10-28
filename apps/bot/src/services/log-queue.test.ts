@@ -149,4 +149,68 @@ describe('LogQueue', () => {
     const message = await queue.send('canal', entry('caso'));
     expect(message?.id).toBe('msg-1');
   });
+
+  it('separa embeds cuja soma excede 6000, inclusive dentro de uma entrada', async () => {
+    const { sent, sender } = recorder();
+    const queue = new LogQueue({ sender });
+    queue.push('canal', {
+      embeds: [{ description: 'a'.repeat(4000) }, { description: 'b'.repeat(4000) }],
+    });
+    await queue.flushAll();
+    expect(sent.map((message) => message.entry.embeds.length)).toEqual([1, 1]);
+    expect(queue.pendingSize).toBe(0);
+  });
+
+  it('conta títulos, campos, autor e rodapé no limite agregado', async () => {
+    const { sent, sender } = recorder();
+    const queue = new LogQueue({ sender });
+    queue.push('canal', {
+      embeds: [
+        {
+          description: 'a'.repeat(3000),
+          title: 't',
+          author: { name: 'autor' },
+          footer: { text: 'rodapé' },
+          fields: [{ name: 'n', value: 'v' }],
+        },
+      ],
+    });
+    queue.push('canal', { embeds: [{ description: 'b'.repeat(3000) }] });
+    await queue.flushAll();
+    expect(sent).toHaveLength(2);
+  });
+
+  it.each([apiError(0, 500), new Error('timeout')])(
+    'repete falhas transitórias sem perder lote: %s',
+    async (failure) => {
+      let now = 0;
+      const sender = vi
+        .fn<LogSender>()
+        .mockRejectedValueOnce(failure)
+        .mockResolvedValue({ id: 'ok' } as Message);
+      const queue = new LogQueue({ sender, now: () => now });
+      queue.push('canal', entry('importante'));
+      await queue.flushAll();
+      expect(queue.pendingSize).toBe(1);
+      now = 1000;
+      await queue.flushAll();
+      expect(queue.pendingSize).toBe(0);
+      expect(sender).toHaveBeenCalledTimes(2);
+      expect(queue.droppedCount).toBe(0);
+    },
+  );
+
+  it('limita tentativas e contabiliza descarte de falha persistente', async () => {
+    let now = 0;
+    const sender = vi.fn<LogSender>().mockRejectedValue(new Error('offline'));
+    const queue = new LogQueue({ sender, now: () => now });
+    queue.push('canal', entry('log'));
+    for (let i = 0; i < 7; i++) {
+      await queue.flushAll();
+      now += 60_000;
+    }
+    expect(sender).toHaveBeenCalledTimes(6);
+    expect(queue.pendingSize).toBe(0);
+    expect(queue.droppedCount).toBe(1);
+  });
 });

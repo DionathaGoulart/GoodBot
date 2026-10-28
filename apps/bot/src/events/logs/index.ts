@@ -1,4 +1,5 @@
 import {
+  guildAuditLogEntryCreate,
   guildBanAdd,
   guildBanRemove,
   guildMemberAdd,
@@ -30,6 +31,7 @@ export const logEvents: readonly EventHandler[] = [
   guildMemberAdd,
   guildMemberRemove,
   guildMemberUpdate,
+  guildAuditLogEntryCreate,
   guildBanAdd,
   guildBanRemove,
   channelCreate,

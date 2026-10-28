@@ -96,7 +96,14 @@ export function createHealthRoutes(options: HealthRoutesOptions): Hono<ApiEnv> {
   const { deps, token, expectedGuilds } = options;
   const startedAt = options.startedAt ?? Date.now();
 
-  return new Hono<ApiEnv>().get('/', async (c) => {
+  const routes = new Hono<ApiEnv>();
+  routes.get('/ready', async (c) => {
+    if (!isAuthorized(c.req.header('authorization'), token)) return c.json({ ok: false }, 401);
+    const database = await databaseHealth(deps.db);
+    const ok = deps.client.isReady() && database.ok;
+    return c.json({ ok }, ok ? 200 : 503);
+  });
+  return routes.get('/', async (c) => {
     if (!isAuthorized(c.req.header('authorization'), token)) {
       return c.json({ ok: true });
     }

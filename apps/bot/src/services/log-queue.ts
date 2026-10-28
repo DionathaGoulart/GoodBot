@@ -3,6 +3,7 @@ import { DiscordAPIError, HTTPError } from 'discord.js';
 
 import { TEXT_CHANNEL_TYPES } from '../client';
 import { childLogger } from '../logger';
+import { metrics } from '../metrics';
 
 import type {
   APIEmbed,
@@ -20,6 +21,8 @@ const log = childLogger('log-queue');
 
 /** O Discord aceita 10 embeds por mensagem — é o teto do coalescing (PRD §7.4). */
 export const MAX_EMBEDS_PER_MESSAGE = 10;
+export const MAX_EMBED_CHARACTERS = 6_000;
+export const MAX_LOG_RETRIES = 5;
 /** Janela de agrupamento: 2 s (PRD §7.4). */
 export const FLUSH_INTERVAL_MS = 2 * SECOND_MS;
 /** Teto por canal; acima disso o log mais antigo é descartado com warn. */
@@ -49,18 +52,19 @@ const FATAL_CODES = new Set([10003, 50001, 50013, 160002]);
 
 interface ChannelState {
   pending: LogEntry[];
-  /** Enquanto `> now`, o canal está em backoff por 429. */
+  /** Enquanto `> now`, o canal espera após 429 ou falha transitória. */
   blockedUntil: number;
   flushing: boolean;
   /** Canal inexistente/sem permissão: para de tentar até o próximo boot. */
   dead: boolean;
+  failures: number;
 }
 
 /**
  * Fila de envio por canal com coalescing. Todo log do bot passa por aqui para
  * não estourar o limite de 5 mensagens/5 s por canal: as entradas acumuladas
- * viram uma mensagem só, com até 10 embeds, a cada 2 s (ou na hora, quando a
- * fila enche).
+ * viram mensagens de até 10 embeds e 6000 caracteres, a cada 2 s (ou na hora,
+ * quando a fila enche).
  *
  * Nada aqui lança: falhar um log nunca pode derrubar o evento que o gerou.
  */
@@ -72,6 +76,7 @@ export class LogQueue {
   private readonly maxPending: number;
   private readonly now: () => number;
   private timer: NodeJS.Timeout | null = null;
+  private dropped = 0;
 
   constructor(options: LogQueueOptions = {}) {
     this.flushIntervalMs = options.flushIntervalMs ?? FLUSH_INTERVAL_MS;
@@ -96,7 +101,7 @@ export class LogQueue {
   private state(channelId: string): ChannelState {
     let state = this.channels.get(channelId);
     if (!state) {
-      state = { pending: [], blockedUntil: 0, flushing: false, dead: false };
+      state = { pending: [], blockedUntil: 0, flushing: false, dead: false, failures: 0 };
       this.channels.set(channelId, state);
     }
     return state;
@@ -107,10 +112,17 @@ export class LogQueue {
     const state = this.state(channelId);
     if (state.dead) return false;
 
-    state.pending.push(entry);
+    const parts = splitEntry(entry, this.maxEmbeds);
+    if (!parts) {
+      this.recordDropped(1);
+      log.error({ channelId }, 'embed inválido ou maior que 6000 caracteres; log descartado');
+      return false;
+    }
+    state.pending.push(...parts);
     if (state.pending.length > this.maxPending) {
       const dropped = state.pending.length - this.maxPending;
       state.pending.splice(0, dropped);
+      this.recordDropped(dropped);
       log.warn({ channelId, dropped }, 'fila de log cheia; descartando entradas antigas');
     }
 
@@ -129,8 +141,29 @@ export class LogQueue {
   async send(channelId: string, entry: LogEntry): Promise<Message | null> {
     const state = this.state(channelId);
     if (state.dead) return null;
+    const parts = splitEntry(entry, this.maxEmbeds);
+    if (!parts) {
+      this.recordDropped(1);
+      log.error({ channelId }, 'embed inválido ou maior que 6000 caracteres; log descartado');
+      return null;
+    }
     await this.waitForBackoff(state);
-    return this.deliver(channelId, state, entry);
+    if (state.blockedUntil > this.now()) {
+      for (const part of parts) this.push(channelId, part);
+      return null;
+    }
+    let first: Message | null = null;
+    for (let index = 0; index < parts.length; index++) {
+      const part = parts[index]!;
+      const message = await this.deliver(channelId, state, part);
+      if (index === 0) first = message;
+      if (!message && state.blockedUntil > this.now()) {
+        // Não há ID para vincular ao caso ainda, mas o registro não se perde.
+        for (const pending of parts.slice(index)) this.push(channelId, pending);
+        break;
+      }
+    }
+    return first;
   }
 
   /** Descarrega todos os canais com pendência. Nunca lança. */
@@ -173,7 +206,11 @@ export class LogQueue {
     entry: LogEntry,
   ): Promise<Message | null> {
     try {
-      return await this.sender(channelId, entry);
+      const message = await this.sender(channelId, entry);
+      if (!message) throw new Error('sender não devolveu mensagem');
+      state.failures = 0;
+      state.blockedUntil = 0;
+      return message;
     } catch (error) {
       const retryAfterMs = rateLimitDelay(error);
       if (retryAfterMs !== null) {
@@ -183,6 +220,7 @@ export class LogQueue {
       }
       if (isFatal(error)) {
         state.dead = true;
+        this.recordDropped(state.pending.length + 1);
         state.pending.length = 0;
         log.warn(
           { channelId, err: error },
@@ -190,6 +228,23 @@ export class LogQueue {
         );
         return null;
       }
+      const status =
+        error instanceof DiscordAPIError || error instanceof HTTPError ? error.status : null;
+      if (status === null || status >= 500) {
+        state.failures++;
+        if (state.failures <= MAX_LOG_RETRIES) {
+          state.blockedUntil =
+            this.now() + Math.min(30 * SECOND_MS, SECOND_MS * 2 ** (state.failures - 1));
+          log.warn(
+            { channelId, attempt: state.failures, err: error },
+            'falha transitória no log; nova tentativa agendada',
+          );
+          return null;
+        }
+      }
+      state.failures = 0;
+      state.blockedUntil = 0;
+      this.recordDropped(1);
       log.error({ channelId, err: error }, 'falha ao enviar log');
       return null;
     }
@@ -215,6 +270,15 @@ export class LogQueue {
     for (const state of this.channels.values()) total += state.pending.length;
     return total;
   }
+
+  get droppedCount(): number {
+    return this.dropped;
+  }
+
+  private recordDropped(count: number): void {
+    this.dropped += count;
+    metrics.logDropped.inc({}, count);
+  }
 }
 
 /** Junta entradas até o limite de embeds; entrada com anexo vai sozinha. */
@@ -228,11 +292,48 @@ function takeBatch(pending: LogEntry[], maxEmbeds: number): { entry: LogEntry; t
     const next = pending[0] as LogEntry;
     if (next.files?.length) break;
     if (embeds.length + next.embeds.length > maxEmbeds) break;
+    if (embedCharacters([...embeds, ...next.embeds]) > MAX_EMBED_CHARACTERS) break;
     pending.shift();
     taken.push(next);
     embeds.push(...next.embeds);
   }
   return { entry: { embeds }, taken };
+}
+
+function embedCharacters(embeds: LogEntry['embeds']): number {
+  return embeds.reduce((sum, embed) => {
+    const data = 'toJSON' in embed ? embed.toJSON() : embed;
+    return (
+      sum +
+      (data.title?.length ?? 0) +
+      (data.description?.length ?? 0) +
+      (data.footer?.text.length ?? 0) +
+      (data.author?.name.length ?? 0) +
+      (data.fields?.reduce((size, field) => size + field.name.length + field.value.length, 0) ?? 0)
+    );
+  }, 0);
+}
+
+/** Mesmo uma única entrada pode conter embeds que precisam de mensagens separadas. */
+function splitEntry(entry: LogEntry, maxEmbeds: number): LogEntry[] | null {
+  const parts: LogEntry[] = [{ embeds: [], ...(entry.files ? { files: entry.files } : {}) }];
+  try {
+    for (const embed of entry.embeds) {
+      if (embedCharacters([embed]) > MAX_EMBED_CHARACTERS) return null;
+      let part = parts[parts.length - 1]!;
+      if (
+        part.embeds.length >= maxEmbeds ||
+        embedCharacters([...part.embeds, embed]) > MAX_EMBED_CHARACTERS
+      ) {
+        part = { embeds: [] };
+        parts.push(part);
+      }
+      part.embeds.push(embed);
+    }
+    return parts;
+  } catch {
+    return null;
+  }
 }
 
 function countEmbeds(pending: readonly LogEntry[]): number {

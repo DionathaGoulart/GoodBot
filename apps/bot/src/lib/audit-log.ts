@@ -18,6 +18,8 @@ export interface AuditLookup<T extends AuditLogEvent> {
   targetId?: string;
   timeoutMs?: number;
   maxAgeMs?: number;
+  /** Delta esperado; evita atribuir outra alteração recente do mesmo alvo. */
+  matches?: (entry: GuildAuditLogsEntry) => boolean;
 }
 
 export interface AuditResult {
@@ -27,6 +29,20 @@ export interface AuditResult {
 }
 
 const EMPTY: AuditResult = { executor: null, reason: null };
+const consumed = new Map<string, number>();
+
+/** Deduplica eventos e consultas concorrentes, com memória limitada. */
+export function claimAuditEntry(guildId: string, entryId: string): boolean {
+  const now = Date.now();
+  for (const [key, at] of consumed) {
+    if (now - at > 60 * SECOND_MS) consumed.delete(key);
+  }
+  const key = `${guildId}:${entryId}`;
+  if (consumed.has(key)) return false;
+  if (consumed.size >= 10_000) consumed.delete(consumed.keys().next().value!);
+  consumed.set(key, now);
+  return true;
+}
 
 /**
  * Descobre quem causou um evento de gateway (quem mudou o cargo, quem apagou o
@@ -44,16 +60,30 @@ export async function findAuditEntry<T extends AuditLogEvent>(
   const maxAgeMs = lookup.maxAgeMs ?? AUDIT_LOG_MAX_AGE_MS;
 
   try {
-    const logs = await withTimeout(guild.fetchAuditLogs({ type, limit: 5 }), timeoutMs);
-    if (!logs) return EMPTY;
-
-    const entry = [...logs.entries.values()].find((candidate) => {
-      if (Date.now() - candidate.createdTimestamp > maxAgeMs) return false;
-      if (!targetId) return true;
-      return auditTargetId(candidate) === targetId;
-    });
-    if (!entry) return EMPTY;
-    return { executor: entry.executor, reason: entry.reason };
+    const deadline = Date.now() + timeoutMs;
+    do {
+      const logs = await withTimeout(
+        guild.fetchAuditLogs({ type, limit: 25 }),
+        Math.max(1, deadline - Date.now()),
+      );
+      if (!logs) return EMPTY;
+      const candidates = [...logs.entries.values()].filter((candidate) => {
+        if (Date.now() - candidate.createdTimestamp > maxAgeMs) return false;
+        if (targetId && auditTargetId(candidate) !== targetId) return false;
+        return !lookup.matches || lookup.matches(candidate);
+      });
+      // Ambiguidade não é resolvida escolhendo arbitrariamente um moderador.
+      if (candidates.length > 1) return EMPTY;
+      const entry = candidates[0];
+      if (entry) {
+        if (!claimAuditEntry(guild.id, entry.id)) return EMPTY;
+        return { executor: entry.executor, reason: entry.reason };
+      }
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(250, remaining)));
+    } while (Date.now() < deadline);
+    return EMPTY;
   } catch (error) {
     log.debug({ err: error, guildId: guild.id, type }, 'falha ao consultar o audit log');
     return EMPTY;

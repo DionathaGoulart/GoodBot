@@ -2,12 +2,37 @@ import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BACKUP_MIN_BYTES, BACKUP_STALE_AFTER_MS, readBackupHealth } from './health';
+import {
+  BACKUP_MIN_BYTES,
+  BACKUP_STALE_AFTER_MS,
+  createHealthRoutes,
+  readBackupHealth,
+} from './health';
 
 const AGORA = new Date('2026-09-16T12:00:00Z').getTime();
 const HORA = 60 * 60 * 1000;
+
+it('readiness exige token e só retorna 200 com gateway e banco disponíveis', async () => {
+  const execute = vi.fn().mockResolvedValue([]);
+  const isReady = vi.fn().mockReturnValue(true);
+  const routes = createHealthRoutes({
+    token: 'test-token',
+    expectedGuilds: () => 1,
+    deps: { db: { execute }, client: { isReady } } as never,
+  });
+  expect((await routes.request('/ready')).status).toBe(401);
+  expect(execute).not.toHaveBeenCalled();
+  const request = () =>
+    routes.request('/ready', { headers: { authorization: 'Bearer test-token' } });
+  expect((await request()).status).toBe(200);
+  isReady.mockReturnValue(false);
+  expect((await request()).status).toBe(503);
+  isReady.mockReturnValue(true);
+  execute.mockRejectedValue(new Error('banco fora'));
+  expect((await request()).status).toBe(503);
+});
 
 let dir: string;
 

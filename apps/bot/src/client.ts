@@ -93,8 +93,8 @@ export const clientOptions: ClientOptions = {
     messages: { interval: 600, lifetime: 3600 },
     threads: { interval: 3600, lifetime: 14_400 },
     // O teto acima já segura o pico; o sweeper é quem devolve a memória de um
-    // servidor que ficou quieto. Membro varrido volta num `fetch` — o preço
-    // de errar aqui é uma chamada, não um bug.
+    // servidor que ficou quieto. Eventos posteriores podem trazer oldMember
+    // parcial: handlers não podem inferir diferenças desse histórico ausente.
     guildMembers: {
       interval: MEMBER_SWEEP_INTERVAL_SECONDS,
       filter: () => (member) => member.id !== member.client.user.id,

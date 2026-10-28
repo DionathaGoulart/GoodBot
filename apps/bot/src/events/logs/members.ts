@@ -1,7 +1,7 @@
 import { formatDuration } from '@goodbot/shared';
 import { AuditLogEvent, Events, time, TimestampStyles } from 'discord.js';
 
-import { findAuditEntry } from '../../lib/audit-log';
+import { claimAuditEntry, findAuditEntry } from '../../lib/audit-log';
 import { defineEvent } from '../../lib/event';
 import {
   actor,
@@ -91,8 +91,8 @@ export const guildMemberRemove = defineEvent(Events.GuildMemberRemove, async (ct
 });
 
 /**
- * Nick, cargos e avatar chegam no mesmo evento. O Discord não diz quem fez a
- * mudança — quem descobre é o audit log, com o timeout curto de `findAuditEntry`.
+ * Apelido/avatar exigem estado anterior completo. Cargos usam este diff só
+ * sem ViewAuditLog; com a permissão, seu evento de auditoria traz o delta real.
  */
 export const guildMemberUpdate = defineEvent(
   Events.GuildMemberUpdate,
@@ -100,6 +100,8 @@ export const guildMemberUpdate = defineEvent(
     const guildId = newMember.guild.id;
     const config = await logsConfig(ctx, guildId);
     if (!config.enabled) return;
+    // Um fetch recuperaria o presente, nunca o estado anterior perdido do cache.
+    if (oldMember.partial) return;
 
     const roleIds = memberRoleIds(newMember);
     const embeds = [];
@@ -109,6 +111,13 @@ export const guildMemberUpdate = defineEvent(
         guild: newMember.guild,
         type: AuditLogEvent.MemberUpdate,
         targetId: newMember.id,
+        matches: (entry) =>
+          entry.changes.some(
+            (change) =>
+              change.key === 'nick' &&
+              (change.old ?? null) === oldMember.nickname &&
+              (change.new ?? null) === newMember.nickname,
+          ),
       });
       embeds.push(
         logEmbed({
@@ -134,7 +143,12 @@ export const guildMemberUpdate = defineEvent(
     const before = memberRoleIds(oldMember);
     const added = roleIds.filter((id) => !before.includes(id));
     const removed = before.filter((id) => !roleIds.includes(id));
-    if (added.length > 0 || removed.length > 0) {
+    // Com acesso ao audit log, o delta autoritativo chega em seu próprio evento,
+    // inclusive para membros ausentes do cache. Aqui fica só o fallback.
+    if (
+      !newMember.guild.members.me?.permissions.has('ViewAuditLog') &&
+      (added.length > 0 || removed.length > 0)
+    ) {
       const audit = await findAuditEntry({
         guild: newMember.guild,
         type: AuditLogEvent.MemberRoleUpdate,
@@ -187,6 +201,77 @@ export const guildMemberUpdate = defineEvent(
     for (const embed of embeds) {
       await ctx.logs.emit(guildId, 'members', { embeds: [embed] }, { roleIds });
     }
+  },
+);
+
+/** Cargos vêm do delta do Discord, sem inferir histórico a partir do cache. */
+export const guildAuditLogEntryCreate = defineEvent(
+  Events.GuildAuditLogEntryCreate,
+  async (ctx, entry, guild) => {
+    if (entry.action !== AuditLogEvent.MemberRoleUpdate || !entry.targetId) return;
+    // Este evento recebe a Guild como segundo argumento, sem guildId aninhado.
+    if (!ctx.registry.serves(guild.id)) return;
+    const config = await logsConfig(ctx, guild.id);
+    if (!config.enabled) return;
+    const ids = (key: '$add' | '$remove'): string[] =>
+      entry.changes
+        .filter((change) => change.key === key)
+        .flatMap<unknown>((change) => (Array.isArray(change.new) ? change.new : []))
+        .filter(
+          (role): role is { id: string } =>
+            typeof role === 'object' &&
+            role !== null &&
+            'id' in role &&
+            typeof role.id === 'string',
+        )
+        .map((role) => role.id);
+    const added = ids('$add');
+    const removed = ids('$remove');
+    if (!added.length && !removed.length) return;
+    if (!claimAuditEntry(guild.id, entry.id)) return;
+    const user = { id: entry.targetId };
+    const executor = entry.executor ?? (entry.executorId ? { id: entry.executorId } : null);
+    const fields: APIEmbedField[] = [
+      { name: 'Usuário', value: userValue(user), inline: true },
+      ...executorField(executor, entry.reason),
+    ];
+    if (added.length) fields.push({ name: 'Adicionados', value: roleMentions(added) });
+    if (removed.length) fields.push({ name: 'Removidos', value: roleMentions(removed) });
+    const embed = logEmbed({
+      title: 'Cargos alterados',
+      tone: 'update',
+      description: sentence(
+        actor(executor),
+        added.length > 0 && `deu ${roleMentions(added)}`,
+        added.length > 0 && removed.length > 0 && 'e',
+        removed.length > 0 && `tirou ${roleMentions(removed)}`,
+        added.length > 0 && !removed.length ? `a ${userMention(user)}` : `de ${userMention(user)}`,
+        reasonSuffix(entry.reason),
+      ),
+      fields,
+      footer: logFooter(`USUÁRIO: ${user.id}`),
+    });
+    let current = guild.members.cache.get(user.id);
+    const kinds = await ctx.logs.getConfigs(guild.id);
+    if (!current && kinds.members.ignoredRoleIds.length > 0) {
+      // O estado atual serve para filtros, nunca para reconstruir o delta.
+      current = await guild.members.fetch(user.id).catch(() => undefined);
+      if (!current) {
+        ctx.logger.warn(
+          { guildId: guild.id, userId: user.id },
+          'log de cargos omitido: não foi possível conferir cargos ignorados',
+        );
+        return;
+      }
+    }
+    await ctx.logs.emit(
+      guild.id,
+      'members',
+      { embeds: [embed] },
+      {
+        roleIds: current ? memberRoleIds(current) : added,
+      },
+    );
   },
 );
 
