@@ -40,6 +40,11 @@ Um erro de server action aparece com o stack; um `redirect` para `/denied` não
 Supabase subiu de major: suba a imagem do serviço `backup` em
 `infra/docker-compose.yml` para a mesma versão.
 
+**Disponibilidade.** `GET /health/ready` exige o Bearer interno e retorna 200
+somente com gateway e banco disponíveis, ou 503 quando degradado. `/health`
+público permanece como liveness. `/metrics` inclui `goodbot_log_dropped_total`;
+crescimento indica logs descartados e merece investigação.
+
 ---
 
 ## Reiniciar
@@ -58,6 +63,45 @@ ssh goodbot 'cd /opt/goodbot && TAG=sha-1a2b3c4 docker compose up -d bot'
 O painel na Vercel não se "reinicia": use _Redeploy_ no deployment que
 funcionava.
 
+## Operações pendentes de reconciliação
+
+Depois de uma falha parcial entre banco e Discord, não presuma que repetir a
+ação é seguro. O scheduler mantém a evidência e emite alerta; consulte primeiro
+o alvo, o audit log e os registros correspondentes. Consultas de diagnóstico:
+
+```sql
+SELECT id, guild_id, kind, run_at, attempts, failed_at, last_error, payload
+FROM scheduled_actions
+WHERE failed_at IS NOT NULL
+ORDER BY failed_at DESC
+LIMIT 100;
+
+SELECT id, guild_id, channel_id, created_at, applied_at, overwrites
+FROM channel_locks
+WHERE applied_at IS NULL;
+```
+
+Punições com resultado incerto exigem comparar o estado real com a intenção do
+moderador. Se necessário, execute uma nova ação explícita pelos comandos de
+moderação, com a duração desejada, para criar uma geração vigente. Registre a
+decisão no caso correspondente; não reative uma tarefa antiga alterando somente
+`done_at` ou `failed_at`, pois isso ignora sua geração.
+
+Para locks pendentes, confira os overwrites atuais e o snapshot salvo antes de
+usar `/unlock confirmar-pendente:true`. Essa opção autoriza restaurar o snapshot
+anterior, inclusive se a aplicação do lock não pôde ser confirmada. O unlock
+comum e o desligamento em lote não forçam essa recuperação.
+
+Para lembretes com entrega incerta, confira o histórico do canal ou DM antes de
+criar outro. A deduplicação por nonce do Discord tem duração limitada; o bot
+suspende o reenvio automático quando não pode assegurar a mesma entrega.
+
+Ao publicar as correções da auditoria de 28/10/2026, faça backup e aplique
+`0027_audit_fixes.sql` e `0028_lock_application_state.sql` antes de iniciar a
+nova versão. A 0028 deixa locks legados pendentes porque o código anterior não
+registrava confirmação do Discord; reconcilie-os individualmente. Atualize
+também o registro de comandos para disponibilizar a opção de recuperação.
+
 ---
 
 ## Restaurar um backup
@@ -68,6 +112,10 @@ guarda **7 diários + 4 semanais** no volume `backups`. Ele leva só os schemas
 é do Supabase (`auth`, `storage`, `supabase_vault`) e não existe num Postgres
 comum. Um dump que sai sem o rodapé `PostgreSQL database dump complete` é
 descartado e dispara o alerta.
+
+Falhas voltam a tentar a cada 15 minutos, inclusive depois das 06:00 UTC. O
+marcador `/backups/.last-success` só muda após sucesso e evita repetir o dump
+do dia após reinício. O serviço monta também `scripts/backup-loop.sh`.
 
 ```bash
 # 1. Ver o que existe.
@@ -315,6 +363,9 @@ Se os IPs variam muito (botnet), rotacione o `INTERNAL_API_TOKEN`: ele é a
 
 ## Buscar squad: subir o módulo novo (PRD v1.8)
 
+> Histórico: squads foi removido do produto na PRD 2.1. Não execute estes
+> passos em uma instalação atual; mantenha dados legados até uma migração aprovada.
+
 O squad fixo (perfil, match, jogatina com voice reservado) foi trocado por
 cargo de busca, salas efêmeras e evento agendado do Discord. Antes do deploy:
 
@@ -357,6 +408,8 @@ Sintomas que valem saber:
 ---
 
 ## Buscar squad: agenda de jogatinas (PRD v1.9)
+
+> Histórico: este módulo não faz parte do runtime atual (PRD 2.1).
 
 A jogatina marcada saiu do evento nativo do Discord e foi para o canal
 `#agenda`. A migration `0024` só cria as tabelas `lfg_sessions` e
