@@ -16,6 +16,7 @@ out/
 # logs e cobertura
 *.log
 coverage/
+.vitest/
 
 # editores / SO
 .DS_Store
