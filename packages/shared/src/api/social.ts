@@ -41,6 +41,7 @@ export const SocialAccountSummarySchema = z.object({
   /** ISO 8601; `null` enquanto o job não passou por ela. */
   lastCheckedAt: z.string().nullable(),
   failureCount: z.number().int(),
+  sourceHealth: SocialSourceHealthSchema,
   /**
    * ISO 8601 de até quando o bot deixou a conta em pausa por falhas seguidas;
    * `null` = rodando normalmente. Passada a hora, o job tenta de novo.

@@ -39,6 +39,8 @@ export interface SocialAccountRef {
    * job, porque provider não fala com o banco.
    */
   isKnown(externalId: string): Promise<boolean>;
+  /** Resultado de cada fonte efetivamente consultada; usado para saúde persistida. */
+  onSourceResult?: (source: 'feed' | 'live', error?: Error) => void;
 }
 
 /**

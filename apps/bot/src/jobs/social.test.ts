@@ -1,4 +1,9 @@
-import { DEFAULT_SOCIAL_CONFIG, MINUTE_MS, SOCIAL_DEFAULT_TEMPLATE } from '@goodbot/shared';
+import {
+  DEFAULT_SOCIAL_CONFIG,
+  DEFAULT_SOCIAL_SOURCE_HEALTH,
+  MINUTE_MS,
+  SOCIAL_DEFAULT_TEMPLATE,
+} from '@goodbot/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SocialAccountRef } from '../services/social/types';
@@ -14,6 +19,7 @@ const {
   releaseSocialPost,
   recordSocialFailure,
   resetSocialFailures,
+  setSocialSourceHealth,
   touchSocialAccount,
 } = vi.hoisted(() => ({
   listEnabledSocialAccounts: vi.fn(),
@@ -24,6 +30,7 @@ const {
   releaseSocialPost: vi.fn(),
   recordSocialFailure: vi.fn(),
   resetSocialFailures: vi.fn(),
+  setSocialSourceHealth: vi.fn(),
   touchSocialAccount: vi.fn(),
 }));
 
@@ -36,6 +43,7 @@ vi.mock('@goodbot/db', () => ({
   releaseSocialPost,
   recordSocialFailure,
   resetSocialFailures,
+  setSocialSourceHealth,
   touchSocialAccount,
 }));
 
@@ -72,6 +80,7 @@ function fakeAccount(overrides: Partial<SocialAccount> = {}): SocialAccount {
     createdAt: new Date('2026-09-01T00:00:00Z'),
     updatedAt: new Date('2026-09-01T00:00:00Z'),
     ...overrides,
+    sourceHealth: overrides.sourceHealth ?? DEFAULT_SOCIAL_SOURCE_HEALTH,
   };
 }
 
@@ -390,5 +399,84 @@ describe('SocialJob · pausa automática', () => {
     await new SocialJob(deps).tick();
 
     expect(pauseSocialAccount).not.toHaveBeenCalled();
+  });
+
+  it('persiste falha do feed mesmo com live saudável e avisa na terceira falha', async () => {
+    const emit = vi.fn();
+    const prior = {
+      ...DEFAULT_SOCIAL_SOURCE_HEALTH,
+      feed: { ...DEFAULT_SOCIAL_SOURCE_HEALTH.feed, failureCount: 2 },
+    };
+    const provider = {
+      platform: 'youtube',
+      fetchLatest: vi.fn(async (ref: SocialAccountRef) => {
+        ref.onSourceResult?.('feed', new Error('Feed HTTP 503'));
+        ref.onSourceResult?.('live');
+        return [];
+      }),
+    };
+    const { deps } = makeDeps([], { provider, alerts: { emit } });
+    listEnabledSocialAccounts.mockResolvedValue([
+      fakeAccount({ kinds: ['video', 'live'], sourceHealth: prior }),
+    ]);
+
+    await new SocialJob(deps).tick();
+
+    expect(setSocialSourceHealth).toHaveBeenCalledWith(
+      {},
+      'conta-1',
+      expect.objectContaining({
+        feed: expect.objectContaining({ failureCount: 3, lastError: 'Feed HTTP 503' }),
+        live: expect.objectContaining({
+          failureCount: 0,
+          lastSuccessAt: new Date(NOW).toISOString(),
+        }),
+      }),
+    );
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'social:conta-1:feed', level: 'warning' }),
+    );
+    expect(recordSocialFailure).not.toHaveBeenCalled();
+  });
+
+  it('respeita intervalo da guild por conta', async () => {
+    const { deps, fetchLatest } = makeDeps([]);
+    deps.config = {
+      get: (id: string) =>
+        Promise.resolve({
+          ...DEFAULT_SOCIAL_CONFIG,
+          enabled: true,
+          pollIntervalSeconds: id === GUILD_ID ? 60 : 900,
+        }),
+    } as never;
+    listEnabledSocialAccounts.mockResolvedValue([
+      fakeAccount({ lastCheckedAt: new Date(NOW - 61_000) }),
+      fakeAccount({
+        id: 'conta-2',
+        guildId: OTHER_GUILD_ID,
+        lastCheckedAt: new Date(NOW - 61_000),
+      }),
+    ]);
+
+    expect(await new SocialJob(deps).tick()).toBe(1);
+    expect(fetchLatest).toHaveBeenCalledOnce();
+    expect(fetchLatest.mock.calls[0]?.[0].id).toBe('conta-1');
+  });
+
+  it('falha ao persistir saúde de uma conta não impede checar a seguinte', async () => {
+    const provider = {
+      platform: 'youtube',
+      fetchLatest: vi.fn(async (ref: SocialAccountRef) => {
+        ref.onSourceResult?.('feed');
+        return [];
+      }),
+    };
+    const { deps } = makeDeps([], { provider });
+    listEnabledSocialAccounts.mockResolvedValue([fakeAccount(), fakeAccount({ id: 'conta-2' })]);
+    setSocialSourceHealth.mockRejectedValueOnce(new Error('DB indisponível'));
+
+    expect(await new SocialJob(deps).tick()).toBe(2);
+    expect(provider.fetchLatest).toHaveBeenCalledTimes(2);
+    expect(setSocialSourceHealth).toHaveBeenCalledTimes(2);
   });
 });

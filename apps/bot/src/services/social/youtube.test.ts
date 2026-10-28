@@ -622,12 +622,15 @@ describe('YouTubeProvider com o feed fora do ar', () => {
     calls(mock).filter((url) => url.endsWith('/live'));
 
   it.each([404, 500])('o %i do feed não cala a sonda de live', async (feedStatus) => {
+    const onSourceResult = vi.fn();
     const provider = new YouTubeProvider({
       fetch: fakeYouTube({ feedStatus, live: LIVE_EM_ANDAMENTO }),
     });
-    const items = await provider.fetchLatest(account({ kinds: TODOS }));
+    const items = await provider.fetchLatest(account({ kinds: TODOS, onSourceResult }));
 
     expect(items.map((item) => [item.externalId, item.kind])).toEqual([['rFZHOHl-L8A', 'live']]);
+    expect(onSourceResult).toHaveBeenCalledWith('feed', expect.any(Error));
+    expect(onSourceResult).toHaveBeenCalledWith('live');
   });
 
   it('sem live no ar a passada sai vazia, e não como erro', async () => {

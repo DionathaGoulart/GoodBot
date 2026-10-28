@@ -386,14 +386,23 @@ export class YouTubeProvider implements SocialProvider {
     const wantsLive = account.kinds.includes('live');
 
     const feedIsOptional = wantsLive && account.firstPass !== true;
-    const entries = wantsUpload ? await this.loadFeed(account.externalId, feedIsOptional) : [];
+    const entries = wantsUpload
+      ? await this.loadFeed(account.externalId, feedIsOptional, account.onSourceResult)
+      : [];
     const items: SocialItem[] = [];
     const seen = new Set<string>();
 
     // A live vem primeiro porque é a publicação mais recente por definição, e
     // porque ela costuma estar no feed também: quem chega antes fixa o tipo.
     if (wantsLive) {
-      const live = await this.probeLive(account.externalId, entries);
+      let live: SocialItem | null;
+      try {
+        live = await this.probeLive(account.externalId, entries);
+        account.onSourceResult?.('live');
+      } catch (error) {
+        account.onSourceResult?.('live', error instanceof Error ? error : new Error(String(error)));
+        throw error;
+      }
       if (live) {
         items.push(live);
         seen.add(live.externalId);
@@ -437,13 +446,18 @@ export class YouTubeProvider implements SocialProvider {
    * esconder isso atrás de "feed indisponível" seria trocar um alerta por
    * silêncio.
    */
-  private async loadFeed(channelId: string, optional: boolean): Promise<YouTubeFeedEntry[]> {
+  private async loadFeed(
+    channelId: string,
+    optional: boolean,
+    onResult?: SocialAccountRef['onSourceResult'],
+  ): Promise<YouTubeFeedEntry[]> {
     const outage = this.feedOutages.get(channelId);
     const now = this.now();
     if (optional && outage && now < outage.retryAt) return [];
 
     try {
       const entries = await this.fetchFeed(channelId);
+      onResult?.('feed');
       if (outage) {
         this.feedOutages.delete(channelId);
         log.info(
@@ -453,6 +467,7 @@ export class YouTubeProvider implements SocialProvider {
       }
       return entries;
     } catch (error) {
+      onResult?.('feed', error instanceof Error ? error : new Error(String(error)));
       if (!optional || !(error instanceof SocialProviderError)) throw error;
       this.recordFeedFailure(channelId, outage, now, error);
       return [];

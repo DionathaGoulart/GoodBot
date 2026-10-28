@@ -50,6 +50,7 @@ function toSummary(row: SocialAccount): SocialAccountSummary {
     enabled: row.enabled,
     lastCheckedAt: row.lastCheckedAt?.toISOString() ?? null,
     failureCount: row.failureCount,
+    sourceHealth: row.sourceHealth,
     pausedUntil: row.pausedUntil?.toISOString() ?? null,
     disabledReason: row.disabledReason,
     createdAt: row.createdAt.toISOString(),

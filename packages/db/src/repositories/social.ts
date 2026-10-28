@@ -1,3 +1,4 @@
+import { DEFAULT_SOCIAL_SOURCE_HEALTH } from '@goodbot/shared';
 import { and, asc, eq, gt, isNotNull, or, sql } from 'drizzle-orm';
 
 import { guilds } from '../schema/guilds';
@@ -5,7 +6,12 @@ import { socialAccounts, socialPosts } from '../schema/social';
 
 import type { DbExecutor } from '../client';
 import type { SocialAccount, SocialPost } from '../types';
-import type { MessageTemplate, SocialKind, SocialPlatform } from '@goodbot/shared';
+import type {
+  MessageTemplate,
+  SocialKind,
+  SocialPlatform,
+  SocialSourceHealth,
+} from '@goodbot/shared';
 
 export interface SocialAccountInputRow {
   platform: SocialPlatform;
@@ -95,6 +101,7 @@ export async function updateSocialAccount(
     .set({
       ...input,
       failureCount: 0,
+      sourceHealth: DEFAULT_SOCIAL_SOURCE_HEALTH,
       disabledReason: null,
       pausedUntil: null,
       updatedAt: sql`now()`,
@@ -102,6 +109,17 @@ export async function updateSocialAccount(
     .where(and(eq(socialAccounts.guildId, guildId), eq(socialAccounts.id, id)))
     .returning();
   return row ?? null;
+}
+
+export async function setSocialSourceHealth(
+  db: DbExecutor,
+  id: string,
+  health: SocialSourceHealth,
+): Promise<void> {
+  await db
+    .update(socialAccounts)
+    .set({ sourceHealth: health, updatedAt: sql`now()` })
+    .where(eq(socialAccounts.id, id));
 }
 
 export async function deleteSocialAccount(
@@ -178,11 +196,7 @@ export async function recordSocialFailure(
 }
 
 /** Tira a conta das passadas até `until`. `enabled` fica como estava. */
-export async function pauseSocialAccount(
-  db: DbExecutor,
-  id: string,
-  until: Date,
-): Promise<void> {
+export async function pauseSocialAccount(db: DbExecutor, id: string, until: Date): Promise<void> {
   await db
     .update(socialAccounts)
     .set({ pausedUntil: until, updatedAt: sql`now()` })

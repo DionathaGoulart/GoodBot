@@ -7,6 +7,7 @@ import {
   recordSocialFailure,
   releaseSocialPost,
   resetSocialFailures,
+  setSocialSourceHealth,
   touchSocialAccount,
 } from '@goodbot/db';
 import {
@@ -17,6 +18,7 @@ import {
   SOCIAL_KIND_LABEL,
   SOCIAL_MAX_FAILURES,
   SOCIAL_PAUSE_MAX_MS,
+  DEFAULT_SOCIAL_SOURCE_HEALTH,
 } from '@goodbot/shared';
 
 import { childLogger } from '../logger';
@@ -29,7 +31,7 @@ import type { AuditService } from '../services/audit';
 import type { ConfigService } from '../services/config';
 import type { SocialItem, SocialProvider } from '../services/social/types';
 import type { Db, SocialAccount } from '@goodbot/db';
-import type { SocialConfig } from '@goodbot/shared';
+import type { SocialConfig, SocialSourceHealth } from '@goodbot/shared';
 import type { Client, GuildTextBasedChannel } from 'discord.js';
 
 const log = childLogger('social');
@@ -48,10 +50,8 @@ export interface SocialJobDeps {
 }
 
 /**
- * Polling das contas de rede social (PRD §5.8). Um laço, um intervalo: a cada
- * passada percorre **todas** as contas ligadas em sequência, com uma pausa
- * curta entre elas. Não há intervalo por conta — com o teto de 20 contas por
- * servidor a passada inteira cabe folgada no menor intervalo, e o que precisa
+ * Polling das contas de rede social (PRD §5.8). O timer usa o menor intervalo
+ * ativo; cada conta só é consultada ao vencer o intervalo da sua guild. O que precisa
  * sobreviver a um restart (falhas e pausa) está no banco.
  *
  * Três invariantes:
@@ -120,26 +120,33 @@ export class SocialJob {
       const configs = new Map<string, SocialConfig>();
 
       let checked = 0;
+      let nextIntervalMs = Infinity;
       for (const account of accounts) {
         let config = configs.get(account.guildId);
         if (!config) {
           config = await this.deps.config.get(account.guildId, 'social');
           configs.set(account.guildId, config);
-          this.intervalMs = config.pollIntervalSeconds * SECOND_MS;
         }
         if (!config.enabled) {
           // Módulo desligado na guild: nem chamada de API, nem linha tocada.
           continue;
         }
+        const pollMs = config.pollIntervalSeconds * SECOND_MS;
+        nextIntervalMs = Math.min(nextIntervalMs, pollMs);
         if (isSocialPaused(account.pausedUntil, this.now())) {
           // Em pausa por falhas: a espera ainda não venceu. Pular sem tocar a
           // linha mantém `last_checked_at` dizendo quando ela tentou de fato.
           continue;
         }
+        if (account.lastCheckedAt && account.lastCheckedAt.getTime() + pollMs > this.now())
+          continue;
         if (checked > 0 && delay > 0) await sleep(delay);
         await this.check(account);
         checked += 1;
       }
+      this.intervalMs = Number.isFinite(nextIntervalMs)
+        ? nextIntervalMs
+        : SOCIAL_DEFAULT_POLL_SECONDS * SECOND_MS;
       return checked;
     } catch (error) {
       log.error({ err: error }, 'falha na passada do job de redes sociais');
@@ -152,6 +159,7 @@ export class SocialJob {
   /** Uma conta: busca, anuncia o que é novo e atualiza o estado dela. */
   private async check(account: SocialAccount): Promise<void> {
     const at = new Date(this.now());
+    const sourceResults: { source: 'feed' | 'live'; error?: Error }[] = [];
     // A primeira passada de uma conta nova só marca o que já existe como
     // visto: sem isto o canal receberia o feed inteiro de uma vez.
     const backlog = account.lastCheckedAt === null;
@@ -167,6 +175,7 @@ export class SocialJob {
         // O provider não fala com o banco: quem sabe o que já foi anunciado é
         // o job, e é esta consulta que evita reclassificar o feed inteiro.
         isKnown: (externalId) => hasSocialPost(this.deps.db, account.id, externalId),
+        onSourceResult: (source, error) => sourceResults.push({ source, error }),
       });
 
       // As publicações chegam da mais nova para a mais antiga; anunciar em
@@ -183,7 +192,65 @@ export class SocialJob {
     } catch (error) {
       await touchSocialAccount(this.deps.db, account.id, at);
       await this.fail(account, error);
+    } finally {
+      if (sourceResults.length) {
+        try {
+          await this.saveSourceHealth(account, sourceResults, at);
+        } catch (error) {
+          log.error(
+            { accountId: account.id, err: error },
+            'falha ao gravar saúde das fontes sociais',
+          );
+        }
+      }
     }
+  }
+
+  private async saveSourceHealth(
+    account: SocialAccount,
+    results: { source: 'feed' | 'live'; error?: Error }[],
+    at: Date,
+  ): Promise<void> {
+    const old = account.sourceHealth ?? DEFAULT_SOCIAL_SOURCE_HEALTH;
+    const health: SocialSourceHealth = { feed: { ...old.feed }, live: { ...old.live } };
+    const alerts: (() => void)[] = [];
+    for (const { source, error } of results) {
+      const state = health[source];
+      const previousFailures = state.failureCount;
+      if (error) {
+        state.failureCount += 1;
+        state.lastFailureAt = at.toISOString();
+        state.lastError = error.message.slice(0, 200);
+        if (source === 'feed' && state.failureCount === 3) {
+          const reason = state.lastError;
+          alerts.push(() =>
+            this.deps.alerts?.emit({
+              kind: `social:${account.id}:feed`,
+              title: 'Feed do YouTube com falhas',
+              description: `O feed de \`${account.handle ?? account.externalId}\` falhou 3 vezes seguidas. A checagem de lives continua ativa.`,
+              level: 'warning',
+              fields: [{ name: 'Motivo', value: reason }],
+            }),
+          );
+        }
+      } else {
+        state.failureCount = 0;
+        state.lastSuccessAt = at.toISOString();
+        state.lastError = null;
+        if (source === 'feed' && previousFailures >= 3) {
+          alerts.push(() =>
+            this.deps.alerts?.emit({
+              kind: `social:${account.id}:feed:retomada`,
+              title: 'Feed do YouTube voltou',
+              description: `O feed de \`${account.handle ?? account.externalId}\` respondeu novamente.`,
+              level: 'success',
+            }),
+          );
+        }
+      }
+    }
+    await setSocialSourceHealth(this.deps.db, account.id, health);
+    for (const emit of alerts) emit();
   }
 
   /**

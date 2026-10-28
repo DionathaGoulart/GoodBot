@@ -92,6 +92,26 @@ function AccountState({ account }: { account: SocialAccountSummary }) {
     );
   }
 
+  if (account.sourceHealth.feed.failureCount > 0 || account.sourceHealth.live.failureCount > 0) {
+    const feed = account.sourceHealth.feed;
+    const live = account.sourceHealth.live;
+    return (
+      <span className="flex flex-col gap-1">
+        <Tag tone="warning">FONTE COM FALHAS</Tag>
+        {feed.failureCount > 0 ? (
+          <span className="screen-meta" title={feed.lastError ?? undefined}>
+            Feed: {feed.failureCount} falha(s)
+          </span>
+        ) : null}
+        {live.failureCount > 0 ? (
+          <span className="screen-meta" title={live.lastError ?? undefined}>
+            Lives: {live.failureCount} falha(s)
+          </span>
+        ) : null}
+      </span>
+    );
+  }
+
   return (
     <span className="flex flex-col gap-1">
       <Tag tone="success">OK</Tag>
