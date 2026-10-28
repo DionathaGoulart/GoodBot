@@ -100,6 +100,8 @@ export const channelLocks = pgTable(
     overwrites: jsonb('overwrites').$type<LockOverwrite[]>().notNull().default([]),
     lockedBy: snowflake('locked_by').notNull(),
     reason: text('reason'),
+    /** Nulo enquanto o REST não confirmou o lock; unlock automático não restaura. */
+    appliedAt: timestamptz('applied_at'),
     createdAt: createdAt(),
   },
   (t) => [

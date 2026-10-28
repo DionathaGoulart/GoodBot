@@ -69,13 +69,20 @@ export const scheduledActions = pgTable(
     kind: scheduledActionKindEnum('kind').notNull(),
     runAt: timestamptz('run_at').notNull(),
     payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+    /** Reserva recuperável; uma queda libera a ação quando o prazo vence. */
+    leaseUntil: timestamptz('lease_until'),
+    claimToken: uuid('claim_token'),
+    attempts: integer('attempts').notNull().default(0),
+    /** Tentativas esgotadas: mantida para inspeção e intervenção. */
+    failedAt: timestamptz('failed_at'),
+    lastError: text('last_error'),
     doneAt: timestamptz('done_at'),
     createdAt: createdAt(),
   },
   (t) => [
     index('scheduled_actions_pending_idx')
       .on(t.runAt)
-      .where(sql`${t.doneAt} is null`),
+      .where(sql`${t.doneAt} is null and ${t.failedAt} is null`),
     index('scheduled_actions_case_idx').on(t.caseId),
   ],
 );

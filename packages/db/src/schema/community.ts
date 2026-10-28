@@ -158,15 +158,44 @@ export const tickets = pgTable(
     closeReason: text('close_reason'),
     transcriptUrl: text('transcript_url'),
     openedAt: timestamptz('opened_at').notNull().defaultNow(),
+    /** Última atividade no canal; persiste através de reinícios do bot. */
+    lastActivityAt: timestamptz('last_activity_at').notNull().defaultNow(),
     closedAt: timestamptz('closed_at'),
     createdAt: createdAt(),
   },
   (t) => [
     uniqueIndex('tickets_guild_number_uidx').on(t.guildId, t.number),
     index('tickets_guild_user_status_idx').on(t.guildId, t.userId, t.status),
+    index('tickets_inactive_idx')
+      .on(t.guildId, t.lastActivityAt)
+      .where(sql`${t.status} = 'open'`),
     uniqueIndex('tickets_channel_uidx').on(t.channelId),
   ],
 );
+
+/** Contador persistente; números não são reutilizados depois de um erro no Discord. */
+export const ticketCounters = pgTable('ticket_counters', {
+  guildId: guildRef().primaryKey(),
+  lastNumber: integer('last_number').notNull(),
+}).enableRLS();
+
+/** Reserva curta que conta para o limite mesmo antes de criar o canal no Discord. */
+export const ticketOpenReservations = pgTable(
+  'ticket_open_reservations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    guildId: guildRef(),
+    userId: snowflake('user_id').notNull(),
+    typeId: uuid('type_id'),
+    number: integer('number').notNull(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('ticket_open_reservations_user_idx').on(t.guildId, t.userId, t.expiresAt),
+    uniqueIndex('ticket_open_reservations_number_uidx').on(t.guildId, t.number),
+  ],
+).enableRLS();
 
 // ── Tags ────────────────────────────────────────────────────────────────────
 

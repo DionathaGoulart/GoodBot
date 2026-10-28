@@ -4,6 +4,22 @@ import { SnowflakeSchema } from '../config/common';
 import { SocialKindSchema, SocialPlatformSchema, YOUTUBE_CHANNEL_ID_RE } from '../config/social';
 import { MessageTemplateSchema } from '../templates';
 
+export const SocialSourceCheckSchema = z.object({
+  failureCount: z.number().int().nonnegative(),
+  lastSuccessAt: z.string().nullable(),
+  lastFailureAt: z.string().nullable(),
+  lastError: z.string().nullable(),
+});
+export const SocialSourceHealthSchema = z.object({
+  feed: SocialSourceCheckSchema,
+  live: SocialSourceCheckSchema,
+});
+export type SocialSourceHealth = z.infer<typeof SocialSourceHealthSchema>;
+export const DEFAULT_SOCIAL_SOURCE_HEALTH: SocialSourceHealth = {
+  feed: { failureCount: 0, lastSuccessAt: null, lastFailureAt: null, lastError: null },
+  live: { failureCount: 0, lastSuccessAt: null, lastFailureAt: null, lastError: null },
+};
+
 /**
  * Uma conta como a API devolve: o que o painel mandou mais o estado que só o
  * bot conhece (última checagem, falhas, pausa automática e o último erro).

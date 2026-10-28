@@ -1,3 +1,4 @@
+import { DEFAULT_SOCIAL_SOURCE_HEALTH } from '@goodbot/shared';
 import {
   bigserial,
   boolean,
@@ -13,7 +14,12 @@ import { createdAt, snowflake, snowflakeArray, text, timestamptz, updatedAt } fr
 import { socialKindEnum, socialPlatformEnum } from './enums';
 import { guilds } from './guilds';
 
-import type { MessageTemplate, SocialKind, SocialPlatform } from '@goodbot/shared';
+import type {
+  MessageTemplate,
+  SocialKind,
+  SocialPlatform,
+  SocialSourceHealth,
+} from '@goodbot/shared';
 
 const guildRef = () =>
   snowflake('guild_id')
@@ -59,6 +65,10 @@ export const socialAccounts = pgTable(
     pausedUntil: timestamptz('paused_until'),
     /** Falhas seguidas. Zera no primeiro sucesso; a partir de 10 a conta pausa. */
     failureCount: integer('failure_count').notNull().default(0),
+    sourceHealth: jsonb('source_health')
+      .$type<SocialSourceHealth>()
+      .notNull()
+      .default(DEFAULT_SOCIAL_SOURCE_HEALTH),
     /**
      * Último erro da sequência de falhas; `null` depois de um sucesso ou de um
      * save pelo painel. O nome é da v2, quando a décima falha desligava a conta.
