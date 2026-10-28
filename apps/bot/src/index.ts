@@ -14,6 +14,7 @@ import { PendingExpiryJob } from './jobs/pending-expiry';
 import { RetentionJob } from './jobs/retention';
 import { SocialJob } from './jobs/social';
 import { StatsRollupJob } from './jobs/stats-rollup';
+import { TicketInactivityJob } from './jobs/ticket-inactivity';
 import { recordError } from './lib/error-log';
 import { loadCommands, loadEvents } from './lib/loader';
 import { logger } from './logger';
@@ -158,6 +159,13 @@ async function main(): Promise<void> {
     },
   });
   const social = new YouTubeProvider();
+  const ticketInactivity = new TicketInactivityJob({
+    db,
+    client,
+    config,
+    tickets,
+    servesGuild: (guildId) => registry.serves(guildId),
+  });
   const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole, alerts });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
   // Os links que os avisos de ciclo de vida citam. Saem do `AUTH_URL` pela
@@ -271,6 +279,7 @@ async function main(): Promise<void> {
     stats.start();
     statsRollup.start();
     socialJob.start();
+    ticketInactivity.start();
     demoExpiry.start();
     pendingExpiry.start();
     retention.start();
@@ -311,6 +320,7 @@ async function main(): Promise<void> {
       stats.stop();
       statsRollup.stop();
       socialJob.stop();
+      ticketInactivity.stop();
       demoExpiry.stop();
       pendingExpiry.stop();
       retention.stop();

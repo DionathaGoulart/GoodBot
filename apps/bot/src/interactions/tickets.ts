@@ -33,8 +33,9 @@ interface TicketScope {
   ticket: Ticket;
   channel: GuildTextBasedChannel;
   member: GuildMember;
-  /** Autor do ticket, suporte do tipo ou moderação. */
-  canManage: boolean;
+  /** A equipe assume; autor e equipe podem fechar. */
+  canClaim: boolean;
+  canClose: boolean;
 }
 
 /**
@@ -65,11 +66,13 @@ async function scopeFor(
   const level = resolveLevel(toMemberLike(member), settings);
 
   const isSupport = (type?.supportRoleIds ?? []).some((id) => member.roles.cache.has(id));
+  const canClaim = isSupport || levelAtLeast(level, 'mod');
   return {
     ticket,
     channel: channel as GuildTextBasedChannel,
     member,
-    canManage: isSupport || levelAtLeast(level, 'mod') || ticket.userId === member.id,
+    canClaim,
+    canClose: canClaim || ticket.userId === member.id,
   };
 }
 
@@ -169,7 +172,7 @@ async function claimFrom(ctx: BotContext, interaction: ButtonInteraction): Promi
   try {
     const scope = await scopeFor(ctx, interaction);
     if (!scope) return;
-    if (!scope.canManage) {
+    if (!scope.canClaim) {
       await interaction.editReply({ content: 'Só a equipe de suporte pode assumir tickets.' });
       return;
     }
@@ -177,7 +180,7 @@ async function claimFrom(ctx: BotContext, interaction: ButtonInteraction): Promi
     const claimed = await ctx.tickets.claim(scope.ticket, scope.member.id);
     if (!claimed) {
       await interaction.editReply({
-        content: `Este ticket já foi assumido por <@${scope.ticket.claimedBy ?? ''}>.`,
+        content: 'Este ticket já foi assumido por outra pessoa ou foi fechado.',
       });
       return;
     }
@@ -207,7 +210,7 @@ async function closeFrom(
   try {
     const scope = await scopeFor(ctx, interaction);
     if (!scope) return;
-    if (!scope.canManage) {
+    if (!scope.canClose) {
       await interaction.editReply({ content: 'Você não pode fechar este ticket.' });
       return;
     }

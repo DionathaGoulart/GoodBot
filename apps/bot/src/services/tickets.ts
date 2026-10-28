@@ -1,12 +1,13 @@
 import {
   claimTicket,
   closeTicket,
-  countOpenTickets,
-  createTicket,
+  confirmTicketOpening,
   getTicketByChannel,
   getTicketPanel,
   getTicketType,
   listTicketTypes,
+  releaseTicketOpening,
+  reserveTicketOpening,
   setTicketPanelMessage,
   setTicketTranscript,
 } from '@goodbot/db';
@@ -231,9 +232,8 @@ export class TicketService {
   }
 
   /**
-   * Abre um ticket para `member`. O canal nasce antes da linha no banco (o
-   * `channel_id` é obrigatório) e é renomeado depois, quando o padrão usa
-   * `{number}` — o número só é reservado no `INSERT`.
+   * Reserva vaga e número em transação curta. A chamada ao Discord acontece
+   * fora da transação; na falha, o canal criado e a reserva são compensados.
    */
   async open(member: GuildMember, typeId: string): Promise<OpenResult> {
     const guild = member.guild;
@@ -245,45 +245,51 @@ export class TicketService {
     }
 
     const limit = openLimitFor(type, config);
-    const open = await countOpenTickets(this.deps.db, guild.id, member.id);
-    if (open >= limit) {
+    const reservation = await reserveTicketOpening(this.deps.db, {
+      guildId: guild.id,
+      userId: member.id,
+      typeId: type.id,
+      limit,
+    });
+    if (!reservation.reserved) {
       throw new UserFacingError(
         limit === 1
           ? 'Você já tem um ticket aberto. Feche-o antes de abrir outro.'
-          : `Você já tem ${open} tickets abertos (máx. ${limit}).`,
+          : `Você já tem ${reservation.open} tickets abertos ou em abertura (máx. ${limit}).`,
         { code: 'TICKET_LIMIT' },
       );
     }
 
     const pattern = type.namingPattern ?? config.namingPattern;
-    const channel = await this.createChannel(member, type, config, pattern);
-
+    let channel: GuildTextBasedChannel | null = null;
     let ticket: Ticket;
     try {
-      ticket = await createTicket(this.deps.db, {
-        guildId: guild.id,
-        typeId: type.id,
-        userId: member.id,
-        channelId: channel.id,
+      const name = renderChannelName(pattern, {
+        number: reservation.number,
+        user: member.user.username,
+        type: type.name,
       });
+      channel = await this.createChannel(member, type, config, name);
+      const confirmed = await confirmTicketOpening(this.deps.db, reservation.id, channel.id);
+      if (!confirmed) throw new Error('Reserva de ticket expirou antes da confirmação');
+      ticket = confirmed;
     } catch (error) {
-      // Sem a linha o ticket não existe: o canal órfão só confundiria.
-      await channel.delete('Falha ao registrar o ticket').catch(() => null);
+      if (channel) {
+        await channel.delete('Falha ao registrar o ticket').catch((deleteError: unknown) => {
+          log.warn({ err: deleteError, channelId: channel?.id }, 'canal órfão de ticket');
+        });
+      }
+      await releaseTicketOpening(this.deps.db, reservation.id).catch((releaseError: unknown) => {
+        log.warn({ err: releaseError, reservationId: reservation.id }, 'reserva pendente');
+      });
       throw error;
     }
 
-    const finalName = renderChannelName(pattern, {
-      number: ticket.number,
-      user: member.user.username,
-      type: type.name,
+    // A linha já existe: falha da mensagem inicial não pode fazer o painel
+    // dizer que a abertura falhou e induzir novo clique/ticket.
+    await this.sendOpening(channel, member, type, ticket).catch((error: unknown) => {
+      log.warn({ err: error, ticketId: ticket.id }, 'mensagem inicial do ticket falhou');
     });
-    if (channel.name !== finalName) {
-      await channel.setName(finalName).catch((error: unknown) => {
-        log.warn({ err: error, ticketId: ticket.id }, 'não foi possível renomear o canal');
-      });
-    }
-
-    await this.sendOpening(channel, member, type, ticket);
     await this.notifyLog(guild, config, {
       title: 'Ticket aberto',
       description: `${member} abriu o ticket #${ticket.number} em ${channel}.`,
@@ -301,15 +307,9 @@ export class TicketService {
     member: GuildMember,
     type: TicketType,
     config: TicketsConfig,
-    pattern: string,
+    name: string,
   ): Promise<GuildTextBasedChannel> {
     const guild = member.guild;
-    // Nome provisório: o número definitivo só existe depois do `INSERT`.
-    const provisional = renderChannelName(pattern, {
-      number: 0,
-      user: member.user.username,
-      type: type.name,
-    });
 
     if (config.useThreads) {
       const parent = await guild.channels.fetch(type.categoryId).catch(() => null);
@@ -319,18 +319,53 @@ export class TicketService {
           { code: 'BAD_TICKET_PARENT' },
         );
       }
-      const thread = await (parent as TextChannel).threads.create({
-        name: provisional,
+      if (type.supportRoleIds.length === 0) {
+        throw new UserFacingError(
+          'Tickets em thread privada precisam de um cargo de suporte com acesso ao canal pai.',
+          { code: 'THREAD_SUPPORT_ACCESS' },
+        );
+      }
+      const parentChannel = parent as TextChannel;
+      const needed = [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.ManageThreads,
+        PermissionFlagsBits.SendMessagesInThreads,
+      ];
+      for (const roleId of type.supportRoleIds) {
+        const role = guild.roles.cache.get(roleId) ?? (await guild.roles.fetch(roleId));
+        if (!role || !parentChannel.permissionsFor(role)?.has(needed)) {
+          throw new UserFacingError(
+            'O cargo de suporte precisa de Ver canal, Gerenciar threads e Enviar mensagens em threads no canal pai.',
+            { code: 'THREAD_SUPPORT_ACCESS' },
+          );
+        }
+      }
+      if (
+        !member
+          .permissionsIn(parentChannel)
+          .has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessagesInThreads])
+      ) {
+        throw new UserFacingError('Você não consegue responder em threads deste canal.', {
+          code: 'THREAD_AUTHOR_ACCESS',
+        });
+      }
+      const thread = await parentChannel.threads.create({
+        name,
         type: ChannelType.PrivateThread,
         invitable: false,
         reason: `Ticket de ${member.user.tag}`,
       });
-      await thread.members.add(member.id).catch(() => null);
+      try {
+        await thread.members.add(member.id);
+      } catch (error) {
+        await thread.delete('Falha ao incluir o autor no ticket').catch(() => null);
+        throw error;
+      }
       return thread;
     }
 
     return guild.channels.create({
-      name: provisional,
+      name,
       type: ChannelType.GuildText,
       parent: type.categoryId,
       permissionOverwrites: ticketOverwrites(guild, member.id, type.supportRoleIds),
@@ -413,7 +448,7 @@ export class TicketService {
   async close(
     channel: GuildTextBasedChannel,
     ticket: Ticket,
-    input: { actorId: string; reason: string | null },
+    input: { actorId: string; reason: string | null; inactiveBefore?: Date },
   ): Promise<Ticket> {
     const guild = channel.guild;
     const config = await this.deps.config.get(guild.id, 'tickets');
@@ -421,6 +456,7 @@ export class TicketService {
     const closed = await closeTicket(this.deps.db, ticket.id, {
       closedBy: input.actorId,
       reason: input.reason,
+      ...(input.inactiveBefore ? { inactiveBefore: input.inactiveBefore } : {}),
     });
     if (!closed) {
       throw new UserFacingError('Este ticket já está sendo fechado.', { code: 'ALREADY_CLOSING' });

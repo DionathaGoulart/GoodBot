@@ -18,18 +18,28 @@ import type { AutocompleteContext, CommandContext } from '../../lib/command';
 import type { Ticket } from '@goodbot/db';
 import type { GuildMember, GuildTextBasedChannel } from 'discord.js';
 
-/** Quem pode fechar/gerir: autor do ticket, suporte do tipo ou moderação. */
-async function requireManage(ctx: CommandContext, ticket: Ticket): Promise<void> {
+/** O autor pode gerir seu ticket; assumir atendimento exige equipe. */
+async function requireManage(
+  ctx: CommandContext,
+  ticket: Ticket,
+  action: 'manage' | 'claim',
+): Promise<void> {
   if (levelAtLeast(ctx.level, 'mod')) return;
-  if (ticket.userId === ctx.member.id) return;
   const type = ticket.typeId ? await getTicketType(ctx.db, ctx.guildId, ticket.typeId) : null;
   if (type?.supportRoleIds.some((id) => ctx.member.roles.cache.has(id))) return;
-  throw new UserFacingError('Você não pode gerenciar este ticket.', { code: 'FORBIDDEN' });
+  if (action === 'manage' && ticket.userId === ctx.member.id) return;
+  throw new UserFacingError(
+    action === 'claim'
+      ? 'Só a equipe de suporte pode assumir tickets.'
+      : 'Você não pode gerenciar este ticket.',
+    { code: 'FORBIDDEN' },
+  );
 }
 
 /** O canal onde o comando rodou, quando ele é um ticket aberto. */
 async function ticketHere(
   ctx: CommandContext,
+  action: 'manage' | 'claim' = 'manage',
 ): Promise<{ ticket: Ticket; channel: GuildTextBasedChannel }> {
   const channel = ctx.interaction.channel;
   if (!channel?.isTextBased() || channel.isDMBased()) {
@@ -38,7 +48,7 @@ async function ticketHere(
     });
   }
   const ticket = await ctx.tickets.requireTicketFor(channel.id);
-  await requireManage(ctx, ticket);
+  await requireManage(ctx, ticket, action);
   return { ticket, channel: channel as GuildTextBasedChannel };
 }
 
@@ -212,10 +222,10 @@ export default defineCommand({
     if (group === 'panel') return handlePanel(ctx, sub);
 
     if (sub === 'claim') {
-      const { ticket, channel } = await ticketHere(ctx);
+      const { ticket, channel } = await ticketHere(ctx, 'claim');
       const claimed = await ctx.tickets.claim(ticket, ctx.member.id);
       if (!claimed) {
-        throw new UserFacingError(`Já foi assumido por <@${ticket.claimedBy ?? ''}>.`, {
+        throw new UserFacingError('Este ticket já foi assumido ou foi fechado.', {
           code: 'ALREADY_CLAIMED',
         });
       }
