@@ -295,6 +295,7 @@ jobs:
             install -m 644 /tmp/goodbot-infra/Caddyfile ./Caddyfile
             install -d -m 750 ./scripts
             install -m 755 /tmp/goodbot-infra/scripts/backup.sh ./scripts/backup.sh
+            install -m 755 /tmp/goodbot-infra/scripts/backup-loop.sh ./scripts/backup-loop.sh
             install -m 755 /tmp/goodbot-infra/scripts/restore.sh ./scripts/restore.sh
             # O deploy.sh é o caminho do rollback (`deploy.sh sha-…`). Sem esta
             # linha a cópia da VM ficava a do bootstrap, e foi assim que ela

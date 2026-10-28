@@ -85,6 +85,7 @@ install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 750 "$APP_DIR"
 
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 750 "$APP_DIR/scripts"
 install -o "$SERVICE_USER" -g "$SERVICE_USER" -m 755 "$HERE/scripts/backup.sh" "$APP_DIR/scripts/backup.sh"
+install -o "$SERVICE_USER" -g "$SERVICE_USER" -m 755 "$HERE/scripts/backup-loop.sh" "$APP_DIR/scripts/backup-loop.sh"
 install -o "$SERVICE_USER" -g "$SERVICE_USER" -m 755 "$HERE/scripts/restore.sh" "$APP_DIR/scripts/restore.sh"
 
 # O Caddyfile vai com 644 porque é montado DENTRO do container, que roda com
