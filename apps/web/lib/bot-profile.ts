@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -45,7 +45,7 @@ function parseBody(raw: FormDataEntryValue | null): unknown {
  * (§6.5).
  */
 export async function saveBotProfile(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('profile'));
   const parsed = BotProfileInputSchema.safeParse(

@@ -11,7 +11,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildAccess, requireGuildWriteAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -101,7 +101,7 @@ function channelId(formData: FormData): string | null {
 
 /** Cria (sem `channelId`) ou edita (com) um canal ou categoria. */
 export async function saveChannel(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const id = channelId(formData);
   const raw = parseBody(formData.get('channel'));
@@ -141,7 +141,7 @@ export async function saveChannel(guildId: string, formData: FormData): Promise<
 }
 
 export async function removeChannel(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const id = channelId(formData);
   if (!id) return { ok: false, message: 'Canal inválido.' };
@@ -165,7 +165,7 @@ export async function removeChannel(guildId: string, formData: FormData): Promis
 }
 
 export async function setSlowmode(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const id = channelId(formData);
   if (!id) return { ok: false, message: 'Canal inválido.' };
@@ -201,7 +201,7 @@ export async function toggleChannelLock(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const id = channelId(formData);
   if (!id) return { ok: false, message: 'Canal inválido.' };
@@ -232,7 +232,7 @@ export async function setChannelOverrides(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const id = channelId(formData);
   if (!id) return { ok: false, message: 'Canal inválido.' };

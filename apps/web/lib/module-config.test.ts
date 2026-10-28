@@ -1,8 +1,6 @@
-import {
-  DEFAULT_LOGS_CONFIG,
-  DEFAULT_MODERATION_CONFIG,
-} from '@goodbot/shared';
+import { DEFAULT_LOGS_CONFIG, DEFAULT_MODERATION_CONFIG } from '@goodbot/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { expectErrorMessage } from './test-error';
 
 const GUILD_ID = '100000000000000000';
 
@@ -25,12 +23,13 @@ vi.mock('@goodbot/db', () => ({
   setLogConfig: (...args: unknown[]) => setLogConfig(...args),
   setGuildSettings: (...args: unknown[]) => setGuildSettings(...args),
 }));
-vi.mock('./db', () => ({ db: () => ({}) }));
+const transaction = vi.fn(async (operation: (tx: object) => Promise<unknown>) => operation({}));
+vi.mock('./db', () => ({ db: () => ({ transaction }) }));
 vi.mock('./audit', () => ({ withAudit: (...args: unknown[]) => withAudit(...args) }));
 vi.mock('./internal-api', () => ({ internalApi: () => ({ invalidateConfig }) }));
 vi.mock('next/cache', () => ({ revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
 vi.mock('./auth/require', () => ({
-  requireGuildAccess: () =>
+  requireGuildWriteAccess: () =>
     Promise.resolve({
       user: { id: '200000000000000000', name: 'mod#1', image: null },
       level: 'admin',
@@ -87,7 +86,7 @@ describe('saveModuleConfig', () => {
 
     expect(result.ok).toBe(true);
     expect(setModuleConfig).toHaveBeenCalledWith(
-      {},
+      expect.anything(),
       GUILD_ID,
       'moderation',
       expect.objectContaining({ defaultReason: 'porque sim' }),
@@ -112,6 +111,39 @@ describe('saveModuleConfig', () => {
     expect(result.ok).toBe(true);
     expect(result.message).toMatch(/bot não respondeu/i);
     expect(setModuleConfig).toHaveBeenCalled();
+  });
+
+  it('não audita nem invalida config geral quando a segunda gravação falha na transação', async () => {
+    getGuildSettings.mockResolvedValue(null);
+    getModuleConfig.mockResolvedValue({
+      module: 'general',
+      enabled: true,
+      config: { enabled: true },
+      stored: true,
+      updatedAt: null,
+      updatedBy: null,
+    });
+    setModuleConfig.mockRejectedValueOnce(new Error('falha intermediária'));
+
+    const form = body({
+      settings: {
+        timezone: 'America/Sao_Paulo',
+        embedColor: 0x123456,
+        modRoleIds: [],
+        adminRoleIds: [],
+        dashboardAccessRoleIds: [],
+        logChannelId: null,
+        noticeChannelId: null,
+        dmOnPunish: null,
+      },
+      module: { enabled: true },
+    });
+
+    await expectErrorMessage(saveModuleConfig(GUILD_ID, 'general', form), 'falha intermediária');
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(setGuildSettings).toHaveBeenCalledTimes(1);
+    expect(withAudit).not.toHaveBeenCalled();
+    expect(invalidateConfig).not.toHaveBeenCalled();
   });
 
   it('a página de logs grava o módulo e uma linha por tipo de log', async () => {
@@ -185,7 +217,7 @@ describe('saveModuleConfig', () => {
     expect(result.ok).toBe(true);
     expect(setLogConfig).toHaveBeenCalledTimes(5);
     expect(setLogConfig).toHaveBeenCalledWith(
-      {},
+      expect.anything(),
       GUILD_ID,
       'modlog',
       expect.objectContaining({ enabled: true, channelId: '300000000000000000' }),

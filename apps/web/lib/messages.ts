@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -71,7 +71,7 @@ export async function sendChannelMessage(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const parsed = ComposeInputSchema.safeParse(parseBody(formData.get('message')));
   if (!parsed.success) {
@@ -129,7 +129,7 @@ export async function deleteChannelMessage(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const channelId = SnowflakeSchema.safeParse(formData.get('channelId'));
   const messageId = SnowflakeSchema.safeParse(formData.get('messageId'));

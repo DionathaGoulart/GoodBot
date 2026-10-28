@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildAccess, requireGuildWriteAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -54,7 +54,7 @@ function parseBody(raw: FormDataEntryValue | null): unknown {
  * auditoria seria o pior tipo de poder que o painel pode ter (§6.5).
  */
 export async function saveGuildProfile(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('settings'));
   const parsed = GuildSettingsInputSchema.safeParse(
@@ -112,7 +112,7 @@ function auditable(profile: GuildProfile) {
  * `source` muda para `dashboard`.
  */
 export async function unbanUser(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'mod');
+  const session = await requireGuildWriteAccess(guildId, 'mod');
 
   const userId = formData.get('userId');
   if (typeof userId !== 'string' || userId === '') {

@@ -23,14 +23,9 @@ export function isStale(checkedAt: number | undefined, now = Date.now()): boolea
   return !checkedAt || now - checkedAt > ACCESS_CHECK_TTL_MS;
 }
 
-/**
- * `checkedAt` que mantém a permissão válida por mais `ACCESS_RETRY_DELAY_MS` e
- * só então volta a ser recarregada. Usado quando a checagem com o bot falhou e
- * o nível anterior foi preservado: sem isso a sessão tentaria de novo a cada
- * requisição e nunca sairia do 429.
- */
+/** Próxima tentativa após uma falha, sem alterar a data da última confirmação. */
 export function retryAt(now = Date.now()): number {
-  return now - ACCESS_CHECK_TTL_MS + ACCESS_RETRY_DELAY_MS;
+  return now + ACCESS_RETRY_DELAY_MS;
 }
 
 export function rankOf(level: AccessLevel): number {
@@ -99,6 +94,8 @@ export function resolveAccessLevel(input: AccessInput): AccessLevel {
 export interface GuildGrant {
   level: AccessLevel;
   checkedAt: number;
+  /** Até quando poupar a API após falha; nunca torna o grant novamente válido. */
+  retryAfter?: number;
 }
 
 export interface SessionLike {

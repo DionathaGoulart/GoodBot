@@ -3,7 +3,7 @@
 import { MessageTemplateSchema, SnowflakeSchema } from '@goodbot/shared';
 import { z } from 'zod';
 
-import { requireGuildAccess } from '@/lib/auth/require';
+import { requireGuildWriteAccess } from '@/lib/auth/require';
 import { internalApi } from '@/lib/internal-api';
 import { saveModuleConfig, type ActionResult } from '@/lib/module-config';
 import { removeTag, saveTag } from '@/lib/tags';
@@ -41,9 +41,9 @@ export async function sendWelcomeTestAction(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  // `requireGuildAccess` recusa guild que o bot não atende e nível
+  // `requireGuildWriteAccess` recusa guild que o bot não atende e nível
   // insuficiente, então um `guildId` forjado na chamada não passa daqui.
-  await requireGuildAccess(guildId, 'admin');
+  await requireGuildWriteAccess(guildId, 'admin');
 
   const raw = formData.get('payload');
   let parsed;

@@ -24,11 +24,14 @@ export interface GuildSession {
 export async function resolveGuildSession(
   guildId: string,
   minimum: AccessLevel = 'mod',
+  access: 'read' | 'write' = 'read',
 ): Promise<{ session: GuildSession } | { verdict: DeniedVerdict }> {
   const session = await currentSession();
   if (!session?.user?.id) return { verdict: 'unauthenticated' };
 
-  if (!(await withinWriteBudget(session.user.id))) return { verdict: 'rate-limited' };
+  const requestHeaders = await headers();
+  if (access === 'write' && !withinWriteBudget(session.user.id, requestHeaders))
+    return { verdict: 'rate-limited' };
 
   // Guild que o bot não atende nem chega a consultar a API: uma URL inventada
   // não deve virar tráfego para o bot nem revelar se aquele servidor existe.
@@ -37,19 +40,25 @@ export async function resolveGuildSession(
   const grant = session.guilds?.[guildId];
   let level = grant?.level ?? 'none';
   if (!grant || isStale(grant.checkedAt)) {
-    // Reconfirmar é melhor esforço: se a API do bot não responde (429 numa
-    // rajada de escrita, deploy, rede), vale o nível que veio na sessão em vez
-    // de derrubar a página inteira com um erro. Quem nunca teve nível segue
-    // em `none` e é barrado logo abaixo.
-    try {
-      level = await resolveGuildLevel(session.user.id, guildId);
-    } catch {
-      level = grant?.level ?? 'none';
+    // Leituras podem mostrar o último nível conhecido durante uma falha curta.
+    // Uma escrita nunca usa nível vencido que não pôde ser revalidado.
+    if (grant?.retryAfter && grant.retryAfter > Date.now()) {
+      if (access === 'write') return { verdict: 'denied' };
+    } else {
+      try {
+        level = await resolveGuildLevel(session.user.id, guildId);
+      } catch {
+        if (access === 'write') return { verdict: 'denied' };
+        level = grant?.level ?? 'none';
+      }
     }
   }
 
   const verdict = checkGuildAccess(
-    { ...session, guilds: { ...session.guilds, [guildId]: { level, checkedAt: Date.now() } } },
+    {
+      ...session,
+      guilds: { ...session.guilds, [guildId]: { level, checkedAt: grant?.checkedAt ?? 0 } },
+    },
     guildId,
     minimum,
   );
@@ -69,9 +78,8 @@ export async function resolveGuildSession(
 }
 
 /**
- * Porta de entrada de **todo** server component, action e route handler que
- * toca em dados da guild (PRD §7.3) — não basta checar no layout. Se a
- * permissão está velha (§6, 15 min), reconfirma com o bot antes de decidir.
+ * Guarda de leitura para server components, consultas e GET da guild.
+ * Cada mutação usa `requireGuildWriteAccess` junto da escrita.
  */
 export async function requireGuildAccess(
   guildId: string,
@@ -83,15 +91,26 @@ export async function requireGuildAccess(
   redirect(result.verdict === 'rate-limited' ? '/denied?reason=rate-limit' : '/denied');
 }
 
+/** Guarda para toda mutação, independente do transporte escolhido pelo Next. */
+export async function requireGuildWriteAccess(
+  guildId: string,
+  minimum: AccessLevel = 'mod',
+): Promise<GuildSession> {
+  const result = await resolveGuildSession(guildId, minimum, 'write');
+  if ('session' in result) return result.session;
+  if (result.verdict === 'unauthenticated') redirect('/login');
+  redirect(result.verdict === 'rate-limited' ? '/denied?reason=rate-limit' : '/denied');
+}
+
 /**
  * Rate limit das **escritas** do painel (PRD §7.3). O gatilho é o header
- * `next-action`, que o Next só manda numa server action — assim navegar pelas
- * páginas nunca gasta o balde, e toda action passa por aqui sem que nenhum
- * call site precise lembrar de chamar o limitador.
+ * Nenhum header do cliente decide se uma chamada é escrita: o call site usa
+ * `requireGuildWriteAccess` explicitamente.
  */
-async function withinWriteBudget(userId: string): Promise<boolean> {
-  const requestHeaders = await headers();
-  if (!requestHeaders.get('next-action')) return true;
+function withinWriteBudget(
+  userId: string,
+  requestHeaders: Awaited<ReturnType<typeof headers>>,
+): boolean {
   return actionLimiter.hit(`${clientIp(requestHeaders)}:${userId}`).allowed;
 }
 

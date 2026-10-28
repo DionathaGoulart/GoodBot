@@ -14,7 +14,7 @@ import { ReactionRolePanelInputSchema, type ReactionRolePanelInput } from '@good
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { db } from './db';
 import { internalApi } from './internal-api';
 import { loadModuleConfig, toFieldErrors, type ActionResult } from './module-config';
@@ -67,7 +67,7 @@ function panelId(formData: FormData): string | null {
  * ar decide quando atualizar, no botão `ATUALIZAR`.
  */
 export async function savePanel(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const parsed = ReactionRolePanelInputSchema.safeParse(parseBody(formData.get('panel')));
   if (!parsed.success) {
@@ -121,7 +121,7 @@ export async function savePanel(guildId: string, formData: FormData): Promise<Ac
 
 /** `PUBLICAR` / `ATUALIZAR`: o bot é quem monta e envia a mensagem. */
 export async function publishPanel(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const id = panelId(formData);
   if (!id) return { ok: false, message: 'Painel inválido.' };
@@ -150,7 +150,7 @@ export async function publishPanel(guildId: string, formData: FormData): Promise
  * conseguiria alcançar pelo dashboard.
  */
 export async function removePanel(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const id = panelId(formData);
   if (!id) return { ok: false, message: 'Painel inválido.' };

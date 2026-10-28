@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -57,7 +57,7 @@ export async function saveScheduledEvent(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const eventIdValue = formData.get('eventId');
   const eventId = typeof eventIdValue === 'string' && eventIdValue !== '' ? eventIdValue : null;
@@ -103,7 +103,7 @@ export async function deleteScheduledEvent(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const eventId = formData.get('eventId');
   if (typeof eventId !== 'string' || eventId === '') {

@@ -22,7 +22,7 @@ import {
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { db } from './db';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
@@ -111,7 +111,7 @@ function idFrom(formData: FormData, key: string): string | null {
 // ── tipos ───────────────────────────────────────────────────────────────────
 
 export async function saveTicketType(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const parsed = TicketTypeInputSchema.safeParse(parseBody(formData.get('type')));
   if (!parsed.success) {
@@ -150,7 +150,7 @@ export async function saveTicketType(guildId: string, formData: FormData): Promi
 }
 
 export async function removeTicketType(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const typeId = idFrom(formData, 'typeId');
   if (!typeId) return { ok: false, message: 'Tipo inválido.' };
@@ -172,7 +172,7 @@ export async function removeTicketType(guildId: string, formData: FormData): Pro
 // ── painel ──────────────────────────────────────────────────────────────────
 
 export async function saveTicketPanel(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const parsed = TicketPanelInputSchema.safeParse(parseBody(formData.get('panel')));
   if (!parsed.success) {
@@ -208,7 +208,7 @@ export async function publishTicketPanel(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const id = idFrom(formData, 'panelId');
   if (!id) return { ok: false, message: 'Painel inválido.' };
@@ -235,7 +235,7 @@ export async function removeTicketPanel(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const id = idFrom(formData, 'panelId');
   if (!id) return { ok: false, message: 'Painel inválido.' };
@@ -277,7 +277,7 @@ export async function closeTicketAction(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'mod');
+  const session = await requireGuildWriteAccess(guildId, 'mod');
 
   const raw = formData.get('ticketId');
   const ticketId = Number(raw);

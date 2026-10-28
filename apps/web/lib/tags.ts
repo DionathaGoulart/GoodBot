@@ -5,7 +5,7 @@ import { TagInputSchema } from '@goodbot/shared';
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { db } from './db';
 import { loadModuleConfig, toFieldErrors, type ActionResult } from './module-config';
 
@@ -47,7 +47,7 @@ function parseBody(raw: FormDataEntryValue | null): unknown {
  * histórico de `uses` da linha.
  */
 export async function saveTag(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const parsed = TagInputSchema.safeParse(parseBody(formData.get('tag')));
   if (!parsed.success) {
@@ -93,7 +93,7 @@ export async function saveTag(guildId: string, formData: FormData): Promise<Acti
 }
 
 export async function removeTag(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const name = formData.get('name');
   if (typeof name !== 'string' || name.length === 0) {

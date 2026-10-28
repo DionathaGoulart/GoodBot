@@ -11,7 +11,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -48,7 +48,7 @@ function invalid(error: Parameters<typeof toFieldErrors>[0]): ActionResult {
  * entrou no servidor.
  */
 export async function createEmoji(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('emoji'));
   const parsed = EmojiCreateInputSchema.safeParse(
@@ -76,7 +76,7 @@ export async function createEmoji(guildId: string, formData: FormData): Promise<
 }
 
 export async function updateEmoji(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const emojiId = formData.get('emojiId');
   if (typeof emojiId !== 'string' || emojiId === '')
@@ -111,7 +111,7 @@ export async function updateEmoji(guildId: string, formData: FormData): Promise<
 }
 
 export async function deleteEmoji(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const emojiId = formData.get('emojiId');
   if (typeof emojiId !== 'string' || emojiId === '')
@@ -142,7 +142,7 @@ export async function deleteEmoji(guildId: string, formData: FormData): Promise<
 }
 
 export async function createSticker(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('sticker'));
   const parsed = StickerCreateInputSchema.safeParse(
@@ -170,7 +170,7 @@ export async function createSticker(guildId: string, formData: FormData): Promis
 }
 
 export async function updateSticker(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const stickerId = formData.get('stickerId');
   if (typeof stickerId !== 'string' || stickerId === '') {
@@ -206,7 +206,7 @@ export async function updateSticker(guildId: string, formData: FormData): Promis
 }
 
 export async function deleteSticker(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const stickerId = formData.get('stickerId');
   if (typeof stickerId !== 'string' || stickerId === '') {

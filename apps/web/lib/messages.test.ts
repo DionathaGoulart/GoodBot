@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { expectErrorMessage } from './test-error';
 
 const GUILD_ID = '100000000000000000';
 const ACTOR = '200000000000000002';
@@ -10,7 +11,7 @@ const deleteMessage = vi.fn();
 const channelMessages = vi.fn();
 const withAudit = vi.fn();
 
-/** O nível que `requireGuildAccess` vai conceder no teste da vez. */
+/** O nível que `requireGuildWriteAccess` vai conceder no teste da vez. */
 let level: 'mod' | 'admin' = 'admin';
 
 vi.mock('server-only', () => ({}));
@@ -21,8 +22,8 @@ vi.mock('./internal-api', () => ({
   internalApi: () => ({ sendMessage, deleteMessage, channelMessages }),
 }));
 vi.mock('./auth/require', () => ({
-  requireGuildAccess: (_guildId: string, minimum: 'mod' | 'admin') => {
-    // O `requireGuildAccess` de verdade faz `redirect()`, que lança; o mock
+  requireGuildWriteAccess: (_guildId: string, minimum: 'mod' | 'admin') => {
+    // O `requireGuildWriteAccess` de verdade faz `redirect()`, que lança; o mock
     // imita isso, que é o que importa: a action nunca chega a escrever.
     if (minimum === 'admin' && level !== 'admin') throw new Error('NEXT_REDIRECT');
     return Promise.resolve({
@@ -77,12 +78,13 @@ describe('sendChannelMessage', () => {
   it('recusa @everyone de quem não é admin do painel', async () => {
     level = 'mod';
 
-    await expect(
+    await expectErrorMessage(
       sendChannelMessage(
         GUILD_ID,
         compose({ template: { content: 'ei' }, allowedMentions: { everyone: true } }),
       ),
-    ).rejects.toThrow('NEXT_REDIRECT');
+      'NEXT_REDIRECT',
+    );
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
@@ -136,7 +138,7 @@ describe('deleteChannelMessage', () => {
     formData.set('channelId', CHANNEL);
     formData.set('messageId', MESSAGE);
 
-    await expect(deleteChannelMessage(GUILD_ID, formData)).rejects.toThrow('NEXT_REDIRECT');
+    await expectErrorMessage(deleteChannelMessage(GUILD_ID, formData), 'NEXT_REDIRECT');
     expect(deleteMessage).not.toHaveBeenCalled();
   });
 });

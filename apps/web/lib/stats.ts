@@ -18,7 +18,7 @@ import {
 } from '@goodbot/db';
 import { revalidateTag, unstable_cache } from 'next/cache';
 
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { db } from './db';
 import { internalApi } from './internal-api';
 import {
@@ -60,11 +60,11 @@ export const statsTag = (guildId: string): string => `stats:${guildId}`;
  * desta guild. Sem isto o clique devolveria o mesmo dado de até cinco minutos
  * atrás e pareceria um botão quebrado.
  *
- * Passa por `requireGuildAccess` como qualquer action: invalidar cache dos
+ * Passa por `requireGuildWriteAccess` como qualquer action: invalidar cache dos
  * outros não é escrita, mas também não é assunto de quem não entra na guild.
  */
 export async function refreshGuildData(guildId: string): Promise<void> {
-  await requireGuildAccess(guildId);
+  await requireGuildWriteAccess(guildId);
   // `expire: 0` e não o `'max'` recomendado: com `max` o Next serve o cache
   // velho enquanto revalida atrás, e quem acabou de clicar em "atualizar"
   // veria exatamente o número que o fez clicar. Aqui o próximo pedido espera.

@@ -13,7 +13,7 @@ import { AutomodRuleSchema, DAY_MS, type AutomodRule, type RaidModeState } from 
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { db } from './db';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
@@ -89,7 +89,7 @@ async function invalidate(guildId: string): Promise<string | undefined> {
 
 /** Cria ou edita uma regra. `ruleId` no FormData = edição. */
 export async function saveAutomodRule(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const parsed = AutomodRuleSchema.safeParse(parseBody(formData.get('rule')));
   if (!parsed.success) {
@@ -139,7 +139,7 @@ export async function removeAutomodRule(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const ruleId = formData.get('ruleId');
   if (typeof ruleId !== 'string' || ruleId.length === 0) {
@@ -166,7 +166,7 @@ export async function removeAutomodRule(
 
 /** Botões ▲▼: o cliente manda a lista inteira na ordem nova. */
 export async function reorderAutomod(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const body = parseBody(formData.get('ruleIds'));
   if (!Array.isArray(body) || body.some((id) => typeof id !== 'string')) {
@@ -205,7 +205,7 @@ export async function loadRaidState(guildId: string): Promise<RaidModeState | nu
 }
 
 export async function setRaidMode(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
   const active = formData.get('active') === 'true';
 
   try {

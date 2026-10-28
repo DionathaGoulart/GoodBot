@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { expectErrorMessage } from './test-error';
 
 const GUILD_ID = '100000000000000000';
 const ACTOR = '200000000000000000';
@@ -15,7 +16,7 @@ const channel = vi.fn();
 const withAudit = vi.fn();
 const revalidatePath = vi.fn();
 
-/** O nível que `requireGuildAccess` vai conceder no teste da vez. */
+/** O nível que `requireGuildWriteAccess` vai conceder no teste da vez. */
 let level: 'mod' | 'admin' = 'admin';
 
 vi.mock('server-only', () => ({}));
@@ -39,11 +40,11 @@ vi.mock('./internal-api', () => ({
 }));
 vi.mock('./auth/require', () => ({
   /**
-   * O `requireGuildAccess` de verdade faz `redirect()` quando o nível não
+   * O `requireGuildWriteAccess` de verdade faz `redirect()` quando o nível não
    * basta, e `redirect` lança. O mock imita isso lançando, que é o que importa:
    * a action nunca chega a escrever.
    */
-  requireGuildAccess: (_guildId: string, minimum: 'mod' | 'admin') => {
+  requireGuildWriteAccess: (_guildId: string, minimum: 'mod' | 'admin') => {
     if (minimum === 'admin' && level !== 'admin') throw new Error('NEXT_REDIRECT');
     return Promise.resolve({
       user: { id: ACTOR, name: 'mod#1', image: null },
@@ -93,19 +94,22 @@ describe('nível insuficiente', () => {
   it('mod não cria, não apaga cargo e não mexe em cargos de membro', async () => {
     level = 'mod';
 
-    await expect(
+    await expectErrorMessage(
       saveRole(GUILD_ID, form({ role: JSON.stringify({ name: 'Mod' }) })),
-    ).rejects.toThrow('NEXT_REDIRECT');
-    await expect(removeRole(GUILD_ID, form({ roleId: ROLE }))).rejects.toThrow('NEXT_REDIRECT');
-    await expect(
+      'NEXT_REDIRECT',
+    );
+    await expectErrorMessage(removeRole(GUILD_ID, form({ roleId: ROLE })), 'NEXT_REDIRECT');
+    await expectErrorMessage(
       setMemberRolesAction(
         GUILD_ID,
         form({ userId: ACTOR, roles: JSON.stringify({ add: [ROLE] }) }),
       ),
-    ).rejects.toThrow('NEXT_REDIRECT');
-    await expect(
+      'NEXT_REDIRECT',
+    );
+    await expectErrorMessage(
       setOverrides(GUILD_ID, form({ channelId: CHANNEL, overrides: JSON.stringify([]) })),
-    ).rejects.toThrow('NEXT_REDIRECT');
+      'NEXT_REDIRECT',
+    );
 
     expect(createRole).not.toHaveBeenCalled();
     expect(deleteRole).not.toHaveBeenCalled();

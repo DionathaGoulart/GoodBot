@@ -10,7 +10,7 @@ import {
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildAccess, requireGuildWriteAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -74,7 +74,7 @@ export async function saveSocialAccount(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const parsed = SocialAccountInputSchema.safeParse(parseBody(formData.get('account')));
   if (!parsed.success) {
@@ -116,7 +116,7 @@ export async function removeSocialAccount(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const id = accountId(formData);
   if (!id) return { ok: false, message: 'Conta inválida.' };
@@ -166,7 +166,7 @@ export async function testSocialAccount(
   guildId: string,
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireGuildAccess(guildId, 'admin');
+  await requireGuildWriteAccess(guildId, 'admin');
 
   const id = accountId(formData);
   if (!id) return { ok: false, message: 'Conta inválida.' };

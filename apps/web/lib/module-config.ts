@@ -22,7 +22,7 @@ import {
 import { revalidatePath } from 'next/cache';
 
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { CONFIG_PAGES, type ConfigPage, type ConfigPageValues } from './config-pages';
 import { db } from './db';
 import { internalApi } from './internal-api';
@@ -124,17 +124,21 @@ async function writePage(
 ): Promise<void> {
   if (page === 'general') {
     const { settings, module } = values as GeneralPageValues;
-    await setGuildSettings(db(), guildId, settings);
-    await setModuleConfig(db(), guildId, 'general', module, actorId);
+    await db().transaction(async (tx) => {
+      await setGuildSettings(tx, guildId, settings);
+      await setModuleConfig(tx, guildId, 'general', module, actorId);
+    });
     return;
   }
 
   if (page === 'logs') {
     const { module, kinds } = values as LogsPageValues;
-    await setModuleConfig(db(), guildId, 'logs', module, actorId);
-    for (const kind of LOG_KINDS) {
-      await setLogConfig(db(), guildId, kind, kinds[kind]);
-    }
+    await db().transaction(async (tx) => {
+      await setModuleConfig(tx, guildId, 'logs', module, actorId);
+      for (const kind of LOG_KINDS) {
+        await setLogConfig(tx, guildId, kind, kinds[kind]);
+      }
+    });
     return;
   }
 
@@ -192,7 +196,7 @@ export async function saveModuleConfig(
   page: ConfigPage,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const parsed = CONFIG_PAGES[page].schema.safeParse(parseBody(formData.get('config')));
   if (!parsed.success) {

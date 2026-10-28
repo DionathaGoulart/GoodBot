@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -44,7 +44,7 @@ function roleId(formData: FormData): string | null {
  * hierarquia e chama o Discord é o bot, com o `actorId` da sessão.
  */
 export async function saveRole(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('role'));
   const parsed = RoleWriteInputSchema.safeParse(
@@ -80,7 +80,7 @@ export async function saveRole(guildId: string, formData: FormData): Promise<Act
 }
 
 export async function removeRole(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const id = roleId(formData);
   if (!id) return { ok: false, message: 'Cargo inválido.' };
@@ -105,7 +105,7 @@ export async function removeRole(guildId: string, formData: FormData): Promise<A
 
 /** `▲`/`▼` da tabela: uma casa por clique. */
 export async function moveRole(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const id = roleId(formData);
   if (!id) return { ok: false, message: 'Cargo inválido.' };

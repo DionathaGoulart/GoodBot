@@ -158,13 +158,8 @@ describe('isStale', () => {
 describe('retryAt', () => {
   const now = 1_700_000_000_000;
 
-  it('segura a permissão por mais um minuto e não além', () => {
-    const checkedAt = retryAt(now);
-    expect(isStale(checkedAt, now + ACCESS_RETRY_DELAY_MS)).toBe(false);
-    expect(isStale(checkedAt, now + ACCESS_RETRY_DELAY_MS + 1)).toBe(true);
-  });
-
-  it('não revive uma permissão que já estava velha', () => {
-    expect(isStale(retryAt(now), now)).toBe(false);
+  it('agenda nova tentativa sem mudar a data da última confirmação', () => {
+    expect(retryAt(now)).toBe(now + ACCESS_RETRY_DELAY_MS);
+    expect(isStale(now - ACCESS_CHECK_TTL_MS - 1, now)).toBe(true);
   });
 });

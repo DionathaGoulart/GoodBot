@@ -7,7 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { failure } from './action-error';
 import { withAudit } from './audit';
 import { hasAccess } from './auth/access';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { EXPORT_LIMIT, PAGE_SIZE, filterRange, type CaseFilters } from './case-filters';
 import { csvBody, csvHeader } from './csv';
 import { db } from './db';
@@ -229,7 +229,7 @@ function caseNumberFrom(formData: FormData): number | null {
  * mod-log tem de acompanhar a edição, e só ele fala com o Discord.
  */
 export async function editCaseReason(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'mod');
+  const session = await requireGuildWriteAccess(guildId, 'mod');
 
   const caseNumber = caseNumberFrom(formData);
   if (caseNumber === null) return { ok: false, message: 'Caso inválido.' };
@@ -266,7 +266,7 @@ export async function editCaseReason(guildId: string, formData: FormData): Promi
 
 /** Apagar (soft delete). Só `admin` (PRD §9.2); o caso fica no banco. */
 export async function deleteCase(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const caseNumber = caseNumberFrom(formData);
   if (caseNumber === null) return { ok: false, message: 'Caso inválido.' };
@@ -297,7 +297,7 @@ export async function deleteCase(guildId: string, formData: FormData): Promise<A
  * punição do painel: vira um caso novo, com mod-log e tudo (PRD §6.4).
  */
 export async function undoCase(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'mod');
+  const session = await requireGuildWriteAccess(guildId, 'mod');
 
   const caseNumber = caseNumberFrom(formData);
   if (caseNumber === null) return { ok: false, message: 'Caso inválido.' };

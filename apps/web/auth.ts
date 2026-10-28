@@ -112,7 +112,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
 
         for (const guildId of atendidas) {
           const atual = anterior[guildId];
-          if (atual && !isStale(atual.checkedAt)) {
+          if (
+            atual &&
+            (!isStale(atual.checkedAt) || (atual.retryAfter && atual.retryAfter > Date.now()))
+          ) {
             guilds[guildId] = atual;
             continue;
           }
@@ -130,7 +133,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
             // Sem nível anterior nesta guild não há o que preservar: ela fica
             // de fora do mapa (= sem acesso) e tenta de novo na requisição
             // seguinte. Uma guild que falha não derruba as outras.
-            if (atual) guilds[guildId] = { ...atual, checkedAt: retryAt() };
+            if (atual) guilds[guildId] = { ...atual, retryAfter: retryAt() };
           }
         }
 

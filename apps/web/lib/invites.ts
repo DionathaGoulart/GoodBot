@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { failure } from './action-error';
 import { withAudit } from './audit';
-import { requireGuildAccess } from './auth/require';
+import { requireGuildWriteAccess } from './auth/require';
 import { internalApi } from './internal-api';
 import { toFieldErrors, type ActionResult } from './module-config';
 
@@ -37,7 +37,7 @@ function parseBody(raw: FormDataEntryValue | null): unknown {
 }
 
 export async function createInvite(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const raw = parseBody(formData.get('invite'));
   const parsed = CreateInviteInputSchema.safeParse(
@@ -79,7 +79,7 @@ export async function createInvite(guildId: string, formData: FormData): Promise
 
 /** Revogar um convite. O `before` é o que a auditoria guarda: depois some. */
 export async function deleteInvite(guildId: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireGuildAccess(guildId, 'admin');
+  const session = await requireGuildWriteAccess(guildId, 'admin');
 
   const code = formData.get('code');
   if (typeof code !== 'string' || code === '') return { ok: false, message: 'Convite inválido.' };
