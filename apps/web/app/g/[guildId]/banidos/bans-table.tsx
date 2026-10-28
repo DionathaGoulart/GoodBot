@@ -25,6 +25,7 @@ import { Label } from '@/components/ui/label';
 import type { GuildBanPage, GuildBanSummary } from '@goodbot/shared';
 
 type BanRow = GuildBanSummary & Record<string, unknown>;
+const EMPTY_BANS: GuildBanSummary[] = [];
 
 function DateCell({ value }: { value: string | null }) {
   if (!value) return <span className="screen-meta">—</span>;
@@ -69,7 +70,7 @@ export function BansTable({
   }>({ source: page, extra: [], cursor: page.nextCursor });
 
   const fresh = loaded.source === page;
-  const accumulated = fresh ? loaded.extra : [];
+  const accumulated = fresh ? loaded.extra : EMPTY_BANS;
   const cursor = fresh ? loaded.cursor : page.nextCursor;
 
   const bans = React.useMemo(() => [...page.bans, ...accumulated], [page.bans, accumulated]);

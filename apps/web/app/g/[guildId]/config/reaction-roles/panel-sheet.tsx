@@ -11,7 +11,7 @@ import {
   type ReactionRolePanelInput,
   type ReactionRoleStyle,
 } from '@goodbot/shared';
-import { useFieldArray, useForm, useFormContext } from 'react-hook-form';
+import { useFieldArray, useForm, useFormContext, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { savePanelAction } from '@/app/actions/modules';
@@ -150,7 +150,7 @@ export function PanelSheet({
     disabled: readOnly,
   });
   const [saving, setSaving] = React.useState(false);
-  const style = form.watch('style');
+  const style = useWatch({ control: form.control, name: 'style' });
 
   React.useEffect(() => {
     if (editing) form.reset(editing.panel);

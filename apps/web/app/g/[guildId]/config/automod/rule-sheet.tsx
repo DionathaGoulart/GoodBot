@@ -12,7 +12,7 @@ import {
   type AutomodRule,
   type AutomodRuleType,
 } from '@goodbot/shared';
-import { useFieldArray, useForm, useFormContext } from 'react-hook-form';
+import { useFieldArray, useForm, useFormContext, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { saveAutomodRuleAction } from '@/app/actions/modules';
@@ -349,7 +349,7 @@ export function RuleSheet({
     disabled: readOnly,
   });
   const [saving, setSaving] = React.useState(false);
-  const type = form.watch('type');
+  const type = useWatch({ control: form.control, name: 'type' });
   const lastType = React.useRef<AutomodRuleType | null>(null);
 
   React.useEffect(() => {
