@@ -3,6 +3,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  DiscordAPIError,
+  RESTJSONErrorCodes,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
@@ -230,7 +232,15 @@ export class ReactionRoleService {
 
     const existing =
       panel.messageId && panel.channelId === targetId
-        ? await channel.messages.fetch(panel.messageId).catch(() => null)
+        ? await channel.messages.fetch(panel.messageId).catch((error: unknown) => {
+            if (
+              error instanceof DiscordAPIError &&
+              error.code === RESTJSONErrorCodes.UnknownMessage
+            ) {
+              return null;
+            }
+            throw error;
+          })
         : null;
 
     const message = existing ? await existing.edit(body) : await channel.send(body);

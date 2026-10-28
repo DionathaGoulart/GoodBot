@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, notInArray, sql } from 'drizzle-orm';
 
 import { reactionRoleItems, reactionRolePanels } from '../schema/community';
 import { guilds } from '../schema/guilds';
@@ -153,22 +153,37 @@ export async function clearPanelMessage(
   return row ?? null;
 }
 
-/**
- * Troca a lista de cargos do painel de uma vez. O editor do painel manda a
- * lista inteira, então apagar e reinserir mantém `position` igual à ordem que
- * o usuário vê — reconciliar item a item daria o mesmo resultado com mais
- * chance de divergir.
- */
+/** Concilia por cargo: controles já publicados continuam apontando ao mesmo UUID. */
 export async function replacePanelItems(
   db: DbExecutor,
   panelId: string,
   items: readonly Omit<AddItemInput, 'panelId'>[],
 ): Promise<ReactionRoleItem[]> {
-  await db.delete(reactionRoleItems).where(eq(reactionRoleItems.panelId, panelId));
+  const obsolete = db.delete(reactionRoleItems);
+  await obsolete.where(
+    items.length === 0
+      ? eq(reactionRoleItems.panelId, panelId)
+      : and(
+          eq(reactionRoleItems.panelId, panelId),
+          notInArray(
+            reactionRoleItems.roleId,
+            items.map((item) => item.roleId),
+          ),
+        ),
+  );
   if (items.length === 0) return [];
   return db
     .insert(reactionRoleItems)
     .values(items.map((item, position) => ({ ...item, panelId, position })))
+    .onConflictDoUpdate({
+      target: [reactionRoleItems.panelId, reactionRoleItems.roleId],
+      set: {
+        emoji: sql`excluded.emoji`,
+        label: sql`excluded.label`,
+        description: sql`excluded.description`,
+        position: sql`excluded.position`,
+      },
+    })
     .returning();
 }
 

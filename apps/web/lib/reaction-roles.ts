@@ -90,23 +90,25 @@ export async function savePanel(guildId: string, formData: FormData): Promise<Ac
     }
   }
 
-  const panel = id
-    ? await updatePanel(db(), guildId, id, {
-        channelId: input.channelId,
-        mode: input.mode,
-        style: input.style,
-        content: input.content,
-      })
-    : await createPanel(db(), {
-        guildId,
-        channelId: input.channelId,
-        mode: input.mode,
-        style: input.style,
-        content: input.content,
-      });
+  const panel = await db().transaction(async (tx) => {
+    const updated = id
+      ? await updatePanel(tx, guildId, id, {
+          channelId: input.channelId,
+          mode: input.mode,
+          style: input.style,
+          content: input.content,
+        })
+      : await createPanel(tx, {
+          guildId,
+          channelId: input.channelId,
+          mode: input.mode,
+          style: input.style,
+          content: input.content,
+        });
+    if (updated) await replacePanelItems(tx, updated.id, input.items);
+    return updated;
+  });
   if (!panel) return { ok: false, message: 'Esse painel não existe mais.' };
-
-  await replacePanelItems(db(), panel.id, input.items);
 
   await withAudit(
     { id: session.user.id, tag: session.user.name, guildId: session.guildId },

@@ -104,8 +104,10 @@ function resolveChangeFor(
   }
 
   if (!interaction.isStringSelectMenu()) return null;
-  const selectedRoleIds = interaction.values
-    .map((value) => panel.items.find((row) => row.id === value)?.roleId)
-    .filter((id): id is string => Boolean(id));
+  const selected = interaction.values.map((value) => panel.items.find((row) => row.id === value));
+  // Um menu antigo pode ter IDs removidos após edição. Seleção desconhecida
+  // não significa que o usuário pediu para desmarcar todos os cargos.
+  if (selected.some((item) => !item)) return null;
+  const selectedRoleIds = selected.map((item) => item!.roleId);
   return resolveSelect({ mode: panel.mode, selectedRoleIds, panelRoleIds, currentRoleIds });
 }
