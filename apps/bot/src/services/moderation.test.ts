@@ -1,5 +1,5 @@
 import { DEFAULT_MODERATION_CONFIG, isUserFacingError, MINUTE_MS } from '@goodbot/shared';
-import { Collection } from 'discord.js';
+import { Collection, DiscordAPIError } from 'discord.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ModerationService } from './moderation';
@@ -10,25 +10,63 @@ import type { Case } from '@goodbot/db';
 import type { ModerationConfig } from '@goodbot/shared';
 import type { Client, Guild, GuildMember, User } from 'discord.js';
 
-const { createCase, scheduleAction, softDeleteCase, cancelScheduledActions, countWarnsSince } =
-  vi.hoisted(() => ({
-    createCase: vi.fn(),
-    scheduleAction: vi.fn(),
-    softDeleteCase: vi.fn(),
-    cancelScheduledActions: vi.fn(),
-    countWarnsSince: vi.fn(),
-  }));
+const {
+  createCase,
+  scheduleAction,
+  softDeleteCase,
+  cancelScheduledActionsWithIds,
+  compensateScheduledPunishment,
+  recordPunishmentTransition,
+  isCurrentPunishmentTransition,
+  markPunishmentTransitionApplied,
+  markPunishmentTransitionAttempting,
+  markPunishmentTransitionRejected,
+  markPunishmentTransitionUncertain,
+  countWarnsSince,
+  withPunishmentLock,
+} = vi.hoisted(() => ({
+  createCase: vi.fn(),
+  scheduleAction: vi.fn(),
+  softDeleteCase: vi.fn(),
+  cancelScheduledActionsWithIds: vi.fn(),
+  compensateScheduledPunishment: vi.fn(),
+  recordPunishmentTransition: vi.fn(),
+  isCurrentPunishmentTransition: vi.fn(),
+  markPunishmentTransitionApplied: vi.fn(),
+  markPunishmentTransitionAttempting: vi.fn(),
+  markPunishmentTransitionRejected: vi.fn(),
+  markPunishmentTransitionUncertain: vi.fn(),
+  countWarnsSince: vi.fn(),
+  withPunishmentLock: vi.fn(),
+}));
 
 vi.mock('@goodbot/db', () => ({
   createCase,
   scheduleAction,
   softDeleteCase,
-  cancelScheduledActions,
+  cancelScheduledActionsWithIds,
+  compensateScheduledPunishment,
+  recordPunishmentTransition,
+  isCurrentPunishmentTransition,
+  markPunishmentTransitionApplied,
+  markPunishmentTransitionAttempting,
+  markPunishmentTransitionRejected,
+  markPunishmentTransitionUncertain,
   countWarnsSince,
+  withPunishmentLock,
 }));
 
 const BOT_ID = '100000000000000000';
 const GUILD_ID = '900000000000000000';
+const db = { transaction: (action: (tx: object) => Promise<unknown>) => action({}) };
+
+function discordRejection(status: number): DiscordAPIError {
+  return Object.assign(Object.create(DiscordAPIError.prototype), {
+    status,
+    code: 50013,
+    message: 'Discord recusou a ação',
+  }) as DiscordAPIError;
+}
 
 let caseNumber = 0;
 
@@ -124,7 +162,7 @@ function setup(
   const client = { user: { id: BOT_ID, tag: 'Goodbot#0001' } } as unknown as Client;
 
   return {
-    service: new ModerationService({ db: {} as never, client, config, modlog }),
+    service: new ModerationService({ db: db as never, client, config, modlog }),
     guild,
     actor,
     target,
@@ -136,14 +174,31 @@ function setup(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  db.transaction = (action: (tx: object) => Promise<unknown>) => action({});
   caseNumber = 0;
   createCase.mockImplementation((_db: unknown, input: Record<string, unknown>) =>
     Promise.resolve(fakeCase(input)),
   );
-  scheduleAction.mockResolvedValue(undefined);
+  scheduleAction.mockResolvedValue({ id: 77 });
   softDeleteCase.mockResolvedValue(null);
-  cancelScheduledActions.mockResolvedValue(0);
+  cancelScheduledActionsWithIds.mockResolvedValue([]);
+  compensateScheduledPunishment.mockResolvedValue(undefined);
+  recordPunishmentTransition.mockResolvedValue(88);
+  isCurrentPunishmentTransition.mockResolvedValue(true);
+  markPunishmentTransitionApplied.mockResolvedValue(undefined);
+  markPunishmentTransitionAttempting.mockResolvedValue(true);
+  markPunishmentTransitionRejected.mockResolvedValue(undefined);
+  markPunishmentTransitionUncertain.mockResolvedValue(undefined);
   countWarnsSince.mockResolvedValue(0);
+  withPunishmentLock.mockImplementation(
+    (
+      _db: unknown,
+      _guild: string,
+      _kind: string,
+      _target: string,
+      action: (tx: unknown) => Promise<unknown>,
+    ) => action({}),
+  );
 });
 
 describe('hierarquia', () => {
@@ -170,6 +225,28 @@ describe('hierarquia', () => {
   });
 });
 
+describe('softban parcial', () => {
+  it('preserva o caso e registra estado incerto se o ban funciona e o unban é recusado', async () => {
+    const h = setup();
+    h.bans.remove.mockRejectedValue(discordRejection(403));
+
+    await expect(
+      h.service.softban({ guild: h.guild, target: h.target, actor: h.actor }),
+    ).rejects.toThrow('Softban aplicado parcialmente');
+
+    expect(h.bans.create).toHaveBeenCalledOnce();
+    expect(h.bans.remove).toHaveBeenCalledOnce();
+    expect(softDeleteCase).not.toHaveBeenCalled();
+    expect(markPunishmentTransitionRejected).not.toHaveBeenCalled();
+    expect(markPunishmentTransitionUncertain).toHaveBeenCalledWith(
+      db,
+      88,
+      undefined,
+      expect.stringContaining('Softban aplicado parcialmente'),
+    );
+  });
+});
+
 describe('ban', () => {
   it('cria o caso com expires_at e agenda o unban quando há duração', async () => {
     const h = setup();
@@ -193,7 +270,7 @@ describe('ban', () => {
     const scheduled = scheduleAction.mock.calls[0]![1] as Record<string, unknown>;
     expect(scheduled.kind).toBe('unban');
     expect(scheduled.runAt).toBe(expiresAt);
-    expect(scheduled.payload).toMatchObject({ targetId: h.target.id });
+    expect(scheduled.payload).toMatchObject({ targetId: h.target.id, transitionMarkerId: 88 });
 
     expect(h.bans.create).toHaveBeenCalledOnce();
     expect(h.modlog.postCase).toHaveBeenCalledWith(result.case);
@@ -205,6 +282,41 @@ describe('ban', () => {
 
     expect((createCase.mock.calls[0]![1] as Record<string, unknown>).expiresAt).toBeNull();
     expect(scheduleAction).not.toHaveBeenCalled();
+    expect(cancelScheduledActionsWithIds).toHaveBeenCalledWith(
+      {},
+      { guildId: GUILD_ID, kind: 'unban', targetId: h.target.id },
+    );
+  });
+
+  it('prepara o cancelamento e novo prazo antes do efeito no Discord', async () => {
+    const h = setup();
+    const order: string[] = [];
+    h.bans.create.mockImplementation(() => {
+      order.push('discord');
+      return Promise.resolve();
+    });
+    cancelScheduledActionsWithIds.mockImplementation(() => {
+      order.push('cancel');
+      return Promise.resolve([1]);
+    });
+    scheduleAction.mockImplementation(() => {
+      order.push('schedule');
+      return Promise.resolve();
+    });
+
+    await h.service.ban({ guild: h.guild, target: h.target, actor: h.actor, durationMs: 60_000 });
+    expect(order).toEqual(['cancel', 'schedule', 'discord']);
+  });
+
+  it('falha ao agendar impede aplicar a punição no Discord', async () => {
+    const h = setup();
+    scheduleAction.mockRejectedValueOnce(new Error('banco indisponível'));
+
+    await expect(
+      h.service.ban({ guild: h.guild, target: h.target, actor: h.actor, durationMs: 60_000 }),
+    ).rejects.toThrow('banco indisponível');
+    expect(h.bans.create).not.toHaveBeenCalled();
+    expect(softDeleteCase).toHaveBeenCalledOnce();
   });
 
   it('usa o motivo padrão da config quando nenhum é informado', async () => {
@@ -216,16 +328,107 @@ describe('ban', () => {
     );
   });
 
-  it('apaga o caso quando a ação no Discord falha', async () => {
+  it('compensa a fila e apaga o caso quando o Discord rejeita definitivamente', async () => {
     const h = setup();
-    h.bans.create.mockRejectedValueOnce(new Error('403'));
+    h.bans.create.mockRejectedValueOnce(discordRejection(403));
+    cancelScheduledActionsWithIds.mockResolvedValueOnce([42]);
 
     await expect(
-      h.service.ban({ guild: h.guild, target: h.target, actor: h.actor }),
+      h.service.ban({ guild: h.guild, target: h.target, actor: h.actor, durationMs: 60_000 }),
     ).rejects.toThrow();
 
     expect(createCase).toHaveBeenCalledOnce();
-    expect(softDeleteCase).toHaveBeenCalledWith({}, GUILD_ID, 1);
+    expect(compensateScheduledPunishment).toHaveBeenCalledWith({}, [42], 77);
+    expect(markPunishmentTransitionRejected).toHaveBeenCalledWith({}, 88);
+    expect(softDeleteCase).toHaveBeenCalledWith(db, GUILD_ID, 1);
+  });
+
+  it('confirma a transição no banco antes de chamar o Discord', async () => {
+    const h = setup();
+    let commits = 0;
+    withPunishmentLock.mockImplementation(
+      async (
+        _db: unknown,
+        _guild: string,
+        _kind: string,
+        _target: string,
+        action: (tx: object) => Promise<unknown>,
+      ) => {
+        const result = await action({});
+        commits++;
+        return result;
+      },
+    );
+    h.bans.create.mockImplementation(() => {
+      expect(commits).toBe(2);
+      return Promise.resolve();
+    });
+    await h.service.ban({ guild: h.guild, target: h.target, actor: h.actor, durationMs: 60_000 });
+  });
+
+  it('falha no commit da transição impede o efeito no Discord', async () => {
+    const h = setup();
+    withPunishmentLock.mockImplementationOnce(
+      async (
+        _db: unknown,
+        _guild: string,
+        _kind: string,
+        _target: string,
+        action: (tx: object) => Promise<unknown>,
+      ) => {
+        await action({});
+        throw new Error('commit falhou');
+      },
+    );
+    await expect(
+      h.service.ban({ guild: h.guild, target: h.target, actor: h.actor, durationMs: 60_000 }),
+    ).rejects.toThrow('commit falhou');
+    expect(h.bans.create).not.toHaveBeenCalled();
+  });
+
+  it('timeout REST ambíguo conserva caso e agendamento para reconciliação', async () => {
+    const h = setup();
+    h.bans.create.mockRejectedValueOnce(new Error('timeout de rede'));
+    await expect(
+      h.service.ban({ guild: h.guild, target: h.target, actor: h.actor, durationMs: 60_000 }),
+    ).rejects.toThrow('timeout de rede');
+    expect(compensateScheduledPunishment).not.toHaveBeenCalled();
+    expect(markPunishmentTransitionUncertain).toHaveBeenCalledWith(db, 88, 77, 'timeout de rede');
+    expect(softDeleteCase).not.toHaveBeenCalled();
+  });
+
+  it('requisição superada antes do REST não aplica punição antiga', async () => {
+    const h = setup();
+    isCurrentPunishmentTransition.mockResolvedValueOnce(false).mockResolvedValueOnce(false);
+    await expect(
+      h.service.ban({ guild: h.guild, target: h.target, actor: h.actor, durationMs: 60_000 }),
+    ).rejects.toThrow('Punição substituída');
+    expect(h.bans.create).not.toHaveBeenCalled();
+    expect(markPunishmentTransitionApplied).not.toHaveBeenCalled();
+    expect(softDeleteCase).toHaveBeenCalledOnce();
+  });
+
+  it('falha antes do REST compensa o prazo anterior se a transição ainda for atual', async () => {
+    const h = setup();
+    cancelScheduledActionsWithIds.mockResolvedValueOnce([42]);
+    withPunishmentLock
+      .mockImplementationOnce(
+        (
+          _db: unknown,
+          _guild: string,
+          _kind: string,
+          _target: string,
+          action: (tx: object) => Promise<unknown>,
+        ) => action({}),
+      )
+      .mockRejectedValueOnce(new Error('falha ao abrir fase 2'));
+    await expect(
+      h.service.ban({ guild: h.guild, target: h.target, actor: h.actor, durationMs: 60_000 }),
+    ).rejects.toThrow('falha ao abrir fase 2');
+    expect(h.bans.create).not.toHaveBeenCalled();
+    expect(compensateScheduledPunishment).toHaveBeenCalledWith({}, [42], 77);
+    expect(markPunishmentTransitionRejected).toHaveBeenCalledWith({}, 88);
+    expect(softDeleteCase).toHaveBeenCalledOnce();
   });
 });
 
@@ -256,6 +459,10 @@ describe('timeout', () => {
 
     expect((scheduleAction.mock.calls[0]![1] as Record<string, unknown>).kind).toBe('untimeout');
     expect(h.targetMember.timeout).toHaveBeenCalledWith(10 * MINUTE_MS, expect.any(String));
+    expect(cancelScheduledActionsWithIds).toHaveBeenCalledWith(
+      {},
+      { guildId: GUILD_ID, kind: 'untimeout', targetId: h.target.id },
+    );
   });
 });
 
@@ -360,7 +567,7 @@ describe('unban', () => {
     await h.service.unban({ guild: h.guild, target: h.target, actor: h.actor, reason: 'perdão' });
 
     expect(h.bans.remove).toHaveBeenCalledOnce();
-    expect(cancelScheduledActions).toHaveBeenCalledWith(
+    expect(cancelScheduledActionsWithIds).toHaveBeenCalledWith(
       {},
       {
         guildId: GUILD_ID,

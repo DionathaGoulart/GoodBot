@@ -1,5 +1,15 @@
-import { deleteChannelLock, getChannelLock, listChannelLocks, saveChannelLock } from '@goodbot/db';
-import { OverwriteType, PermissionFlagsBits } from 'discord.js';
+import {
+  cancelScheduledChannelUnlocks,
+  deleteChannelLock,
+  getChannelLock,
+  listChannelLocks,
+  markChannelLockApplied,
+  saveChannelLock,
+  scheduleAction,
+  withChannelLock,
+} from '@goodbot/db';
+import { UserFacingError } from '@goodbot/shared';
+import { DiscordAPIError, OverwriteType, PermissionFlagsBits } from 'discord.js';
 
 import { botFooter, infoEmbed, warningEmbed } from '../lib/embeds';
 import {
@@ -9,6 +19,7 @@ import {
   snapshotOverwrites,
 } from '../lib/overwrites';
 
+import type { AlertService } from './alerts';
 import type { ChannelLock, Db } from '@goodbot/db';
 import type { AnyThreadChannel, GuildBasedChannel } from 'discord.js';
 
@@ -36,10 +47,24 @@ export interface LockInput {
   roleIds: readonly string[];
   actorId: string;
   reason: string;
+  durationMs?: number;
 }
 
 export type LockOutcome = 'locked' | 'already-locked';
 export type UnlockOutcome = 'unlocked' | 'not-locked';
+
+export class UnconfirmedChannelLockError extends UserFacingError {
+  constructor(
+    readonly guildId: string,
+    readonly channelId: string,
+    readonly lockId: number,
+  ) {
+    super(
+      'Lock sem confirmação. Verifique os overwrites; para restaurar o snapshot antigo use /unlock com confirmar-pendente.',
+      { code: 'LOCK_UNCONFIRMED' },
+    );
+  }
+}
 
 /**
  * Lock e unlock de canais com restauração exata. O snapshot dos overwrites
@@ -47,7 +72,10 @@ export type UnlockOutcome = 'unlocked' | 'not-locked';
  * `SendMessages` a quem nunca teve a permissão.
  */
 export class LockService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly alerts?: Pick<AlertService, 'emit'>,
+  ) {}
 
   async isLocked(guildId: string, channelId: string): Promise<boolean> {
     return (await getChannelLock(this.db, guildId, channelId)) !== null;
@@ -59,52 +87,134 @@ export class LockService {
 
   async lock(input: LockInput): Promise<LockOutcome> {
     const { channel, roleIds } = input;
-    // O insert só passa se ainda não havia lock: um segundo `/lock` não pode
-    // sobrescrever o snapshot com os overwrites já trancados.
-    const saved = await saveChannelLock(this.db, {
-      guildId: input.guildId,
-      channelId: channel.id,
-      roleIds: [...roleIds],
-      overwrites: snapshotOverwrites(channel, roleIds),
-      lockedBy: input.actorId,
-      reason: input.reason,
+    // Fase 1: o snapshot e o unlock temporário ficam duráveis antes do REST.
+    // Uma queda/timeout após o Discord aceitar a chamada não os apaga.
+    const saved = await withChannelLock(this.db, input.guildId, channel.id, async (tx) => {
+      const saved = await saveChannelLock(tx, {
+        guildId: input.guildId,
+        channelId: channel.id,
+        roleIds: [...roleIds],
+        overwrites: snapshotOverwrites(channel, roleIds),
+        lockedBy: input.actorId,
+        reason: input.reason,
+      });
+      if (!saved) return null;
+
+      if (input.durationMs) {
+        await scheduleAction(tx, {
+          guildId: input.guildId,
+          kind: 'unlock',
+          runAt: new Date(Date.now() + input.durationMs),
+          payload: { channelId: channel.id, lockId: saved.id },
+        });
+      }
+      return saved;
     });
     if (!saved) return 'already-locked';
 
-    let next = currentOverwrites(channel);
-    for (const roleId of roleIds) {
-      next = denyOverwriteBits(next, {
-        id: roleId,
-        type: OverwriteType.Role,
-        bits: LOCK_PERMISSIONS,
-      });
-    }
-
+    // Fase 2: unlock concorrente pode ter encerrado a reserva entre as fases.
+    // Revalidar o ID sob o mesmo mutex impede aplicar um lock já cancelado.
+    let rejected: unknown;
+    let attempted = false;
     try {
-      await channel.permissionOverwrites.set(next, input.reason);
+      const outcome = await withChannelLock<LockOutcome>(
+        this.db,
+        input.guildId,
+        channel.id,
+        async (tx) => {
+          const current = await getChannelLock(tx, input.guildId, channel.id);
+          if (current?.id !== saved.id) {
+            throw new Error('Lock encerrado antes de ser aplicado');
+          }
+          let next = currentOverwrites(channel);
+          for (const roleId of roleIds) {
+            next = denyOverwriteBits(next, {
+              id: roleId,
+              type: OverwriteType.Role,
+              bits: LOCK_PERMISSIONS,
+            });
+          }
+
+          try {
+            attempted = true;
+            await channel.permissionOverwrites.set(next, input.reason);
+          } catch (error) {
+            // 4xx confirma que nenhum overwrite foi aplicado. Timeout/5xx são
+            // ambíguos: o snapshot permanece para reconciliação manual.
+            if (isDefinitiveDiscordRejection(error)) {
+              await deleteChannelLock(tx, input.guildId, channel.id, saved.id);
+              await cancelScheduledChannelUnlocks(tx, input.guildId, channel.id, saved.id);
+              rejected = error;
+              return 'already-locked';
+            }
+            throw error;
+          }
+          await markChannelLockApplied(tx, saved.id);
+          return 'locked';
+        },
+      );
+      if (rejected) throw rejected;
+      return outcome;
     } catch (error) {
-      // Sem overwrite aplicado não há lock: some com a linha para o próximo
-      // `/lock` poder tentar de novo com o snapshot certo.
-      await deleteChannelLock(this.db, input.guildId, channel.id);
+      if (attempted && !rejected) {
+        this.alerts?.emit({
+          kind: `lock-uncertain:${input.guildId}:${channel.id}:${saved.id}`,
+          title: 'Lock com estado incerto',
+          level: 'danger',
+          description:
+            'Verifique os overwrites no Discord e o snapshot no banco antes de restaurar. O unlock automático não restaurará este lock sem confirmação.',
+          fields: [
+            { name: 'Servidor', value: input.guildId },
+            { name: 'Canal', value: channel.id },
+            { name: 'Lock', value: String(saved.id) },
+          ],
+        });
+      }
       throw error;
     }
-    return 'locked';
   }
 
   async unlock(input: {
     guildId: string;
     channel: LockableChannel;
     reason: string;
+    /** Unlock agendado só pode atuar sobre a instância que o originou. */
+    expectedLockId?: number;
+    /** Recuperação explícita após conferir os overwrites no Discord. */
+    confirmPending?: boolean;
   }): Promise<UnlockOutcome> {
-    const lock = await deleteChannelLock(this.db, input.guildId, input.channel.id);
-    if (!lock) return 'not-locked';
+    return withChannelLock(this.db, input.guildId, input.channel.id, async (tx) => {
+      const lock = await getChannelLock(tx, input.guildId, input.channel.id);
+      if (!lock || (input.expectedLockId !== undefined && lock.id !== input.expectedLockId)) {
+        return 'not-locked';
+      }
+      if (lock.appliedAt === null && !input.confirmPending) {
+        throw new UnconfirmedChannelLockError(input.guildId, input.channel.id, lock.id);
+      }
 
-    // Id sem snapshot não tinha overwrite antes do lock: o restore o omite, e
-    // é isso que apaga o overwrite que o próprio lock criou.
-    const next = restoreOverwrites(currentOverwrites(input.channel), lock.roleIds, lock.overwrites);
-    await input.channel.permissionOverwrites.set(next, input.reason);
-    return 'unlocked';
+      // Id sem snapshot não tinha overwrite antes do lock: o restore o omite.
+      // O snapshot só sai após a restauração confirmada pelo Discord.
+      const next = restoreOverwrites(
+        currentOverwrites(input.channel),
+        lock.roleIds,
+        lock.overwrites,
+      );
+      await input.channel.permissionOverwrites.set(next, input.reason);
+      const removed = await deleteChannelLock(tx, input.guildId, input.channel.id, lock.id);
+      if (!removed) throw new Error('Lock alterado durante a restauração');
+      await cancelScheduledChannelUnlocks(tx, input.guildId, input.channel.id, lock.id);
+      return 'unlocked';
+    });
   }
+}
+
+function isDefinitiveDiscordRejection(error: unknown): boolean {
+  return (
+    error instanceof DiscordAPIError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 429
+  );
 }
 
 /**

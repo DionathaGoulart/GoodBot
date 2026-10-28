@@ -1,7 +1,36 @@
+import { scheduleAction } from '@goodbot/db';
 import { AutoroleConfigSchema } from '@goodbot/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { selectAutoroleIds } from './autorole';
+import { AutoroleService, selectAutoroleIds } from './autorole';
+
+vi.mock('@goodbot/db', () => ({ scheduleAction: vi.fn() }));
+
+it('persiste mesmo atraso curto para sobreviver ao restart', async () => {
+  const service = new AutoroleService({
+    db: {} as never,
+    config: {
+      get: vi
+        .fn()
+        .mockResolvedValue(
+          AutoroleConfigSchema.parse({
+            enabled: true,
+            delaySeconds: 10,
+            humanRoleIds: ['111111111111111111'],
+          }),
+        ),
+    } as never,
+  });
+  await service.onJoin({ id: 'member', guild: { id: 'guild' }, user: { bot: false } } as never);
+  expect(scheduleAction).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({
+      kind: 'autorole',
+      payload: { targetId: 'member' },
+      runAt: expect.any(Date),
+    }),
+  );
+});
 
 const config = (input: Record<string, unknown>) => AutoroleConfigSchema.parse(input);
 

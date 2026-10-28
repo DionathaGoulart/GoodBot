@@ -1,12 +1,28 @@
-import { claimDueActions, completeReminder, createCase, getReminder } from '@goodbot/db';
+import {
+  claimDueActions,
+  completeReminder,
+  completeScheduledAction,
+  createCase,
+  failScheduledAction,
+  getReminder,
+  isScheduledActionActive,
+  listStalePendingChannelLocks,
+  markReminderSendAttempt,
+  markScheduledUndoAttempting,
+  markStaleScheduledUndos,
+  markStalePunishmentTransitions,
+  markStaleReminderDeliveries,
+  withPunishmentLock,
+} from '@goodbot/db';
 import { DEFAULT_REASON, SECOND_MS } from '@goodbot/shared';
+import { DiscordAPIError } from 'discord.js';
 
 import { botFooter, code, infoEmbed } from '../lib/embeds';
 import { logEmbed } from '../lib/log-embeds';
 import { childLogger } from '../logger';
-import { announceLock, isLockable } from './locks';
-import { fetchMember } from './moderation';
+import { UnconfirmedChannelLockError, announceLock, isLockable } from './locks';
 
+import type { AlertService } from './alerts';
 import type { AutoroleService } from './autorole';
 import type { ConfigService } from './config';
 import type { LockService } from './locks';
@@ -17,6 +33,10 @@ import type { CaseType } from '@goodbot/shared';
 import type { Client } from 'discord.js';
 
 const log = childLogger('scheduler');
+
+class ReminderDeliveryUncertainError extends Error {}
+class ReminderClaimLostError extends Error {}
+class PunishmentUndoUncertainError extends Error {}
 
 /** Poll a cada 30 s na tabela, sem cron externo (PRD §5.1). */
 export const SCHEDULER_INTERVAL_MS = 30 * SECOND_MS;
@@ -52,6 +72,7 @@ interface ActionPayload {
   caseNumber?: number;
   /** `unlock`. */
   channelId?: string;
+  lockId?: number;
   /** `reminder`. */
   reminderId?: number;
   /** `poll_close`. */
@@ -66,6 +87,7 @@ export interface SchedulerDeps {
   locks: LockService;
   polls: PollService;
   autorole: AutoroleService;
+  alerts?: Pick<AlertService, 'emit'>;
   /** Sobrescreve o intervalo (testes e dev). */
   intervalMs?: number;
   /** Quantas ações uma passada processa. */
@@ -75,9 +97,8 @@ export interface SchedulerDeps {
 /**
  * Executa o que foi agendado: desfazer punições temporárias, destrancar
  * canais, entregar lembretes, encerrar enquetes e aplicar o autorole atrasado.
- * As ações são tomadas em lote com `for update skip locked` e já marcadas
- * como feitas; falha de execução vira log e não retentativa infinita (ver
- * `claimDueActions`).
+ * Cada ação recebe um lease recuperável; só é concluída após o efeito. Falhas
+ * transitórias têm espera progressiva, com limite e estado terminal visível.
  */
 export class Scheduler {
   private readonly deps: SchedulerDeps;
@@ -108,18 +129,98 @@ export class Scheduler {
     // Uma passada lenta (rate limit do Discord) não pode empilhar passadas.
     if (this.running) return 0;
     this.running = true;
+    let processed = 0;
     try {
-      const actions = await claimDueActions(this.deps.db, {
-        kinds: HANDLED_KINDS,
-        limit: this.deps.batchSize ?? 25,
-      });
-      for (const action of actions) {
-        await this.run(action);
+      const stale = await markStalePunishmentTransitions(this.deps.db);
+      for (const marker of stale) {
+        log.error(
+          { markerId: marker.id, guildId: marker.guildId, payload: marker.payload },
+          'punição preparada sem confirmação; reconciliação manual necessária',
+        );
+        this.deps.alerts?.emit({
+          kind: `moderation-stale:${marker.id}`,
+          title: 'Punição preparada sem confirmação',
+          level: 'danger',
+          description:
+            'Confira o estado no Discord e reconcilie o caso e a tarefa agendada no banco. O bot não fará o desfazimento automaticamente.',
+          fields: [
+            { name: 'Servidor', value: marker.guildId },
+            { name: 'Alvo', value: String(marker.payload.targetId ?? 'desconhecido') },
+            { name: 'Marcador', value: String(marker.id) },
+          ],
+        });
       }
-      return actions.length;
+      const uncertainReminders = await markStaleReminderDeliveries(this.deps.db);
+      for (const reminder of uncertainReminders) {
+        log.error(
+          { actionId: reminder.id, guildId: reminder.guildId, payload: reminder.payload },
+          'lembrete com entrega incerta; reenvio automático suspenso',
+        );
+        this.deps.alerts?.emit({
+          kind: `reminder-uncertain:${reminder.id}`,
+          title: 'Entrega de lembrete incerta',
+          level: 'warning',
+          description:
+            'Verifique o histórico do canal ou DM antes de reenviar. O bot suspendeu o reenvio para evitar mensagem duplicada.',
+          fields: [
+            { name: 'Servidor', value: reminder.guildId },
+            { name: 'Ação', value: String(reminder.id) },
+            { name: 'Lembrete', value: String(reminder.payload.reminderId ?? 'desconhecido') },
+          ],
+        });
+      }
+      const uncertainUndos = await markStaleScheduledUndos(this.deps.db);
+      for (const undo of uncertainUndos) {
+        this.deps.alerts?.emit({
+          kind: `punishment-undo-uncertain:${undo.id}`,
+          title: 'Reversão de punição pendente de conferência',
+          level: 'danger',
+          description:
+            'O processo caiu após registrar início da chamada ao Discord. Confira o estado do alvo antes de reexecutar.',
+          fields: [
+            { name: 'Servidor', value: undo.guildId },
+            { name: 'Ação', value: String(undo.id) },
+            { name: 'Alvo', value: String(undo.payload.targetId ?? 'desconhecido') },
+          ],
+        });
+      }
+      const pendingLocks = await listStalePendingChannelLocks(
+        this.deps.db,
+        new Date(Date.now() - 10 * 60_000),
+      );
+      for (const lock of pendingLocks) {
+        log.error(
+          { guildId: lock.guildId, channelId: lock.channelId, lockId: lock.id },
+          'lock reservado sem confirmação no Discord',
+        );
+        this.deps.alerts?.emit({
+          kind: `lock-pending:${lock.id}`,
+          title: 'Lock pendente de reconciliação',
+          level: 'danger',
+          description:
+            'Verifique os overwrites no Discord. O unlock automático foi bloqueado; use unlock manual após confirmar o estado.',
+          fields: [
+            { name: 'Servidor', value: lock.guildId },
+            { name: 'Canal', value: lock.channelId },
+            { name: 'Lock', value: String(lock.id) },
+          ],
+        });
+      }
+      // Reservar de uma em uma impede que a última ação de um lote lento
+      // perca seu lease antes de começar a execução.
+      for (let i = 0; i < (this.deps.batchSize ?? 25); i++) {
+        const [action] = await claimDueActions(this.deps.db, {
+          kinds: HANDLED_KINDS,
+          limit: 1,
+        });
+        if (!action) break;
+        await this.run(action);
+        processed++;
+      }
+      return processed;
     } catch (error) {
       log.error({ err: error }, 'falha na passada do scheduler');
-      return 0;
+      return processed;
     } finally {
       this.running = false;
     }
@@ -129,11 +230,12 @@ export class Scheduler {
     const kind = action.kind as HandledKind;
     const payload = action.payload as ActionPayload;
     try {
+      if (!action.claimToken) throw new Error('Ação sem token de reserva');
       switch (kind) {
         case 'unban':
         case 'untimeout':
           await this.undoPunishment(action, kind, payload);
-          break;
+          return;
         case 'unlock':
           await this.unlockChannel(action, payload);
           break;
@@ -147,8 +249,73 @@ export class Scheduler {
           await this.applyAutorole(action, payload);
           break;
       }
+      await completeScheduledAction(this.deps.db, action.id, action.claimToken);
     } catch (error) {
-      log.error({ err: error, actionId: action.id, kind }, 'falha ao executar ação');
+      if (error instanceof ReminderDeliveryUncertainError) {
+        this.deps.alerts?.emit({
+          kind: `reminder-uncertain:${action.id}`,
+          title: 'Lembrete com entrega incerta',
+          level: 'danger',
+          description:
+            'A janela de deduplicação expirou. Verifique o destino no Discord antes de reenviar.',
+          fields: [
+            { name: 'Servidor', value: action.guildId },
+            { name: 'Ação', value: String(action.id) },
+          ],
+        });
+      }
+      if (error instanceof PunishmentUndoUncertainError) {
+        this.deps.alerts?.emit({
+          kind: `punishment-undo-uncertain:${action.id}`,
+          title: 'Reversão de punição requer conferência',
+          level: 'danger',
+          description:
+            'O Discord pode ter aceitado a reversão, mas a confirmação ou o caso falhou. Confira Discord e banco antes de repetir.',
+          fields: [
+            { name: 'Servidor', value: action.guildId },
+            { name: 'Ação', value: String(action.id) },
+            { name: 'Alvo', value: String(action.payload.targetId ?? 'desconhecido') },
+          ],
+        });
+      }
+      const outcome = action.claimToken
+        ? await failScheduledAction(this.deps.db, {
+            id: action.id,
+            claimToken: action.claimToken,
+            attempts:
+              error instanceof UnconfirmedChannelLockError ||
+              error instanceof PunishmentUndoUncertainError
+                ? 8
+                : action.attempts,
+            error: error instanceof Error ? error.message : 'Erro desconhecido',
+          })
+        : 'terminal';
+      log.error(
+        { err: error, actionId: action.id, kind, attempts: action.attempts, outcome },
+        'falha ao executar ação agendada',
+      );
+      if (outcome === 'terminal') {
+        this.deps.alerts?.emit({
+          kind: `scheduled-action-terminal:${action.id}`,
+          title: 'Ação agendada requer intervenção',
+          level: 'danger',
+          description:
+            error instanceof UnconfirmedChannelLockError
+              ? 'Lock sem confirmação de aplicação. Verifique os overwrites e o snapshot antes de restaurar manualmente.'
+              : 'Tentativas esgotadas. Verifique o estado no Discord e no banco antes de repetir.',
+          fields: [
+            { name: 'Servidor', value: action.guildId },
+            { name: 'Ação', value: String(action.id) },
+            { name: 'Tipo', value: kind },
+            ...(error instanceof UnconfirmedChannelLockError
+              ? [
+                  { name: 'Canal', value: error.channelId },
+                  { name: 'Lock', value: String(error.lockId) },
+                ]
+              : []),
+          ],
+        });
+      }
     }
   }
 
@@ -160,49 +327,124 @@ export class Scheduler {
     const targetId = payload.targetId;
     if (!targetId) {
       log.warn({ actionId: action.id, kind }, 'ação agendada sem targetId');
+      if (action.claimToken)
+        await completeScheduledAction(this.deps.db, action.id, action.claimToken);
       return;
     }
 
-    const guild = await this.deps.client.guilds.fetch(action.guildId);
-    const bot = this.deps.client.user;
     const reason = REASON_BY_KIND[kind];
-    let targetTag = payload.targetTag ?? targetId;
-
-    if (kind === 'unban') {
-      const ban = await guild.bans.fetch(targetId).catch(() => null);
-      // Alguém já desbaniu na mão: nada a desfazer, e nenhum caso a criar.
-      if (!ban) {
-        log.debug({ actionId: action.id, targetId }, 'usuário já não estava banido');
-        return;
-      }
-      targetTag = ban.user.tag;
-      await guild.bans.remove(targetId, reason);
-    } else {
-      const member = await fetchMember(guild, targetId);
-      if (!member) {
-        log.debug({ actionId: action.id, targetId }, 'membro saiu antes do timeout expirar');
-        return;
-      }
-      targetTag = member.user.tag;
-      // O Discord já expirou o timeout sozinho; isto só garante o estado.
-      if (member.communicationDisabledUntil) {
-        await member.timeout(null, reason);
-      }
+    // Falhas de leitura acontecem antes do marcador e continuam recuperáveis.
+    const preflightGuild = await this.deps.client.guilds.fetch(action.guildId);
+    try {
+      if (kind === 'unban') await preflightGuild.bans.fetch(targetId);
+      else await preflightGuild.members.fetch({ user: targetId, force: true });
+    } catch (error) {
+      if (!isUnknownDiscordResource(error, kind === 'unban' ? 10026 : 10007)) throw error;
     }
+    // Commit separado antes do REST: uma queda não reivindica a reversão outra vez.
+    if (
+      !action.claimToken ||
+      !(await withPunishmentLock(this.deps.db, action.guildId, kind, targetId, (tx) =>
+        markScheduledUndoAttempting(tx, action.id, action.claimToken!),
+      ))
+    )
+      return;
+    let effectStarted = false;
+    let targetTag: string | null;
+    try {
+      targetTag = await withPunishmentLock(
+        this.deps.db,
+        action.guildId,
+        kind,
+        targetId,
+        async (tx) => {
+          // Mesmo que a tarefa tenha sido reservada antes de uma renovação, o
+          // novo caso pode tê-la cancelado enquanto esperava este advisory lock.
+          if (
+            !action.claimToken ||
+            !(await isScheduledActionActive(tx, action.id, action.claimToken))
+          ) {
+            return null;
+          }
 
-    const kase = await createCase(this.deps.db, {
-      guildId: action.guildId,
-      type: CASE_TYPE_BY_KIND[kind],
-      targetId,
-      targetTag,
-      actorId: bot?.id ?? this.deps.client.application?.id ?? targetId,
-      actorTag: bot?.tag ?? 'Goodbot',
-      reason: reason || DEFAULT_REASON,
-      durationMs: null,
-      expiresAt: null,
-      source: 'command',
-    });
-    await this.deps.modlog.postCase(kase);
+          const guild = await this.deps.client.guilds.fetch(action.guildId);
+          if (kind === 'unban') {
+            let ban;
+            try {
+              ban = await guild.bans.fetch(targetId);
+            } catch (error) {
+              if (isUnknownDiscordResource(error, 10026)) {
+                await completeScheduledAction(tx, action.id, action.claimToken!);
+                return null;
+              }
+              throw error;
+            }
+            effectStarted = true;
+            await guild.bans.remove(targetId, reason);
+            if (!(await completeScheduledAction(tx, action.id, action.claimToken!)))
+              throw new Error('Reversão sem confirmação da tarefa');
+            return ban.user.tag;
+          }
+
+          let member;
+          try {
+            member = await guild.members.fetch({ user: targetId, force: true });
+          } catch (error) {
+            if (isUnknownDiscordResource(error, 10007)) {
+              await completeScheduledAction(tx, action.id, action.claimToken!);
+              return null;
+            }
+            throw error;
+          }
+          // Timeout renovado externamente: nunca desfazer o prazo mais recente.
+          if (
+            member.communicationDisabledUntil &&
+            member.communicationDisabledUntil.getTime() > action.runAt.getTime() + 2_000
+          ) {
+            await completeScheduledAction(tx, action.id, action.claimToken!);
+            return null;
+          }
+          // O Discord pode já ter expirado o timeout nativo.
+          if (member.communicationDisabledUntil) {
+            effectStarted = true;
+            await member.timeout(null, reason);
+          }
+          if (!(await completeScheduledAction(tx, action.id, action.claimToken!)))
+            throw new Error('Reversão sem confirmação da tarefa');
+          return member.user.tag;
+        },
+      );
+    } catch (error) {
+      throw new PunishmentUndoUncertainError(
+        effectStarted
+          ? 'Reversão Discord sem confirmação no banco'
+          : 'Reversão iniciada sem confirmação do resultado',
+        { cause: error },
+      );
+    }
+    if (targetTag === null) return;
+
+    const bot = this.deps.client.user;
+    let kase;
+    try {
+      kase = await createCase(this.deps.db, {
+        guildId: action.guildId,
+        type: CASE_TYPE_BY_KIND[kind],
+        targetId,
+        targetTag,
+        actorId: bot?.id ?? this.deps.client.application?.id ?? targetId,
+        actorTag: bot?.tag ?? 'Goodbot',
+        reason: reason || DEFAULT_REASON,
+        durationMs: null,
+        expiresAt: null,
+        source: 'command',
+      });
+      await this.deps.modlog.postCase(kase);
+    } catch (error) {
+      throw new PunishmentUndoUncertainError('Reversão concluída; caso ou modlog pendente', {
+        cause: error,
+      });
+    }
 
     log.info(
       { actionId: action.id, kind, targetId, caseNumber: kase.caseNumber },
@@ -212,13 +454,19 @@ export class Scheduler {
 
   /** `/lock` com duração: devolve os overwrites originais na hora marcada. */
   private async unlockChannel(action: ScheduledAction, payload: ActionPayload): Promise<void> {
-    const channelId = payload.channelId;
-    if (!channelId) {
-      log.warn({ actionId: action.id }, 'unlock agendado sem channelId');
+    const { channelId, lockId } = payload;
+    if (!channelId || !Number.isSafeInteger(lockId)) {
+      log.warn({ actionId: action.id }, 'unlock agendado sem identidade do lock');
       return;
     }
     const guild = await this.deps.client.guilds.fetch(action.guildId);
-    const channel = await guild.channels.fetch(channelId).catch(() => null);
+    let channel;
+    try {
+      channel = await guild.channels.fetch(channelId);
+    } catch (error) {
+      if (isUnknownDiscordResource(error, 10003)) return;
+      throw error;
+    }
     if (!isLockable(channel)) {
       log.debug({ actionId: action.id, channelId }, 'canal do unlock não existe mais');
       return;
@@ -228,6 +476,7 @@ export class Scheduler {
       guildId: action.guildId,
       channel,
       reason: AUTO_UNLOCK_REASON,
+      expectedLockId: lockId,
     });
     // Um `/unlock` manual antes da hora já resolveu: nada a anunciar.
     if (outcome === 'not-locked') return;
@@ -277,19 +526,42 @@ export class Scheduler {
       },
       settings.embedColor,
     );
+    // Uma ação reclamada novamente após crash usa o mesmo nonce. O Discord
+    // deduplica dentro de uma janela curta; a fila usa lease de 90s aqui.
+    const nonce = `r:${pending.id}`;
+    const reserveSend = async () => {
+      if (!action.claimToken) throw new ReminderClaimLostError('Reserva do lembrete perdida');
+      const result = await markReminderSendAttempt(this.deps.db, action.id, action.claimToken);
+      if (result === 'uncertain')
+        throw new ReminderDeliveryUncertainError('Entrega do lembrete incerta');
+      if (result === 'superseded') throw new ReminderClaimLostError('Reserva do lembrete perdida');
+    };
 
     let delivered = false;
     if (pending.channelId) {
-      const channel = await this.deps.client.channels.fetch(pending.channelId).catch(() => null);
+      let channel;
+      try {
+        channel = await this.deps.client.channels.fetch(pending.channelId);
+      } catch (error) {
+        if (!isUnknownDiscordResource(error, 10003)) throw error;
+        channel = null;
+      }
       if (channel?.isTextBased() && 'send' in channel) {
-        await channel.send({ content: `<@${pending.userId}>`, embeds: [embed] });
+        await reserveSend();
+        await channel.send({
+          content: `<@${pending.userId}>`,
+          embeds: [embed],
+          nonce,
+          enforceNonce: true,
+        });
         delivered = true;
       }
     }
     if (!delivered) {
       // Sem canal (ou canal sumiu): cai na DM, que é o padrão do `/remind`.
-      const user = await this.deps.client.users.fetch(pending.userId).catch(() => null);
-      await user?.send({ embeds: [embed] }).catch(() => null);
+      const user = await this.deps.client.users.fetch(pending.userId);
+      await reserveSend();
+      await user.send({ embeds: [embed], nonce, enforceNonce: true });
     }
 
     await completeReminder(this.deps.db, pending.id);
@@ -316,4 +588,8 @@ export class Scheduler {
     const closed = await this.deps.polls.close(pollId);
     if (closed) log.info({ actionId: action.id, pollId }, 'enquete encerrada');
   }
+}
+
+function isUnknownDiscordResource(error: unknown, code: number): boolean {
+  return error instanceof DiscordAPIError && error.code === code;
 }

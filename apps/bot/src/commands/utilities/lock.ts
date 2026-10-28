@@ -1,4 +1,3 @@
-import { scheduleAction } from '@goodbot/db';
 import { DEFAULT_REASON, UserFacingError, formatDuration } from '@goodbot/shared';
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
@@ -88,19 +87,11 @@ export const lock = defineCommand({
       roleIds: lockRoleIds(ctx.guildId, config),
       actorId: ctx.member.id,
       reason,
+      durationMs,
     });
 
     if (outcome === 'already-locked') {
       throw new UserFacingError(`<#${channel.id}> já está trancado.`, { code: 'ALREADY_LOCKED' });
-    }
-
-    if (durationMs) {
-      await scheduleAction(ctx.db, {
-        guildId: ctx.guildId,
-        kind: 'unlock',
-        runAt: new Date(Date.now() + durationMs),
-        payload: { channelId: channel.id },
-      });
     }
 
     const until = durationMs ? ` por ${formatDuration(durationMs, { style: 'long' })}` : '';
@@ -128,7 +119,12 @@ const unlockBuilder = new SlashCommandBuilder()
   .setName('unlock')
   .setDescription('Destranca um canal, restaurando as permissões anteriores')
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-  .addStringOption((option) => option.setName('motivo').setDescription('Aparece no mod-log'));
+  .addStringOption((option) => option.setName('motivo').setDescription('Aparece no mod-log'))
+  .addBooleanOption((option) =>
+    option
+      .setName('confirmar-pendente')
+      .setDescription('Após conferir permissões, restaura snapshot de lock sem confirmação'),
+  );
 addChannelOption(unlockBuilder);
 
 export const unlock = defineCommand({
@@ -143,8 +139,14 @@ export const unlock = defineCommand({
     const config = await requireUtilities(ctx);
     const channel = resolveChannel(ctx.interaction);
     const reason = ctx.interaction.options.getString('motivo') ?? DEFAULT_REASON;
+    const confirmPending = ctx.interaction.options.getBoolean('confirmar-pendente') ?? false;
 
-    const outcome = await ctx.locks.unlock({ guildId: ctx.guildId, channel, reason });
+    const outcome = await ctx.locks.unlock({
+      guildId: ctx.guildId,
+      channel,
+      reason,
+      confirmPending,
+    });
     if (outcome === 'not-locked') {
       throw new UserFacingError(`<#${channel.id}> não está trancado por mim.`, {
         code: 'NOT_LOCKED',

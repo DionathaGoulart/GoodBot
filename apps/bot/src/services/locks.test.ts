@@ -1,14 +1,27 @@
-import { Collection, OverwriteType, PermissionFlagsBits } from 'discord.js';
+import { Collection, DiscordAPIError, OverwriteType, PermissionFlagsBits } from 'discord.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LockableChannel } from './locks';
 import type { ChannelLock } from '@goodbot/db';
 
-const { saveChannelLock, deleteChannelLock, getChannelLock, listChannelLocks } = vi.hoisted(() => ({
+const {
+  saveChannelLock,
+  deleteChannelLock,
+  getChannelLock,
+  listChannelLocks,
+  withChannelLock,
+  scheduleAction,
+  cancelScheduledChannelUnlocks,
+  markChannelLockApplied,
+} = vi.hoisted(() => ({
   saveChannelLock: vi.fn(),
   deleteChannelLock: vi.fn(),
   getChannelLock: vi.fn(),
   listChannelLocks: vi.fn(),
+  withChannelLock: vi.fn(),
+  scheduleAction: vi.fn(),
+  cancelScheduledChannelUnlocks: vi.fn(),
+  markChannelLockApplied: vi.fn(),
 }));
 
 vi.mock('@goodbot/db', () => ({
@@ -16,6 +29,10 @@ vi.mock('@goodbot/db', () => ({
   deleteChannelLock,
   getChannelLock,
   listChannelLocks,
+  withChannelLock,
+  scheduleAction,
+  cancelScheduledChannelUnlocks,
+  markChannelLockApplied,
 }));
 
 const { LOCK_PERMISSIONS, LockService } = await import('./locks');
@@ -24,6 +41,14 @@ const GUILD_ID = '900000000000000000';
 const EVERYONE = GUILD_ID;
 const EXTRA_ROLE = '700000000000000001';
 const MEMBER = '300000000000000000';
+
+function discordRejection(status: number): DiscordAPIError {
+  return Object.assign(Object.create(DiscordAPIError.prototype), {
+    status,
+    code: 50013,
+    message: 'Discord recusou o lock',
+  }) as DiscordAPIError;
+}
 
 interface RawOverwrite {
   id: string;
@@ -64,6 +89,13 @@ function fakeChannel(initial: RawOverwrite[]) {
 describe('LockService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    withChannelLock.mockImplementation(
+      (db: unknown, _guild: string, _channel: string, action: (tx: unknown) => Promise<unknown>) =>
+        action(db),
+    );
+    cancelScheduledChannelUnlocks.mockResolvedValue(0);
+    markChannelLockApplied.mockResolvedValue(undefined);
+    getChannelLock.mockResolvedValue({ id: 1 } as ChannelLock);
   });
 
   it('nega envio preservando os outros bits e cria overwrite para cargo sem um', async () => {
@@ -90,6 +122,7 @@ describe('LockService', () => {
     });
 
     expect(outcome).toBe('locked');
+    expect(markChannelLockApplied).toHaveBeenCalledWith({}, 1);
     // O snapshot guarda só quem tinha overwrite entre os ids afetados.
     expect(saveChannelLock.mock.calls[0]?.[1]).toMatchObject({
       overwrites: [
@@ -137,7 +170,7 @@ describe('LockService', () => {
     expect(channel.permissionOverwrites.set).not.toHaveBeenCalled();
   });
 
-  it('apaga a linha do lock quando o Discord recusa os overwrites', async () => {
+  it('preserva o snapshot quando o REST falha após a reserva', async () => {
     const channel = fakeChannel([]);
     saveChannelLock.mockResolvedValue({ id: 1 });
     channel.permissionOverwrites.set.mockRejectedValueOnce(new Error('50013'));
@@ -151,7 +184,127 @@ describe('LockService', () => {
         reason: 'teste',
       }),
     ).rejects.toThrow('50013');
-    expect(deleteChannelLock).toHaveBeenCalledWith({}, GUILD_ID, channel.id);
+    expect(deleteChannelLock).not.toHaveBeenCalled();
+    expect(saveChannelLock).toHaveBeenCalledOnce();
+    expect(getChannelLock).toHaveBeenCalledWith({}, GUILD_ID, channel.id);
+  });
+
+  it('rejeição definitiva remove snapshot e unlock reservado', async () => {
+    const channel = fakeChannel([]);
+    saveChannelLock.mockResolvedValue({ id: 1 });
+    deleteChannelLock.mockResolvedValue({ id: 1 });
+    channel.permissionOverwrites.set.mockRejectedValueOnce(discordRejection(403));
+
+    await expect(
+      new LockService({} as never).lock({
+        guildId: GUILD_ID,
+        channel,
+        roleIds: [EVERYONE],
+        actorId: MEMBER,
+        reason: 'teste',
+        durationMs: 60_000,
+      }),
+    ).rejects.toThrow('Discord recusou o lock');
+    expect(deleteChannelLock).toHaveBeenCalledWith({}, GUILD_ID, channel.id, 1);
+    expect(cancelScheduledChannelUnlocks).toHaveBeenCalledWith({}, GUILD_ID, channel.id, 1);
+  });
+
+  it('falha ao confirmar lock após REST preserva snapshot e emite alerta', async () => {
+    const channel = fakeChannel([]);
+    saveChannelLock.mockResolvedValue({ id: 1 });
+    markChannelLockApplied.mockRejectedValueOnce(new Error('commit falhou'));
+    const alerts = { emit: vi.fn() };
+    await expect(
+      new LockService({} as never, alerts).lock({
+        guildId: GUILD_ID,
+        channel,
+        roleIds: [EVERYONE],
+        actorId: MEMBER,
+        reason: 'teste',
+      }),
+    ).rejects.toThrow('commit falhou');
+    expect(deleteChannelLock).not.toHaveBeenCalled();
+    expect(alerts.emit).toHaveBeenCalledWith(expect.objectContaining({ level: 'danger' }));
+  });
+
+  it('unlock pendente exige confirmação explícita após checar permissões', async () => {
+    const channel = fakeChannel([]);
+    const lock = {
+      id: 1,
+      roleIds: [EVERYONE],
+      overwrites: [],
+      appliedAt: null,
+    } as unknown as ChannelLock;
+    getChannelLock.mockResolvedValue(lock);
+    deleteChannelLock.mockResolvedValue(lock);
+    const service = new LockService({} as never);
+    await expect(
+      service.unlock({ guildId: GUILD_ID, channel, reason: 'expirou', expectedLockId: 1 }),
+    ).rejects.toThrow('Lock sem confirmação');
+    await expect(service.unlock({ guildId: GUILD_ID, channel, reason: 'manual' })).rejects.toThrow(
+      'Lock sem confirmação',
+    );
+    expect(channel.permissionOverwrites.set).not.toHaveBeenCalled();
+    expect(
+      await service.unlock({ guildId: GUILD_ID, channel, reason: 'manual', confirmPending: true }),
+    ).toBe('unlocked');
+    expect(channel.permissionOverwrites.set).toHaveBeenCalledOnce();
+  });
+
+  it('confirma a reserva antes de aplicar os overwrites', async () => {
+    const channel = fakeChannel([]);
+    const order: string[] = [];
+    withChannelLock.mockImplementation(
+      async (
+        db: unknown,
+        _guild: string,
+        _channel: string,
+        action: (tx: unknown) => Promise<unknown>,
+      ) => {
+        const result = await action(db);
+        order.push('commit');
+        return result;
+      },
+    );
+    saveChannelLock.mockImplementation(() => {
+      order.push('snapshot');
+      return Promise.resolve({ id: 1 } as ChannelLock);
+    });
+    scheduleAction.mockImplementation(() => {
+      order.push('schedule');
+      return Promise.resolve();
+    });
+    channel.permissionOverwrites.set.mockImplementation(() => {
+      order.push('discord');
+      return Promise.resolve();
+    });
+
+    await new LockService({} as never).lock({
+      guildId: GUILD_ID,
+      channel,
+      roleIds: [EVERYONE],
+      actorId: MEMBER,
+      reason: 'teste',
+      durationMs: 60_000,
+    });
+    expect(order).toEqual(['snapshot', 'schedule', 'commit', 'discord', 'commit']);
+  });
+
+  it('não aplica lock cancelado entre a reserva e o REST', async () => {
+    const channel = fakeChannel([]);
+    saveChannelLock.mockResolvedValue({ id: 1 } as ChannelLock);
+    getChannelLock.mockResolvedValue(null);
+
+    await expect(
+      new LockService({} as never).lock({
+        guildId: GUILD_ID,
+        channel,
+        roleIds: [EVERYONE],
+        actorId: MEMBER,
+        reason: 'teste',
+      }),
+    ).rejects.toThrow('Lock encerrado antes de ser aplicado');
+    expect(channel.permissionOverwrites.set).not.toHaveBeenCalled();
   });
 
   it('unlock restaura o estado anterior exato e apaga o overwrite que o lock criou', async () => {
@@ -170,6 +323,7 @@ describe('LockService', () => {
       saved = { id: 1, ...input } as unknown as ChannelLock;
       return Promise.resolve(saved);
     });
+    getChannelLock.mockImplementation(() => Promise.resolve(saved));
     deleteChannelLock.mockImplementation(() => Promise.resolve(saved));
 
     const service = new LockService({} as never);
@@ -184,11 +338,13 @@ describe('LockService', () => {
 
     expect(outcome).toBe('unlocked');
     expect(channel.permissionOverwrites.set).toHaveBeenLastCalledWith(before, 'fim');
+    expect(deleteChannelLock).toHaveBeenCalledWith({}, GUILD_ID, channel.id, 1);
+    expect(cancelScheduledChannelUnlocks).toHaveBeenCalledWith({}, GUILD_ID, channel.id, 1);
   });
 
   it('unlock sem lock gravado não mexe no canal', async () => {
     const channel = fakeChannel([]);
-    deleteChannelLock.mockResolvedValue(null);
+    getChannelLock.mockResolvedValue(null);
 
     const outcome = await new LockService({} as never).unlock({
       guildId: GUILD_ID,
@@ -198,5 +354,62 @@ describe('LockService', () => {
 
     expect(outcome).toBe('not-locked');
     expect(channel.permissionOverwrites.set).not.toHaveBeenCalled();
+  });
+
+  it('falha REST mantém o snapshot para que o unlock possa ser repetido', async () => {
+    const channel = fakeChannel([]);
+    const saved = {
+      id: 42,
+      guildId: GUILD_ID,
+      channelId: channel.id,
+      roleIds: [EVERYONE],
+      overwrites: [],
+    } as unknown as ChannelLock;
+    getChannelLock.mockResolvedValue(saved);
+    deleteChannelLock.mockResolvedValue(saved);
+    channel.permissionOverwrites.set.mockRejectedValueOnce(new Error('falha REST'));
+    const service = new LockService({} as never);
+
+    await expect(service.unlock({ guildId: GUILD_ID, channel, reason: 'fim' })).rejects.toThrow(
+      'falha REST',
+    );
+    expect(deleteChannelLock).not.toHaveBeenCalled();
+    expect(await service.unlock({ guildId: GUILD_ID, channel, reason: 'fim' })).toBe('unlocked');
+    expect(deleteChannelLock).toHaveBeenCalledOnce();
+  });
+
+  it('unlock antigo não modifica outra instância do lock', async () => {
+    const channel = fakeChannel([]);
+    getChannelLock.mockResolvedValue({ id: 43 } as ChannelLock);
+    const outcome = await new LockService({} as never).unlock({
+      guildId: GUILD_ID,
+      channel,
+      reason: 'expirou',
+      expectedLockId: 42,
+    });
+    expect(outcome).toBe('not-locked');
+    expect(channel.permissionOverwrites.set).not.toHaveBeenCalled();
+    expect(deleteChannelLock).not.toHaveBeenCalled();
+  });
+
+  it('lock temporário grava tarefa com ID do snapshot', async () => {
+    const channel = fakeChannel([]);
+    saveChannelLock.mockResolvedValue({ id: 42 } as ChannelLock);
+    getChannelLock.mockResolvedValue({ id: 42 } as ChannelLock);
+    await new LockService({} as never).lock({
+      guildId: GUILD_ID,
+      channel,
+      roleIds: [EVERYONE],
+      actorId: MEMBER,
+      reason: 'teste',
+      durationMs: 60_000,
+    });
+    expect(scheduleAction).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        kind: 'unlock',
+        payload: { channelId: channel.id, lockId: 42 },
+      }),
+    );
   });
 });

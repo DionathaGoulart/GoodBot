@@ -92,6 +92,7 @@ async function main(): Promise<void> {
     },
   });
   const moderation = new ModerationService({
+    alerts,
     db,
     client,
     config,
@@ -124,7 +125,7 @@ async function main(): Promise<void> {
     audit,
     onHit: (hit) => void stats.recordAutomodHit(hit.guildId, hit.ruleId),
   });
-  const locks = new LockService(db);
+  const locks = new LockService(db, alerts);
   const polls = new PollService({ db, client });
   const welcome = new WelcomeService({ config });
   const autorole = new AutoroleService({ db, config, audit });
@@ -157,7 +158,7 @@ async function main(): Promise<void> {
     },
   });
   const social = new YouTubeProvider();
-  const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole });
+  const scheduler = new Scheduler({ db, client, config, modlog, locks, polls, autorole, alerts });
   const socialJob = new SocialJob({ db, client, config, provider: social, alerts, audit });
   // Os links que os avisos de ciclo de vida citam. Saem do `AUTH_URL` pela
   // mesma conta que o painel faz para os subdomínios — uma regra só, em
@@ -315,7 +316,6 @@ async function main(): Promise<void> {
       retention.stop();
       capacity.stop();
       databaseProbe.stop();
-      autorole.stop();
       await api.stop();
       // O que estava em buffer precisa chegar ao canal e ao banco antes do fim.
       await Promise.all([queue.flushAll(), messageCache.flush(), stats.flush()]);

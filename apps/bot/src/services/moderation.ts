@@ -1,4 +1,17 @@
-import { cancelScheduledActions, createCase, scheduleAction, softDeleteCase } from '@goodbot/db';
+import {
+  cancelScheduledActionsWithIds,
+  compensateScheduledPunishment,
+  createCase,
+  isCurrentPunishmentTransition,
+  markPunishmentTransitionApplied,
+  markPunishmentTransitionAttempting,
+  markPunishmentTransitionRejected,
+  markPunishmentTransitionUncertain,
+  recordPunishmentTransition,
+  scheduleAction,
+  softDeleteCase,
+  withPunishmentLock,
+} from '@goodbot/db';
 import {
   DAY_MS,
   MAX_REASON_LENGTH,
@@ -13,6 +26,7 @@ import { sendPunishmentDm } from './dm';
 import { resolveEscalation } from './escalation';
 import { canActOn, toMemberLike } from './permissions';
 
+import type { AlertService } from './alerts';
 import type { ConfigService, ResolvedSettings } from './config';
 import type { EscalationStep } from './escalation';
 import type { ModlogService } from './modlog';
@@ -30,6 +44,7 @@ export interface ModerationDeps {
   client: Client;
   config: ConfigService;
   modlog: ModlogService;
+  alerts?: Pick<AlertService, 'emit'>;
   /** Hook de estatísticas por tipo de caso (§5.6). */
   onCase?: (kase: Case) => void;
 }
@@ -74,6 +89,8 @@ interface ExecuteInput extends TimedRequest {
   dm?: boolean;
   /** Agenda o desfazimento quando há duração. */
   schedule?: 'unban' | 'untimeout';
+  /** A ação encerra uma punição temporária anterior, sem novo agendamento. */
+  invalidate?: 'unban' | 'untimeout';
 }
 
 /**
@@ -119,21 +136,15 @@ export class ModerationService {
 
   async unban(request: ActionRequest): Promise<ActionResult> {
     const { guild, target } = request;
-    const result = await this.execute({
+    return this.execute({
       ...request,
       type: 'unban',
+      invalidate: 'unban',
       dm: false,
       perform: async (audit) => {
         await guild.bans.remove(target.id, audit);
       },
     });
-    // Um unban manual antes da hora não pode deixar um `unban` agendado solto.
-    await cancelScheduledActions(this.db, {
-      guildId: guild.id,
-      kind: 'unban',
-      targetId: target.id,
-    });
-    return result;
   }
 
   async softban(request: BanRequest): Promise<ActionResult> {
@@ -144,13 +155,22 @@ export class ModerationService {
     return this.execute({
       ...request,
       type: 'softban',
+      invalidate: 'unban',
       durationMs: undefined,
       perform: async (audit) => {
         await guild.bans.create(target.id, {
           reason: audit,
           deleteMessageSeconds: days * DAY_SECONDS,
         });
-        await guild.bans.remove(target.id, `softban: ${audit}`);
+        try {
+          await guild.bans.remove(target.id, `softban: ${audit}`);
+        } catch (cause) {
+          // O ban já foi aceito: até uma recusa definitiva do unban deixa
+          // efeito parcial e exige preservar o caso e alertar para recuperação.
+          throw new Error('Softban aplicado parcialmente: não foi possível confirmar o unban.', {
+            cause,
+          });
+        }
       },
     });
   }
@@ -197,9 +217,10 @@ export class ModerationService {
 
   async untimeout(request: ActionRequest): Promise<ActionResult> {
     const { guild, target } = request;
-    const result = await this.execute({
+    return this.execute({
       ...request,
       type: 'untimeout',
+      invalidate: 'untimeout',
       perform: async (audit) => {
         const member = await fetchMember(guild, target.id);
         if (!member) {
@@ -208,12 +229,6 @@ export class ModerationService {
         await member.timeout(null, audit);
       },
     });
-    await cancelScheduledActions(this.db, {
-      guildId: guild.id,
-      kind: 'untimeout',
-      targetId: target.id,
-    });
-    return result;
   }
 
   async warn(request: ActionRequest): Promise<ActionResult> {
@@ -303,8 +318,8 @@ export class ModerationService {
   }
 
   /**
-   * Caminho comum de toda punição, nesta ordem: hierarquia → caso → DM → ação
-   * no Discord → agendamento → mod-log.
+   * Caminho comum de toda punição: hierarquia → caso → DM → transição da fila
+   * e ação no Discord na mesma seção crítica → mod-log.
    *
    * O caso nasce **antes** da ação porque a DM precisa do número do caso e
    * porque, depois de um ban ou kick, não há mais servidor em comum para
@@ -345,23 +360,188 @@ export class ModerationService {
       }
     }
 
+    let attempted = false;
+    let definitelyRejected = false;
+    let unresolvedBeforeRest = false;
+    let preparedTransition:
+      | {
+          markerId: number;
+          newActionId?: number;
+          oldActionIds: number[];
+          kind: 'unban' | 'untimeout';
+        }
+      | undefined;
     try {
-      await input.perform(auditReason(actorTag, reason));
+      const audit = auditReason(actorTag, reason);
+      const undoKind = input.schedule ?? input.invalidate;
+      if (undoKind) {
+        // Cada fase usa uma transação curta. Um marcador persistido impede
+        // que uma requisição antiga aplique REST após a preparação de outra.
+        const staged = await withPunishmentLock(
+          this.db,
+          guild.id,
+          undoKind,
+          target.id,
+          async (tx) => {
+            const oldActionIds = await cancelScheduledActionsWithIds(tx, {
+              guildId: guild.id,
+              kind: undoKind,
+              targetId: target.id,
+            });
+            const markerId = await recordPunishmentTransition(tx, {
+              guildId: guild.id,
+              caseId: kase.id,
+              kind: undoKind,
+              targetId: target.id,
+              fallbackActionIds: oldActionIds,
+            });
+            const next =
+              input.schedule && expiresAt
+                ? await scheduleAction(tx, {
+                    guildId: guild.id,
+                    caseId: kase.id,
+                    kind: input.schedule,
+                    runAt: expiresAt,
+                    payload: {
+                      targetId: target.id,
+                      targetTag: target.tag,
+                      caseNumber: kase.caseNumber,
+                      transitionMarkerId: markerId,
+                      fallbackActionIds: oldActionIds,
+                    },
+                  })
+                : null;
+            return { oldActionIds, newActionId: next?.id, markerId };
+          },
+        );
+        preparedTransition = { ...staged, kind: undoKind };
+        const ready = await withPunishmentLock(
+          this.db,
+          guild.id,
+          undoKind,
+          target.id,
+          async (tx) => {
+            if (
+              !(await isCurrentPunishmentTransition(tx, {
+                guildId: guild.id,
+                kind: undoKind,
+                targetId: target.id,
+                markerId: staged.markerId,
+              }))
+            )
+              return false;
+            return markPunishmentTransitionAttempting(tx, staged.markerId);
+          },
+        );
+        if (!ready) throw new Error('Punição substituída por uma ação mais recente');
+        const result = await withPunishmentLock(
+          this.db,
+          guild.id,
+          undoKind,
+          target.id,
+          async (tx) => {
+            if (
+              !(await isCurrentPunishmentTransition(tx, {
+                guildId: guild.id,
+                kind: undoKind,
+                targetId: target.id,
+                markerId: staged.markerId,
+                expectedState: 'attempting',
+              }))
+            )
+              return { outcome: 'superseded' as const };
+            try {
+              attempted = true;
+              await input.perform(audit);
+              await markPunishmentTransitionApplied(tx, staged.markerId);
+              return { outcome: 'applied' as const };
+            } catch (error) {
+              if (!isDefinitiveDiscordRejection(error)) throw error;
+              await compensateScheduledPunishment(tx, staged.oldActionIds, staged.newActionId);
+              await markPunishmentTransitionRejected(tx, staged.markerId);
+              return { outcome: 'rejected' as const, error };
+            }
+          },
+        );
+        if (result.outcome === 'superseded')
+          throw new Error('Punição substituída por uma ação mais recente');
+        if (result.outcome === 'rejected') {
+          definitelyRejected = true;
+          throw result.error;
+        }
+      } else {
+        attempted = true;
+        await input.perform(audit);
+      }
     } catch (error) {
-      await softDeleteCase(this.db, guild.id, kase.caseNumber).catch((rollbackError: unknown) => {
-        log.error({ err: rollbackError, caseNumber: kase.caseNumber }, 'falha ao desfazer o caso');
-      });
+      if (!attempted && preparedTransition) {
+        try {
+          const prepared = preparedTransition;
+          await withPunishmentLock(this.db, guild.id, prepared.kind, target.id, async (tx) => {
+            if (
+              !(await isCurrentPunishmentTransition(tx, {
+                guildId: guild.id,
+                kind: prepared.kind,
+                targetId: target.id,
+                markerId: prepared.markerId,
+              }))
+            )
+              return;
+            await compensateScheduledPunishment(tx, prepared.oldActionIds, prepared.newActionId);
+            await markPunishmentTransitionRejected(tx, prepared.markerId);
+          });
+        } catch (compensationError) {
+          unresolvedBeforeRest = true;
+          log.error(
+            { err: compensationError, markerId: preparedTransition.markerId },
+            'falha ao compensar transição não executada',
+          );
+        }
+      }
+      if (
+        (!attempted && !unresolvedBeforeRest) ||
+        definitelyRejected ||
+        isDefinitiveDiscordRejection(error)
+      ) {
+        await softDeleteCase(this.db, guild.id, kase.caseNumber).catch((rollbackError: unknown) => {
+          log.error(
+            { err: rollbackError, caseNumber: kase.caseNumber },
+            'falha ao desfazer o caso',
+          );
+        });
+      } else {
+        if (attempted && preparedTransition) {
+          await markPunishmentTransitionUncertain(
+            this.db,
+            preparedTransition.markerId,
+            preparedTransition.newActionId,
+            error instanceof Error ? error.message : 'Erro desconhecido',
+          ).catch((statusError: unknown) => {
+            log.error(
+              { err: statusError, markerId: preparedTransition?.markerId },
+              'falha ao registrar transição incerta',
+            );
+          });
+        }
+        log.error(
+          { err: error, guildId: guild.id, caseNumber: kase.caseNumber },
+          'estado da ação no Discord incerto; transição agendada preservada',
+        );
+        this.deps.alerts?.emit({
+          kind: `moderation-uncertain:${guild.id}:${kase.id}`,
+          title: 'Punição com estado incerto',
+          level: 'danger',
+          description:
+            'Verifique o estado atual no Discord e reconcilie o caso e a tarefa agendada no banco antes de repetir a ação.',
+          fields: [
+            { name: 'Servidor', value: guild.id },
+            { name: 'Alvo', value: target.id },
+            { name: 'Caso', value: String(kase.caseNumber) },
+            { name: 'Marcador', value: String(preparedTransition?.markerId ?? 'nenhum') },
+          ],
+        });
+      }
       throw toUserFacing(error, type);
-    }
-
-    if (input.schedule && expiresAt) {
-      await scheduleAction(this.db, {
-        guildId: guild.id,
-        caseId: kase.id,
-        kind: input.schedule,
-        runAt: expiresAt,
-        payload: { targetId: target.id, targetTag: target.tag, caseNumber: kase.caseNumber },
-      });
     }
 
     await this.modlog.postCase(kase);
@@ -420,9 +600,20 @@ export async function fetchMember(guild: Guild, userId: string): Promise<GuildMe
   if (cached) return cached;
   try {
     return await guild.members.fetch({ user: userId });
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof DiscordAPIError && Number(error.code) === 10007) return null;
+    throw error;
   }
+}
+
+/** 4xx sem rate limit confirma que a requisição não foi aceita pelo Discord. */
+function isDefinitiveDiscordRejection(error: unknown): boolean {
+  return (
+    error instanceof DiscordAPIError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 429
+  );
 }
 
 /** `note` nunca gera DM; os demais tipos seguem a config. */

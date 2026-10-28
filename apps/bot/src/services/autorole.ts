@@ -1,8 +1,8 @@
 import { scheduleAction } from '@goodbot/db';
-import { MINUTE_MS, SECOND_MS } from '@goodbot/shared';
+import { SECOND_MS } from '@goodbot/shared';
+import { DiscordAPIError } from 'discord.js';
 
 import { childLogger } from '../logger';
-import { fetchMember } from './moderation';
 
 import type { AuditService } from './audit';
 import type { ConfigService } from './config';
@@ -15,12 +15,6 @@ const log = childLogger('autorole');
 /** Motivo que aparece no audit log do Discord. */
 export const AUTOROLE_REASON = 'Autorole';
 export const VERIFY_REASON = 'Cargo de verificação';
-
-/**
- * Até aqui o atraso cabe num `setTimeout`; acima disso vai para
- * `scheduled_actions`, que sobrevive a um restart do bot.
- */
-export const AUTOROLE_TIMER_MAX_MS = 10 * MINUTE_MS;
 
 /**
  * Cargos que um membro recebe ao entrar. Bot e humano são listas separadas —
@@ -44,7 +38,6 @@ export class AutoroleService {
   private readonly db: Db;
   private readonly config: ConfigService;
   private readonly audit: Pick<AuditService, 'record'> | undefined;
-  private readonly timers = new Set<NodeJS.Timeout>();
 
   constructor(deps: AutoroleDeps) {
     this.db = deps.db;
@@ -63,16 +56,6 @@ export class AutoroleService {
     }
 
     const delayMs = config.delaySeconds * SECOND_MS;
-    if (delayMs <= AUTOROLE_TIMER_MAX_MS) {
-      const timer = setTimeout(() => {
-        this.timers.delete(timer);
-        void this.applyFor(member.guild, member.id);
-      }, delayMs);
-      timer.unref();
-      this.timers.add(timer);
-      return;
-    }
-
     await scheduleAction(this.db, {
       guildId: member.guild.id,
       kind: 'autorole',
@@ -81,9 +64,14 @@ export class AutoroleService {
     });
   }
 
-  /** Usado pelo atraso (timer ou scheduler): o membro pode já ter saído. */
+  /** Atrasos são persistidos; só membro realmente ausente conclui sem aplicar. */
   async applyFor(guild: Guild, userId: string): Promise<void> {
-    const member = await fetchMember(guild, userId);
+    const member = await guild.members
+      .fetch({ user: userId, force: true })
+      .catch((error: unknown) => {
+        if (error instanceof DiscordAPIError && Number(error.code) === 10007) return null;
+        throw error;
+      });
     if (!member) {
       log.debug({ guildId: guild.id, userId }, 'membro saiu antes do autorole');
       return;
@@ -120,12 +108,7 @@ export class AutoroleService {
         { err: error, guildId: member.guild.id, userId: member.id, roleIds },
         'não foi possível aplicar o autorole',
       );
+      throw error;
     }
-  }
-
-  /** Cancela os atrasos curtos pendentes no shutdown. */
-  stop(): void {
-    for (const timer of this.timers) clearTimeout(timer);
-    this.timers.clear();
   }
 }
